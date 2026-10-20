@@ -5,6 +5,7 @@ import { unzipSync, zipSync } from 'fflate';
 import { errorMessage } from '../../api/client';
 import Icon from '../../components/Icon';
 import FileViewer from '../../components/FileViewer';
+import NewFileDialog from '../../components/NewFileDialog';
 import { useLanguage } from '../../context/LanguageContext';
 import { usePageMeta } from '../../context/PageMetaContext';
 import { StModal, EmptyState, Skeleton, timeAgo } from '../../components/student/stUi';
@@ -365,6 +366,17 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     setViewer({ startId: n.id });
   }, [openFolder, setEditor, setViewer]);
 
+  // "New → Word / Excel / PowerPoint / PDF …": the file is created by <NewFileDialog>; once the folder reload shows it, open it in its editor
+  const pendingOpen = useRef(null);
+  const newDoc = useCallback((kind) => setDlg({ type: 'newfile', kind }), []);
+  useEffect(() => {
+    if (pendingOpen.current == null) return;
+    const n = items.find((x) => x.id === pendingOpen.current);
+    if (!n) return;
+    pendingOpen.current = null;
+    openNode(n);
+  }, [items, openNode]);
+
   // ?open=<id> (used by the desktop shell): open that item once its folder has loaded, then drop the param
   const openParam = Number(params.get('open')) || null;
   useEffect(() => {
@@ -695,6 +707,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     if (!n) {
       out.push({ icon: 'folder-plus', label: tt('New folder', 'مجلد جديد'), run: newFolder });
       out.push({ icon: 'file-plus', label: tt('New text file', 'ملف نصي جديد'), run: newFile });
+      out.push({ icon: 'file-plus', label: tt('New document (Word, Excel, PowerPoint, PDF…)', 'مستند جديد (Word, Excel, PowerPoint, PDF…)'), run: () => newDoc('docx') });
       out.push({ icon: 'terminal', label: tt('New project', 'مشروع جديد'), run: newProject });
       out.push({ icon: 'file-up', label: tt('Upload files', 'رفع ملفات'), run: () => fileInput.current?.click() });
       if (data.breadcrumb.length) out.push({ icon: 'terminal', label: tt('Open this folder in code editor', 'فتح هذا المجلد في محرر الأكواد'), run: () => setEditor({ kind: 'folder', node: data.breadcrumb[data.breadcrumb.length - 1] }) });
@@ -765,6 +778,12 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                 <div className="mp-pop" role="menu" onClick={(e) => e.stopPropagation()}>
                   <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFolder(); }}><Icon name="folder-plus" size={16} />{tt('Folder', 'مجلد')}</button>
                   <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFile(); }}><Icon name="file-plus" size={16} />{tt('Text file', 'ملف نصي')}</button>
+                  <div className="mp-ctx__sep" role="separator" />
+                  {[['docx', 'Word document', 'مستند Word'], ['xlsx', 'Excel workbook', 'جدول Excel'], ['pptx', 'PowerPoint', 'عرض PowerPoint'], ['pdf', 'PDF document', 'ملف PDF']].map(([k, en, arb]) => (
+                    <button key={k} type="button" role="menuitem" onClick={() => { setNewMenu(false); newDoc(k); }}><Icon name="file" size={16} />{tt(en, arb)}</button>
+                  ))}
+                  <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newDoc('docx'); }}><Icon name="more-horizontal" size={16} />{tt('More file types…', 'أنواع ملفات أخرى…')}</button>
+                  <div className="mp-ctx__sep" role="separator" />
                   <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newProject(); }}><Icon name="terminal" size={16} />{tt('Project', 'مشروع')}</button>
                 </div>
               )}
@@ -978,6 +997,12 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
       )}
 
       {dlg?.type === 'name' && <NameDialog dlg={dlg} tt={tt} onClose={() => setDlg(null)} />}
+      {dlg?.type === 'newfile' && (
+        <NewFileDialog
+          locale={locale} parentId={folderParam} initialType={dlg.kind} onClose={() => setDlg(null)}
+          onCreated={async (node) => { pendingOpen.current = node.id; flash(tt('File created.', 'تم إنشاء الملف.')); await reload({ quiet: true }); }}
+        />
+      )}
       {dlg?.type === 'confirm' && (
         <StModal
           title={dlg.title} onClose={() => setDlg(null)}

@@ -26,6 +26,7 @@ import { chromeH, initialWm, winTitle, wmReducer } from './wm';
 import { restoreWm, saveWm } from './wmPersist';
 import { EditorWindow, ViewerWindow } from './FileWindows';
 import { isTextName } from '../lib/driveFileKinds';
+import NewFileDialog from '../components/NewFileDialog';
 import WindowFrame from './Window';
 import './desktop.css';
 import './mac.css';
@@ -250,6 +251,17 @@ export default function DesktopOS() {
 
   // a viewer / editor window saved something in My PC -> refresh the desktop icons
   useEffect(() => { const h = () => reloadDesk(); window.addEventListener('uip-drive-changed', h); return () => window.removeEventListener('uip-drive-changed', h); }, [reloadDesk]);
+
+  // right-click > New > Word / Excel / PowerPoint / PDF …: <NewFileDialog> saves the file on the Desktop; once the icons reload, open it in its editor window
+  const pendingOpen = useRef(null);
+  const newDoc = useCallback((type) => { setOverlay(null); setDlg({ kind: 'newfile', type }); }, []);
+  useEffect(() => {
+    if (pendingOpen.current == null) return;
+    const n = desk.items.find((x) => x.id === pendingOpen.current);
+    if (!n) return;
+    pendingOpen.current = null;
+    openNode(n);
+  }, [desk.items, openNode]);
 
   // after the Explorer window loses focus / closes, pick up any changes it made to the Desktop folder
   const explorerWin = wm.list.find((w) => w.app === 'explorer');
@@ -481,6 +493,10 @@ export default function DesktopOS() {
         'sep',
         { label: tt('New folder', 'مجلد جديد'), icon: 'folder-plus', hint: 'Ctrl+Shift+N', onClick: newFolder, disabled: !desk.id },
         { label: tt('New text file', 'ملف نصي جديد'), icon: 'file-plus', onClick: newFile, disabled: !desk.id },
+        { label: tt('New Word document', 'مستند Word جديد'), icon: 'file-plus', onClick: () => newDoc('docx'), disabled: !desk.id },
+        { label: tt('New Excel workbook', 'جدول Excel جديد'), icon: 'file-plus', onClick: () => newDoc('xlsx'), disabled: !desk.id },
+        { label: tt('New PowerPoint presentation', 'عرض PowerPoint جديد'), icon: 'file-plus', onClick: () => newDoc('pptx'), disabled: !desk.id },
+        { label: tt('New PDF / other file…', 'ملف PDF / نوع آخر…'), icon: 'file-plus', onClick: () => newDoc('pdf'), disabled: !desk.id },
         'sep',
         { label: tt('Open This PC', 'فتح جهازي'), icon: 'monitor', hint: 'Alt+E', onClick: () => runCommand('explorer') },
         { label: tt('Personalize', 'تخصيص'), icon: 'palette', hint: 'Alt+P', onClick: () => runCommand('personalize') },
@@ -790,7 +806,13 @@ export default function DesktopOS() {
       />
 
       {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
-      {dlg && <OsDialog key={dlg.title} dlg={dlg} tt={tt} onDone={finishDlg} />}
+      {dlg && dlg.kind !== 'newfile' && <OsDialog key={dlg.title} dlg={dlg} tt={tt} onDone={finishDlg} />}
+      {dlg?.kind === 'newfile' && desk.id && (
+        <NewFileDialog
+          locale={locale} parentId={desk.id} initialType={dlg.type} onClose={() => setDlg(null)}
+          onCreated={(node) => { pendingOpen.current = node.id; flash(tt('File created on the desktop.', 'تم إنشاء الملف على سطح المكتب.')); reloadDesk(); }}
+        />
+      )}
       {toast && <div className={`os-toast${toast.tone === 'error' ? ' is-error' : ''}`} role="status">{toast.msg}</div>}
       {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} onUnlock={() => setLocked(false)} />}
       {brightness < 100 && <div className="os-dim" style={{ opacity: ((100 - brightness) / 100) * 0.7 }} aria-hidden="true" />}
