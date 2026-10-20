@@ -4,7 +4,8 @@ import { useCallback, useRef, useState } from 'react';
 export default function useDocHistory(initial) {
   const [state, setState] = useState({ past: [], value: initial, future: [], saved: initial });
   const ref = useRef(state); ref.current = state;
-  const set = useCallback((v) => setState((s) => ({ ...s, past: [...s.past.slice(-80), s.value], value: v, future: [] })), []);
+  // merge = true folds the change into the previous undo step (used for key-repeat nudges)
+  const set = useCallback((v, merge) => setState((s) => ({ ...s, past: merge && s.past.length ? s.past : [...s.past.slice(-80), s.value], value: v, future: [] })), []);
   const undo = useCallback(() => setState((s) => (s.past.length ? { ...s, past: s.past.slice(0, -1), value: s.past[s.past.length - 1], future: [s.value, ...s.future] } : s)), []);
   const redo = useCallback(() => setState((s) => (s.future.length ? { ...s, past: [...s.past, s.value], value: s.future[0], future: s.future.slice(1) } : s)), []);
   const markSaved = useCallback(() => setState((s) => ({ ...s, saved: s.value })), []);
