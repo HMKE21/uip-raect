@@ -23,8 +23,11 @@ import '../../styles/css/drafts.css';
 import '../../styles/css/zip-workbench.css';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
+import { isEditableJson } from './jsonCheck';
 const CsvGrid = lazy(() => import('./CsvGrid'));
+const JsonEdit = lazy(() => import('./JsonEdit'));
 const isGridPath = (p) => /\.(csv|tsv)$/i.test(p || '');
+const isJsonFile = (p) => /\.json$/i.test(p || '');
 
 const MAX_ZIP_BYTES = 150 * 1024 * 1024;
 const MAX_TOTAL_UNPACKED = 600 * 1024 * 1024;
@@ -841,6 +844,9 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
 
   const activeDoc = active ? docs.current.get(active) : null;
   const gridOn = !!(active && activeDoc?.kind === 'text' && isGridPath(active) && !rawText.has(active) && (edits.current.get(active) ?? origTexts.current.get(active) ?? '').length < 6000000);
+  const jsonText = active && activeDoc?.kind === 'text' && isJsonFile(active) ? (edits.current.get(active) ?? origTexts.current.get(active) ?? '') : null;
+  const jsonValid = jsonText !== null && isEditableJson(jsonText);
+  const jsonOn = jsonValid && !rawText.has(active);
   const toggleDir = (p) => setOpen((o) => { const n = new Set(o); if (n.has(p)) n.delete(p); else n.add(p); return n; });
 
   const keyAct = (fn) => (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
@@ -1045,6 +1051,9 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
                 ))}
               </div>
               <div className="zb-crumbs">{crumbs.map((c, i) => <span key={i}>{i > 0 && <i>›</i>}{c}</span>)}
+                {jsonValid && (
+                  <button type="button" className="zb-crumbs__dl zb-crumbs__view" onClick={() => switchView(active, jsonOn)} title={jsonOn ? tt('Show as plain text', 'عرض كنص') : tt('Show as visual JSON editor', 'عرض كمحرر JSON مرئي')}>{jsonOn ? tt('Text', 'نص') : tt('Visual', 'مرئي')}</button>
+                )}
                 {activeDoc?.kind === 'text' && isGridPath(active) && (
                   <button type="button" className="zb-crumbs__dl zb-crumbs__view" onClick={() => switchView(active, gridOn)} title={gridOn ? tt('Show as plain text', 'عرض كنص') : tt('Show as spreadsheet', 'عرض كجدول')}>{gridOn ? tt('Text', 'نص') : tt('Table', 'جدول')}</button>
                 )}
@@ -1055,7 +1064,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
 
           <div className="zb-stage">
             {editorDoc && (
-              <div className="zb-cm-wrap" style={{ display: activeDoc?.kind === 'text' && !gridOn ? 'block' : 'none' }}>
+              <div className="zb-cm-wrap" style={{ display: activeDoc?.kind === 'text' && !gridOn && !jsonOn ? 'block' : 'none' }}>
                 <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
                   <CodeEditor docId={editorDoc.docId} path={editorDoc.path} initialText={editorDoc.text} onChange={onEdit} onCursor={setCursor} readOnly={false} wrap={wrap} fontSize={fontSize} reveal={reveal} theme={theme} />
                 </Suspense>
@@ -1065,6 +1074,13 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
               <div className="zb-cm-wrap" key={`${active}#${gens.current.get(active) || 0}`}>
                 <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
                   <CsvGrid path={active} text={edits.current.get(active) ?? origTexts.current.get(active) ?? ''} onText={(t) => setTextFor(active, t)} tt={tt} rtl={tt('', 'x') === 'x'} />
+                </Suspense>
+              </div>
+            )}
+            {jsonOn && (
+              <div className="zb-cm-wrap" key={`${active}#${gens.current.get(active) || 0}`}>
+                <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
+                  <JsonEdit path={active} text={jsonText} onText={(t) => setTextFor(active, t)} tt={tt} />
                 </Suspense>
               </div>
             )}

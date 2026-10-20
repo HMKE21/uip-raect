@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from '../Icon';
 import '../../styles/css/json-viewer.css';
@@ -118,6 +118,61 @@ function Primitive({ value, q }) {
   return <span className="jv-num">{hl(String(value), q)}</span>;
 }
 
+// ------------------------------------------------------------------ editing (only when <JsonViewer onChange> is given)
+const EditCtx = createContext(null);
+const PATH_RE = /\.([A-Za-z_$][\w$]*)|\[(\d+)\]|\[("(?:[^"\\]|\\.)*")\]/g;
+/** "$.a[0]["x y"]" -> ['a', 0, 'x y'] */
+export function parsePath(p) {
+  const out = []; PATH_RE.lastIndex = 0; let m;
+  const src = String(p).replace(/^\$/, '');
+  while ((m = PATH_RE.exec(src))) out.push(m[1] !== undefined ? m[1] : m[2] !== undefined ? Number(m[2]) : JSON.parse(m[3]));
+  return out;
+}
+const cloneC = (x) => (Array.isArray(x) ? x.slice() : { ...x });
+function updateIn(root, tokens, fn) { // immutable: copies only the containers along the path
+  if (!tokens.length) return fn(root);
+  const out = cloneC(root); const [k, ...rest] = tokens;
+  out[k] = updateIn(root[k], rest, fn);
+  return out;
+}
+export const setIn = (root, path, v) => updateIn(root, parsePath(path), () => v);
+export function removeIn(root, path) {
+  const t = parsePath(path); if (!t.length) return root;
+  const last = t.pop();
+  return updateIn(root, t, (c) => { const o = cloneC(c); if (Array.isArray(o)) o.splice(last, 1); else delete o[last]; return o; });
+}
+export function addIn(root, path, key, v) {
+  return updateIn(root, parsePath(path), (c) => { const o = cloneC(c); if (Array.isArray(o)) o.push(v); else o[key] = v; return o; });
+}
+/** Text typed by the user -> JSON value. Strings stay strings; other types are parsed (true / 12 / null), falling back to text. */
+function typedValue(text, was) {
+  if (was === 'string') return text;
+  const t = text.trim();
+  try { const v = JSON.parse(t); if (!isObj(v)) return v; } catch { /* plain text */ }
+  return text;
+}
+const literalValue = (text) => { const t = text.trim(); try { return JSON.parse(t); } catch { return text; } };
+
+function EditInput({ path, value, kind, ctx }) {
+  const [draft, setDraft] = useState(kind === 'string' ? value : kind === 'null' ? 'null' : String(value));
+  return (
+    <input className="jv-edit" autoFocus value={draft} spellCheck={false} dir="auto"
+      ref={(el) => { if (el && !el.dataset.sel) { el.dataset.sel = '1'; el.select(); } }}
+      onChange={(e) => setDraft(e.target.value)} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); ctx.commit(path, typedValue(draft, kind)); } else if (e.key === 'Escape') ctx.cancel(); }}
+      onBlur={() => ctx.commit(path, typedValue(draft, kind))} />
+  );
+}
+
+/** A primitive value; double-click edits it in place when the viewer is editable. */
+function EditableValue({ path, value, q, graph }) {
+  const ctx = useContext(EditCtx);
+  const view = graph ? <GraphValue value={value} q={q} /> : <Primitive value={value} q={q} />;
+  if (!ctx) return view;
+  if (ctx.editing !== path) return <span className="jv-editable" onDoubleClick={(e) => { e.stopPropagation(); ctx.begin(path); }} title="Double-click to edit">{view}</span>;
+  return <EditInput path={path} value={value} kind={kindOf(value)} ctx={ctx} />;
+}
+
 // ------------------------------------------------------------------ outline (nested tree with connector lines)
 function TreeNode({ name, value, path, depth, isArrayItem, cmd, search, q, selected, onSelect }) {
   const container = isObj(value);
@@ -148,7 +203,7 @@ function TreeNode({ name, value, path, depth, isArrayItem, cmd, search, q, selec
         <div className={cls} onClick={() => onSelect(path, value)} title="Click to copy the value">
           <span className="jv-caret jv-caret--sp" />
           <TypeBadge kind={kind} />
-          {label}<Primitive value={value} q={q} />
+          {label}<EditableValue path={path} value={value} q={q} />
         </div>
       </div>
     );
@@ -412,7 +467,7 @@ function GraphView({ value, q, search, cmd, selected, onSelect, fontSize, L }) {
                           <span className={`jv-gcaret${r.open ? ' is-open' : ''}`}><Icon name="chevron-right" size={11} /></span>
                         </>
                       ) : (
-                        <span className="jv-gval"><GraphValue value={r.value} q={q} /></span>
+                        <span className="jv-gval"><EditableValue path={r.path} value={r.value} q={q} graph /></span>
                       )}
                     </div>
                   );
@@ -569,7 +624,7 @@ function CodeView({ lines, q, wrap, fontSize }) {
 }
 
 // ------------------------------------------------------------------ viewer
-export default function JsonViewer({ value, text, filename = 'response.json', meta, labels = {} }) {
+export default function JsonViewer({ value, text, filename = 'response.json', meta, labels = {}, onChange }) {
   const L = { tree: 'Tree', outline: 'Outline', code: 'Code', search: 'Search keys & values…', expand: 'Expand all', collapse: 'Collapse all', copy: 'Copy', copied: 'Copied', download: 'Download', full: 'Full screen', exit: 'Exit full screen', nodes: 'nodes', lines: 'lines', path: 'Click a node to see its path', matches: 'matches', wrap: 'Wrap', zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomHint: 'Ctrl + mouse wheel to zoom', fit: 'Fit to screen', resetLayout: 'Reset layout', dragHint: 'drag to move', resize: 'Drag to resize', theme: 'Theme', dark: 'Dark', light: 'Light', ...labels };
   const [view, setView] = useState('tree');
   const [theme, setTheme] = useState(() => readLS(LS_THEME, 'dark-plus'));
@@ -582,6 +637,9 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
   const [flash, setFlash] = useState('');
   const [full, setFull] = useState(false);
   const rootRef = useRef(null);
+  const editable = typeof onChange === 'function';
+  const [editing, setEditing] = useState(null); // path of the value being edited
+  const [adding, setAdding] = useState(null); // { key, val } while the add form is open
 
   const pretty = useMemo(() => (value !== undefined && value !== null ? JSON.stringify(value, null, 2) : (text || '')), [value, text]);
   const lines = useMemo(() => pretty.split('\n'), [pretty]);
@@ -597,7 +655,7 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
 
   useEffect(() => { writeLS(LS_THEME, theme); }, [theme]);
   useEffect(() => { writeLS(LS_SIZE, fontSize); }, [fontSize]);
-  useEffect(() => { setSelected(null); setCmd((c) => ({ tick: 0, level: c.level })); }, [pretty]);
+  useEffect(() => { if (editable) return; setSelected(null); setCmd((c) => ({ tick: 0, level: c.level })); }, [pretty]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!full) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') setFull(false); };
@@ -611,6 +669,25 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
     setSelected(path);
     if (!isObj(v)) copyText(typeof v === 'string' ? v : String(v)).then(() => say(L.copied));
   }, [say, L.copied]);
+
+
+  const editApi = useMemo(() => (editable ? {
+    editing,
+    begin: (path) => setEditing(path),
+    cancel: () => setEditing(null),
+    commit: (path, v) => { setEditing(null); if (JSON.stringify(setIn(value, path, v)) !== JSON.stringify(value)) onChange(setIn(value, path, v)); },
+  } : null), [editable, editing, value, onChange]);
+  const selVal = useMemo(() => { if (!selected || !parsed) return undefined; try { return parsePath(selected).reduce((a, k) => a[k], value); } catch { return undefined; } }, [selected, parsed, value]);
+  const addTarget = selected && isObj(selVal) ? selected : '$';
+  const addTargetVal = addTarget === '$' ? value : selVal;
+  const doAdd = () => {
+    if (!adding || !isObj(addTargetVal)) return;
+    const arr = Array.isArray(addTargetVal); const key = adding.key.trim();
+    if (!arr && !key) return;
+    onChange(addIn(value, addTarget, key, literalValue(adding.val)));
+    setAdding(null);
+  };
+  const doRemove = () => { if (!selected || selected === '$') return; onChange(removeIn(value, selected)); setSelected(null); };
 
   const level = (n) => setCmd((c) => ({ tick: c.tick + 1, level: n }));
   const download = () => {
@@ -656,12 +733,32 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
         </div>
       </div>
 
+      <EditCtx.Provider value={editApi}>
       <div className={`jv-body${shownView === 'tree' ? ' jv-body--graph' : ''}`} style={{ fontSize }}>
-        {shownView === 'tree' && <GraphView key={pretty} value={value} q={q.trim()} search={search} cmd={cmd} selected={selected} onSelect={onSelect} fontSize={fontSize} L={L} />}
+        {shownView === 'tree' && <GraphView key={editable ? 'g' : pretty} value={value} q={q.trim()} search={search} cmd={cmd} selected={selected} onSelect={onSelect} fontSize={fontSize} L={L} />}
         {shownView === 'outline' && <TreeNode name={null} value={value} path="$" depth={0} isArrayItem={false} cmd={cmd} search={search} q={q.trim()} selected={selected} onSelect={onSelect} />}
         {shownView === 'code' && <CodeView lines={lines} q={q.trim()} wrap={wrap} fontSize={fontSize} />}
       </div>
+      </EditCtx.Provider>
 
+      {editable && structured && (
+        <div className="jv-editbar">
+          {adding ? (
+            <>
+              {!Array.isArray(addTargetVal) && <input className="jv-edit" autoFocus placeholder="key" value={adding.key} onChange={(e) => setAdding({ ...adding, key: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') doAdd(); else if (e.key === 'Escape') setAdding(null); }} />}
+              <input className="jv-edit" autoFocus={Array.isArray(addTargetVal)} placeholder='value  (123, true, null, "text", {}, [])' value={adding.val} onChange={(e) => setAdding({ ...adding, val: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') doAdd(); else if (e.key === 'Escape') setAdding(null); }} />
+              <button type="button" onClick={doAdd}><Icon name="check" size={13} /> {L.add || 'Add'}</button>
+              <button type="button" onClick={() => setAdding(null)}>{L.cancel || 'Cancel'}</button>
+            </>
+          ) : (
+            <>
+              <span className="jv-edithint">{L.editHint || 'Double-click a value to edit it'}</span>
+              <button type="button" disabled={!isObj(addTargetVal)} onClick={() => setAdding({ key: '', val: '' })}><Icon name="plus" size={13} /> {L.add || 'Add'} {addTarget !== '$' ? `→ ${addTarget}` : ''}</button>
+              <button type="button" className="jv-danger" disabled={!selected || selected === '$'} onClick={doRemove}><Icon name="trash" size={13} /> {L.remove || 'Delete'}</button>
+            </>
+          )}
+        </div>
+      )}
       <div className="jv-status">
         <span className="jv-path" title={selected || ''}>{selected || L.path}</span>
         {flash && <span className="jv-flash"><Icon name="check" size={12} /> {flash}</span>}

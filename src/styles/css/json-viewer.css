@@ -146,3 +146,20 @@
 .jv-rs--y { left: 14px; right: 14px; bottom: -4px; height: 9px; cursor: ns-resize; }
 .jv-rs--xy { right: -2px; bottom: -2px; width: 16px; height: 16px; cursor: nwse-resize; background: linear-gradient(135deg, transparent 50%, var(--jv-dim) 50%, var(--jv-dim) 58%, transparent 58%, transparent 70%, var(--jv-dim) 70%, var(--jv-dim) 78%, transparent 78%); opacity: .55; border-bottom-right-radius: 10px; }
 .jv-gcard:hover .jv-rs--xy { opacity: 1; }
+
+/* in-place editing */
+.jv-editable { cursor: text; border-radius: 4px; }
+.jv-editable:hover { outline: 1px dashed currentColor; outline-offset: 2px; }
+.jv-edit { font: inherit; color: inherit; background: rgba(127,127,127,.18); border: 1px solid #3b82f6; border-radius: 5px; padding: 1px 6px; min-width: 90px; max-width: 100%; outline: none; }
+.jv-grow .jv-edit { height: 100%; padding-block: 0; flex: 1; min-width: 0; }
+.jv-editbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid rgba(127,127,127,.25); flex-wrap: wrap; font-size: 12px; }
+.jv-editbar button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 7px; border: 1px solid rgba(127,127,127,.35); background: rgba(127,127,127,.12); color: inherit; font: inherit; cursor: pointer; }
+.jv-editbar button:hover:not(:disabled) { background: rgba(127,127,127,.25); }
+.jv-editbar button:disabled { opacity: .4; cursor: default; }
+.jv-editbar .jv-danger:hover:not(:disabled) { background: rgba(229,72,77,.3); border-color: rgba(229,72,77,.6); }
+.jv-edithint { opacity: .65; margin-inline-end: auto; }
+.jv-editbar .jv-edit { flex: 1; min-width: 120px; }
+
+.zb-json { position: absolute; inset: 0; display: flex; }
+.zb-json > .jv { flex: 1; min-width: 0; border-radius: 0; border: 0; }
+.zb-json > .jv { margin: 0 !important; }
