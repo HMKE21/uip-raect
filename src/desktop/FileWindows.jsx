@@ -13,7 +13,7 @@ const ZipWorkbench = lazy(() => import('../components/zipbench/ZipWorkbench'));
 const changed = () => window.dispatchEvent(new Event('uip-drive-changed'));
 
 /** Images, PDFs, office files, media, ZIPs… in a normal desktop window (same viewer + editors as the full-screen one). */
-export function ViewerWindow({ files, startId, locale, registerGuard, onClose }) {
+export function ViewerWindow({ files, startId, locale, registerGuard, onClose, onEditText }) {
   const loadBlob = useCallback((file, { onProgress } = {}) => fetchDriveBlob(file.driveId ?? file.id, { onProgress }), []);
   const saveFile = useCallback(async (file, blob, opts) => {
     const res = await drive.replace(file.id, blob, opts?.name || file.original_name);
@@ -25,7 +25,7 @@ export function ViewerWindow({ files, startId, locale, registerGuard, onClose })
   return (
     <FileViewer
       embedded files={files} startIndex={startIndex} locale={locale} onClose={onClose} registerGuard={registerGuard}
-      loadBlob={loadBlob} onSaveFile={saveFile} sandboxTokenPathOf={sandboxTokenPathOf}
+      loadBlob={loadBlob} onSaveFile={saveFile} onEditText={onEditText} sandboxTokenPathOf={sandboxTokenPathOf}
     />
   );
 }

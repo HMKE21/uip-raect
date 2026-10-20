@@ -16,7 +16,7 @@ import { saveBlob } from '../../lib/exporter';
 import { drive, fetchDriveBlob, fetchFolderZip, fetchDownload } from '../../lib/driveApi';
 import { isSystemNode } from '../../desktop/sync';
 import { FileGlyph, FolderGlyph } from '../../desktop/OsIcons';
-import { extOf, isTextName } from '../../lib/driveFileKinds';
+import { extOf, isTextName, opensInEditor } from '../../lib/driveFileKinds';
 import { useSharedClip } from '../../lib/driveClipboard';
 import '../../styles/css/my-pc.css';
 
@@ -354,7 +354,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     }
   }, [flash, reload]);
 
-  const viewerFiles = useMemo(() => items.filter((n) => n.type === 'file' && !isTextName(n.name)).map((n) => ({
+  const viewerFiles = useMemo(() => items.filter((n) => n.type === 'file' && !opensInEditor(n.name)).map((n) => ({
     id: n.id, original_name: n.name, url: `drive:${n.id}`, size_bytes: n.size_bytes, size_human: n.size_human, version: 1, driveId: n.id,
   })), [items]);
 
@@ -362,7 +362,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
 
   const openNode = useCallback((n) => {
     if (n.type === 'folder') { openFolder(n.id); return; }
-    if (isTextName(n.name)) { setEditor({ kind: 'text', node: n }); return; }
+    if (opensInEditor(n.name)) { setEditor({ kind: 'text', node: n }); return; }
     setViewer({ startId: n.id });
   }, [openFolder, setEditor, setViewer]);
 
@@ -1043,6 +1043,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
         <FileViewer
           files={viewerFiles} startIndex={startViewerIndex} locale={locale} onClose={() => setViewer(null)}
           loadBlob={loadViewerBlob} onSaveFile={saveViewerFile}
+          onEditText={(f) => { const n = items.find((x) => x.id === (f.driveId ?? f.id)); setViewerState(null); setEditor({ kind: 'text', node: n || { id: f.driveId ?? f.id, name: f.original_name } }); }}
           sandboxTokenPathOf={(f) => drive.sandboxTokenPath(f.driveId ?? f.id)}
         />
       )}

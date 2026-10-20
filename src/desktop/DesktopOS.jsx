@@ -25,7 +25,7 @@ import { wallpaperById, wallpaperCss } from './wallpapers';
 import { chromeH, initialWm, winTitle, wmReducer } from './wm';
 import { restoreWm, saveWm } from './wmPersist';
 import { EditorWindow, ViewerWindow } from './FileWindows';
-import { isTextName } from '../lib/driveFileKinds';
+import { opensInEditor } from '../lib/driveFileKinds';
 import NewFileDialog from '../components/NewFileDialog';
 import WindowFrame from './Window';
 import './desktop.css';
@@ -243,9 +243,9 @@ export default function DesktopOS() {
   }, [openApp, prefs.openMax]);
   const openNode = useCallback((n) => {
     if (n.type === 'folder') { openExplorer({ folder: String(n.id) }); return; }
-    if (isTextName(n.name)) { openFileWin({ kind: 'editor', editor: { kind: 'text', node: n } }); return; }
+    if (opensInEditor(n.name)) { openFileWin({ kind: 'editor', editor: { kind: 'text', node: n } }); return; }
     const toFile = (x) => ({ id: x.id, original_name: x.name, url: `drive:${x.id}`, size_bytes: x.size_bytes, size_human: x.size_human, version: 1, driveId: x.id });
-    const sibs = desk.items.filter((x) => x.type === 'file' && !isSystemNode(x) && !isTextName(x.name));
+    const sibs = desk.items.filter((x) => x.type === 'file' && !isSystemNode(x) && !opensInEditor(x.name));
     openFileWin({ kind: 'viewer', startId: n.id, files: (sibs.some((x) => x.id === n.id) ? sibs : [n]).map(toFile) });
   }, [desk.items, openExplorer, openFileWin]);
 
@@ -638,7 +638,8 @@ export default function DesktopOS() {
   const bodyOf = (w) => {
     switch (w.app) {
       case 'explorer': return <ExplorerApp onOpenWindow={openFileWin} />;
-      case 'viewer': return <ViewerWindow files={w.props.files} startId={w.props.startId} locale={locale} registerGuard={guardFor(w.id)} onClose={() => dispatch({ type: 'close', id: w.id, force: true })} />;
+      case 'viewer': return <ViewerWindow files={w.props.files} startId={w.props.startId} locale={locale} registerGuard={guardFor(w.id)} onClose={() => dispatch({ type: 'close', id: w.id, force: true })}
+        onEditText={(f) => openFileWin({ kind: 'editor', editor: { kind: 'text', node: { id: f.driveId ?? f.id, name: f.original_name } } })} />;
       case 'editor': return <EditorWindow editor={w.props.editor} locale={locale} registerGuard={guardFor(w.id)} />;
       case 'settings': return <SettingsApp tab={w.props.tab} prefs={prefs} setPrefs={setPrefs} ar={ar} tt={tt} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale} usage={desk.usage} user={user} lockEnabled={lockEnabled} onLockChanged={setLockEnabled} />;
       case 'taskmgr': return <TaskManagerApp list={wm.list} ar={ar} tt={tt} usage={desk.usage} onEnd={(id) => dispatch({ type: 'close', id })} onFocus={(id) => dispatch({ type: 'focus', id })} />;

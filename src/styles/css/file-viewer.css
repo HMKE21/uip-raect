@@ -181,3 +181,8 @@
   .st-fv, .st-fv__stage { animation: none; }
   .st-fv__image img { transition: none; }
 }
+
+/* JSON files (My PC): the admin JSON viewer fills the stage */
+.st-fv__sheet--json { width: min(1500px, 100%); padding: 0; overflow: hidden; display: flex; flex-direction: column; background: transparent; box-shadow: 0 20px 70px rgba(0, 0, 0, .5); }
+.st-fv__sheet--json .jv { flex: 1; min-height: 0; margin-top: 0; border-radius: 14px; }
+.st-fv__sheet--json .jv-body { max-height: none; min-height: 0; }

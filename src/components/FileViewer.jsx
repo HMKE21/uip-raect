@@ -10,10 +10,12 @@ import { saveBlob } from '../lib/exporter';
 import { describe, extOf, cellStr, MAX_ROWS, PdfCanvasViewer } from './FilePreviewButton';
 import { agoText, discardDraft, getDraft } from '../lib/draftStore';
 import useDraftScope from '../lib/useDraftScope';
+import { JSON_EXT } from '../lib/driveFileKinds';
 import '../styles/css/drafts.css';
 import '../styles/css/file-viewer.css';
 
 const ZipWorkbench = lazy(() => import('./zipbench/ZipWorkbench'));
+const JsonViewer = lazy(() => import('./admin/JsonViewer'));
 const ImageEditor = lazy(() => import('./editor/ImageEditor'));
 const PdfEditor = lazy(() => import('./editor/PdfEditor'));
 const XlsxEditor = lazy(() => import('./editor/XlsxView'));
@@ -59,6 +61,7 @@ const AUDIO_EXT = ['mp3', 'wav', 'ogg', 'm4a', 'aac'];
 const CODE_EXT = ['js', 'jsx', 'ts', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'cs', 'php', 'css', 'scss', 'sh', 'ini', 'toml', 'rb', 'go', 'rs', 'kt', 'swift', 'vue', 'dart', 'sql', 'json', 'xml', 'yml', 'yaml', 'html', 'htm'];
 const PLAIN_TEXT_EXT = ['txt', 'md', 'log', 'env', 'gitignore'];
 const MAX_TEXT = 200000;
+const MAX_JSON_BYTES = 12 * 1024 * 1024; // bigger files stay in the plain text view
 const MAX_LINE_NUMBERS = 3000;
 const CACHE_LIMIT = 8;
 const PREFETCH_MAX_BYTES = 6 * 1024 * 1024;
@@ -112,6 +115,16 @@ async function buildView(file, blob) {
   }
   if (ext === 'zip') {
     return { kind: 'zip', blob };
+  }
+  if (JSON_EXT.has(ext) && blob.size <= MAX_JSON_BYTES) {
+    const raw = (await blob.text()).replace(/^\uFEFF/, '');
+    try {
+      const value = ext === 'jsonl' || ext === 'ndjson'
+        ? raw.split(/\r?\n/).filter((l) => l.trim()).map((l) => JSON.parse(l))
+        : JSON.parse(raw);
+      if (value !== null && typeof value === 'object') return { kind: 'json', value, raw };
+    } catch (e) { return { kind: 'text', text: raw.slice(0, MAX_TEXT), code: true, jsonError: e?.message || String(e) }; }
+    return { kind: 'text', text: raw.slice(0, MAX_TEXT), code: true };
   }
   if (CODE_EXT.includes(ext) || PLAIN_TEXT_EXT.includes(ext)) {
     let text = await blob.text();
@@ -262,7 +275,7 @@ function ImageStage({ url, alt, tt, apiRef, onSwipe, rtl }) {
   );
 }
 
-export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp, locale = 'en', onSaveZip, onSaveFile, projectId, loadBlob, sandboxTokenPathOf, embedded = false, registerGuard }) {
+export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp, locale = 'en', onSaveZip, onSaveFile, onEditText, projectId, loadBlob, sandboxTokenPathOf, embedded = false, registerGuard }) {
   const rtl = locale === 'ar';
   const tt = useCallback((en, ar) => (locale === 'ar' ? ar : en), [locale]);
   const list = useMemo(() => files.filter((f) => f && f.url), [files]);
@@ -509,6 +522,11 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
           </div>
         </div>
         <div className="st-fv__actions">
+          {data?.kind === 'json' && onEditText && !editing && (
+            <button type="button" className="st-fv__btn st-fv__btn--primary" onClick={() => onEditText(file)} title={tt('Edit as text in the code editor', 'تعديل كنص في محرر الأكواد')}>
+              <Icon name="edit" size={17} /><span>{tt('Edit', 'تعديل')}</span>
+            </button>
+          )}
           {canEdit && (
             <button type="button" className="st-fv__btn st-fv__btn--primary" onClick={() => setEditing(true)} title={tt('Edit this file', 'تعديل الملف')}>
               <Icon name="edit" size={17} /><span>{tt('Edit', 'تعديل')}</span>
@@ -653,8 +671,18 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
             )}
           </div>
         )}
+        {stage === 'json' && (
+          <div className="st-fv__sheet st-fv__sheet--json">
+            <Suspense fallback={<div className="st-fv__center"><Spinner /></div>}>
+              <JsonViewer key={rootOf(file)} value={data.value} text={data.raw} filename={downloadName}
+                meta={ext === 'jsonl' || ext === 'ndjson' ? 'JSON Lines' : undefined}
+                labels={{ tree: tt('Tree', 'شجرة'), outline: tt('Outline', 'هيكل'), theme: tt('Theme', 'الثيم'), dark: tt('Dark', 'داكن'), light: tt('Light', 'فاتح'), code: tt('Code', 'كود'), search: tt('Search keys & values…', 'ابحث في المفاتيح والقيم…'), expand: tt('Expand all', 'فتح الكل'), collapse: tt('Collapse all', 'طي الكل'), copy: tt('Copy', 'نسخ'), copied: tt('Copied', 'تم النسخ'), download: tt('Download', 'تنزيل'), full: tt('Full screen', 'ملء الشاشة'), exit: tt('Exit full screen', 'إنهاء ملء الشاشة'), nodes: tt('nodes', 'عقدة'), lines: tt('lines', 'سطر'), path: tt('Click a node to see its path', 'اضغط على عقدة لعرض مسارها'), matches: tt('matches', 'نتيجة'), wrap: tt('Wrap', 'التفاف'), zoomIn: tt('Zoom in', 'تكبير'), zoomOut: tt('Zoom out', 'تصغير'), zoomHint: tt('Ctrl + mouse wheel to zoom', 'Ctrl + عجلة الماوس للتكبير'), fit: tt('Fit to screen', 'ملاءمة الشاشة'), resetLayout: tt('Reset layout', 'إعادة الترتيب'), dragHint: tt('drag to move', 'اسحب للتحريك'), resize: tt('Drag to resize', 'اسحب لتغيير الحجم') }} />
+            </Suspense>
+          </div>
+        )}
         {stage === 'text' && (
           <div className="st-fv__sheet">
+            {data.jsonError && <p className="st-fv__empty" role="alert" dir="ltr">{tt('Not valid JSON — shown as text:', 'مش JSON صالح — معروض كنص:')} {data.jsonError}</p>}
             {!data.text ? <p className="st-fv__empty">{tt('This file is empty.', 'الملف فارغ.')}</p> : lines ? (
               <pre dir="ltr" className={`st-fv__code${data.code ? ' is-code' : ''}`}>{lines.map((ln, i) => <span key={i} className="st-fv__ln">{ln || ' '}{'\n'}</span>)}</pre>
             ) : (
