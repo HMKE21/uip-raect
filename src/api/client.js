@@ -232,7 +232,7 @@ async function fetchWithRetry(method, path, url, opts) {
   throw lastErr;
 }
 
-async function rawRequest(method, path, { params, body, formData, headers } = {}) {
+async function rawRequest(method, path, { params, body, formData, headers, asResponse } = {}) {
   // While an export runs, the language picked in the export menu wins over the UI language.
   const exportLang = getExportLang();
   const url = buildUrl(path, exportLang ? { ...params, lang: exportLang } : params);
@@ -273,6 +273,8 @@ async function rawRequest(method, path, { params, body, formData, headers } = {}
     throw new ApiError(msg('Network error — please check your connection.', 'خطأ في الشبكة — من فضلك تحقق من اتصالك.'), 0, null);
   }
 
+  // File downloads: a .json file is served as application/json — hand back the Response untouched instead of parsing it.
+  if (asResponse && response.ok) return response;
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {
     if (!response.ok) throw new ApiError(`Request failed (${response.status})`, response.status, null);
@@ -604,7 +606,7 @@ async function uploadRequest(method, path, formData, onProgress, signal) {
 export const api = {
   get: (path, params) => request('GET', path, { params }),
   /** GET a file. Same Bearer + refresh-on-401 path as every other call; returns the Response. */
-  blob: (path, params, headers) => request('GET', path, { params, headers: { Accept: '*/*', ...(headers || {}) } }),
+  blob: (path, params, headers) => request('GET', path, { params, asResponse: true, headers: { Accept: '*/*', ...(headers || {}) } }),
   post: (path, body) => request('POST', path, { body }),
   put: (path, body) => request('PUT', path, { body }),
   patch: (path, body) => request('PATCH', path, { body }),
