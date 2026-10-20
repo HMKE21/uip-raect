@@ -251,3 +251,8 @@
 .os--wmax.os--dockpeek .os-dock__rail { pointer-events: auto; }
 .os-dockhot { position: absolute; inset-inline: 0; bottom: 0; height: 5px; z-index: 100001; }
 .os--wmax .os-toast { bottom: 40px; }
+.os-lock__field input { background: transparent; border: 0; border-radius: 0; }
+.os-lock__row button.os-lock__go { background: rgba(255, 255, 255, .92); }
+.os-lock__row button.os-lock__go:disabled { background: rgba(255, 255, 255, .22); }
+.os-lock__row .os-lock__eye { background: transparent; }
+.os-lock__row .os-lock__eye:hover { background: rgba(255, 255, 255, .16); }

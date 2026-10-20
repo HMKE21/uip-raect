@@ -815,7 +815,7 @@ export default function DesktopOS() {
         />
       )}
       {toast && <div className={`os-toast${toast.tone === 'error' ? ' is-error' : ''}`} role="status">{toast.msg}</div>}
-      {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} onUnlock={() => setLocked(false)} />}
+      {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} onUnlock={() => setLocked(false)} onPortal={() => runCommand('portal')} />}
       {brightness < 100 && <div className="os-dim" style={{ opacity: ((100 - brightness) / 100) * 0.7 }} aria-hidden="true" />}
       <div className={`os-boot${booting ? '' : ' is-done'}`} aria-hidden="true"><UipMark size={72} /><span className="os-boot__bar"><i /></span></div>
     </div>,

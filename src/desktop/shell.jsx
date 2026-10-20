@@ -235,13 +235,14 @@ export function TaskView({ list, ar, tt, onPick, onClose, onCloseWin }) {
  * Lock password set (Settings > Lock screen) -> the password is checked on the server; "Forgot password?" sends a
  * 6-digit code to the account's e-mail and lets the student choose a new password with it.
  */
-export function LockScreen({ ar, tt, user, lockEnabled, onUnlock }) {
+export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal }) {
   const name = user?.full_name || user?.email || '';
   const needPw = lockEnabled !== false; // unknown (offline, first load) is treated as locked: the server answers "no password" if there is none
   const [view, setView] = useState('pw'); // 'pw' | 'reset'
   const [pw, setPw] = useState(''); const [code, setCode] = useState(''); const [np, setNp] = useState(''); const [np2, setNp2] = useState('');
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [info, setInfo] = useState('');
   const [wait, setWait] = useState(0);
+  const [show, setShow] = useState(false); const [caps, setCaps] = useState(false); const [shake, setShake] = useState(0);
   const first = useRef(null);
   useEffect(() => {
     if (needPw) return undefined;
@@ -256,7 +257,7 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock }) {
     e.preventDefault();
     if (busy || !pw) return;
     setBusy(true); setErr('');
-    try { await desktopApi.lockVerify(pw); onUnlock(); } catch (x) { setErr(lockError(x)); setPw(''); first.current?.focus(); } finally { setBusy(false); }
+    try { await desktopApi.lockVerify(pw); onUnlock(); } catch (x) { setErr(lockError(x)); setPw(''); setShake((n) => n + 1); first.current?.focus(); } finally { setBusy(false); }
   };
   const sendCode = async () => {
     if (busy) return;
@@ -276,13 +277,21 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock }) {
     try { await desktopApi.lockReset(code.trim(), np); onUnlock(); } catch (x) { setErr(lockError(x)); } finally { setBusy(false); }
   };
 
-  const avatar = <div className="os-lock__user"><i>{String(name || '?').trim().charAt(0).toUpperCase()}</i><b dir="auto">{name}</b></div>;
+  const sub = user?.email && user.email !== name ? user.email : '';
+  const avatar = <div className="os-lock__user"><i>{String(name || '?').trim().charAt(0).toUpperCase()}</i><b dir="auto">{name}</b>{sub && <small dir="ltr">{sub}</small>}</div>;
+  const capsKey = (e) => setCaps(!!e.getModifierState?.('CapsLock'));
+  const foot = (
+    <div className="os-lock__foot">
+      <span className="os-lock__badge"><Icon name="lock" size={13} />{tt('Locked', 'مقفول')}</span>
+      {onPortal && <button type="button" className="os-lock__ghost" onClick={onPortal}>{tt('Back to portal', 'العودة للبوابة')}</button>}
+    </div>
+  );
   if (!needPw) {
     return (
       <div className="os-lock" onClick={onUnlock} role="button" tabIndex={0} aria-label={tt('Unlock', 'فتح القفل')}>
         <Clock ar={ar} big />
         {avatar}
-        <p>{tt('Click or press any key to unlock', 'اضغط أي زر أو اضغط بالماوس للفتح')}</p>
+        <p className="os-lock__hint"><Icon name="chevron-up" size={18} />{tt('Click or press any key to unlock', 'اضغط أي زر أو اضغط بالماوس للفتح')}</p>
       </div>
     );
   }
@@ -293,9 +302,14 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock }) {
       {view === 'pw' ? (
         <form className="os-lock__form" onSubmit={submit}>
           <div className="os-lock__row">
-            <input ref={first} type="password" value={pw} onChange={(e) => setPw(e.target.value)} placeholder={tt('Password', 'الباسورد')} autoComplete="off" maxLength={72} aria-label={tt('Password', 'الباسورد')} dir="auto" />
-            <button type="submit" disabled={busy || !pw} aria-label={tt('Unlock', 'فتح القفل')}>{busy ? <span className="mp-spin" /> : <Icon name="arrow-right" size={18} />}</button>
+            <div key={shake} className={`os-lock__field${shake ? ' is-shake' : ''}${err ? ' is-err' : ''}`}>
+              <Icon name="lock" size={16} />
+              <input ref={first} type={show ? 'text' : 'password'} value={pw} onChange={(e) => { setPw(e.target.value); if (err) setErr(''); }} onKeyDown={capsKey} onKeyUp={capsKey} onBlur={() => setCaps(false)} placeholder={tt('Enter password', 'اكتب الباسورد')} autoComplete="off" maxLength={72} aria-label={tt('Password', 'الباسورد')} aria-invalid={!!err} dir="auto" />
+              <button type="button" className="os-lock__eye" onClick={() => setShow((v) => !v)} aria-label={show ? tt('Hide password', 'إخفاء الباسورد') : tt('Show password', 'إظهار الباسورد')} aria-pressed={show} tabIndex={-1}><Icon name={show ? 'eye-off' : 'eye'} size={16} /></button>
+            </div>
+            <button type="submit" className="os-lock__go" disabled={busy || !pw} aria-label={tt('Unlock', 'فتح القفل')}>{busy ? <span className="mp-spin" /> : <Icon name="arrow-right" size={18} />}</button>
           </div>
+          {caps && <p className="os-lock__caps"><Icon name="alert-triangle" size={13} />{tt('Caps Lock is on', 'زر Caps Lock مفعّل')}</p>}
           {err && <p className="os-lock__err" role="alert">{err}</p>}
           <button type="button" className="os-lock__link" onClick={sendCode} disabled={busy}>{tt('Forgot password?', 'نسيت الباسورد؟')}</button>
         </form>
@@ -313,6 +327,7 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock }) {
           </div>
         </form>
       )}
+      {foot}
     </div>
   );
 }
