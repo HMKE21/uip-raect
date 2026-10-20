@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import OfficeShell from './OfficeShell';
 import { Btn } from './EditorUI';
 import DocxRibbon from './DocxRibbon';
 import { readDocx, htmlToDocx, sanitizeHtml } from '../../lib/officeFmt/docx';
+import { borderCss } from '../../lib/officeFmt/docxRead';
 import {
   twToPx, rgbToHex, blocksOfSelection, closestIn, saveSel, restoreSel, makeHistory, findMatches, rangeOfMatch, selectRange,
   cellOf, T, tableHtml, fitImage, countWords, normalizeUrl, printDocument, PAGE_SIZES,
@@ -17,10 +18,34 @@ const isBlank = (h) => !h || (!/<(img|span data-fld|table)/i.test(h) && !h.repla
 const WARN = { chart: ['Charts are not editable here and will be dropped on save.', 'الرسوم البيانية مش قابلة للتعديل هنا وهتتشال عند الحفظ.'], textbox: ['Text boxes are not editable here and will be dropped on save.', 'مربعات النص مش قابلة للتعديل هنا وهتتشال عند الحفظ.'], shape: ['Shapes are not editable here and will be dropped on save.', 'الأشكال مش قابلة للتعديل هنا وهتتشال عند الحفظ.'], notes: ['Footnotes / endnotes are not kept on save.', 'الحواشي مش بتتحفظ.'], firstPage: ['Only the default header / footer is kept.', 'بيتحفظ الهيدر والفوتر الافتراضي بس.'] };
 
 const pageStyle = (pg, d, zoom) => ({
-  width: twToPx(pg.w), minHeight: twToPx(pg.h), padding: `${twToPx(pg.top)}px ${twToPx(pg.right)}px ${twToPx(pg.bottom)}px ${twToPx(pg.left)}px`,
+  // the header / footer sit in the flow: the page is padded by their distance from the edge and they fill up to the margin, so a tall header pushes the text down
+  width: twToPx(pg.w), minHeight: twToPx(pg.h), padding: `${twToPx(Math.min(pg.header, pg.top))}px ${twToPx(pg.right)}px ${twToPx(Math.min(pg.footer, pg.bottom))}px ${twToPx(pg.left)}px`,
+  '--dx-hmin': `${twToPx(Math.max(0, pg.top - pg.header))}px`, '--dx-fmin': `${twToPx(Math.max(0, pg.bottom - pg.footer))}px`,
   '--dx-font': `'${d.font}', Calibri, Arial, 'Noto Naskh Arabic', sans-serif`, '--dx-size': `${d.size}pt`, '--dx-before': `${d.before}pt`, '--dx-after': `${d.after}pt`, '--dx-line': d.line,
   '--dx-ph': `${twToPx(pg.h)}px`, '--dx-hd': `${twToPx(pg.header)}px`, '--dx-fd': `${twToPx(pg.footer)}px`, zoom,
 });
+
+/** Page borders (Word "Page Borders"): one frame per page, placed from the page edge or from the text like Word does. */
+export function PageBorders({ pg, zoom }) {
+  const ref = useRef(null); const [pages, setPages] = useState(1); const b = pg.borders;
+  useLayoutEffect(() => {
+    const host = ref.current?.parentElement; if (!host || !b) return undefined;
+    const ph = twToPx(pg.h);
+    const calc = () => setPages(Math.max(1, Math.ceil(host.getBoundingClientRect().height / (zoom || 1) / ph - 0.02)));
+    calc(); const ro = new ResizeObserver(calc); ro.observe(host); return () => ro.disconnect();
+  }, [b, pg.h, zoom]);
+  if (!b) return null;
+  const ph = twToPx(pg.h); const px = (p) => (p * 4) / 3;
+  const edge = (k, margin) => Math.max(0, b.offsetFrom === 'text' ? twToPx(margin) - (b[k] ? px(b[k].space) : 0) : (b[k] ? px(b[k].space) : 0));
+  const T = edge('top', pg.top); const L = edge('left', pg.left); const R = edge('right', pg.right); const B = edge('bottom', pg.bottom);
+  const frame = {}; ['top', 'left', 'bottom', 'right'].forEach((k) => { if (b[k]) frame[`border${k[0].toUpperCase()}${k.slice(1)}`] = borderCss(b[k]); });
+  return (
+    <div ref={ref} className="dxp__pb" aria-hidden="true" style={{ zIndex: b.zOrder === 'back' ? 0 : 2 }}>
+      {Array.from({ length: pages }, (_, i) => ((b.display === 'firstPage' && i > 0) || (b.display === 'notFirstPage' && i === 0) ? null
+        : <i key={i} style={{ position: 'absolute', left: L, right: R, top: i * ph + T, height: Math.max(0, ph - T - B), ...frame }} />))}
+    </div>
+  );
+}
 
 /** Read-only page view of a .docx for the file viewer: real page size, margins, header and footer, scaled to the pane. */
 export function DocxPreview({ blob, tt }) {
@@ -37,6 +62,7 @@ export function DocxPreview({ blob, tt }) {
   return (
     <div ref={box} className="dx__preview">
       <div className="dxp dxp--ro" dir={d.rtl ? 'rtl' : 'ltr'} style={pageStyle(doc.page, d, fit)}>
+        <PageBorders pg={doc.page} zoom={fit} />
         {doc.header && <div className="dxp__hdr" dangerouslySetInnerHTML={{ __html: doc.header }} />}
         <div className="dxp__body" dangerouslySetInnerHTML={{ __html: doc.html }} />
         {doc.footer && <div className="dxp__ftr" dangerouslySetInnerHTML={{ __html: doc.footer }} />}
@@ -83,7 +109,7 @@ export default function DocxView({ blob, fileName, tt, rtl, guardRef, onSave, on
       while (f.firstChild) s.appendChild(f.firstChild); f.replaceWith(s);
     });
     root.querySelectorAll('[style*="xxx-large"],[style*="x-large"]').forEach((el) => { if (/font-size:\s*(-webkit-)?xx?x?-large/.test(el.getAttribute('style'))) el.style.fontSize = `${pendingSize.current}pt`; });
-    root.querySelectorAll('span:not([style]):not([data-fld]):not([class])').forEach((s) => { s.replaceWith(...Array.from(s.childNodes)); });
+    root.querySelectorAll('span:not([style]):not([data-fld]):not([class]):not([dir])').forEach((s) => { s.replaceWith(...Array.from(s.childNodes)); });
     // lists nested directly in lists -> inside the previous <li>
     root.querySelectorAll('ul > ul, ul > ol, ol > ul, ol > ol').forEach((l) => {
       const prev = l.previousElementSibling;
@@ -343,6 +369,7 @@ export default function DocxView({ blob, fileName, tt, rtl, guardRef, onSave, on
       {err && <p className="ed__err dx__err" role="alert" onClick={() => setErr('')}>{err}</p>}
       <div className="dx__stage" ref={stage}>
         <div className="dxp" dir={def.rtl ? 'rtl' : 'ltr'} style={pageStyle(pg, def, zoom)}>
+          <PageBorders pg={pg} zoom={zoom} />
           <div ref={hdr} className="dxp__hdr" data-ph={tt('Header', 'رأس الصفحة')} {...fieldProps} />
           <div ref={body} className="dxp__body" spellCheck {...fieldProps} />
           <div ref={ftr} className="dxp__ftr" data-ph={tt('Footer', 'تذييل الصفحة')} {...fieldProps} />

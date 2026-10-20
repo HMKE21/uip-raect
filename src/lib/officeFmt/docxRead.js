@@ -24,6 +24,7 @@ const escA = (s) => esc(s).replace(/"/g, '&quot;');
 const num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : undefined; };
 const pt = (n) => `${Math.round(n * 100) / 100}pt`;
 const hexOk = (c) => (c && /^[0-9a-f]{6}$/i.test(c) ? `#${c.toLowerCase()}` : undefined);
+const RTL_CHARS = /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/;
 const merge = (a, b) => { const o = { ...a }; Object.keys(b || {}).forEach((k) => { if (b[k] !== undefined) o[k] = b[k]; }); return o; };
 
 /* ------------------------------------------------------------------ run / paragraph property parsing */
@@ -51,8 +52,19 @@ function parseRpr(rPr, theme) {
   const va = V(kid(rPr, 'w:vertAlign')); if (va) o.va = va === 'superscript' ? 'sup' : va === 'subscript' ? 'sub' : null;
   const caps = flag(kid(rPr, 'w:caps')); if (caps !== undefined) o.caps = caps;
   const rs = V(kid(rPr, 'w:rStyle')); if (rs) o.rStyle = rs;
+  const rt = flag(kid(rPr, 'w:rtl')); if (rt !== undefined) o.rtl = rt;
   return o;
 }
+
+/** <w:top w:val="single" w:sz="6" w:space="1" w:color="8EAADB"/> -> { val, sz (1/8 pt), space (pt), color } | null (no line) */
+function parseBorder(el) {
+  if (!el) return null;
+  const val = V(el); if (!val || /^(nil|none)$/i.test(val)) return null;
+  const c = A(el, 'w:color');
+  return { val, sz: Math.max(2, num(A(el, 'w:sz')) || 4), space: num(A(el, 'w:space')) || 0, color: hexOk(c) || '#000000' };
+}
+const CSS_LINE = (v) => (/double|triple|thinThick|thickThin/i.test(v) ? 'double' : /dot/i.test(v) ? 'dotted' : /dash/i.test(v) ? 'dashed' : 'solid');
+export const borderCss = (b) => `${Math.max(CSS_LINE(b.val) === 'double' ? 3 : 0.5, Math.round((b.sz / 8) * 100) / 100)}pt ${CSS_LINE(b.val)} ${b.color}`;
 
 function parsePpr(pPr) {
   if (!pPr) return {};
@@ -76,6 +88,12 @@ function parsePpr(pPr) {
   if (np) { const id = num(V(kid(np, 'w:numId'))); const lv = num(V(kid(np, 'w:ilvl'))); if (id !== undefined) o.numId = id; if (lv !== undefined) o.ilvl = lv; }
   const ps = V(kid(pPr, 'w:pStyle')); if (ps) o.pStyle = ps;
   const pb = flag(kid(pPr, 'w:pageBreakBefore')); if (pb) o.pbb = true;
+  const bd = kid(pPr, 'w:pBdr');
+  if (bd) {
+    const b = {};
+    ['top', 'bottom', 'left', 'right'].forEach((k) => { const x = parseBorder(kid(bd, `w:${k}`) || kid(bd, `w:${k === 'left' ? 'start' : k === 'right' ? 'end' : k}`)); if (x) b[k] = x; });
+    if (Object.keys(b).length) o.bdr = b;
+  }
   return o;
 }
 
@@ -179,7 +197,14 @@ class Conv {
     const bytes = this.files[path]; let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     const ex = el.getElementsByTagName('wp:extent')[0]; const dp = el.getElementsByTagName('wp:docPr')[0];
     const w = ex ? Math.round(num(A(ex, 'cx')) / 9525) : 0; const h = ex ? Math.round(num(A(ex, 'cy')) / 9525) : 0;
-    return `<img src="data:${MIME[ext]};base64,${btoa(bin)}"${w > 0 ? ` width="${w}"` : ''}${h > 0 && w > 0 ? ` height="${h}"` : ''}${dp && A(dp, 'descr') ? ` alt="${escA(A(dp, 'descr'))}"` : ''}>`;
+    let fl = ''; // anchored (floating) picture: remember the side it sits on so the logos of a header stay left / right of the text
+    const anc = el.getElementsByTagName('wp:anchor')[0];
+    if (anc) {
+      const ph = kid(anc, 'wp:positionH'); const al = (kid(ph, 'wp:align')?.textContent || '').trim(); const off = kid(ph, 'wp:posOffset');
+      if (al === 'right' || al === 'outside') fl = 'right'; else if (al === 'left' || al === 'inside') fl = 'left';
+      else if (off) { const cx = ex ? num(A(ex, 'cx')) || 0 : 0; const mid = (num(off.textContent) || 0) / 635 + cx / 635 / 2; const base = A(ph, 'relativeFrom') === 'page' ? this.pageW : this.textW; fl = mid > base / 2 ? 'right' : 'left'; }
+    }
+    return `<img src="data:${MIME[ext]};base64,${btoa(bin)}"${fl ? ` data-fl="${fl}"` : ''}${w > 0 ? ` width="${w}"` : ''}${h > 0 && w > 0 ? ` height="${h}"` : ''}${dp && A(dp, 'descr') ? ` alt="${escA(A(dp, 'descr'))}"` : ''}>`;
   }
 
   /* one run -> list of { html } | { pb: true }, formatted relative to the paragraph's own look */
@@ -222,8 +247,8 @@ class Conv {
     const b = !!this.bold(e, rtl); const i = !!this.ital(e, rtl);
     if (b !== !!this.bold(eff, rtl) && !b) st.push('font-weight:normal');
     if (i !== !!this.ital(eff, rtl) && !i) st.push('font-style:normal');
-    const wrapT = (h) => {
-      let o = h;
+    const wrapT = (h, iso) => {
+      let o = iso ? `<span dir="ltr">${h}</span>` : h; // Word lays a run that is not flagged right-to-left out left-to-right, even inside a bidi paragraph
       if (e.va === 'sup') o = `<sup>${o}</sup>`; else if (e.va === 'sub') o = `<sub>${o}</sub>`;
       if (e.st && !eff.st) o = `<s>${o}</s>`;
       if (e.u && !eff.u) o = `<u>${o}</u>`;
@@ -232,7 +257,7 @@ class Conv {
       if (st.length) o = `<span style="${escA(st.join(';'))}">${o}</span>`;
       return href ? `<a href="${escA(href)}">${o}</a>` : o;
     };
-    return parts.map((p) => (p.pb ? p : p.text !== undefined ? { html: wrapT(esc(p.text)) } : { html: p.html === '<br>' ? '<br>' : p.html }));
+    return parts.map((p) => (p.pb ? p : p.text !== undefined ? { html: wrapT(esc(p.text), rtl && !e.rtl && !RTL_CHARS.test(p.text)) } : { html: p.html === '<br>' ? '<br>' : p.html }));
   }
 
   fldChar(type, parts, flush) {
@@ -279,6 +304,7 @@ class Conv {
     if (!forList) {
       if (ppr.before !== undefined && ppr.before !== bp.before) st.push(`margin-top:${pt(ppr.before)}`);
       if (ppr.after !== undefined && ppr.after !== bp.after) st.push(`margin-bottom:${pt(ppr.after)}`);
+      if (ppr.bdr) ['top', 'bottom', 'left', 'right'].forEach((k) => { if (ppr.bdr[k]) st.push(`border-${k}:${borderCss(ppr.bdr[k])}`); });
       if (ppr.indStart) st.push(`margin-inline-start:${pt(ppr.indStart)}`);
       if (ppr.indEnd) st.push(`margin-inline-end:${pt(ppr.indEnd)}`);
       if (ppr.first) st.push(`text-indent:${pt(ppr.first)}`);
@@ -377,7 +403,7 @@ class Conv {
         col += span; return cell;
       });
     });
-    let html = `<table${bordered ? '' : ' data-b="none"'}${rtl ? ' dir="rtl"' : ''}><tbody>`;
+    let html = `<table${bordered ? '' : ' data-b="none"'}${rtl ? ' dir="rtl"' : ' dir="ltr"'}><tbody>`;
     rows.forEach((cells, ri) => {
       html += '<tr>';
       cells.forEach((c) => {
@@ -422,6 +448,12 @@ export function readDocxRaw(arrayBuffer) {
     top: tw('w:top', 1440), right: tw('w:right', 1440), bottom: tw('w:bottom', 1440), left: tw('w:left', 1440), header: tw('w:header', 708), footer: tw('w:footer', 708),
   };
   if (A(sz, 'w:orient') === 'landscape' && page.w < page.h) [page.w, page.h] = [page.h, page.w];
+  const pbEl = kid(sect, 'w:pgBorders');
+  if (pbEl) {
+    const b = {}; ['top', 'left', 'bottom', 'right'].forEach((k) => { const x = parseBorder(kid(pbEl, `w:${k}`)); if (x) b[k] = x; });
+    if (Object.keys(b).length) page.borders = { ...b, offsetFrom: A(pbEl, 'w:offsetFrom') || 'page', display: A(pbEl, 'w:display') || 'allPages', zOrder: A(pbEl, 'w:zOrder') || 'front' };
+  }
+  cv.pageW = page.w; cv.textW = Math.max(1440, page.w - page.left - page.right);
   const html = cv.container(body);
   const ref = (kind) => {
     const r = kids(sect, `w:${kind}Reference`).find((x) => (A(x, 'w:type') || 'default') === 'default');

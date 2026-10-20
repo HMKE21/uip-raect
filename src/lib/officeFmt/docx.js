@@ -35,6 +35,7 @@ function cleanStyle(st) {
     else if (k === 'line-height' && /^([\d.]+|[\d.]+pt)$/.test(v)) out.push(`line-height:${v}`);
     else if (k === 'vertical-align' && /^(middle|bottom|top)$/.test(v)) out.push(`vertical-align:${v}`);
     else if (k === 'width' && /^[\d.]+(%|pt|px)$/.test(v)) out.push(`width:${v}`);
+    else if (/^border-(top|bottom|left|right)$/.test(k) && /^[\d.]+(pt|px) (solid|double|dotted|dashed) (#[0-9a-f]{3,8}|rgba?\([\d\s,.%]+\)|[a-z]{3,20})$/i.test(v)) out.push(`${k}:${v}`);
   });
   return out.join(';');
 }
@@ -57,6 +58,7 @@ function cleanNode(node, doc) {
   if (tag === 'IMG') {
     const s = (node.getAttribute('src') || '').trim(); if (!SAFE_IMG.test(s)) return null; el.setAttribute('src', s);
     ['width', 'height'].forEach((a) => { const w = parseInt(node.getAttribute(a), 10); if (w > 0 && w < 10000) el.setAttribute(a, String(w)); });
+    const fl = node.getAttribute('data-fl'); if (fl === 'left' || fl === 'right') el.setAttribute('data-fl', fl);
   }
   if (tag === 'TD' || tag === 'TH') ['colspan', 'rowspan'].forEach((a) => { const v = parseInt(node.getAttribute(a), 10); if (v > 1 && v < 50) el.setAttribute(a, String(v)); });
   node.childNodes.forEach((c) => { const n = cleanNode(c, doc); if (n) el.appendChild(n); });
@@ -164,12 +166,12 @@ export async function htmlToDocx(root, ctx = {}) {
     const fs = lenPt(st.fontSize); if (fs) f.size = Math.round(fs * 2);
     return f;
   };
-  const textRuns = (text, f, rtl) => {
+  const textRuns = (text, f, rtl, forced) => {
     const out = [];
     text.replace(/\u00a0/g, ' ').split(/(\t|\n)/).forEach((s) => {
       if (s === '\t') out.push(new TextRun({ ...f, children: [new D.Tab()] }));
       else if (s === '\n') out.push(new TextRun({ break: 1 }));
-      else if (s) out.push(new TextRun({ text: s, ...f, rightToLeft: rtl || undefined, boldComplexScript: f.bold, italicsComplexScript: f.italics, sizeComplexScript: f.size }));
+      else if (s) out.push(new TextRun({ text: s, ...f, rightToLeft: (forced ? rtl : rtl && RTL_RE.test(s)) || undefined, boldComplexScript: f.bold, italicsComplexScript: f.italics, sizeComplexScript: f.size }));
     });
     return out;
   };
@@ -180,13 +182,15 @@ export async function htmlToDocx(root, ctx = {}) {
       const aw = parseFloat(n.style?.width) || parseInt(n.getAttribute('width'), 10); const ah = parseFloat(n.style?.height) || parseInt(n.getAttribute('height'), 10);
       let w = aw || nat[0]; let h = ah || (aw ? Math.round((aw * nat[1]) / nat[0]) : nat[1]);
       const max = Math.round(textW / 15); if (w > max) { h = Math.round((h * max) / w); w = max; }
-      return new ImageRun({ type: imgType(src), data, transformation: { width: Math.max(1, w), height: Math.max(1, h) } });
+      const fl = n.getAttribute('data-fl');
+      const floating = fl ? { horizontalPosition: { relative: D.HorizontalPositionRelativeFrom.MARGIN, align: fl === 'right' ? D.HorizontalPositionAlign.RIGHT : D.HorizontalPositionAlign.LEFT }, verticalPosition: { relative: D.VerticalPositionRelativeFrom.PARAGRAPH, offset: 0 }, wrap: { type: D.TextWrappingType.SQUARE, side: D.TextWrappingSide.BOTH_SIDES }, margins: { left: 114300, right: 114300 }, allowOverlap: true } : undefined;
+      return new ImageRun({ type: imgType(src), data, transformation: { width: Math.max(1, w), height: Math.max(1, h) }, floating });
     } catch { return null; }
   }
-  function runs(node, fmt, rtl) {
+  function runs(node, fmt, rtl, forced) {
     const out = [];
     node.childNodes.forEach((n) => {
-      if (n.nodeType === 3) { if (n.nodeValue) out.push(...textRuns(n.nodeValue, fmt, rtl)); return; }
+      if (n.nodeType === 3) { if (n.nodeValue) out.push(...textRuns(n.nodeValue, fmt, rtl, forced)); return; }
       if (n.nodeType !== 1) return;
       const t = n.tagName; const f = { ...fmt };
       if (t === 'BR') { out.push(new TextRun({ break: 1 })); return; }
@@ -202,9 +206,10 @@ export async function htmlToDocx(root, ctx = {}) {
       styleFmt(n, f);
       if (t === 'IMG') { const im = image(n); if (im) out.push(im); return; }
       if (t === 'A' && /^(https?:|mailto:|tel:)/i.test(n.getAttribute('href') || '')) {
-        out.push(new ExternalHyperlink({ link: n.getAttribute('href'), children: runs(n, { ...f, color: f.color || '0563C1', underline: f.underline || {} }, rtl) })); return;
+        out.push(new ExternalHyperlink({ link: n.getAttribute('href'), children: runs(n, { ...f, color: f.color || '0563C1', underline: f.underline || {} }, rtl, forced) })); return;
       }
-      out.push(...runs(n, f, rtl));
+      if (t === 'SPAN' && n.hasAttribute('dir')) { out.push(...runs(n, f, n.getAttribute('dir') === 'rtl', true)); return; }
+      out.push(...runs(n, f, rtl, forced));
     });
     return out;
   }
@@ -228,6 +233,13 @@ export async function htmlToDocx(root, ctx = {}) {
     if (!inList) { if (is) ind.start = tw(is); if (ie) ind.end = tw(ie); }
     if (ti) { if (ti > 0) ind.firstLine = tw(ti); else ind.hanging = tw(-ti); }
     if (Object.keys(ind).length) p.indent = ind;
+    const bd = {};
+    ['top', 'bottom', 'left', 'right'].forEach((k) => {
+      const m = /^([\d.]+)(pt|px)\s+(solid|double|dotted|dashed)\s+(.+)$/.exec(el.style?.getPropertyValue(`border-${k}`) || ''); if (!m) return;
+      const wpt = m[2] === 'px' ? Number(m[1]) * 0.75 : Number(m[1]);
+      bd[k] = { style: { solid: BorderStyle.SINGLE, double: BorderStyle.DOUBLE, dotted: BorderStyle.DOTTED, dashed: BorderStyle.DASHED }[m[3]], size: Math.max(2, Math.min(96, Math.round(wpt * 8))), color: hex(m[4]) || '000000', space: 1 };
+    });
+    if (Object.keys(bd).length) p.border = bd;
     return p;
   };
   function para(el, extra = {}, inList = false) {
@@ -252,7 +264,7 @@ export async function htmlToDocx(root, ctx = {}) {
   /* ---------- tables ---------- */
   function table(el) {
     const trs = Array.from(el.querySelectorAll('tr')).filter((tr) => tr.closest('table') === el);
-    const rtl = dirOf(el); const noB = el.getAttribute('data-b') === 'none';
+    const rtl = el.hasAttribute('dir') ? el.getAttribute('dir') === 'rtl' : def.rtl; const noB = el.getAttribute('data-b') === 'none';
     const line = noB ? { style: BorderStyle.NONE, size: 0, color: 'auto' } : { style: BorderStyle.SINGLE, size: 4, color: '808080' };
     const borders = { top: line, bottom: line, left: line, right: line };
     const occ = [];
@@ -316,6 +328,15 @@ export async function htmlToDocx(root, ctx = {}) {
   const body = []; blocks(root, body); if (!body.length) body.push(new Paragraph({}));
   const hdr = ctx.header ? build(ctx.header) : []; const ftr = ctx.footer ? build(ctx.footer) : [];
   const landscape = pg.w > pg.h;
+  function pageBorders() { // Word "Page Borders"
+    const b = pg.borders; if (!b) return null;
+    const names = new Set(Object.values(BorderStyle)); const out = {};
+    ['top', 'left', 'bottom', 'right'].forEach((k) => { if (b[k]) out[`pageBorder${k[0].toUpperCase()}${k.slice(1)}`] = { style: names.has(b[k].val) ? b[k].val : BorderStyle.SINGLE, size: Math.min(96, b[k].sz), color: (b[k].color || '#000000').replace('#', '').toUpperCase(), space: Math.min(31, Math.round(b[k].space)) }; });
+    if (!Object.keys(out).length) return null;
+    const DISPLAY = { firstPage: D.PageBorderDisplay.FIRST_PAGE, notFirstPage: D.PageBorderDisplay.NOT_FIRST_PAGE };
+    out.pageBorders = { display: DISPLAY[b.display] || D.PageBorderDisplay.ALL_PAGES, offsetFrom: b.offsetFrom === 'text' ? D.PageBorderOffsetFrom.TEXT : D.PageBorderOffsetFrom.PAGE, zOrder: b.zOrder === 'back' ? D.PageBorderZOrder.BACK : D.PageBorderZOrder.FRONT };
+    return out;
+  }
   const font = def.font; const sz = Math.round(def.size * 2);
   const hs = (lvl) => ({ id: `Heading${lvl}`, name: `heading ${lvl}`, basedOn: 'Normal', next: 'Normal', quickFormat: true, run: { font, size: HEADING_STYLES[lvl].size, color: HEADING_STYLES[lvl].color, bold: true }, paragraph: { spacing: { before: HEADING_STYLES[lvl].before, after: HEADING_STYLES[lvl].after }, keepNext: true, outlineLevel: lvl - 1 } });
   const doc = new Document({
@@ -330,7 +351,7 @@ export async function htmlToDocx(root, ctx = {}) {
       ],
     },
     sections: [{
-      properties: { page: { size: { width: Math.min(pg.w, pg.h), height: Math.max(pg.w, pg.h), orientation: landscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT }, margin: { top: pg.top, right: pg.right, bottom: pg.bottom, left: pg.left, header: pg.header, footer: pg.footer } } },
+      properties: { page: { ...(pageBorders() ? { borders: pageBorders() } : {}), size: { width: Math.min(pg.w, pg.h), height: Math.max(pg.w, pg.h), orientation: landscape ? PageOrientation.LANDSCAPE : PageOrientation.PORTRAIT }, margin: { top: pg.top, right: pg.right, bottom: pg.bottom, left: pg.left, header: pg.header, footer: pg.footer } } },
       headers: hdr.length ? { default: new Header({ children: hdr }) } : undefined,
       footers: ftr.length ? { default: new Footer({ children: ftr }) } : undefined,
       children: body,
