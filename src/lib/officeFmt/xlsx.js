@@ -19,7 +19,7 @@ export const THEMES = [
 ];
 export const themeById = (id) => THEMES.find((t) => t.id === id) || THEMES[0];
 const THEME_KEY = 'uip.sheet.theme';
-export const loadTheme = () => { try { return themeById(localStorage.getItem(THEME_KEY)).id; } catch { return THEMES[0].id; } };
+export const loadTheme = () => { try { return themeById(localStorage.getItem(THEME_KEY) || 'excel').id; } catch { return 'excel'; } };
 export const saveTheme = (id) => { try { localStorage.setItem(THEME_KEY, id); } catch { /* storage not available */ } };
 export const MAX_CELLS = 400000;
 export const cellStr = (v) => (v instanceof Date ? v.toISOString().slice(0, 19).replace('T', ' ') : v === null || v === undefined ? '' : String(v));

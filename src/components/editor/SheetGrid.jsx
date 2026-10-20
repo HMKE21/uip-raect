@@ -7,11 +7,11 @@ import '../../styles/css/office.css';
 
 const ROW_H = 30;
 const OVERSCAN = 12;
-const MIN_ROWS = 100; // like Excel, an empty sheet shows a full canvas of cells; typing into them grows the data
-const MIN_COLS = 26;
+const MIN_ROWS = 200; // like Excel, an empty sheet shows a full canvas of cells; typing into them grows the data
+const MIN_COLS = 40;
 const padGrid = (src, readOnly) => {
   if (readOnly) return src;
-  const w = Math.min(MAX_COLS, Math.max(MIN_COLS, (src[0]?.length || 1) + 5)); const h = Math.max(MIN_ROWS, src.length + 30);
+  const w = Math.min(MAX_COLS, Math.max(MIN_COLS, (src[0]?.length || 1) + 8)); const h = Math.max(MIN_ROWS, src.length + 60);
   return Array.from({ length: h }, (_, r) => Array.from({ length: w }, (_, c) => src[r]?.[c] ?? ''));
 };
 /** Drops the empty tail (rows / columns) so the padding never becomes data. */
@@ -22,6 +22,39 @@ const trimGrid = (n) => {
   return rows.map((r) => r.slice(0, w));
 };
 const num = (s) => (s !== '' && /^-?\d+(\.\d+)?$/.test(String(s).trim()) ? Number(s) : null);
+
+/** Theme picker: a real menu (the native <select> list was unreadable on the dark toolbar). */
+function ThemeMenu({ T, onPick, tt }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const down = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
+    const key = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', down); document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('pointerdown', down); document.removeEventListener('keydown', key); };
+  }, [open]);
+  return (
+    <div className="xg__theme" ref={box}>
+      <button type="button" className={`xg__themebtn${open ? ' is-open' : ''}`} aria-haspopup="listbox" aria-expanded={open} title={tt('Theme', 'الثيم')} onClick={() => setOpen((o) => !o)}>
+        <i style={{ background: T.swatch }} />
+        <span>{tt(T.en, T.ar)}</span>
+        <Icon name="chevron-down" size={13} />
+      </button>
+      {open && (
+        <div className="xg__menu" role="listbox" aria-label={tt('Theme', 'الثيم')}>
+          {THEMES.map((x) => (
+            <button key={x.id} type="button" role="option" aria-selected={x.id === T.id} className={`xg__opt${x.id === T.id ? ' is-on' : ''}`} onClick={() => { onPick(x.id); setOpen(false); }}>
+              <i style={{ background: x.swatch }} />
+              <span>{tt(x.en, x.ar)}</span>
+              {x.id === T.id && <b aria-hidden="true">✓</b>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * Spreadsheet-style grid (virtualised). Controlled: `cells` (string[][]) + `onChange(nextCells)`.
@@ -42,7 +75,8 @@ function SheetGrid({ theme, onTheme, cells: src, onChange: emit, tt, rtl, undo, 
   const [widths, setWidths] = useState({});
   const [scroll, setScroll] = useState({ top: 0, h: 600 });
   const [sort, setSort] = useState(null); // { c, dir }
-  const [noHeader, setNoHeader] = useState(false);
+  const [headerRow, setHeaderRow] = useState(true);
+  const noHeader = !headerRow;
   const wrap = useRef(null);
   const rows = cells.length;
   const cols = cells[0]?.length || 1;
@@ -184,13 +218,11 @@ function SheetGrid({ theme, onTheme, cells: src, onChange: emit, tt, rtl, undo, 
         </>)}
         <Btn icon="ed-align-left" label="A→Z" onClick={() => doSort(sel.c, 'asc')} title={tt('Sort column ascending', 'ترتيب تصاعدي')} disabled={readOnly} />
         <Btn icon="ed-align-right" label="Z→A" onClick={() => doSort(sel.c, 'desc')} title={tt('Sort column descending', 'ترتيب تنازلي')} disabled={readOnly} />
-        <label className="xg__chk"><input type="checkbox" checked={noHeader} onChange={(e) => setNoHeader(e.target.checked)} />{tt('No header row', 'بدون صف عناوين')}</label>
-        <label className="xg__theme" title={tt('Theme', 'الثيم')}>
-          <i style={{ background: T.swatch }} />
-          <select value={T.id} onChange={(e) => pickTheme(e.target.value)} aria-label={tt('Theme', 'الثيم')}>
-            {THEMES.map((x) => <option key={x.id} value={x.id}>{tt(x.en, x.ar)}</option>)}
-          </select>
-        </label>
+        <button type="button" role="switch" aria-checked={headerRow} className={`xg__switch${headerRow ? ' is-on' : ''}`} onClick={() => setHeaderRow((v) => !v)} title={tt('Treat the first row as a header (styled, and kept out of sorting)', 'اعتبر الصف الأول عناوين (بتتلوّن وبتتستثنى من الترتيب)')}>
+          <i aria-hidden="true" />
+          <span>{tt('Header row', 'صف العناوين')}</span>
+        </button>
+        <ThemeMenu T={T} onPick={pickTheme} tt={tt} />
         <span className="ed__sp" />
         <div className="xg__find">
           <input value={find} placeholder={tt('Find…', 'بحث…')} onChange={(e) => setFind(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); nextHit(e.shiftKey ? -1 : 1); } }} />
@@ -201,6 +233,7 @@ function SheetGrid({ theme, onTheme, cells: src, onChange: emit, tt, rtl, undo, 
       </div>
       <div className="xg__formula" dir="auto">
         <span className="xg__ref">{colName(sel.c)}{sel.r + 1}</span>
+        <span className="xg__fx" aria-hidden="true">fx</span>
         <input value={edit ? edit.v : (cells[sel.r]?.[sel.c] ?? '')} readOnly={readOnly}
           onFocus={() => { if (!edit && !readOnly) setEdit({ r: sel.r, c: sel.c, v: cells[sel.r][sel.c] }); }}
           onChange={(e) => setEdit({ r: sel.r, c: sel.c, v: e.target.value })}
@@ -222,7 +255,7 @@ function SheetGrid({ theme, onTheme, cells: src, onChange: emit, tt, rtl, undo, 
           {Array.from({ length: last - first }).map((_, i) => {
             const r = first + i; const row = cells[r];
             return (
-              <div key={r} className={`xg__row${r === 0 && !noHeader && hasHeader ? ' xg__row--hd' : ''}${r > 0 && r % 2 === 1 && T.band ? ' xg__row--alt' : ''}`} style={{ top: ROW_H + r * ROW_H, height: ROW_H, width: tableW }}>
+              <div key={r} className={`xg__row${r === 0 && !noHeader && hasHeader ? ' xg__row--hd' : ''}${r > 0 && r < src.length && r % 2 === 1 && T.band ? ' xg__row--alt' : ''}`} style={{ top: ROW_H + r * ROW_H, height: ROW_H, width: tableW }}>
                 <div className={`xg__rowh${r >= rect.r1 && r <= rect.r2 ? ' is-on' : ''}`} style={{ width: gutter }} onPointerDown={(e) => { if (e.button === 0) setSel({ r, c: 0, r2: r, c2: cols - 1 }); }}>{r + 1}</div>
                 {row.map((v, c) => {
                   const active = r === sel.r && c === sel.c;
@@ -246,7 +279,7 @@ function SheetGrid({ theme, onTheme, cells: src, onChange: emit, tt, rtl, undo, 
         </div>
       </div>
       <div className="xg__status">
-        <span>{rows.toLocaleString()} {tt('rows', 'صف')} × {cols} {tt('columns', 'عمود')}</span>
+        <span>{Math.max(1, src.length).toLocaleString()} {tt('rows', 'صف')} × {src[0]?.length || 1} {tt('columns', 'عمود')}</span>
         {sums && <span>{tt('Selected', 'المحدد')}: {sums.n} · Σ {+sums.s.toFixed(4)} · {tt('avg', 'متوسط')} {+sums.avg.toFixed(4)}</span>}
       </div>
     </div>
