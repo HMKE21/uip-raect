@@ -242,3 +242,12 @@
 
 /* headings inside the desktop use the system font, not the site's serif display face */
 .os h1, .os h2, .os h3, .os h4 { font-family: inherit; }
+
+/* ── maximized window = the whole workspace: it runs down to the bottom of the screen, the Dock auto-hides ──── */
+.os--wmax .os-wins { inset: var(--mb-h) 0 0; }
+.os--wmax .os-dock { transform: translateY(calc(100% + 24px)); opacity: 0; transition: transform .26s cubic-bezier(.2, .8, .3, 1), opacity .2s; }
+.os--wmax .os-dock__rail { pointer-events: none; }
+.os--wmax.os--dockpeek .os-dock { transform: none; opacity: 1; z-index: 100000; }
+.os--wmax.os--dockpeek .os-dock__rail { pointer-events: auto; }
+.os-dockhot { position: absolute; inset-inline: 0; bottom: 0; height: 5px; z-index: 100001; }
+.os--wmax .os-toast { bottom: 40px; }

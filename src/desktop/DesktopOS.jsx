@@ -162,6 +162,8 @@ export default function DesktopOS() {
   const battery = useBattery();
   const online = useOnline();
   const [fs, setFs] = useState(() => !!document.fullscreenElement);
+  // A maximized window now fills everything below the menu bar; the Dock auto-hides and slides up when the pointer touches the bottom edge.
+  const [dockPeek, setDockPeek] = useState(false);
   useEffect(() => { const h = () => setFs(!!document.fullscreenElement); document.addEventListener('fullscreenchange', h); return () => document.removeEventListener('fullscreenchange', h); }, []);
   // A new device / tab starts LOCKED when a lock password is set (or not yet known); a reload in the same tab keeps its state.
   const bootLock = useRef(false);
@@ -698,9 +700,18 @@ export default function DesktopOS() {
     };
   });
 
+  const wmax = wm.list.some((w) => w.id === wm.active && w.max && !w.min);
+  useEffect(() => {
+    if (!wmax || !dockPeek) return undefined;
+    const h = (e) => { if (e.clientY < window.innerHeight - 120) setDockPeek(false); };
+    window.addEventListener('pointermove', h);
+    return () => window.removeEventListener('pointermove', h);
+  }, [wmax, dockPeek]);
+  useEffect(() => { if (!wmax) setDockPeek(false); }, [wmax]);
+
   return createPortal(
     <div
-      className={`os os--${theme === 'dark' ? 'dark' : 'light'}${wp.dark === false ? ' os--lightwp' : ''}`} dir={dir}
+      className={`os os--${theme === 'dark' ? 'dark' : 'light'}${wp.dark === false ? ' os--lightwp' : ''}${wmax ? ' os--wmax' : ''}${wmax && dockPeek ? ' os--dockpeek' : ''}`} dir={dir}
       style={{ '--os-accent': prefs.accent, '--cell-w': `${cell.w}px`, '--cell-h': `${cell.h}px`, '--glyph': `${cell.g}px` }}
       onPointerDownCapture={(e) => {
         if (!e.target.closest('.os-ctx')) setMenu(null);
@@ -769,6 +780,7 @@ export default function DesktopOS() {
       {overlay === 'cal' && <CalendarFlyout tt={tt} ar={ar} />}
 
       <MenuBar ar={ar} tt={tt} menus={menus} tray={tray} />
+      {wmax && !dockPeek && <div className="os-dockhot" onPointerEnter={() => setDockPeek(true)} aria-hidden="true" />}
       <Dock
         items={dockItems} tt={tt} mag={prefs.dockMag !== false} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}
         onBin={() => runCommand('bin')} binFull={desk.binFull} binLabel={tt('Recycle Bin', 'سلة المحذوفات')}
