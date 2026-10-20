@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import OfficeShell from './OfficeShell';
 import SheetGrid from './SheetGrid';
 import useDocHistory from './useDocHistory';
-import { buildSheets, MAX_CELLS, readSheets } from '../../lib/officeFmt/xlsx';
+import { buildSheets, loadTheme, MAX_CELLS, readSheets } from '../../lib/officeFmt/xlsx';
 
 /** Read-only professional grid for the viewer (all sheets, find, sort-free, copy). */
 export function XlsxPreview({ blob, ext, tt, rtl }) {
@@ -22,7 +22,7 @@ export function XlsxPreview({ blob, ext, tt, rtl }) {
 /** Grid editor for .xlsx / .csv / .tsv opened from FileViewer. Sheets are tabs; all of them are saved. */
 export default function XlsxView({ blob, fileName, ext, tt, rtl, guardRef, onSave, onClose, draftKey, startDirty = false }) {
   const [state, setState] = useState({ status: 'loading' });
-  const [sheet, setSheet] = useState(0);
+  const [sheet, setSheet] = useState(0); const [theme, setTheme] = useState(loadTheme);
   const h = useDocHistory(null, startDirty);
 
   useEffect(() => {
@@ -40,7 +40,7 @@ export default function XlsxView({ blob, fileName, ext, tt, rtl, guardRef, onSav
   const sheets = h.value || [];
   const cur = sheets[sheet];
   const onChange = useCallback((cells) => h.set(sheets.map((s, i) => (i === sheet ? { ...s, cells } : s))), [h, sheets, sheet]);
-  const build = useCallback(() => buildSheets(sheets, ext, { rtl }), [sheets, ext, rtl]);
+  const build = useCallback(() => buildSheets(sheets, ext, { rtl, theme }), [sheets, ext, rtl, theme]);
 
   if (state.status === 'loading') return <div className="ed ed--center"><span className="st-fv-spinner" /><p className="ed__hint">{tt('Opening the sheet…', 'جارٍ فتح الجدول…')}</p></div>;
   if (state.status === 'error') return <div className="ed ed--center"><p className="ed__err">{state.msg}</p><button type="button" className="ed__btn" onClick={onClose}>{tt('Close', 'إغلاق')}</button></div>;
@@ -52,7 +52,8 @@ export default function XlsxView({ blob, fileName, ext, tt, rtl, guardRef, onSav
           {sheets.map((s, i) => <button key={i} type="button" role="tab" aria-selected={sheet === i} className={sheet === i ? 'is-on' : ''} onClick={() => setSheet(i)}>{s.name}</button>)}
         </div>
       )}>
-      {cur && <SheetGrid cells={cur.cells} onChange={onChange} tt={tt} rtl={rtl} undo={h.undo} redo={h.redo} canUndo={h.canUndo} canRedo={h.canRedo} />}
+      {cur && <SheetGrid theme={theme} onTheme={setTheme} cells={cur.cells} onChange={onChange} tt={tt} rtl={rtl} undo={h.undo} redo={h.redo} canUndo={h.canUndo} canRedo={h.canRedo} />}
+      {ext !== 'xlsx' && <p className="ed__hint ed__hint--note xg__note">{tt('The theme is for viewing only: CSV / TSV files cannot store colours. Save as .xlsx to keep it.', 'الثيم للعرض بس: ملفات CSV / TSV مبتحفظش ألوان. احفظه كـ .xlsx عشان الثيم يتحفظ.')}</p>}
       {ext === 'xlsx' && <p className="ed__hint ed__hint--note xg__note">{tt('Formulas are saved as their values; colours and charts of the original file are not kept.', 'الصيغ بتتحفظ كقيم، وألوان وتنسيقات ورسوم الملف الأصلي مش بتتحفظ.')}</p>}
     </OfficeShell>
   );

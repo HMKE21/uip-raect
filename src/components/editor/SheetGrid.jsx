@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../Icon';
 import { Btn } from './EditorUI';
-import { colName, MAX_COLS } from '../../lib/officeFmt/xlsx';
+import { colName, MAX_COLS, THEMES, themeById, loadTheme, saveTheme } from '../../lib/officeFmt/xlsx';
 import '../../styles/css/editor.css';
 import '../../styles/css/office.css';
 
@@ -28,9 +28,13 @@ const num = (s) => (s !== '' && /^-?\d+(\.\d+)?$/.test(String(s).trim()) ? Numbe
  * Header row (row 1) is styled as the header; row numbers, column letters, sort, find, add/delete rows & columns,
  * column auto-widths, arrow / Tab / Enter navigation, copy / paste of ranges from Excel.
  */
-function SheetGrid({ cells: src, onChange: emit, tt, rtl, undo, redo, canUndo, canRedo, readOnly = false, extraTools = null }) {
+function SheetGrid({ theme, onTheme, cells: src, onChange: emit, tt, rtl, undo, redo, canUndo, canRedo, readOnly = false, extraTools = null }) {
   const cells = useMemo(() => padGrid(src, readOnly), [src, readOnly]);
   const onChange = useCallback((n) => emit(readOnly ? n : trimGrid(n)), [emit, readOnly]);
+  const [localTheme, setLocalTheme] = useState(loadTheme);
+  const T = themeById(theme ?? localTheme);
+  const pickTheme = (id) => { saveTheme(id); setLocalTheme(id); onTheme?.(id); };
+  const vars = { '--xg-bg': T.bg, '--xg-fg': T.fg, '--xg-head': T.head, '--xg-head-fg': T.headFg, '--xg-head-on': T.headOn, '--xg-head-on-fg': T.headOnFg, '--xg-hd-bg': T.hdBg, '--xg-hd-fg': T.hdFg, '--xg-band': T.band || 'transparent', '--xg-line': T.line, ...(T.accent ? { '--ed-accent': T.accent } : {}) };
   const hasHeader = cells[0].some((v) => (v ?? '') !== '');
   const [sel, setSel] = useState({ r: 0, c: 0, r2: 0, c2: 0 });
   const [edit, setEdit] = useState(null); // { r, c, v }
@@ -165,7 +169,7 @@ function SheetGrid({ cells: src, onChange: emit, tt, rtl, undo, redo, canUndo, c
   const tableW = gutter + Array.from({ length: cols }).reduce((a, _, c) => a + wOf(c), 0);
 
   return (
-    <div className="xg">
+    <div className="xg" data-theme={T.id} style={vars}>
       <div className="ed__top xg__tools">
         {extraTools}
         <Btn icon="ed-undo" onClick={undo} disabled={!canUndo} title={tt('Undo (Ctrl+Z)', 'تراجع (Ctrl+Z)')} />
@@ -181,6 +185,12 @@ function SheetGrid({ cells: src, onChange: emit, tt, rtl, undo, redo, canUndo, c
         <Btn icon="ed-align-left" label="A→Z" onClick={() => doSort(sel.c, 'asc')} title={tt('Sort column ascending', 'ترتيب تصاعدي')} disabled={readOnly} />
         <Btn icon="ed-align-right" label="Z→A" onClick={() => doSort(sel.c, 'desc')} title={tt('Sort column descending', 'ترتيب تنازلي')} disabled={readOnly} />
         <label className="xg__chk"><input type="checkbox" checked={noHeader} onChange={(e) => setNoHeader(e.target.checked)} />{tt('No header row', 'بدون صف عناوين')}</label>
+        <label className="xg__theme" title={tt('Theme', 'الثيم')}>
+          <i style={{ background: T.swatch }} />
+          <select value={T.id} onChange={(e) => pickTheme(e.target.value)} aria-label={tt('Theme', 'الثيم')}>
+            {THEMES.map((x) => <option key={x.id} value={x.id}>{tt(x.en, x.ar)}</option>)}
+          </select>
+        </label>
         <span className="ed__sp" />
         <div className="xg__find">
           <input value={find} placeholder={tt('Find…', 'بحث…')} onChange={(e) => setFind(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); nextHit(e.shiftKey ? -1 : 1); } }} />
@@ -212,7 +222,7 @@ function SheetGrid({ cells: src, onChange: emit, tt, rtl, undo, redo, canUndo, c
           {Array.from({ length: last - first }).map((_, i) => {
             const r = first + i; const row = cells[r];
             return (
-              <div key={r} className={`xg__row${r === 0 && !noHeader && hasHeader ? ' xg__row--hd' : ''}`} style={{ top: ROW_H + r * ROW_H, height: ROW_H, width: tableW }}>
+              <div key={r} className={`xg__row${r === 0 && !noHeader && hasHeader ? ' xg__row--hd' : ''}${r > 0 && r % 2 === 1 && T.band ? ' xg__row--alt' : ''}`} style={{ top: ROW_H + r * ROW_H, height: ROW_H, width: tableW }}>
                 <div className={`xg__rowh${r >= rect.r1 && r <= rect.r2 ? ' is-on' : ''}`} style={{ width: gutter }} onPointerDown={(e) => { if (e.button === 0) setSel({ r, c: 0, r2: r, c2: cols - 1 }); }}>{r + 1}</div>
                 {row.map((v, c) => {
                   const active = r === sel.r && c === sel.c;

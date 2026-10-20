@@ -7,6 +7,20 @@
 import { parseCsv, toCsv } from '../exporter';
 
 export const MAX_COLS = 200;
+
+/** Sheet themes: how the grid looks on screen (bg .. band, accent) and which colours go into a saved .xlsx (xl). CSV / TSV cannot hold colours. */
+export const THEMES = [
+  { id: 'dark', en: 'Dark', ar: 'داكن', bg: '#0c111c', fg: '#e6ecff', head: '#171e30', headFg: '#9aa7c7', headOn: '#26324f', headOnFg: '#ffffff', hdBg: '#1b2540', hdFg: '#cfe0ff', band: '', line: 'rgba(255,255,255,.09)', swatch: '#1b2540', xl: { head: '#E8ECFF', fg: '#1B2559', band: '' } },
+  { id: 'excel', en: 'Excel green', ar: 'أخضر Excel', bg: '#ffffff', fg: '#1f2937', head: '#f0f3f1', headFg: '#4b5563', headOn: '#c7e6d1', headOnFg: '#14532d', hdBg: '#217346', hdFg: '#ffffff', band: '#eaf5ee', line: '#d4d9d6', accent: '#217346', swatch: '#217346', xl: { head: '#217346', fg: '#FFFFFF', band: '#EAF5EE' } },
+  { id: 'blue', en: 'Ocean blue', ar: 'أزرق', bg: '#ffffff', fg: '#1f2937', head: '#eff3fa', headFg: '#4b5563', headOn: '#c9dbf7', headOnFg: '#1e3a8a', hdBg: '#1f4e9c', hdFg: '#ffffff', band: '#eaf1fb', line: '#d5dbe6', accent: '#2563eb', swatch: '#1f4e9c', xl: { head: '#1F4E9C', fg: '#FFFFFF', band: '#EAF1FB' } },
+  { id: 'violet', en: 'Violet', ar: 'بنفسجي', bg: '#ffffff', fg: '#1f2937', head: '#f4f1fb', headFg: '#4b5563', headOn: '#ddd0f7', headOnFg: '#4c1d95', hdBg: '#6d28d9', hdFg: '#ffffff', band: '#f1ecfd', line: '#ddd8e8', accent: '#7c3aed', swatch: '#6d28d9', xl: { head: '#6D28D9', fg: '#FFFFFF', band: '#F1ECFD' } },
+  { id: 'orange', en: 'Sunset', ar: 'برتقالي', bg: '#ffffff', fg: '#1f2937', head: '#fbf3ee', headFg: '#4b5563', headOn: '#f9d9c3', headOnFg: '#7c2d12', hdBg: '#c2410c', hdFg: '#ffffff', band: '#fdf0e7', line: '#e6dcd5', accent: '#ea580c', swatch: '#c2410c', xl: { head: '#C2410C', fg: '#FFFFFF', band: '#FDF0E7' } },
+  { id: 'slate', en: 'Classic gray', ar: 'رمادي كلاسيك', bg: '#ffffff', fg: '#111827', head: '#f1f2f4', headFg: '#4b5563', headOn: '#d6d9de', headOnFg: '#111827', hdBg: '#374151', hdFg: '#ffffff', band: '#f3f4f6', line: '#d1d5db', accent: '#4b5563', swatch: '#374151', xl: { head: '#374151', fg: '#FFFFFF', band: '#F3F4F6' } },
+];
+export const themeById = (id) => THEMES.find((t) => t.id === id) || THEMES[0];
+const THEME_KEY = 'uip.sheet.theme';
+export const loadTheme = () => { try { return themeById(localStorage.getItem(THEME_KEY)).id; } catch { return THEMES[0].id; } };
+export const saveTheme = (id) => { try { localStorage.setItem(THEME_KEY, id); } catch { /* storage not available */ } };
 export const MAX_CELLS = 400000;
 export const cellStr = (v) => (v instanceof Date ? v.toISOString().slice(0, 19).replace('T', ' ') : v === null || v === undefined ? '' : String(v));
 
@@ -40,7 +54,7 @@ export function toCsvText(cells, delimiter = ',') {
   return toCsv(rows[0], rows.slice(1));
 }
 
-export async function buildSheets(sheets, ext, { rtl } = {}) {
+export async function buildSheets(sheets, ext, { rtl, theme } = {}) {
   if (ext === 'csv') return new Blob(['\uFEFF', toCsvText(sheets[0].cells)], { type: 'text/csv;charset=utf-8' });
   if (ext === 'tsv') return new Blob([toCsvText(sheets[0].cells, '\t')], { type: 'text/tab-separated-values;charset=utf-8' });
   const { default: writeXlsxFile } = await import('write-excel-file/browser');
@@ -50,7 +64,12 @@ export async function buildSheets(sheets, ext, { rtl } = {}) {
     let name = String(s.name || `Sheet${i + 1}`).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || `Sheet${i + 1}`;
     while (used.has(name.toLowerCase())) name = `${name.slice(0, 28)}_${i}`;
     used.add(name.toLowerCase());
-    const data = rows.map((r, ri) => r.map((c) => (ri === 0 && c !== '' ? { value: c === '' ? null : String(c), fontWeight: 'bold', backgroundColor: '#E8ECFF', textColor: '#1B2559' } : typed(c))));
+    const X = themeById(theme).xl;
+    const data = rows.map((r, ri) => r.map((c) => {
+      if (ri === 0 && c !== '') return { value: String(c), fontWeight: 'bold', backgroundColor: X.head, textColor: X.fg };
+      const v = typed(c);
+      return X.band && ri > 0 && ri % 2 === 1 ? { value: v, backgroundColor: X.band } : v;
+    }));
     const columns = rows[0].map((_, ci) => {
       let max = 8;
       for (let r = 0; r < Math.min(rows.length, 200); r += 1) max = Math.max(max, String(rows[r][ci]).length);
