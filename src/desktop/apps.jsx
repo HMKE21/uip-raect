@@ -5,6 +5,7 @@ import { WALLPAPERS, imageToWallpaper } from './wallpapers';
 import { EXPLORER_SHORTCUTS, GROUPS, SHORTCUTS, fmtKeys } from './shortcuts';
 import { AppGlyph } from './OsIcons';
 import { desktopApi, lockError } from './desktopApi';
+import { CloudPanel } from './CloudSettings';
 
 const StudentMyPC = lazy(() => import('../pages/student/StudentMyPC'));
 
@@ -111,6 +112,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
   };
   const tabs = [
     ['personalize', 'palette', tt('Personalization', 'التخصيص')],
+    ['cloud', 'cloud', tt('Storage & backup', 'التخزين والنسخ')],
     ['lock', 'lock', tt('Lock screen', 'قفل الشاشة')],
     ['system', 'monitor', tt('System', 'النظام')],
     ['about', 'info', tt('About', 'حول')],
@@ -162,6 +164,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
             </Section>
           </>
         )}
+        {tab === 'cloud' && <CloudPanel tt={tt} usage={usage} />}
         {tab === 'lock' && <LockSettings tt={tt} lockEnabled={lockEnabled} onLockChanged={onLockChanged} />}
         {tab === 'system' && (
           <>

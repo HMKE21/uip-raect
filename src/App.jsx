@@ -6,6 +6,7 @@ import { STAFF_LOGIN_PATH } from './config/staffPortal';
 import StaffGate from './components/staff/StaffGate';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
+import SaveCenterHost from './components/savecenter/SaveCenterHost';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
 import DeviceGate from './components/DeviceGate';
@@ -227,6 +228,7 @@ export default function App() {
         <DeviceGate>
         <AuthProvider>
           <AccountSettingsSync />
+          <SaveCenterHost />
           {/* MFA requirements policy: a role that must have 2FA (grace period over) sees the setup page instead of the app. */}
           <MfaGate>
           <ErrorBoundary>

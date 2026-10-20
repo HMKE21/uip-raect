@@ -10,6 +10,7 @@ import { saveBlob } from '../lib/exporter';
 import { describe, extOf, cellStr, MAX_ROWS, PdfCanvasViewer } from './FilePreviewButton';
 import { agoText, discardDraft, getDraft } from '../lib/draftStore';
 import useDraftScope from '../lib/useDraftScope';
+import { afterGuard } from '../lib/saveCenter';
 import { JSON_EXT } from '../lib/driveFileKinds';
 import '../styles/css/drafts.css';
 import '../styles/css/file-viewer.css';
@@ -299,9 +300,9 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   const thumbsRef = useRef(null);
   const imageApi = useRef(null);
   const guardRef = useRef(null); // the ZIP workbench asks before discarding unsaved edits
+  // A guard answers true / false, or a Promise<boolean> (the "Save changes?" dialog: Save / Don't save / Cancel).
   const onClose = useCallback(() => {
-    if (guardRef.current && !guardRef.current()) return;
-    onCloseProp?.();
+    afterGuard(guardRef.current?.(), () => onCloseProp?.());
   }, [onCloseProp]);
   const cache = useRef(new Map());
 
@@ -343,11 +344,10 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   const leaveEditing = useCallback(() => { if (draftKey) discardDraft(draftKey); setRestored(null); setEditing(false); }, [draftKey]);
 
   const go = useCallback((delta) => {
-    if (guardRef.current && !guardRef.current()) return;
     const target = list[clamp(index + delta, 0, list.length - 1)];
-    if (target) { setActiveId(target.id); setSheet(0); }
+    if (target) afterGuard(guardRef.current?.(), () => { setActiveId(target.id); setSheet(0); });
   }, [list, index]);
-  const jump = (i) => { if (guardRef.current && !guardRef.current()) return; if (list[i]) { setActiveId(list[i].id); setSheet(0); } };
+  const jump = (i) => { if (list[i]) afterGuard(guardRef.current?.(), () => { setActiveId(list[i].id); setSheet(0); }); };
 
   useEffect(() => { setEditing(false); setRestored(null); }, [file?.id]);
 

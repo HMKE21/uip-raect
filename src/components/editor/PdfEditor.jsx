@@ -1,4 +1,6 @@
 import useAutoDraft, { DraftChip } from '../../lib/useAutoDraft';
+import { afterGuard, askUnsaved } from '../../lib/saveCenter';
+import { discardDraft } from '../../lib/draftStore';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
 import AnnotSurface from './AnnotSurface';
@@ -436,7 +438,8 @@ export default function PdfEditor({ blob, fileName, tt, rtl, guardRef, onSave, o
     return new Blob([bytes], { type: 'application/pdf' });
   };
   const doSave = async (force) => {
-    if (saving || !hist.dirty) return;
+    if (saving) return false;
+    if (!hist.dirty) return true;
     setSaving(true); setSaveErr(''); setConflict(false);
     try {
       let out = await buildPdf(0);
@@ -446,10 +449,13 @@ export default function PdfEditor({ blob, fileName, tt, rtl, guardRef, onSave, o
         throw new Error(tt(`The edited PDF is ${(out.size / 1048576).toFixed(1)} MB; the server accepts at most 4.5 MB. Use a smaller picture or remove some content.`, `حجم الـ PDF بعد التعديل ${(out.size / 1048576).toFixed(1)} ميجا والسيرفر بيقبل 4.5 ميجا بالكتير. استخدم صورة أصغر أو شيل جزء من المحتوى.`));
       }
       await onSave(out, { name: fileName, force: force === true });
+      return true;
     } catch (e) {
       if (e?.status === 409) setConflict(true); else setSaveErr(e?.message || String(e));
+      return false;
     } finally { setSaving(false); }
   };
+  const saveRef = useRef(null); saveRef.current = () => doSave(false);
   const download = async () => {
     try {
       const out = await buildPdf();
@@ -462,13 +468,14 @@ export default function PdfEditor({ blob, fileName, tt, rtl, guardRef, onSave, o
   };
 
   const dirty = hist.dirty;
-  const draft = useAutoDraft({ draftKey, dirty, token: hist.present, build: () => (hist.present ? buildPdf(0) : null), meta: { name: fileName } });
+  const draft = useAutoDraft({ draftKey, dirty, token: hist.present, build: () => (hist.present ? buildPdf(0) : null), meta: { name: fileName }, saver: () => saveRef.current?.() });
+  const askLeave = () => askUnsaved({ key: draftKey, name: fileName, tt, discard: () => discardDraft(draftKey) });
   useEffect(() => {
     if (!guardRef) return undefined;
-    guardRef.current = () => !dirty || window.confirm(tt('Discard your unsaved changes?', 'تتجاهل التعديلات اللي لسه ما اتحفظتش؟'));
+    guardRef.current = () => !dirty || askLeave();
     return () => { guardRef.current = null; };
   }, [dirty, guardRef, tt]);
-  const requestClose = () => { if (!dirty || window.confirm(tt('Discard your unsaved changes?', 'تتجاهل التعديلات اللي لسه ما اتحفظتش؟'))) onClose(); };
+  const requestClose = () => afterGuard(dirty ? askLeave() : true, onClose);
 
   useEditorKeys({
     undo: hist.undo, redo: hist.redo, save: () => doSave(false), dup: dupSel, del: delSel,

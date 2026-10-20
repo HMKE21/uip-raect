@@ -196,6 +196,12 @@ const PATHS = {
   'ed-table-del': '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/><path d="m14 13 5 5M19 13l-5 5"/>',
   'ed-find': '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.9-4.9"/>',
   'ed-clear': '<path d="M5 6h10l4 4-8 8H7l-3-3z"/><path d="M13 6 9 18M16 18h5"/>',
+  'cloud': '<path d="M17.5 19H7a5 5 0 1 1 1.3-9.84A6 6 0 0 1 20 11.5a3.75 3.75 0 0 1-2.5 7.5Z"/>',
+  'cloud-check': '<path d="M17.5 19H7a5 5 0 1 1 1.3-9.84A6 6 0 0 1 20 11.5a3.75 3.75 0 0 1-2.5 7.5Z"/><path d="m9 13 2.2 2.2L15.5 11"/>',
+  'cloud-off': '<path d="M22.6 16.9A4.5 4.5 0 0 0 18 10h-1.3A7 7 0 0 0 6.1 6.1"/><path d="M5 8.5A5 5 0 0 0 7 19h10.5"/><path d="M2 2l20 20"/>',
+  'cloud-up': '<path d="M17.5 19H7a5 5 0 1 1 1.3-9.84A6 6 0 0 1 20 11.5a3.75 3.75 0 0 1-2.5 7.5Z"/><path d="M12 16v-5M9.8 12.8 12 10.6l2.2 2.2"/>',
+  'hard-drive': '<path d="M3 14h18"/><path d="M5.5 5h13l2.5 9v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4z"/><path d="M7 17h.01M11 17h.01"/>',
+  'external-link': '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/>',
   'ed-highlight': '<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>',
 };
 

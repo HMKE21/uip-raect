@@ -71,7 +71,7 @@ function createEngine(uid) {
     const body = JSON.stringify({ v: 1, updatedAt: readMeta(uid) || Date.now(), data });
     const blob = new Blob([body], { type: 'application/json' });
     let node;
-    if (fileId) node = unwrap(await drive.replace(fileId, blob, ACCOUNT_FILE));
+    if (fileId) node = unwrap(await drive.replace(fileId, blob, ACCOUNT_FILE, { silent: true }));
     else node = unwrap(await drive.createFile(deskId, ACCOUNT_FILE, body));
     fileId = node?.id ?? fileId; token = tok(node?.id ? node : { id: fileId });
   };

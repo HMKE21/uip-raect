@@ -14,6 +14,7 @@ import { useBackLayer } from '../../lib/backStack';
 import { lockScroll } from '../../lib/scrollLock';
 import { saveBlob } from '../../lib/exporter';
 import { drive, fetchDriveBlob, fetchFolderZip, fetchDownload } from '../../lib/driveApi';
+import { afterGuard } from '../../lib/saveCenter';
 import { isSystemNode } from '../../desktop/sync';
 import { FileGlyph, FolderGlyph } from '../../desktop/OsIcons';
 import { extOf, isTextName, opensInEditor } from '../../lib/driveFileKinds';
@@ -115,7 +116,7 @@ function TreeNode({ node, byParent, depth, openSet, toggle, activeId, onOpen, on
 function EditorOverlay({ title, load, onSave, sandboxTokenPath, tt, rtl, onClose }) {
   const [state, setState] = useState({ status: 'loading', blob: null, error: '' });
   const guardRef = useRef(null);
-  const close = useCallback(() => { if (guardRef.current && !guardRef.current()) return; onClose(); }, [onClose]);
+  const close = useCallback(() => { afterGuard(guardRef.current?.(), () => onClose()); }, [onClose]);
   useBackLayer(true, close);
   useEffect(() => lockScroll(), []);
   useEffect(() => {

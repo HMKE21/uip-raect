@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import useAutoDraft, { DraftChip } from '../../lib/useAutoDraft';
+import { afterGuard, askUnsaved } from '../../lib/saveCenter';
+import { discardDraft } from '../../lib/draftStore';
 import { Btn } from './EditorUI';
 import '../../styles/css/editor.css';
 import '../../styles/css/office.css';
@@ -9,11 +11,13 @@ import '../../styles/css/office.css';
  *   build() -> Promise<Blob>   (called for both Save and Download)
  */
 export default function OfficeShell({ fileName, tt, guardRef, onSave, onClose, dirty, build, onSaved, tools, children, status, draftKey, draftToken }) {
-  const draft = useAutoDraft({ draftKey, dirty, token: draftToken, build, meta: { name: fileName } });
+  const saveRef = useRef(null);
+  const draft = useAutoDraft({ draftKey, dirty, token: draftToken, build, meta: { name: fileName }, saver: () => saveRef.current?.() });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const [conflict, setConflict] = useState(false);
-  const ask = () => window.confirm(tt('Discard your unsaved changes?', 'تتجاهل التعديلات اللي لسه ما اتحفظتش؟'));
+  // Promise<boolean>: the "Save changes?" dialog (Save / Don't save / Cancel) that says where the file is saved
+  const ask = () => askUnsaved({ key: draftKey, name: fileName, tt, discard: () => discardDraft(draftKey) });
 
   useEffect(() => {
     if (!guardRef) return undefined;
@@ -29,14 +33,16 @@ export default function OfficeShell({ fileName, tt, guardRef, onSave, onClose, d
   }, [dirty]);
 
   const doSave = async (force) => {
-    if (saving) return;
+    if (saving) return false;
     setSaving(true); setErr(''); setConflict(false);
     try {
       const out = await build();
       await onSave(out, { name: fileName, force: force === true });
       onSaved?.();
-    } catch (e) { if (e?.status === 409) setConflict(true); else setErr(e?.message || String(e)); } finally { setSaving(false); }
+      return true;
+    } catch (e) { if (e?.status === 409) setConflict(true); else setErr(e?.message || String(e)); return false; } finally { setSaving(false); }
   };
+  saveRef.current = () => doSave(false);
   const download = async () => {
     try {
       const out = await build();
@@ -48,7 +54,7 @@ export default function OfficeShell({ fileName, tt, guardRef, onSave, onClose, d
   return (
     <div className="ed ed--office">
       <div className="ed__top">
-        <Btn icon="x" label={tt('Cancel', 'إلغاء')} onClick={() => { if (!dirty || ask()) onClose(); }} />
+        <Btn icon="x" label={tt('Cancel', 'إلغاء')} onClick={() => afterGuard(dirty ? ask() : true, onClose)} />
         <strong className="ed__title" dir="auto">{fileName}</strong>
         {dirty && <span className="ed__pagecount">●&nbsp;{tt('unsaved', 'غير محفوظ')}</span>}
         <span className="ed__sp" />

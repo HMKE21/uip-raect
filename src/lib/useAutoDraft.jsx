@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { allowDraft, delDraft, putDraft } from './draftStore';
+import { saveCenter } from './saveCenter';
 import '../styles/css/drafts.css';
 
 /**
@@ -9,15 +10,17 @@ import '../styles/css/drafts.css';
  *   token     – changes whenever the content changes (re-arms the timer)
  *   build()   – Blob (stored as { kind:'blob' }), plain object (stored as is) or null (editor not ready: nothing written)
  *   always    – keep the record even while clean (session state such as open tabs)
+ *   saver     – optional () => Promise<boolean>: lets the Save Center save this document (reminders, "Save changes?" dialog).
  *   ready     – hold writes back until the editor has loaded, so an empty first state can't replace a stored draft
  * touch() schedules a write without a React state change (typing in a code editor must not re-render the tree).
  */
-export default function useAutoDraft({ draftKey, dirty, token, build, meta, delay = 2500, always = false, ready = true }) {
+export default function useAutoDraft({ draftKey, dirty, token, build, meta, delay = 2500, always = false, ready = true, saver }) {
   const buildRef = useRef(build); buildRef.current = build;
   const metaRef = useRef(meta); metaRef.current = meta;
   const keyRef = useRef(draftKey); keyRef.current = draftKey;
   const readyRef = useRef(ready); readyRef.current = ready;
   const dirtyRef = useRef(dirty); dirtyRef.current = dirty;
+  const saverRef = useRef(saver); saverRef.current = saver;
   const [state, setState] = useState({ status: 'idle', at: 0 }); // idle | pending | saving | saved | failed
   const pending = useRef(false);
   const busy = useRef(false);
@@ -77,6 +80,15 @@ export default function useAutoDraft({ draftKey, dirty, token, build, meta, dela
       window.removeEventListener('beforeunload', bye);
     };
   }, [flush]);
+
+  // tell the Save Center about unsaved changes (reminders + "Save changes?" dialog)
+  const docName = meta?.name;
+  useEffect(() => {
+    if (!draftKey) return undefined;
+    saveCenter.report(draftKey, { dirty: !!dirty, name: docName, save: saverRef.current ? () => saverRef.current?.() : undefined });
+    return undefined;
+  }, [draftKey, dirty, docName, token, !!saver]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => () => { if (draftKey) saveCenter.release(draftKey); }, [draftKey]);
 
   useEffect(() => { if (draftKey) allowDraft(draftKey); }, [draftKey]);
   useEffect(() => { alive.current = true; return () => { alive.current = false; clearTimeout(timer.current); if (pending.current) flush(); }; }, [flush]);

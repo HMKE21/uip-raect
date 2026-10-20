@@ -1,11 +1,75 @@
 import { api } from '../api/client';
 import { getDraft, pruneCache, putDraft } from './draftStore';
+import { emitDriveSaved } from './driveEvents';
 
 /**
  * "My PC" (جهازي) client — thin wrappers over /api/v1/drive/* (App\Http\Controllers\Api\DriveApiController).
  * Every file is private: bytes come through authenticated requests (api.blob = Bearer + refresh-on-401), never a public URL.
  */
 const B = '/api/v1/drive';
+
+
+const unwrap = (r) => (r && r.data !== undefined ? r.data : r);
+
+/**
+ * Server switch (GET /drive/config). When My PC lives on S3 / Cloudflare R2 the browser uploads and downloads STRAIGHT to the bucket
+ * through short-lived signed URLs and Laravel only stores metadata (docs/DRIVE_CLOUD_STORAGE.md). Any network / CORS failure on the
+ * bucket side falls back to the classic proxied path, so saving is never blocked by the direct route.
+ */
+let cfgP = null;
+export function driveConfig(force = false) {
+  if (!cfgP || force) {
+    cfgP = api.get(`${B}/config`).then(unwrap).catch(() => {
+      setTimeout(() => { cfgP = null; }, 60 * 1000); // ask again in a minute
+      return { direct_upload: false, max_file_mb: 100, cloud: {} };
+    });
+  }
+  return cfgP;
+}
+const directOn = async () => !!(await driveConfig()).direct_upload;
+
+/** Errors that mean "the direct route is unusable here" (not "your save is wrong"): use the classic path instead. */
+const canFallBack = (e) => !e?.status || e.status === 0 || e.status === 404 || e.status === 405 || e.status >= 500 || e?.direct === true;
+
+async function sha1Hex(blob) {
+  try {
+    if (!globalThis.crypto?.subtle || blob.size > 64 * 1024 * 1024) return null;
+    const d = await crypto.subtle.digest('SHA-1', await blob.arrayBuffer());
+    return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch { return null; }
+}
+
+/** PUT the bytes to a signed URL with progress. Rejects with { direct: true } on any bucket-side problem. */
+function putToBucket(put, blob, onProgress, signal) {
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open('PUT', put.url);
+    Object.entries(put.headers || {}).forEach(([k, v]) => { try { x.setRequestHeader(k, Array.isArray(v) ? v[0] : v); } catch { /* forbidden header */ } });
+    x.upload.onprogress = (e) => { if (e.lengthComputable) onProgress?.(Math.min(99, Math.round((e.loaded / e.total) * 100))); };
+    x.onload = () => (x.status >= 200 && x.status < 300 ? resolve() : reject(Object.assign(new Error(`Storage answered ${x.status}.`), { direct: true, status: x.status })));
+    x.onerror = () => reject(Object.assign(new Error('Could not reach the storage.'), { direct: true }));
+    x.onabort = () => reject(Object.assign(new Error('Upload cancelled.'), { name: 'AbortError' }));
+    if (signal) { if (signal.aborted) { x.abort(); return; } signal.addEventListener('abort', () => x.abort(), { once: true }); }
+    x.send(blob);
+  });
+}
+
+async function directUpload(parentId, file, rel, onProgress, signal) {
+  const init = unwrap(await api.post(`${B}/upload/init`, {
+    parent_id: parentId || null, name: file.name, size: file.size, mime: file.type || null, path: rel && rel.includes('/') ? rel : null,
+  }));
+  await putToBucket(init.put, file, onProgress, signal);
+  const node = unwrap(await api.post(`${B}/upload/complete`, { token: init.token }));
+  onProgress?.(100);
+  return { success: true, data: { items: [node], failed: [] } };
+}
+
+async function directReplace(id, blob, name) {
+  const init = unwrap(await api.post(`${B}/nodes/${id}/replace/init`, { size: blob.size, mime: blob.type || null }));
+  await putToBucket(init.put, blob);
+  const node = unwrap(await api.post(`${B}/nodes/${id}/replace/complete`, { token: init.token, name: name || null, sha1: await sha1Hex(blob) }));
+  return { success: true, data: node };
+}
 
 export const drive = {
   list: (parentId) => api.get(B, parentId ? { parent_id: parentId } : undefined),
@@ -27,27 +91,45 @@ export const drive = {
   restore: (ids) => api.post(`${B}/restore`, { ids }),
   purge: (ids) => api.post(`${B}/purge`, { ids }),
   emptyTrash: () => api.del(`${B}/trash`),
-  /** Save a file's new bytes (image / PDF / ZIP editors, or a text file from the code editor). */
-  replace: (id, blob, name) => {
-    const fd = new FormData();
-    fd.append('file', new File([blob], name || 'file', { type: blob.type || 'application/octet-stream' }));
-    if (name) fd.append('name', name);
-    return api.postForm(`${B}/nodes/${id}/replace`, fd);
+  /** Save a file's new bytes (image / PDF / ZIP editors, or a text file from the code editor). opts.silent = no "Saved" toast / backup trigger. */
+  replace: async (id, blob, name, opts) => {
+    let res = null;
+    if (await directOn()) {
+      try { res = await directReplace(id, blob, name); } catch (e) { if (!canFallBack(e)) throw e; }
+    }
+    if (!res) {
+      const fd = new FormData();
+      fd.append('file', new File([blob], name || 'file', { type: blob.type || 'application/octet-stream' }));
+      if (name) fd.append('name', name);
+      res = await api.postForm(`${B}/nodes/${id}/replace`, fd);
+    }
+    if (!opts?.silent) emitDriveSaved({ id, name: unwrap(res)?.name || name || '', kind: 'replace', size: blob.size });
+    return res;
   },
   /** Save the code editor's ZIP back into its folder (changed → replaced, new → added, removed → recycle bin). */
   sync: (id, blob) => {
     const fd = new FormData();
     fd.append('file', new File([blob], 'folder.zip', { type: 'application/zip' }));
-    return api.postForm(`${B}/nodes/${id}/sync`, fd);
+    return api.postForm(`${B}/nodes/${id}/sync`, fd).then((r) => { emitDriveSaved({ id, name: '', kind: 'sync', size: blob.size }); return r; });
   },
   /** One file per request (clear progress, parallel-safe). rel = "dir/sub/file.txt" when uploading a folder. */
-  upload: (parentId, file, rel, onProgress, signal) => {
-    const fd = new FormData();
-    if (parentId) fd.append('parent_id', String(parentId));
-    fd.append('files[]', file, file.name);
-    if (rel && rel.includes('/')) fd.append('paths[]', rel);
-    return api.postFormProgress(`${B}/upload`, fd, onProgress, signal);
+  upload: async (parentId, file, rel, onProgress, signal) => {
+    let res = null;
+    if (await directOn()) {
+      try { res = await directUpload(parentId, file, rel, onProgress, signal); } catch (e) { if (e?.name === 'AbortError' || !canFallBack(e)) throw e; }
+    }
+    if (!res) {
+      const fd = new FormData();
+      if (parentId) fd.append('parent_id', String(parentId));
+      fd.append('files[]', file, file.name);
+      if (rel && rel.includes('/')) fd.append('paths[]', rel);
+      res = await api.postFormProgress(`${B}/upload`, fd, onProgress, signal);
+    }
+    emitDriveSaved({ id: unwrap(res)?.items?.[0]?.id, name: file.name, kind: 'upload', size: file.size });
+    return res;
   },
+  /** Whole-tree listing (metadata only) for the cloud backup engine. */
+  manifest: () => api.get(`${B}/manifest`).then(unwrap),
   sandboxTokenPath: (folderId) => `${B}/nodes/${folderId}/sandbox-token`,
 };
 
@@ -70,11 +152,29 @@ async function readWithProgress(res, onProgress) {
   return new Blob(chunks, { type });
 }
 
-/** A file's bytes (private → authenticated fetch). */
+/** A file's bytes (private → authenticated request; with direct storage: a signed bucket URL, validated against the local copy first). */
 export async function fetchDriveBlob(id, { onProgress } = {}) {
   const key = `blob:drive:${id}`;
   const cached = await getDraft(key); // { etag, blob } from an earlier open (IndexedDB)
   const have = cached?.kind === 'cache' && cached.blob && cached.etag ? cached : null;
+
+  if (await directOn()) {
+    try {
+      const info = unwrap(await api.get(`${B}/nodes/${id}/download-url`));
+      if (have && info.etag === have.etag) { onProgress?.(100); return have.blob; }
+      let res;
+      try { res = await fetch(info.url, { credentials: 'omit' }); } catch (fe) { throw Object.assign(fe, { direct: true }); }
+      if (!res.ok) throw Object.assign(new Error(`Storage answered ${res.status}.`), { direct: true });
+      const blob = await readWithProgress(res, onProgress);
+      if (info.etag && blob.size <= CACHE_MAX_BYTES) { putDraft(key, { kind: 'cache', etag: info.etag, blob }); pruneCache(); }
+      return blob;
+    } catch (e) {
+      if (have && e?.status === 0) { onProgress?.(100); return have.blob; } // offline (the API itself is unreachable): use the local copy
+      if (!canFallBack(e)) throw e;
+      // otherwise: the classic proxied download below
+    }
+  }
+
   let res;
   try {
     res = await api.blob(`${B}/nodes/${id}/content`, undefined, have ? { 'If-None-Match': have.etag } : undefined);

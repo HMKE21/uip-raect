@@ -17,6 +17,7 @@ import {
   IMAGE_MIME, MAX_EDIT_BYTES, STORE_EXT, badgeOf, baseName, buildTree, dirName, extOf, fmtBytes, isBinary, languageName,
 } from './zipUtils';
 import useAutoDraft, { DraftChip } from '../../lib/useAutoDraft';
+import { askUnsaved } from '../../lib/saveCenter';
 import { agoText, discardDraft, getDraft } from '../../lib/draftStore';
 import { restoreDraft, sigOf, snapshotDraft } from './zipDraft';
 import '../../styles/css/drafts.css';
@@ -99,6 +100,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const baseMapRef = useRef(new Map());
   const pendingTabs = useRef(null); // { tabs, active } to reopen once the workbench is on screen
   const touchRef = useRef(() => {});
+  const saveRef = useRef(null); // the Save Center saves this archive through it (reminders, "Save changes?")
   const deletedRef = useRef(0);
   const runner = useRunner();
   const sandbox = useSandbox(projectId, sandboxTokenPath); // real server / terminal on the uip-sandbox gateway (needs a project id)
@@ -460,16 +462,19 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     draftKey, dirty: changes > 0, always: true, ready: draftReady && phase === 'ready', token: `${changes}|${tabs.join('\n')}|${active}`,
     build: () => snapshotDraft({ vfs: vfsRef.current, edits: edits.current, newData: newData.current, deletedCount: deletedRef.current, tabs: tabsRef.current, active: activeRef.current, sig: baseSig.current }),
     meta: { name: fileName },
+    saver: onSave ? () => saveRef.current?.() : undefined,
   });
   touchRef.current = draft.touch;
 
   useEffect(() => {
     if (!guardRef) return undefined;
-    guardRef.current = () => changes === 0 || (window.confirm(onSave
-      ? tt('You have unsaved edits in this archive. Close without saving?', 'عندك تعديلات لم تُحفظ على هذا الأرشيف. تقفل بدون حفظ؟')
-      : tt('You have unsaved edits in this archive. Close without downloading the new ZIP?', 'عندك تعديلات لم تُنزَّل على هذا الأرشيف. تقفل بدون تنزيل الـ ZIP الجديد؟')) && (discardDraft(draftKey), true));
+    guardRef.current = () => {
+      if (changes === 0) return true;
+      if (onSave) return askUnsaved({ key: draftKey, name: fileName, tt, discard: () => discardDraft(draftKey) }); // Promise<boolean>: Save / Don't save / Cancel
+      return window.confirm(tt('You have unsaved edits in this archive. Close without downloading the new ZIP?', 'عندك تعديلات لم تُنزَّل على هذا الأرشيف. تقفل بدون تنزيل الـ ZIP الجديد؟')) && (discardDraft(draftKey), true);
+    };
     return () => { guardRef.current = null; };
-  }, [guardRef, changes, tt, onSave, draftKey]);
+  }, [guardRef, changes, tt, onSave, draftKey, fileName]);
 
   const saveBlob = (data, name, type) => {
     const url = URL.createObjectURL(new Blob([data], { type }));
@@ -515,8 +520,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   };
 
   const doSave = async (force = false) => {
-    if (!onSave || saving || busy) return;
-    if (changes === 0 && !force) { flash(tt('No changes to save.', 'لا توجد تعديلات للحفظ.')); return; }
+    if (!onSave || saving || busy) return false;
+    if (changes === 0 && !force) { flash(tt('No changes to save.', 'لا توجد تعديلات للحفظ.')); return true; }
     setSaving(true);
     await new Promise((r) => { setTimeout(r, 30); }); // let the "Saving…" state paint before the heavy zip work
     let saveBlobData = null;
@@ -530,12 +535,15 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
       flash(saved?.message || (saved?.version
         ? tt(`Saved — version ${saved.version} is now what everyone on the project sees.`, `تم الحفظ — النسخة ${saved.version} هي اللي هيشوفها كل أعضاء المشروع.`)
         : tt('Saved for everyone on the project.', 'تم الحفظ لكل أعضاء المشروع.')));
+      return true;
     } catch (err) {
       if (ownBlob.current === saveBlobData) ownBlob.current = null;
       if (err?.status === 409) setDlg({ type: 'overwrite' });
       else flash(tt('Could not save: ', 'تعذّر الحفظ: ') + String(err?.message || err));
+      return false;
     } finally { setSaving(false); }
   };
+  saveRef.current = () => doSave(false);
 
   const downloadFile = (path) => {
     const bytes = getBytes(path);

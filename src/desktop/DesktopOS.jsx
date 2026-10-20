@@ -5,6 +5,7 @@ import { usePrivateParams } from '../lib/privateParams';
 import Icon from '../components/Icon';
 import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
+import CloudTray from './CloudTray';
 import { lockScroll } from '../lib/scrollLock';
 import { roleHome } from '../config/roleHome';
 import { useAuth } from '../context/AuthContext';
@@ -98,6 +99,7 @@ const RUN_ALIASES = {
   taskmgr: 'taskmgr', 'task manager': 'taskmgr', 'مدير المهام': 'taskmgr',
   bin: 'bin', recycle: 'bin', trash: 'bin', 'سلة المحذوفات': 'bin',
   shortcuts: 'shortcuts', help: 'shortcuts', 'الاختصارات': 'shortcuts',
+  cloud: 'cloud', backup: 'cloud', storage: 'cloud', 'النسخ الاحتياطي': 'cloud', 'التخزين': 'cloud',
   lock: 'lock', 'قفل': 'lock', portal: 'portal', exit: 'portal', 'البوابة': 'portal',
 };
 
@@ -153,7 +155,11 @@ export default function DesktopOS() {
   // a window may veto its own close (unsaved edits in the code editor / image editor): guards register here
   const guards = useRef(new Map());
   const dispatch = useCallback((a) => {
-    if (a.type === 'close' && !a.force && guards.current.get(a.id)?.() === false) return;
+    if (a.type === 'close' && !a.force) {
+      const g = guards.current.get(a.id)?.(); // false = stay · Promise<boolean> = the "Save changes?" dialog decides
+      if (g === false) return;
+      if (g && typeof g.then === 'function') { g.then((ok) => { if (ok !== false) rawDispatch({ ...a, force: true }); }); return; }
+    }
     rawDispatch(a);
   }, []);
   const guardFns = useRef(new Map()); // one stable registrar per window id (effects depend on its identity)
@@ -216,12 +222,19 @@ export default function DesktopOS() {
     setOverlay(null);
   }, [dispatch]);
   const openExplorer = useCallback((params = {}) => { setParams(params); openApp('explorer'); }, [openApp, setParams]);
+  // Save Center toasts ("Set up cloud backup") open Settings ▸ Storage & backup in this desktop
+  useEffect(() => {
+    const h = (e) => { if (e.detail) e.detail.handled = true; openApp('settings', { tab: 'cloud' }); };
+    window.addEventListener('uip-open-cloud-settings', h);
+    return () => window.removeEventListener('uip-open-cloud-settings', h);
+  }, [openApp]);
 
   const runCommand = useCallback((id) => {
     switch (id) {
       case 'explorer': openExplorer({}); break;
       case 'bin': openExplorer({ view: 'trash' }); break;
       case 'settings': openApp('settings'); break;
+      case 'cloud': openApp('settings', { tab: 'cloud' }); break;
       case 'personalize': openApp('settings', { tab: 'personalize' }); break;
       case 'taskmgr': openApp('taskmgr'); break;
       case 'shortcuts': openApp('shortcuts'); break;
@@ -701,6 +714,7 @@ export default function DesktopOS() {
         <WifiGlyph on={online} size={15} />
         {battery && <BatteryGlyph level={battery.level} charging={battery.charging} size={18} />}
       </button>
+      <CloudTray tt={tt} onOpen={() => openApp('settings', { tab: 'cloud' })} />
       <button type="button" className="os-tray__srch" title={tt('Spotlight (Alt+R)', 'بحث سريع (Alt+R)')} onClick={() => setOverlay((o) => (o === 'run' ? null : 'run'))}><Icon name="search" size={14} /></button>
       <button type="button" className={`os-tray__clock${overlay === 'cal' ? ' is-on' : ''}`} title={tt('Calendar', 'التقويم')} aria-haspopup="dialog" aria-expanded={overlay === 'cal'} onClick={() => setOverlay((o) => (o === 'cal' ? null : 'cal'))}><Clock ar={ar} bar /></button>
     </div>

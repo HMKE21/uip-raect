@@ -1,4 +1,6 @@
 import useAutoDraft, { DraftChip } from '../../lib/useAutoDraft';
+import { afterGuard, askUnsaved } from '../../lib/saveCenter';
+import { discardDraft } from '../../lib/draftStore';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../Icon';
 import AnnotSurface from './AnnotSurface';
@@ -301,15 +303,19 @@ export default function ImageEditor({ blob, fileName, tt, rtl, guardRef, onSave,
     return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('Could not create the image.'))), outMime, quality / 100));
   };
   const doSave = async (force) => {
-    if (saving || !hist.dirty) return;
+    if (saving) return false;
+    if (!hist.dirty) return true;
     setSaving(true); setSaveErr(''); setConflict(false);
     try {
       const out = await exportBlob();
       await onSave(out, { name: outName, force: force === true });
+      return true;
     } catch (e) {
       if (e?.status === 409) setConflict(true); else setSaveErr(e?.message || String(e));
+      return false;
     } finally { setSaving(false); }
   };
+  const saveRef = useRef(null); saveRef.current = () => doSave(false);
   const download = async () => {
     try {
       const out = await exportBlob();
@@ -353,13 +359,14 @@ export default function ImageEditor({ blob, fileName, tt, rtl, guardRef, onSave,
   const ocrReady = ocr.base === base && ocr.status === 'done';
 
   const dirty = hist.dirty;
-  const draft = useAutoDraft({ draftKey, dirty, token: hist.present, build: () => (hist.present ? exportBlob() : null), meta: { name: outName } });
+  const draft = useAutoDraft({ draftKey, dirty, token: hist.present, build: () => (hist.present ? exportBlob() : null), meta: { name: outName }, saver: () => saveRef.current?.() });
+  const askLeave = () => askUnsaved({ key: draftKey, name: outName, tt, discard: () => discardDraft(draftKey) });
   useEffect(() => {
     if (!guardRef) return undefined;
-    guardRef.current = () => !dirty || window.confirm(tt('Discard your unsaved changes?', 'تتجاهل التعديلات اللي لسه ما اتحفظتش؟'));
+    guardRef.current = () => !dirty || askLeave();
     return () => { guardRef.current = null; };
   }, [dirty, guardRef, tt]);
-  const requestClose = () => { if (!dirty || window.confirm(tt('Discard your unsaved changes?', 'تتجاهل التعديلات اللي لسه ما اتحفظتش؟'))) onClose(); };
+  const requestClose = () => afterGuard(dirty ? askLeave() : true, onClose);
 
   useEditorKeys({
     undo: hist.undo, redo: hist.redo, save: () => doSave(false), dup: dupSel, del: delSel, nudge, hasSel: () => !!selId && !cropping,
