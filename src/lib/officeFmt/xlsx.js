@@ -50,7 +50,7 @@ export async function buildSheets(sheets, ext, { rtl } = {}) {
     let name = String(s.name || `Sheet${i + 1}`).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31) || `Sheet${i + 1}`;
     while (used.has(name.toLowerCase())) name = `${name.slice(0, 28)}_${i}`;
     used.add(name.toLowerCase());
-    const data = rows.map((r, ri) => r.map((c) => (ri === 0 ? { value: c === '' ? null : String(c), fontWeight: 'bold', backgroundColor: '#E8ECFF', textColor: '#1B2559' } : typed(c))));
+    const data = rows.map((r, ri) => r.map((c) => (ri === 0 && c !== '' ? { value: c === '' ? null : String(c), fontWeight: 'bold', backgroundColor: '#E8ECFF', textColor: '#1B2559' } : typed(c))));
     const columns = rows[0].map((_, ci) => {
       let max = 8;
       for (let r = 0; r < Math.min(rows.length, 200); r += 1) max = Math.max(max, String(rows[r][ci]).length);

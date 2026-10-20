@@ -7,6 +7,20 @@ import '../../styles/css/office.css';
 
 const ROW_H = 30;
 const OVERSCAN = 12;
+const MIN_ROWS = 100; // like Excel, an empty sheet shows a full canvas of cells; typing into them grows the data
+const MIN_COLS = 26;
+const padGrid = (src, readOnly) => {
+  if (readOnly) return src;
+  const w = Math.min(MAX_COLS, Math.max(MIN_COLS, (src[0]?.length || 1) + 5)); const h = Math.max(MIN_ROWS, src.length + 30);
+  return Array.from({ length: h }, (_, r) => Array.from({ length: w }, (_, c) => src[r]?.[c] ?? ''));
+};
+/** Drops the empty tail (rows / columns) so the padding never becomes data. */
+const trimGrid = (n) => {
+  let h = n.length; while (h > 1 && n[h - 1].every((v) => (v ?? '') === '')) h -= 1;
+  const rows = n.slice(0, h); let w = rows[0]?.length || 1;
+  while (w > 1 && rows.every((r) => (r[w - 1] ?? '') === '')) w -= 1;
+  return rows.map((r) => r.slice(0, w));
+};
 const num = (s) => (s !== '' && /^-?\d+(\.\d+)?$/.test(String(s).trim()) ? Number(s) : null);
 
 /**
@@ -14,7 +28,10 @@ const num = (s) => (s !== '' && /^-?\d+(\.\d+)?$/.test(String(s).trim()) ? Numbe
  * Header row (row 1) is styled as the header; row numbers, column letters, sort, find, add/delete rows & columns,
  * column auto-widths, arrow / Tab / Enter navigation, copy / paste of ranges from Excel.
  */
-function SheetGrid({ cells, onChange, tt, rtl, undo, redo, canUndo, canRedo, readOnly = false, extraTools = null }) {
+function SheetGrid({ cells: src, onChange: emit, tt, rtl, undo, redo, canUndo, canRedo, readOnly = false, extraTools = null }) {
+  const cells = useMemo(() => padGrid(src, readOnly), [src, readOnly]);
+  const onChange = useCallback((n) => emit(readOnly ? n : trimGrid(n)), [emit, readOnly]);
+  const hasHeader = cells[0].some((v) => (v ?? '') !== '');
   const [sel, setSel] = useState({ r: 0, c: 0, r2: 0, c2: 0 });
   const [edit, setEdit] = useState(null); // { r, c, v }
   const [find, setFind] = useState('');
@@ -109,7 +126,7 @@ function SheetGrid({ cells, onChange, tt, rtl, undo, redo, canUndo, canRedo, rea
     setSort({ c, dir });
     set((n) => {
       const start = noHeader ? 0 : 1; const body = n.slice(start);
-      body.sort((a, b) => { const x = a[c]; const y = b[c]; const nx = num(x); const ny = num(y); const cmp = nx !== null && ny !== null ? nx - ny : String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' }); return dir === 'asc' ? cmp : -cmp; });
+      body.sort((a, b) => { const x = a[c]; const y = b[c]; if (x === '' || y === '') return x === y ? 0 : x === '' ? 1 : -1; const nx = num(x); const ny = num(y); const cmp = nx !== null && ny !== null ? nx - ny : String(x).localeCompare(String(y), undefined, { numeric: true, sensitivity: 'base' }); return dir === 'asc' ? cmp : -cmp; });
       n.splice(start, body.length, ...body);
     });
   };
@@ -195,7 +212,7 @@ function SheetGrid({ cells, onChange, tt, rtl, undo, redo, canUndo, canRedo, rea
           {Array.from({ length: last - first }).map((_, i) => {
             const r = first + i; const row = cells[r];
             return (
-              <div key={r} className={`xg__row${r === 0 && !noHeader ? ' xg__row--hd' : ''}`} style={{ top: ROW_H + r * ROW_H, height: ROW_H, width: tableW }}>
+              <div key={r} className={`xg__row${r === 0 && !noHeader && hasHeader ? ' xg__row--hd' : ''}`} style={{ top: ROW_H + r * ROW_H, height: ROW_H, width: tableW }}>
                 <div className={`xg__rowh${r >= rect.r1 && r <= rect.r2 ? ' is-on' : ''}`} style={{ width: gutter }} onPointerDown={(e) => { if (e.button === 0) setSel({ r, c: 0, r2: r, c2: cols - 1 }); }}>{r + 1}</div>
                 {row.map((v, c) => {
                   const active = r === sel.r && c === sel.c;
