@@ -52,6 +52,10 @@ function cleanNode(node, doc) {
   const ds = node.getAttribute('data-st'); if (ST_OK.has(ds)) el.setAttribute('data-st', ds);
   if (tag === 'HR') { if (node.hasAttribute('data-pb')) el.setAttribute('data-pb', '1'); else return null; return el; }
   if (tag === 'SPAN' && /^(PAGE|NUMPAGES)$/.test(node.getAttribute('data-fld') || '')) { el.setAttribute('data-fld', node.getAttribute('data-fld')); el.setAttribute('contenteditable', 'false'); el.textContent = '1'; return el; }
+  if (tag === 'DIV') { // letterhead text placed on the page (w:framePr): "x,y,width" in px from the header's top-left
+    const m = /^(-?\d{1,5}),(-?\d{1,5}),(\d{1,5})$/.exec(node.getAttribute('data-frame') || '');
+    if (m) { el.setAttribute('data-frame', node.getAttribute('data-frame')); el.setAttribute('style', `position:absolute;left:${m[1]}px;top:${m[2]}px;width:${m[3]}px`); }
+  }
   if (tag === 'TABLE' && node.getAttribute('data-b') === 'none') el.setAttribute('data-b', 'none');
   if (tag === 'OL') { const t = node.getAttribute('type'); if (/^[aAiI1]$/.test(t || '')) el.setAttribute('type', t); const s = parseInt(node.getAttribute('start'), 10); if (s > 1 && s < 10000) el.setAttribute('start', String(s)); }
   if (tag === 'A') { const h = (node.getAttribute('href') || '').trim(); if (SAFE_URL.test(h)) { el.setAttribute('href', h); el.setAttribute('rel', 'noopener noreferrer'); el.setAttribute('target', '_blank'); } }
@@ -248,6 +252,8 @@ export async function htmlToDocx(root, ctx = {}) {
     if (/^H[1-6]$/.test(tag)) props.heading = HEAD[tag];
     else if (dataSt === 'title') props.style = 'Title'; else if (dataSt === 'subtitle') props.style = 'Subtitle'; else if (dataSt === 'quote') props.style = 'Quote';
     else if (tag === 'BLOCKQUOTE') props.indent = { ...(props.indent || {}), start: 720 };
+    const fm = /^(-?\d+),(-?\d+),(\d+)$/.exec(el.closest?.('[data-frame]')?.getAttribute('data-frame') || '');
+    if (fm) props.frame = { type: 'absolute', position: { x: tw(Number(fm[1]) * 0.75) + pg.left, y: tw(Number(fm[2]) * 0.75) + Math.min(pg.header, pg.top) }, width: tw(Number(fm[3]) * 0.75), anchor: { horizontal: D.FrameAnchorType.PAGE, vertical: D.FrameAnchorType.PAGE }, space: { horizontal: 180, vertical: 0 }, wrap: D.FrameWrap.AROUND };
     return new Paragraph({ children: runs(el, f, rtl), bidirectional: rtl || undefined, alignment: alignOf(el, rtl), ...props });
   }
   function list(el, level, ref, out) {

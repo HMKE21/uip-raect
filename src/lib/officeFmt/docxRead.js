@@ -66,6 +66,28 @@ function parseBorder(el) {
 const CSS_LINE = (v) => (/double|triple|thinThick|thickThin/i.test(v) ? 'double' : /dot/i.test(v) ? 'dotted' : /dash/i.test(v) ? 'dashed' : 'solid');
 export const borderCss = (b) => `${Math.max(CSS_LINE(b.val) === 'double' ? 3 : 0.5, Math.round((b.sz / 8) * 100) / 100)}pt ${CSS_LINE(b.val)} ${b.color}`;
 
+/** EMF pictures (Word keeps pasted logos as .emf): the usual case is one embedded DIB (EMR_STRETCHDIBITS) — rewrap it as a .bmp the browser can show. */
+function emfToBmp(u8) {
+  try {
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength); let i = 0;
+    while (i + 8 <= u8.length) {
+      const type = dv.getUint32(i, true); const size = dv.getUint32(i + 4, true); if (size < 8) return null;
+      if (type === 81) { // EMR_STRETCHDIBITS
+        const offBmi = dv.getUint32(i + 48, true); const cbBmi = dv.getUint32(i + 52, true); const offBits = dv.getUint32(i + 56, true); const cbBits = dv.getUint32(i + 60, true);
+        if (!cbBmi || !cbBits || i + offBits + cbBits > u8.length || i + offBmi + cbBmi > u8.length) return null;
+        const comp = dv.getUint32(i + offBmi + 16, true); if (comp !== 0 && comp !== 3) return null; // plain / bit-fields only (no RLE, JPEG, PNG)
+        const out = new Uint8Array(14 + cbBmi + cbBits); const o = new DataView(out.buffer);
+        out[0] = 0x42; out[1] = 0x4d; o.setUint32(2, out.length, true); o.setUint32(10, 14 + cbBmi, true);
+        out.set(u8.subarray(i + offBmi, i + offBmi + cbBmi), 14); out.set(u8.subarray(i + offBits, i + offBits + cbBits), 14 + cbBmi);
+        return out;
+      }
+      if (type === 14) break; // EMR_EOF
+      i += size;
+    }
+  } catch { /* not a bitmap EMF */ }
+  return null;
+}
+
 function parsePpr(pPr) {
   if (!pPr) return {};
   const o = {};
@@ -193,8 +215,9 @@ class Conv {
     const rid = blip ? A(blip, 'r:embed') : vd ? A(vd, 'r:id') : null; if (!rid) return '';
     const rel = this.rels.get(rid); if (!rel || rel.ext) return '';
     const path = resolvePath(rel.target); const ext = path.split('.').pop().toLowerCase();
-    if (!MIME[ext] || !this.files[path]) { this.warn.add('image'); return ''; }
-    const bytes = this.files[path]; let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    let bytes = this.files[path]; let mime = MIME[ext];
+    if (bytes && ext === 'emf') { const bmp = emfToBmp(bytes); if (bmp) { bytes = bmp; mime = MIME.bmp; } }
+    if (!mime || !bytes) { this.warn.add('image'); return ''; } let bin = ''; for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
     const ex = el.getElementsByTagName('wp:extent')[0]; const dp = el.getElementsByTagName('wp:docPr')[0];
     const w = ex ? Math.round(num(A(ex, 'cx')) / 9525) : 0; const h = ex ? Math.round(num(A(ex, 'cy')) / 9525) : 0;
     let fl = ''; // anchored (floating) picture: remember the side it sits on so the logos of a header stay left / right of the text
@@ -204,7 +227,33 @@ class Conv {
       if (al === 'right' || al === 'outside') fl = 'right'; else if (al === 'left' || al === 'inside') fl = 'left';
       else if (off) { const cx = ex ? num(A(ex, 'cx')) || 0 : 0; const mid = (num(off.textContent) || 0) / 635 + cx / 635 / 2; const base = A(ph, 'relativeFrom') === 'page' ? this.pageW : this.textW; fl = mid > base / 2 ? 'right' : 'left'; }
     }
-    return `<img src="data:${MIME[ext]};base64,${btoa(bin)}"${fl ? ` data-fl="${fl}"` : ''}${w > 0 ? ` width="${w}"` : ''}${h > 0 && w > 0 ? ` height="${h}"` : ''}${dp && A(dp, 'descr') ? ` alt="${escA(A(dp, 'descr'))}"` : ''}>`;
+    return `<img src="data:${mime};base64,${btoa(bin)}"${fl ? ` data-fl="${fl}"` : ''}${w > 0 ? ` width="${w}"` : ''}${h > 0 && w > 0 ? ` height="${h}"` : ''}${dp && A(dp, 'descr') ? ` alt="${escA(A(dp, 'descr'))}"` : ''}>`;
+  }
+
+  /** Colour of a DrawingML fill: srgbClr, or a scheme colour (tx2 -> dk2 ...) looked up in the theme. */
+  drawColor(el) {
+    const rgb = el.getElementsByTagName('a:srgbClr')[0]; if (rgb) return hexOk(A(rgb, 'val')) || '#000000';
+    const sc = el.getElementsByTagName('a:schemeClr')[0]; if (!sc) return '#000000';
+    if (!this.themeXml) { const f = Object.keys(this.files).find((k) => /^word\/theme\/theme\d*\.xml$/.test(k)); this.themeXml = f ? strFromU8(this.files[f]) : ''; }
+    const name = { tx1: 'dk1', tx2: 'dk2', bg1: 'lt1', bg2: 'lt2' }[A(sc, 'val')] || A(sc, 'val');
+    const m = new RegExp(`<a:${name}>\\s*<a:(?:srgbClr val|sysClr[^>]*lastClr)="([0-9A-Fa-f]{6})"`).exec(this.themeXml);
+    return m ? `#${m[1]}` : '#000000';
+  }
+
+  /** A straight line shape (Word's "Straight Connector", used as the rule under letterheads). Queued; paragraph() draws it after its text. */
+  lineShape(c) {
+    const wsp = c.getElementsByTagName('wps:wsp')[0]; if (!wsp) return false;
+    if (wsp.getElementsByTagName('wps:txbx').length) return false;
+    const geom = wsp.getElementsByTagName('a:prstGeom')[0]; if (!/^(line|straightConnector1)$/.test(A(geom, 'prst') || '')) return false;
+    const ex = c.getElementsByTagName('wp:extent')[0]; const cx = ex ? num(A(ex, 'cx')) || 0 : 0; const cy = ex ? num(A(ex, 'cy')) || 0 : 0;
+    if (cx <= 0 || cy > cx / 20) return false; // horizontal lines only
+    const ln = wsp.getElementsByTagName('a:ln')[0];
+    const wPt = Math.max(0.5, Math.round(((ln ? num(A(ln, 'w')) || 9525 : 9525) / 12700) * 100) / 100);
+    const color = ln ? this.drawColor(ln) : '#000000';
+    const ph = c.getElementsByTagName('wp:positionH')[0]; const pv = c.getElementsByTagName('wp:positionV')[0];
+    const off = (e) => num(kid(e, 'wp:posOffset')?.textContent) || 0;
+    (this.pendingLines ||= []).push({ w: Math.round(cx / 9525), ml: ph ? Math.round(off(ph) / 9525) : 0, mt: pv ? Math.round(off(pv) / 9525) : 0, wPt, color });
+    return true;
   }
 
   /* one run -> list of { html } | { pb: true }, formatted relative to the paragraph's own look */
@@ -229,7 +278,7 @@ class Conv {
         else if (n === 'w:drawing' || n === 'w:pict' || n === 'w:object') {
           if (c.getElementsByTagName('c:chart').length) this.warn.add('chart');
           if (c.getElementsByTagName('wps:txbx').length || c.getElementsByTagName('w:txbxContent').length) this.warn.add('textbox');
-          const im = this.imageOf(c); if (im) { flush(); parts.push({ html: im }); } else if (c.getElementsByTagName('wps:wsp').length || c.getElementsByTagName('v:shape').length) this.warn.add('shape');
+          const im = this.imageOf(c); if (im) { flush(); parts.push({ html: im }); } else if (this.lineShape(c)) { /* drawn as a rule under the paragraph */ } else if (c.getElementsByTagName('wps:wsp').length || c.getElementsByTagName('v:shape').length) this.warn.add('shape');
         } else if (n === 'mc:AlternateContent') { const ch = kid(c, 'mc:Choice'); if (ch) walk(ch); }
         else if (n === 'w:footnoteReference' || n === 'w:endnoteReference') this.warn.add('notes');
         else if (n === 'w:sym') text += '\u2022';
@@ -329,7 +378,7 @@ class Conv {
     const hm = /^heading\s*([1-6])$/.exec(sname);
     if (hm) tag = `h${hm[1]}`; else if (sname === 'title') dataSt = 'title'; else if (sname === 'subtitle') dataSt = 'subtitle'; else if (/^(quote|intense quote)$/.test(sname)) dataSt = 'quote';
     const para = { eff, rtl };
-    const parts = []; this.inline(p, para, parts);
+    const parts = []; this.pendingLines = []; this.inline(p, para, parts); const lines = this.pendingLines; this.pendingLines = [];
     const dir = ` dir="${rtl ? 'rtl' : 'ltr'}"`;
     const isList = !!ppr.numId && !hm;
     const css = this.blockStyle(ppr, rtl, !!hm || !!dataSt, eff, isList);
@@ -341,6 +390,7 @@ class Conv {
     if (ppr.pbb) blocks.push({ pb: true });
     parts.forEach((x) => { if (x.pb) { close(false); blocks.push({ pb: true }); } else cur += x.html; });
     if (!blocks.length || cur || !parts.length) close(!blocks.length || (!cur && !parts.length));
+    lines.forEach((l) => blocks.push(`<div style="width:${l.w}px;margin-inline-start:${l.ml}px;margin-top:${Math.max(0, l.mt - 16)}px;margin-bottom:6px;border-top:${l.wPt}pt solid ${l.color}"></div>`));
     if (isList) {
       const lv = ppr.ilvl || 0; const nm = this.nb.nums.get(ppr.numId);
       const lvl = nm && this.nb.abs.get(nm.abs)?.get(lv);
@@ -370,19 +420,30 @@ class Conv {
       else { out += `<${tag}${item.ordered && item.type ? ` type="${item.type}"` : ''}${item.ordered && item.start > 1 ? ` start="${item.start}"` : ''}>`; stack.push({ tag, level: L, numId: item.numId }); }
       out += item.li;
     };
+    // Paragraphs with a frame (w:framePr) are positioned on the page (the letterhead text of a header): gather neighbours with the same frame into one absolutely placed box.
+    let fr = null;
+    const flushFrame = () => { if (fr) { out += `<div data-frame="${fr.x},${fr.y},${fr.w}">${fr.html}</div>`; fr = null; } };
+    const frameOf = (p) => {
+      if (!this.frameOrigin) return null;
+      const f = kid(kid(p, 'w:pPr'), 'w:framePr'); if (!f || A(f, 'w:hAnchor') !== 'page' || A(f, 'w:vAnchor') !== 'page') return null;
+      const x = num(A(f, 'w:x')); const y = num(A(f, 'w:y')); const w = num(A(f, 'w:w')); if (x === undefined || y === undefined || !w) return null;
+      return { x: Math.round((x - this.frameOrigin.x) / 15), y: Math.round((y - this.frameOrigin.y) / 15), w: Math.round(w / 15) };
+    };
     const visit = (parent) => {
       Array.from(parent.children).forEach((c) => {
         const n = c.nodeName;
         if (n === 'w:p') {
-          const r = this.paragraph(c);
+          const r = this.paragraph(c); const f = r.list ? null : frameOf(c);
+          if (f) { closeAll(); if (fr && (fr.x !== f.x || fr.y !== f.y || fr.w !== f.w)) flushFrame(); fr = fr || { ...f, html: '' }; r.blocks.forEach((b) => { if (typeof b === 'string') fr.html += b; }); return; }
+          flushFrame();
           r.blocks.forEach((b) => { closeAll(); out += typeof b === 'string' ? b : '<hr data-pb="1">'; });
           if (r.list) push(r.list);
-        } else if (n === 'w:tbl') { closeAll(); out += this.table(c); }
+        } else if (n === 'w:tbl') { flushFrame(); closeAll(); out += this.table(c); }
         else if (n === 'w:sdt') visit(kid(c, 'w:sdtContent') || c);
         else if (n === 'w:sdtContent' || n === 'w:ins' || n === 'w:customXml') visit(c);
       });
     };
-    visit(el); closeAll();
+    visit(el); flushFrame(); closeAll();
     return out;
   }
 
@@ -460,7 +521,8 @@ export function readDocxRaw(arrayBuffer) {
     const rel = r && cv.docRels.get(A(r, 'r:id'));
     return rel ? cv.part(resolvePath(rel.target)) : '';
   };
-  const header = ref('header'); const footer = ref('footer');
+  cv.frameOrigin = { x: page.left, y: Math.min(page.header, page.top) };
+  const header = ref('header'); cv.frameOrigin = null; const footer = ref('footer');
   if (kid(sect, 'w:titlePg') && (kids(sect, 'w:headerReference').length > 1 || kids(sect, 'w:footerReference').length > 1)) cv.warn.add('firstPage');
   const defaults = {
     font: cv.base.fontA || cv.base.fontCs || 'Calibri', size: cv.base.sz || 11,
