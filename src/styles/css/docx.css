@@ -58,3 +58,7 @@
 
 @media (max-width: 760px) { .dx__stage { padding: 12px 6px 30px; } }
 @media print { .dx__stage { padding: 0; background: none; } }
+
+/* An LTR run inside a right-to-left paragraph must join its LTR neighbours (Word does), not become its own isolated
+   island — otherwise "An identification card … for year 2026-2027" is laid out run by run in reverse order. */
+.dxp span[dir="ltr"], .dxp span[dir="rtl"] { unicode-bidi: embed; }
