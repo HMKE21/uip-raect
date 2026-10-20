@@ -186,3 +186,8 @@
 .st-fv__sheet--json { width: min(1500px, 100%); padding: 0; overflow: hidden; display: flex; flex-direction: column; background: transparent; box-shadow: 0 20px 70px rgba(0, 0, 0, .5); }
 .st-fv__sheet--json .jv { flex: 1; min-height: 0; margin-top: 0; border-radius: 14px; }
 .st-fv__sheet--json .jv-body { max-height: none; min-height: 0; }
+
+/* editors / workbench: stack the "restored draft" bar ABOVE the editor (the stage is a flex row, so it used to squeeze the editor into a narrow column) */
+.st-fv__stage--bench { flex-direction: column; }
+.st-fv__stage--bench > .uip-draftbar { flex: none; width: 100%; box-sizing: border-box; border-radius: 10px; margin: 8px 0; color: var(--fv-text, #e8ecf3); }
+.st-fv__stage--bench > .ed, .st-fv__stage--bench > .zb { width: 100%; flex: 1; min-height: 0; }
