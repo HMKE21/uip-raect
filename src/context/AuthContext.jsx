@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { registerPush, unregisterPush } from '../native'; // [ANDROID]
 import { getGateToken } from '../config/staffGate';
+import { clearCache } from '../lib/draftStore';
 import { api, ApiError, getTokens, setTokens, clearTokens, restoreSession, markActivity, getLastActivity, getIdleMs, getStoredUser, setStoredUser, ACCESS_KEY, PERMISSION_DENIED_EVENT } from '../api/client';
 
 const AuthContext = createContext(null);
@@ -252,6 +253,7 @@ export function AuthProvider({ children }) {
     // so the app looked frozen. Both start together and run in the background; the screen switches after at most ~1 s, and a
     // request that is still in flight keeps going (it already carries its own auth headers).
     const { refreshToken } = getTokens();
+    clearCache(); // local copies of private files are not left behind on a shared computer
     const cleanup = Promise.allSettled([
       unregisterPush(), // [ANDROID] stop phone notifications for this account (no-op in the browser)
       // The HttpOnly refresh cookie tells the server which session to end (the client adds the CSRF header).

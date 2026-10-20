@@ -16,6 +16,10 @@ import {
 import {
   IMAGE_MIME, MAX_EDIT_BYTES, STORE_EXT, badgeOf, baseName, buildTree, dirName, extOf, fmtBytes, isBinary, languageName,
 } from './zipUtils';
+import useAutoDraft, { DraftChip } from '../../lib/useAutoDraft';
+import { agoText, discardDraft, getDraft } from '../../lib/draftStore';
+import { restoreDraft, sigOf, snapshotDraft } from './zipDraft';
+import '../../styles/css/drafts.css';
 import '../../styles/css/zip-workbench.css';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
@@ -53,7 +57,7 @@ function Badge({ path }) {
  */
 const MAX_SAVE_BYTES = 50 * 1024 * 1024; // matches the server's upload limit
 
-export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, projectId, sandboxTokenPath }) {
+export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, projectId, sandboxTokenPath, draftKey }) {
   const [phase, setPhase] = useState('loading'); // loading | ready | error
   const [error, setError] = useState('');
   const [vfs, setVfs] = useState(() => new Map()); // path -> { path, dir, size, origPath, isNew }
@@ -86,6 +90,13 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const [runOpen, setRunOpen] = useState(false); // bottom "Run" panel (Python / React / HTML in the browser)
   const [runChoice, setRunChoice] = useState(null); // user's explicit pick in the app dropdown (null = automatic)
   const [runBig, setRunBig] = useState(false);
+  const [draftReady, setDraftReady] = useState(false); // archive loaded and a stored draft applied: only now may drafts be written
+  const [restoredInfo, setRestoredInfo] = useState(null); // { count, at, exact }
+  const baseSig = useRef('');
+  const baseMapRef = useRef(new Map());
+  const pendingTabs = useRef(null); // { tabs, active } to reopen once the workbench is on screen
+  const touchRef = useRef(() => {});
+  const deletedRef = useRef(0);
   const runner = useRunner();
   const sandbox = useSandbox(projectId, sandboxTokenPath); // real server / terminal on the uip-sandbox gateway (needs a project id)
 
@@ -128,6 +139,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     docs.current.forEach((d) => { if (d.url) URL.revokeObjectURL(d.url); });
     docs.current.clear(); edits.current.clear(); origTexts.current.clear(); newData.current.clear(); cache.current.clear();
     setTabs([]); setActive(null); setEditorDoc(null); setDirty(new Set()); setDeletedCount(0);
+    setDraftReady(false); setRestoredInfo(null);
     (async () => {
       try {
         if (blob.size > MAX_ZIP_BYTES) throw new Error(tt('This archive is too large to open here — download it instead.', 'الأرشيف كبير جدًا للفتح هنا — نزّله بدل ذلك.'));
@@ -140,18 +152,35 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
         zipBytes.current = u8;
         const map = new Map();
         list.forEach((e) => map.set(e.path, { path: e.path, dir: e.path.endsWith('/'), size: e.size, origPath: e.path, isNew: false }));
-        setVfs(map);
+        baseSig.current = sigOf([...map.values()]);
+        baseMapRef.current = map;
+        let startMap = map;
+        let applied = null;
+        try {
+          const snap = draftKey ? await getDraft(draftKey) : null;
+          if (snap && !dead) applied = restoreDraft(snap, map, u8, baseSig.current);
+          if (applied && !dead) {
+            edits.current = applied.edits; newData.current = applied.newData; origTexts.current = applied.origTexts;
+            startMap = applied.map;
+            setDirty(applied.dirty); setDeletedCount(applied.deletedCount);
+            pendingTabs.current = { tabs: applied.tabs, active: applied.active };
+            if (applied.count > 0) setRestoredInfo({ count: applied.count, at: snap.at, exact: applied.exact });
+          }
+        } catch { /* a damaged draft must never stop the archive from opening */ }
+        if (dead) return;
+        setVfs(startMap);
         const tops = [...new Set(list.map((e) => e.path.split('/')[0]).filter((n) => list.some((x) => x.path.startsWith(`${n}/`))))];
         setOpen(new Set(tops.length === 1 ? [`${tops[0]}/`] : []));
         defaultSel.current = tops.length === 1 ? `${tops[0]}/` : ''; // single project folder -> add things inside it by default
         setSel(defaultSel.current);
         setPhase('ready');
+        setDraftReady(true);
       } catch (err) {
         if (!dead) { setError(String(err?.message || err)); setPhase('error'); }
       }
     })();
     return () => { dead = true; };
-  }, [blob, tt]);
+  }, [blob, tt, draftKey]);
 
   useEffect(() => () => {
     docs.current.forEach((d) => { if (d.url) URL.revokeObjectURL(d.url); });
@@ -184,11 +213,13 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     if (!doc) return;
     const orig = origTexts.current.get(doc.path) ?? '';
     if (text === orig) { edits.current.delete(doc.path); markDirty(doc.path, false); } else { edits.current.set(doc.path, text); markDirty(doc.path, true); }
+    touchRef.current();
   }, [markDirty]);
 
   const setTextFor = useCallback((path, text) => {
     const orig = origTexts.current.get(path) ?? '';
     if (text === orig) { edits.current.delete(path); markDirty(path, false); } else { edits.current.set(path, text); markDirty(path, true); }
+    touchRef.current();
   }, [markDirty]);
   const switchView = useCallback((path, toText) => {
     setRawText((prev) => { const n = new Set(prev); if (toText) n.add(path); else n.delete(path); return n; });
@@ -226,6 +257,15 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     setActive(path);
     if (window.matchMedia('(max-width: 760px)').matches) setExplorer(false);
   }, [getBytes]);
+
+  // reopen the tabs that were open before the refresh
+  useEffect(() => {
+    if (phase !== 'ready' || !pendingTabs.current) return;
+    const { tabs: ts, active: act } = pendingTabs.current;
+    pendingTabs.current = null;
+    ts.filter((p) => p !== act).forEach((p) => openFile(p));
+    if (act) openFile(act);
+  }, [phase, openFile]);
 
   const closeTab = useCallback((path) => {
     const cur = tabsRef.current;
@@ -412,13 +452,21 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     return n;
   }, [vfs, dirty, deletedCount]);
 
+  deletedRef.current = deletedCount;
+  const draft = useAutoDraft({
+    draftKey, dirty: changes > 0, always: true, ready: draftReady && phase === 'ready', token: `${changes}|${tabs.join('\n')}|${active}`,
+    build: () => snapshotDraft({ vfs: vfsRef.current, edits: edits.current, newData: newData.current, deletedCount: deletedRef.current, tabs: tabsRef.current, active: activeRef.current, sig: baseSig.current }),
+    meta: { name: fileName },
+  });
+  touchRef.current = draft.touch;
+
   useEffect(() => {
     if (!guardRef) return undefined;
-    guardRef.current = () => changes === 0 || window.confirm(onSave
+    guardRef.current = () => changes === 0 || (window.confirm(onSave
       ? tt('You have unsaved edits in this archive. Close without saving?', 'عندك تعديلات لم تُحفظ على هذا الأرشيف. تقفل بدون حفظ؟')
-      : tt('You have unsaved edits in this archive. Close without downloading the new ZIP?', 'عندك تعديلات لم تُنزَّل على هذا الأرشيف. تقفل بدون تنزيل الـ ZIP الجديد؟'));
+      : tt('You have unsaved edits in this archive. Close without downloading the new ZIP?', 'عندك تعديلات لم تُنزَّل على هذا الأرشيف. تقفل بدون تنزيل الـ ZIP الجديد؟')) && (discardDraft(draftKey), true));
     return () => { guardRef.current = null; };
-  }, [guardRef, changes, tt, onSave]);
+  }, [guardRef, changes, tt, onSave, draftKey]);
 
   const saveBlob = (data, name, type) => {
     const url = URL.createObjectURL(new Blob([data], { type }));
@@ -459,7 +507,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     zipBytes.current = bytes;
     const map = new Map();
     unzipSync(bytes, { filter: (f) => { if (!isNoise(f.name)) map.set(f.name, { path: f.name, dir: f.name.endsWith('/'), size: f.originalSize, origPath: f.name, isNew: false }); return false; } });
-    setVfs(map); setDirty(new Set()); setDeletedCount(0);
+    baseSig.current = sigOf([...map.values()]); baseMapRef.current = map;
+    setVfs(map); setDirty(new Set()); setDeletedCount(0); setRestoredInfo(null);
   };
 
   const doSave = async (force = false) => {
@@ -734,7 +783,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     const { zip, skipped } = collectSandboxZip(runApp);
     if (!zip) { flash(tt('This project is too large for the sandbox (50 MB without dependencies).', 'المشروع كبير جدًا على الـ sandbox (50 ميجا من غير المكتبات).')); return; }
     if (skipped) flash(tt(`${skipped} large file(s) were left out of the run.`, `${skipped} ملف كبير اتستبعد من التشغيل.`));
-    sandbox.start({ kind: runApp.sandbox, entry: runApp.entry || '', zip, cols, rows });
+    sandbox.start({ kind: runApp.sandbox, entry: runApp.entry || '', zip, cols, rows, choice: runChoice || '' });
   };
 
   const startRun = (opts = {}) => {
@@ -746,6 +795,18 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     if (skipped) flash(tt(`${skipped} large file(s) were left out of the run.`, `${skipped} ملف كبير اتستبعد من التشغيل.`));
     runner.run({ kind: runApp.kind, files, root: runApp.root, entry: runApp.entry, stdin: opts.stdin || '' });
   };
+  // a refresh while a server was running: re-attach to it instead of uploading + installing everything again
+  const resumedOnce = useRef(false);
+  useEffect(() => {
+    if (phase !== 'ready' || resumedOnce.current || !draftKey) return;
+    resumedOnce.current = true;
+    const m = sandbox.resumable();
+    if (!m) return;
+    setRunChoice(m.choice || null);
+    setRunOpen(true);
+    sandbox.resumeSaved();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, draftKey]);
   const closeRun = () => { runner.stop(); runner.reset(); sandbox.reset(); setRunOpen(false); };
 
   // ---- keyboard (VS Code habits) ------------------------------------------------------------------
@@ -864,6 +925,14 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
         onChange={(e) => onPicked(e, true)}
       />
 
+      {restoredInfo && (
+        <div className="uip-draftbar" role="status">
+          <span>↺ <strong>{tt('Your unsaved work was restored', 'رجّعنا شغلك اللي ما اتحفظش')}</strong> · {tt(`${restoredInfo.count} change${restoredInfo.count === 1 ? '' : 's'}`, `${restoredInfo.count} تعديل`)} · {agoText(restoredInfo.at, !tt('a', 'b').startsWith('a'))}{restoredInfo.exact ? '' : ` — ${tt('the project changed meanwhile, only your text edits and new files were re-applied', 'المشروع اتغيّر في الأثناء، فرجّعنا تعديلات النصوص والملفات الجديدة بس')}`}</span>
+          <span className="uip-draftbar__sp" />
+          <button type="button" onClick={() => setRestoredInfo(null)}>{tt('OK', 'تمام')}</button>
+        </div>
+      )}
+
       {/* toolbar */}
       <div className="zb-top">
         <button type="button" className={`zb-ibtn${explorer && sideTab === 'files' ? ' is-on' : ''}`} onClick={() => { setSideTab('files'); setExplorer((v) => (sideTab === 'files' ? !v : true)); }} title={tt('Explorer (Ctrl+B)', 'المستكشف (Ctrl+B)')} aria-label={tt('Toggle explorer', 'إظهار/إخفاء المستكشف')}><Icon name="folder" size={17} /></button>
@@ -882,6 +951,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
           <button type="button" className="zb-ibtn zb-hide-sm" onClick={() => setFontSize((x) => Math.max(10, x - 1))} aria-label={tt('Smaller text', 'تصغير الخط')}>A−</button>
           <button type="button" className="zb-ibtn zb-hide-sm" onClick={() => setFontSize((x) => Math.min(22, x + 1))} aria-label={tt('Larger text', 'تكبير الخط')}>A+</button>
           <button type="button" className="zb-ibtn" onClick={(e) => openMenuAt(e.currentTarget, themeItems(), tt('Color theme', 'مظهر الألوان'))} title={`${tt('Color theme', 'مظهر الألوان')}: ${th.name}`} aria-label={tt('Color theme', 'مظهر الألوان')} aria-haspopup="menu"><Icon name="palette" size={17} /></button>
+          {changes > 0 && <DraftChip draft={draft} tt={tt} />}
           {changes > 0 && <button type="button" className="zb-btn" onClick={() => setDlg({ type: 'reset' })}>{tt('Discard', 'تجاهل')}</button>}
           {onSave && (
             <button

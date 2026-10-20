@@ -604,7 +604,7 @@ async function uploadRequest(method, path, formData, onProgress, signal) {
 export const api = {
   get: (path, params) => request('GET', path, { params }),
   /** GET a file. Same Bearer + refresh-on-401 path as every other call; returns the Response. */
-  blob: (path, params) => request('GET', path, { params, headers: { Accept: '*/*' } }),
+  blob: (path, params, headers) => request('GET', path, { params, headers: { Accept: '*/*', ...(headers || {}) } }),
   post: (path, body) => request('POST', path, { body }),
   put: (path, body) => request('PUT', path, { body }),
   patch: (path, body) => request('PATCH', path, { body }),

@@ -23,6 +23,7 @@ import { BatteryGlyph, CalendarFlyout, QuickSettings, WifiGlyph, useBattery, use
 import { Clock, ContextMenu, LockScreen, NodeGlyph, OsDialog, RunDialog, StartMenu, TaskView } from './shell';
 import { wallpaperById, wallpaperCss } from './wallpapers';
 import { chromeH, initialWm, winTitle, wmReducer } from './wm';
+import { restoreWm, saveWm } from './wmPersist';
 import { EditorWindow, ViewerWindow } from './FileWindows';
 import { isTextName } from '../lib/driveFileKinds';
 import WindowFrame from './Window';
@@ -145,7 +146,9 @@ export default function DesktopOS() {
   const uidRef = useRef(user?.id); uidRef.current = user?.id;
   const [prefs, setPrefsState] = useState(() => loadPrefs(user?.id));
   const setPrefs = useCallback((patch) => setPrefsState((p) => { const n = { ...p, ...patch }; savePrefs(n, uidRef.current); return n; }), []);
-  const [wm, rawDispatch] = useReducer(wmReducer, initialWm);
+  const [wm, rawDispatch] = useReducer(wmReducer, user?.id, (uid) => restoreWm(uid, APPS) || initialWm);
+  // remember the open windows so a refresh / crash / closed tab brings them back (editors restore their unsaved edits themselves)
+  useEffect(() => { const t = setTimeout(() => saveWm(uidRef.current, wm), 400); return () => clearTimeout(t); }, [wm]);
   // a window may veto its own close (unsaved edits in the code editor / image editor): guards register here
   const guards = useRef(new Map());
   const dispatch = useCallback((a) => {

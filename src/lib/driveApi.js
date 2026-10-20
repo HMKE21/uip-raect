@@ -1,4 +1,5 @@
 import { api } from '../api/client';
+import { getDraft, pruneCache, putDraft } from './draftStore';
 
 /**
  * "My PC" (جهازي) client — thin wrappers over /api/v1/drive/* (App\Http\Controllers\Api\DriveApiController).
@@ -50,6 +51,7 @@ export const drive = {
   sandboxTokenPath: (folderId) => `${B}/nodes/${folderId}/sandbox-token`,
 };
 
+const CACHE_MAX_BYTES = 40 * 1024 * 1024;
 async function readWithProgress(res, onProgress) {
   const total = Number(res.headers.get('content-length')) || 0;
   const type = res.headers.get('content-type') || '';
@@ -70,8 +72,20 @@ async function readWithProgress(res, onProgress) {
 
 /** A file's bytes (private → authenticated fetch). */
 export async function fetchDriveBlob(id, { onProgress } = {}) {
-  const res = await api.blob(`${B}/nodes/${id}/content`);
-  return readWithProgress(res, onProgress);
+  const key = `blob:drive:${id}`;
+  const cached = await getDraft(key); // { etag, blob } from an earlier open (IndexedDB)
+  const have = cached?.kind === 'cache' && cached.blob && cached.etag ? cached : null;
+  let res;
+  try {
+    res = await api.blob(`${B}/nodes/${id}/content`, undefined, have ? { 'If-None-Match': have.etag } : undefined);
+  } catch (e) {
+    if (have && (e?.status === 304 || e?.status === 0)) { onProgress?.(100); return have.blob; } // unchanged — or offline: use the local copy
+    throw e;
+  }
+  const blob = await readWithProgress(res, onProgress);
+  const etag = res.headers.get('etag');
+  if (etag && blob.size <= CACHE_MAX_BYTES) { putDraft(key, { kind: 'cache', etag, blob }); pruneCache(); }
+  return blob;
 }
 
 /** A folder as a ZIP with its contents at the archive root (what the code editor opens). */

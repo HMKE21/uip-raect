@@ -1,3 +1,4 @@
+import useAutoDraft, { DraftChip } from '../../lib/useAutoDraft';
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../Icon';
 import AnnotSurface from './AnnotSurface';
@@ -113,8 +114,8 @@ function CropOverlay({ rect, setRect, aspect, imgW, imgH, scale }) {
   );
 }
 
-export default function ImageEditor({ blob, fileName, tt, rtl, guardRef, onSave, onClose }) {
-  const hist = useHistory(null);
+export default function ImageEditor({ blob, fileName, tt, rtl, guardRef, onSave, onClose, draftKey, startDirty = false }) {
+  const hist = useHistory(null, startDirty);
   const present = hist.present;
   const [status, setStatus] = useState('loading');
   const [loadErr, setLoadErr] = useState('');
@@ -352,6 +353,7 @@ export default function ImageEditor({ blob, fileName, tt, rtl, guardRef, onSave,
   const ocrReady = ocr.base === base && ocr.status === 'done';
 
   const dirty = hist.dirty;
+  const draft = useAutoDraft({ draftKey, dirty, token: hist.present, build: () => (hist.present ? exportBlob() : null), meta: { name: outName } });
   useEffect(() => {
     if (!guardRef) return undefined;
     guardRef.current = () => !dirty || window.confirm(tt('Discard your unsaved changes?', 'تتجاهل التعديلات اللي لسه ما اتحفظتش؟'));
@@ -391,6 +393,7 @@ export default function ImageEditor({ blob, fileName, tt, rtl, guardRef, onSave,
         )}
         {saveErr && <span className="ed__err" title={saveErr}>{saveErr}</span>}
         <Btn icon="download" label={tt('Download', 'تنزيل')} onClick={download} />
+        <DraftChip draft={draft} tt={tt} />
         <Btn icon="save" label={saving ? tt('Saving…', 'جارٍ الحفظ…') : tt('Save', 'حفظ')} onClick={() => doSave(false)} disabled={!dirty || saving} primary />
       </div>
 

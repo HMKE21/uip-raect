@@ -20,10 +20,10 @@ export function XlsxPreview({ blob, ext, tt, rtl }) {
 }
 
 /** Grid editor for .xlsx / .csv / .tsv opened from FileViewer. Sheets are tabs; all of them are saved. */
-export default function XlsxView({ blob, fileName, ext, tt, rtl, guardRef, onSave, onClose }) {
+export default function XlsxView({ blob, fileName, ext, tt, rtl, guardRef, onSave, onClose, draftKey, startDirty = false }) {
   const [state, setState] = useState({ status: 'loading' });
   const [sheet, setSheet] = useState(0);
-  const h = useDocHistory(null);
+  const h = useDocHistory(null, startDirty);
 
   useEffect(() => {
     let dead = false;
@@ -46,7 +46,7 @@ export default function XlsxView({ blob, fileName, ext, tt, rtl, guardRef, onSav
   if (state.status === 'error') return <div className="ed ed--center"><p className="ed__err">{state.msg}</p><button type="button" className="ed__btn" onClick={onClose}>{tt('Close', 'إغلاق')}</button></div>;
 
   return (
-    <OfficeShell fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={h.dirty} build={build} onSaved={h.markSaved}
+    <OfficeShell fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={h.dirty} build={build} onSaved={h.markSaved} draftKey={draftKey} draftToken={h.value}
       status={sheets.length > 1 && (
         <div className="xg__tabs" role="tablist">
           {sheets.map((s, i) => <button key={i} type="button" role="tab" aria-selected={sheet === i} className={sheet === i ? 'is-on' : ''} onClick={() => setSheet(i)}>{s.name}</button>)}

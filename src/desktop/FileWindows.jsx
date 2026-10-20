@@ -4,6 +4,7 @@ import { errorMessage } from '../api/client';
 import Icon from '../components/Icon';
 import FileViewer from '../components/FileViewer';
 import { drive, fetchDriveBlob, fetchFolderZip } from '../lib/driveApi';
+import useDraftScope from '../lib/useDraftScope';
 import '../styles/css/my-pc.css'; // .mp-editor / .mp-spin (also loaded by the Explorer window)
 
 const ZipWorkbench = lazy(() => import('../components/zipbench/ZipWorkbench'));
@@ -34,6 +35,8 @@ export function EditorWindow({ editor, locale, registerGuard }) {
   const ar = locale === 'ar';
   const tt = useCallback((en, a) => (ar ? a : en), [ar]);
   const { node } = editor;
+  const draftScope = useDraftScope();
+  const draftKey = `zip:${draftScope}:${editor.kind}:${node.id}`; // edits + open tabs survive a refresh (see zipDraft.js)
   const [state, setState] = useState({ status: 'loading', blob: null, error: '' });
   const guardRef = useRef(null);
 
@@ -83,7 +86,7 @@ export function EditorWindow({ editor, locale, registerGuard }) {
         {state.status === 'ready' && (
           <Suspense fallback={<div className="mp-editor__msg"><span className="mp-spin" /></div>}>
             <ZipWorkbench
-              blob={state.blob} fileName={`${node.name}.zip`} tt={tt} guardRef={guardRef} onSave={onSave}
+              blob={state.blob} fileName={`${node.name}.zip`} tt={tt} guardRef={guardRef} onSave={onSave} draftKey={draftKey}
               sandboxTokenPath={editor.kind === 'folder' ? drive.sandboxTokenPath(node.id) : undefined}
             />
           </Suspense>

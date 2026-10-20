@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import useAutoDraft, { DraftChip } from '../../lib/useAutoDraft';
 import { Btn } from './EditorUI';
 import '../../styles/css/editor.css';
 import '../../styles/css/office.css';
@@ -7,7 +8,8 @@ import '../../styles/css/office.css';
  * Shared frame for the Office editors: title, save / download / cancel, unsaved-changes guard and 409 conflict handling.
  *   build() -> Promise<Blob>   (called for both Save and Download)
  */
-export default function OfficeShell({ fileName, tt, guardRef, onSave, onClose, dirty, build, onSaved, tools, children, status }) {
+export default function OfficeShell({ fileName, tt, guardRef, onSave, onClose, dirty, build, onSaved, tools, children, status, draftKey, draftToken }) {
+  const draft = useAutoDraft({ draftKey, dirty, token: draftToken, build, meta: { name: fileName } });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
   const [conflict, setConflict] = useState(false);
@@ -55,6 +57,7 @@ export default function OfficeShell({ fileName, tt, guardRef, onSave, onClose, d
             <Btn label={tt('Save over it', 'احفظ فوقها')} onClick={() => doSave(true)} /></span>
         )}
         {err && <span className="ed__err" title={err}>{err}</span>}
+        <DraftChip draft={draft} tt={tt} />
         <Btn icon="download" label={tt('Download', 'تنزيل')} onClick={download} />
         <Btn icon="save" label={saving ? tt('Saving…', 'جارٍ الحفظ…') : tt('Save', 'حفظ')} onClick={() => doSave(false)} disabled={!dirty || saving} primary />
       </div>

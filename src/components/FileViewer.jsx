@@ -8,6 +8,9 @@ import { lockScroll } from '../lib/scrollLock';
 import { downloadPdfChecked, confirmRiskyDownload } from '../lib/pdfSafety';
 import { saveBlob } from '../lib/exporter';
 import { describe, extOf, cellStr, MAX_ROWS, PdfCanvasViewer } from './FilePreviewButton';
+import { agoText, discardDraft, getDraft } from '../lib/draftStore';
+import useDraftScope from '../lib/useDraftScope';
+import '../styles/css/drafts.css';
 import '../styles/css/file-viewer.css';
 
 const ZipWorkbench = lazy(() => import('./zipbench/ZipWorkbench'));
@@ -274,6 +277,8 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   const [sheet, setSheet] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [restored, setRestored] = useState(null); // { blob, at } — the editor was reopened from a local draft
+  const scope = useDraftScope();
   const editingRef = useRef(false);
   editingRef.current = editing;
   const rootRef = useRef(null);
@@ -290,6 +295,8 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   const file = list[index];
   lastRoot.current = rootOf(file);
   const ext = extOf(file?.original_name);
+  const canSave = !!(onSaveFile || onSaveZip);
+  const draftKey = file && canSave ? `ed:${scope}:${projectId ?? 'drive'}:${rootOf(file)}` : '';
   const color = colorOf(file?.original_name);
   const downloadName = file?.original_name || 'file';
   const getBlob = useCallback((f, signal, onProgress) => (loadBlob ? loadBlob(f, { signal, onProgress }) : fetchBlob(f.url, signal, onProgress)), [loadBlob]);
@@ -312,12 +319,15 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
     const name = opts?.name || saved?.original_name || file.original_name;
     const data = await buildView({ original_name: name }, blob);
     cache.current.delete(file.id);
+    if (draftKey) discardDraft(draftKey);
+    setRestored(null);
     remember(saved?.id ?? file.id, data);
     if (saved?.id != null) setActiveId(saved.id);
     setView({ status: 'ready', data });
     setEditing(false);
     return saved;
-  }, [onSaveFile, onSaveZip, file, remember]);
+  }, [onSaveFile, onSaveZip, file, remember, draftKey]);
+  const leaveEditing = useCallback(() => { if (draftKey) discardDraft(draftKey); setRestored(null); setEditing(false); }, [draftKey]);
 
   const go = useCallback((delta) => {
     if (guardRef.current && !guardRef.current()) return;
@@ -326,7 +336,20 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   }, [list, index]);
   const jump = (i) => { if (guardRef.current && !guardRef.current()) return; if (list[i]) { setActiveId(list[i].id); setSheet(0); } };
 
-  useEffect(() => { setEditing(false); }, [file?.id]);
+  useEffect(() => { setEditing(false); setRestored(null); }, [file?.id]);
+
+  // A refresh / crash / lost connection while editing: reopen the editor with the unsaved edits found on this device.
+  const triedDraft = useRef('');
+  useEffect(() => {
+    if (view.status !== 'ready' || !draftKey || triedDraft.current === draftKey) return undefined;
+    const k = view.data?.kind;
+    const editable = (k === 'image' && ext !== 'svg') || k === 'pdf' || k === 'pdf-canvas' || k === 'pptx' || k === 'docx' || (k === 'table' && ['xlsx', 'csv', 'tsv'].includes(ext));
+    if (!editable || !view.data?.blob) return undefined;
+    triedDraft.current = draftKey;
+    let dead = false;
+    getDraft(draftKey).then((d) => { if (!dead && d?.kind === 'blob' && d.blob) { setRestored({ blob: d.blob, at: d.at }); setEditing(true); } });
+    return () => { dead = true; };
+  }, [view, draftKey, ext]);
 
   // Load the current file (cached → instant; video/audio stream straight from the URL).
   useEffect(() => {
@@ -542,17 +565,24 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
             </div>
           </div>
         )}
+        {editing && restored && (
+          <div className="uip-draftbar" role="status">
+            <span>↺ <strong>{tt('Your unsaved edits were restored', 'رجّعنا تعديلاتك اللي ما اتحفظتش')}</strong> · {agoText(restored.at, rtl)} — {tt('they are only on this device until you press Save.', 'لسه على جهازك بس لحد ما تدوس حفظ.')}</span>
+            <span className="uip-draftbar__sp" />
+            <button type="button" onClick={() => { if (window.confirm(tt('Discard the restored edits and go back to the saved file?', 'تتجاهل التعديلات المسترجعة وترجع للملف المحفوظ؟'))) leaveEditing(); }}>{tt('Discard', 'تجاهل')}</button>
+          </div>
+        )}
         {editing && data?.blob && (
           <Suspense fallback={<div className="st-fv__center"><Spinner /></div>}>
             {data.kind === 'image'
-              ? <ImageEditor blob={data.blob} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={() => setEditing(false)} />
+              ? <ImageEditor blob={restored?.blob || data.blob} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={leaveEditing} draftKey={draftKey} startDirty={!!restored} />
               : data.kind === 'pptx'
-                ? <PptxEditor blob={data.blob} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={() => setEditing(false)} />
+                ? <PptxEditor blob={restored?.blob || data.blob} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={leaveEditing} draftKey={draftKey} startDirty={!!restored} />
                 : data.kind === 'docx'
-                  ? <DocxEditor blob={data.blob} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={() => setEditing(false)} />
+                  ? <DocxEditor blob={restored?.blob || data.blob} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={leaveEditing} draftKey={draftKey} startDirty={!!restored} />
                   : data.kind === 'table'
-                    ? <XlsxEditor blob={data.blob} ext={ext} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={() => setEditing(false)} />
-                    : <PdfEditor blob={data.blob} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={() => setEditing(false)} />}
+                    ? <XlsxEditor blob={restored?.blob || data.blob} ext={ext} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={leaveEditing} draftKey={draftKey} startDirty={!!restored} />
+                    : <PdfEditor blob={restored?.blob || data.blob} fileName={downloadName} tt={tt} rtl={rtl} guardRef={guardRef} onSave={saveFile} onClose={leaveEditing} draftKey={draftKey} startDirty={!!restored} />}
           </Suspense>
         )}
         {!editing && stage === 'image' && <ImageStage url={data.url} alt={downloadName} tt={tt} apiRef={imageApi} onSwipe={hasMany ? onSwipe : undefined} rtl={rtl} />}
@@ -591,7 +621,7 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
         )}
         {stage === 'zip' && (
           <Suspense fallback={<div className="st-fv__center"><Spinner /></div>}>
-            <ZipWorkbench key={rootOf(file)} blob={data.blob} fileName={downloadName} tt={tt} guardRef={guardRef} projectId={projectId} sandboxTokenPath={sandboxTokenPathOf ? sandboxTokenPathOf(file) : undefined} onSave={(onSaveFile || onSaveZip) ? saveFile : undefined} />
+            <ZipWorkbench key={rootOf(file)} blob={data.blob} fileName={downloadName} tt={tt} guardRef={guardRef} projectId={projectId} sandboxTokenPath={sandboxTokenPathOf ? sandboxTokenPathOf(file) : undefined} onSave={(onSaveFile || onSaveZip) ? saveFile : undefined} draftKey={draftKey} />
           </Suspense>
         )}
         {!editing && stage === 'table' && data.blob && ['xlsx', 'csv', 'tsv'].includes(ext) && (

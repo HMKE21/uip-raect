@@ -17,9 +17,10 @@ export function DocxPreview({ blob, tt }) {
 }
 
 /** Word editor: rich text page, saved back as a real .docx. */
-export default function DocxView({ blob, fileName, tt, rtl, guardRef, onSave, onClose }) {
+export default function DocxView({ blob, fileName, tt, rtl, guardRef, onSave, onClose, draftKey, startDirty = false }) {
   const [status, setStatus] = useState('loading'); const [err, setErr] = useState('');
-  const [dirty, setDirty] = useState(false);
+  const [dirty, setDirty] = useState(startDirty);
+  const [ver, setVer] = useState(0);
   const page = useRef(null); const initial = useRef('');
 
   useEffect(() => {
@@ -30,7 +31,7 @@ export default function DocxView({ blob, fileName, tt, rtl, guardRef, onSave, on
   useEffect(() => { if (status === 'ready' && page.current) { page.current.innerHTML = initial.current; page.current.focus(); } }, [status]);
 
   const build = useCallback(() => htmlToDocx(page.current), []);
-  const mark = () => setDirty(true);
+  const mark = () => { setDirty(true); setVer((v) => v + 1); };
   const keep = (e) => e.preventDefault(); // keep the selection when clicking toolbar buttons
   const T = (icon, title, fn) => <Btn icon={icon} title={title} onMouseDown={keep} onClick={() => { fn(); page.current?.focus(); mark(); }} />;
 
@@ -86,7 +87,7 @@ export default function DocxView({ blob, fileName, tt, rtl, guardRef, onSave, on
   );
 
   return (
-    <OfficeShell fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={dirty} build={build} onSaved={() => setDirty(false)} tools={tools}
+    <OfficeShell fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={dirty} build={build} onSaved={() => setDirty(false)} draftKey={draftKey} draftToken={ver} tools={tools}
       status={<p className="ed__hint ed__hint--note xg__note">{tt('Saved as a new .docx: headings, text styles, lists, tables, links and pictures are kept; headers, footers and page layout of the original are not.', 'بيتحفظ كملف .docx جديد: العناوين وتنسيق النص والقوائم والجداول والروابط والصور بتتحفظ، لكن الهيدر والفوتر وتخطيط الصفحة الأصلي لأ.')}</p>}>
       <div className="dx"><div className="dx__stage">
         <div ref={page} className="dx__page" contentEditable suppressContentEditableWarning spellCheck dir="auto" onInput={mark} onPaste={onPaste} />

@@ -9,7 +9,7 @@ const LIMIT = 80;
  *   push(fn)       – change + record in one step
  *   debounced(fn)  – live change that is recorded 0.5s after the last tweak (sliders, colour pickers…)
  */
-export default function useHistory(initial) {
+export default function useHistory(initial, startDirty = false) {
   const [s, setS] = useState({ past: [], present: initial, future: [] });
   const ref = useRef(s);
   ref.current = s;
@@ -57,7 +57,7 @@ export default function useHistory(initial) {
     present: s.present,
     canUndo: s.past.length > 0 || !!pend.current.from,
     canRedo: s.future.length > 0,
-    dirty: s.past.length > 0 || !!pend.current.from,
+    dirty: startDirty || s.past.length > 0 || !!pend.current.from, // a restored draft stays "unsaved" until it is saved
     live, debounced, push, commit, undo, redo, reset, flush,
   };
 }

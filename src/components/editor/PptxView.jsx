@@ -63,8 +63,8 @@ function Notes({ files, path, tt, onCommit }) {
 const toPng = (src, w, h) => new Promise((res, rej) => { const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(src, 0, 0); c.toBlob((b) => (b ? res(b) : rej(new Error('Could not convert the image.'))), 'image/png'); });
 
 /** PowerPoint editor: slide panel, ribbon, interactive stage, notes and slide show. Edits go straight to the package XML (see lib/officeFmt/pptxEdit). */
-export default function PptxView({ blob, fileName, tt, rtl, guardRef, onSave, onClose }) {
-  const h = useDocHistory(null); const session = useMemo(() => createSession(), []);
+export default function PptxView({ blob, fileName, tt, rtl, guardRef, onSave, onClose, draftKey, startDirty = false }) {
+  const h = useDocHistory(null, startDirty); const session = useMemo(() => createSession(), []);
   const [status, setStatus] = useState({ s: 'loading' });
   const [cur, setCur] = useState(0); const [sel, setSel] = useState(null); const [editing, setEditing] = useState(null); const [cell, setCell] = useState(null);
   const [tab, setTab] = useState('home'); const [zoom, setZoom] = useState(1); const [notesOpen, setNotesOpen] = useState(false);
@@ -177,7 +177,7 @@ export default function PptxView({ blob, fileName, tt, rtl, guardRef, onSave, on
       <span>{tt('Click a selected object again to edit its text · Arrows nudge · Shift = faster', 'اضغط على العنصر المحدد مرة تانية لتعديل النص · الأسهم للتحريك · Shift أسرع')}</span></div>
   );
   return (
-    <OfficeShell fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={h.dirty} build={build} onSaved={h.markSaved} tools={<Ribbon tt={tt} S={S} A={A} />} status={statusBar}>
+    <OfficeShell fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={h.dirty} build={build} onSaved={h.markSaved} draftKey={draftKey} draftToken={h.value} tools={<Ribbon tt={tt} S={S} A={A} />} status={statusBar}>
       <div className="px" onKeyDown={onRootKey}>
         <div className="px__thumbs">{deck.slides.map((sl, i) => (
           <div key={sl.path || i} className={`px__tw${overIdx === i ? ' is-over' : ''}`} draggable onDragStart={(e) => { e.dataTransfer.setData('text/plain', String(i)); e.dataTransfer.effectAllowed = 'move'; }}

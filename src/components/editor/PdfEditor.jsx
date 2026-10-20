@@ -1,3 +1,4 @@
+import useAutoDraft, { DraftChip } from '../../lib/useAutoDraft';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
 import AnnotSurface from './AnnotSurface';
@@ -201,8 +202,8 @@ function Thumb({ pg, index, total, pdf, current, onGo, ops, tt }) {
   );
 }
 
-export default function PdfEditor({ blob, fileName, tt, rtl, guardRef, onSave, onClose }) {
-  const hist = useHistory(null);
+export default function PdfEditor({ blob, fileName, tt, rtl, guardRef, onSave, onClose, draftKey, startDirty = false }) {
+  const hist = useHistory(null, startDirty);
   const pages = hist.present?.pages || [];
   const [status, setStatus] = useState('loading');
   const [loadErr, setLoadErr] = useState('');
@@ -461,6 +462,7 @@ export default function PdfEditor({ blob, fileName, tt, rtl, guardRef, onSave, o
   };
 
   const dirty = hist.dirty;
+  const draft = useAutoDraft({ draftKey, dirty, token: hist.present, build: () => (hist.present ? buildPdf(0) : null), meta: { name: fileName } });
   useEffect(() => {
     if (!guardRef) return undefined;
     guardRef.current = () => !dirty || window.confirm(tt('Discard your unsaved changes?', 'تتجاهل التعديلات اللي لسه ما اتحفظتش؟'));
@@ -501,6 +503,7 @@ export default function PdfEditor({ blob, fileName, tt, rtl, guardRef, onSave, o
         )}
         {saveErr && <span className="ed__err" title={saveErr}>{saveErr}</span>}
         <Btn icon="download" label={tt('Download', 'تنزيل')} onClick={download} />
+        <DraftChip draft={draft} tt={tt} />
         <Btn icon="save" label={saving ? tt('Saving…', 'جارٍ الحفظ…') : tt('Save', 'حفظ')} onClick={() => doSave(false)} disabled={!dirty || saving} primary />
       </div>
 
