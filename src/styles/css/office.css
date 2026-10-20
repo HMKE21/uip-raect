@@ -35,23 +35,11 @@
 .xg__tabs button.is-on { background: rgba(110,168,255,.18); color: #fff; border-color: var(--ed-accent); }
 .xg__note { margin: 0; border-radius: 0; }
 
-/* Word-like page */
-.dx { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.dx__stage { flex: 1; min-height: 0; overflow: auto; background: #0b0f19; padding: 22px 12px; display: flex; justify-content: center; scrollbar-width: thin; }
-.dx__page { width: min(820px, 100%); min-height: 1000px; height: max-content; background: #fff; color: #111827; padding: 56px 64px; box-shadow: 0 10px 40px rgba(0,0,0,.55); outline: none; font: 15px/1.7 'Segoe UI', Tahoma, 'Noto Naskh Arabic', Arial, sans-serif; overflow-wrap: anywhere; }
-.dx__page h1 { font-size: 26px; margin: .8em 0 .4em; } .dx__page h2 { font-size: 21px; margin: .8em 0 .4em; } .dx__page h3 { font-size: 17px; margin: .8em 0 .4em; }
-.dx__page p { margin: 0 0 .7em; } .dx__page ul, .dx__page ol { margin: 0 0 .7em; padding-inline-start: 1.6em; }
-.dx__page table { border-collapse: collapse; width: 100%; margin: .6em 0; } .dx__page td, .dx__page th { border: 1px solid #94a3b8; padding: 6px 9px; vertical-align: top; min-width: 40px; }
-.dx__page img { max-width: 100%; height: auto; } .dx__page a { color: #1d4ed8; text-decoration: underline; }
-.dx__tools select { background: rgba(255,255,255,.07); color: var(--ed-text); border: 1px solid var(--ed-line); border-radius: 8px; padding: 6px 8px; font: inherit; }
-.dx__tools select option { color: #111; }
-.st-fv__sheet--doc { background: #e9edf3; } .st-fv__sheet--doc .dx__page { min-height: 0; box-shadow: 0 2px 14px rgba(15,23,42,.18); margin: 0 auto; }
+/* Word page: styles/css/docx.css */
+.st-fv__sheet--doc { background: #e9edf3; }
 
 /* Slides */
 .px__prev { background: #e9edf3; padding: 8px; border-radius: 10px; } 
-@media (max-width: 760px) { .dx__page { padding: 28px 20px; } }
-.dx__color { width: 30px; height: 30px; padding: 0; border: 1px solid var(--ed-line); border-radius: 8px; background: none; cursor: pointer; }
-.dx__tools { gap: 4px; }
 .st-fv__sheet--grid { padding: 0; background: transparent; box-shadow: none; display: flex; }
 .xg-preview { border-radius: 14px; }
 .zb-grid { position: absolute; inset: 0; border-radius: 0; border: 0; }
