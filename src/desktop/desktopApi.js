@@ -18,6 +18,14 @@ export const desktopApi = {
   lockDisable: async (password) => unwrap(await api.post(`${B}/lock/disable`, { password })),
   lockOtp: async () => unwrap(await api.post(`${B}/lock/otp`, {})),
   lockReset: async (code, password) => unwrap(await api.post(`${B}/lock/reset`, { code, password })),
+  // Security & devices — DesktopSecurityApiController
+  security: async () => unwrap(await api.get(`${B}/security`)),
+  saveSecurity: async (patch) => unwrap(await api.put(`${B}/security`, patch)),
+  pulse: async () => unwrap(await api.get(`${B}/security/pulse`)),
+  logoutDevice: async (id) => unwrap(await api.post(`${B}/security/devices/${id}/logout`, {})),
+  lockDevice: async (id) => unwrap(await api.post(`${B}/security/devices/${id}/lock`, {})),
+  logoutOthers: async () => unwrap(await api.post(`${B}/security/devices/logout-others`, {})),
+  lockOthers: async () => unwrap(await api.post(`${B}/security/devices/lock-others`, {})),
 };
 
 /** The server's own (already localized) message — the generic field-error join of errorMessage() would print codes like "invalid". */

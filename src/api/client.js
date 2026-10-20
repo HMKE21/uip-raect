@@ -156,6 +156,7 @@ export function clearTokens() {
   store.remove(REFRESH_KEY);
   store.remove(IDLE_KEY);
   store.remove(ACTIVITY_KEY);
+  store.remove(USER_IDLE_KEY);
 }
 
 // ---- Idle (inactivity) tracking -------------------------------------------
@@ -174,12 +175,22 @@ export function getLastActivity() {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** The person's OWN "sign me out after N minutes of inactivity" (Settings ▸ Security & devices). Stricter wins over the platform policy. */
+export const USER_IDLE_KEY = 'uip_user_idle_minutes';
+export function setUserIdleMinutes(min) {
+  const n = Number(min);
+  if (Number.isFinite(n) && n > 0) store.set(USER_IDLE_KEY, String(Math.round(n))); else store.remove(USER_IDLE_KEY);
+}
+
 /** Allowed inactivity in ms; 0 means the policy is disabled. */
 export function getIdleMs() {
   const raw = store.get(IDLE_KEY);
-  if (raw === null || raw === '') return DEFAULT_IDLE_MINUTES * 60000;
-  const m = Number(raw);
-  return Number.isFinite(m) && m > 0 ? m * 60000 : 0;
+  let platform = DEFAULT_IDLE_MINUTES * 60000;
+  if (raw !== null && raw !== '') { const m = Number(raw); platform = Number.isFinite(m) && m > 0 ? m * 60000 : 0; }
+  const own = Number(store.get(USER_IDLE_KEY));
+  const ownMs = Number.isFinite(own) && own > 0 ? own * 60000 : 0;
+  if (!platform) return ownMs;
+  return ownMs ? Math.min(platform, ownMs) : platform;
 }
 
 function buildUrl(path, params) {

@@ -235,8 +235,8 @@ export function TaskView({ list, ar, tt, onPick, onClose, onCloseWin }) {
  * Lock password set (Settings > Lock screen) -> the password is checked on the server; "Forgot password?" sends a
  * 6-digit code to the account's e-mail and lets the student choose a new password with it.
  */
-export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal }) {
-  const name = user?.full_name || user?.email || '';
+export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hideDetails }) {
+  const name = hideDetails ? tt('Locked', 'مقفول') : (user?.full_name || user?.email || '');
   const needPw = lockEnabled !== false; // unknown (offline, first load) is treated as locked: the server answers "no password" if there is none
   const [view, setView] = useState('pw'); // 'pw' | 'reset'
   const [pw, setPw] = useState(''); const [code, setCode] = useState(''); const [np, setNp] = useState(''); const [np2, setNp2] = useState('');
@@ -277,8 +277,8 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal }) {
     try { await desktopApi.lockReset(code.trim(), np); onUnlock(); } catch (x) { setErr(lockError(x)); } finally { setBusy(false); }
   };
 
-  const sub = user?.email && user.email !== name ? user.email : '';
-  const avatar = <div className="os-lock__user"><i>{String(name || '?').trim().charAt(0).toUpperCase()}</i><b dir="auto">{name}</b>{sub && <small dir="ltr">{sub}</small>}</div>;
+  const sub = !hideDetails && user?.email && user.email !== name ? user.email : '';
+  const avatar = <div className="os-lock__user"><i>{hideDetails ? <Icon name="lock" size={15} /> : String(name || '?').trim().charAt(0).toUpperCase()}</i><b dir="auto">{name}</b>{sub && <small dir="ltr">{sub}</small>}</div>;
   const capsKey = (e) => setCaps(!!e.getModifierState?.('CapsLock'));
   const foot = (
     <div className="os-lock__foot">
@@ -328,6 +328,40 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal }) {
         </form>
       )}
       {foot}
+    </div>
+  );
+}
+
+/** Sleep mode: the screen goes dark; any key, click or touch wakes it (the first moments are ignored so the click that started it does not wake it). */
+export function SleepScreen({ ar, tt, dim, onWake }) {
+  useEffect(() => {
+    let armed = false;
+    const t = setTimeout(() => { armed = true; }, 700);
+    const wake = (e) => { if (!armed) return; if (e.type === 'pointermove' && !(e.movementX || e.movementY)) return; e.preventDefault?.(); onWake(); };
+    const EV = ['keydown', 'pointerdown', 'touchstart', 'wheel', 'pointermove'];
+    EV.forEach((n) => window.addEventListener(n, wake, true));
+    return () => { clearTimeout(t); EV.forEach((n) => window.removeEventListener(n, wake, true)); };
+  }, [onWake]);
+  return (
+    <div className={`os-sleep${dim ? ' is-dim' : ''}`} role="button" tabIndex={0} aria-label={tt('Wake up', 'إيقاظ')}>
+      {dim && <div className="os-sleep__clock"><Clock ar={ar} big /></div>}
+      <p className="os-sleep__hint"><Icon name="moon" size={14} />{tt('Sleeping — press any key or move the mouse', 'وضع السكون — اضغط أي زر أو حرّك الماوس')}</p>
+    </div>
+  );
+}
+
+/** Last minute before the automatic sign-out (Settings ▸ Security & devices ▸ Automatic sign-out). */
+export function IdleWarning({ tt, left, onStay, onSignOut }) {
+  return (
+    <div className="os-scrim os-scrim--top">
+      <div className="os-dlg os-idle" role="alertdialog" aria-modal="true" aria-label={tt('Signing out soon', 'هيتسجّل خروجك قريب')}>
+        <h3><Icon name="clock" size={18} /> {tt('Still there?', 'لسه معانا؟')}</h3>
+        <p>{tt(`You will be signed out for inactivity in ${left} s.`, `هيتسجّل خروجك بسبب الخمول بعد ${left} ثانية.`)}</p>
+        <footer>
+          <button type="button" className="os-btn" onClick={onSignOut}>{tt('Sign out now', 'خروج دلوقتي')}</button>
+          <button type="button" autoFocus className="os-btn os-btn--primary" onClick={onStay}>{tt('Stay signed in', 'خلّيني مسجّل')}</button>
+        </footer>
+      </div>
     </div>
   );
 }

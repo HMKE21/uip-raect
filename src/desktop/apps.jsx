@@ -6,6 +6,7 @@ import { EXPLORER_SHORTCUTS, GROUPS, SHORTCUTS, fmtKeys } from './shortcuts';
 import { AppGlyph } from './OsIcons';
 import { desktopApi, lockError } from './desktopApi';
 import { CloudPanel } from './CloudSettings';
+import SecuritySettings from './SecuritySettings';
 
 const StudentMyPC = lazy(() => import('../pages/student/StudentMyPC'));
 
@@ -98,7 +99,7 @@ function LockSettings({ tt, lockEnabled, onLockChanged }) {
   );
 }
 
-export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, toggleTheme, toggleLocale, usage, user, lockEnabled, onLockChanged }) {
+export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, toggleTheme, toggleLocale, usage, user, lockEnabled, onLockChanged, sec, onSec, onLockNow, onSleepNow, onSelfLogout }) {
   const [tab, setTab] = useState(tabProp || 'personalize');
   const [err, setErr] = useState('');
   const file = useRef(null);
@@ -113,7 +114,8 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
   const tabs = [
     ['personalize', 'palette', tt('Personalization', 'التخصيص')],
     ['cloud', 'cloud', tt('Storage & backup', 'التخزين والنسخ')],
-    ['lock', 'lock', tt('Lock screen', 'قفل الشاشة')],
+    ['security', 'shield', tt('Security & devices', 'الأمان والأجهزة')],
+    ['lock', 'lock', tt('Lock password', 'باسورد القفل')],
     ['system', 'monitor', tt('System', 'النظام')],
     ['about', 'info', tt('About', 'حول')],
   ];
@@ -165,6 +167,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
           </>
         )}
         {tab === 'cloud' && <CloudPanel tt={tt} usage={usage} />}
+        {tab === 'security' && sec && <SecuritySettings tt={tt} ar={ar} sec={sec} onSec={onSec} lockEnabled={lockEnabled} onLockNow={onLockNow} onSleepNow={onSleepNow} onSelfLogout={onSelfLogout} onOpenLockTab={() => setTab('lock')} />}
         {tab === 'lock' && <LockSettings tt={tt} lockEnabled={lockEnabled} onLockChanged={onLockChanged} />}
         {tab === 'system' && (
           <>

@@ -42,6 +42,7 @@ export const SHORTCUTS = [
   { id: 'start', keys: ['Alt+S'], win: '⌘Space', group: 'system', en: 'Launchpad & search', ar: 'لوحة التطبيقات والبحث' },
   { id: 'run', keys: ['Alt+R'], win: '⌘Space', group: 'system', en: 'Spotlight…', ar: 'بحث سريع…' },
   { id: 'lock', keys: ['Alt+L'], win: '⌃⌘Q', group: 'system', en: 'Lock screen', ar: 'قفل الشاشة' },
+  { id: 'sleep', keys: ['Alt+Shift+S'], win: '⌥⌘⏏', group: 'system', en: 'Sleep (dark screen)', ar: 'وضع السكون (شاشة سودا)' },
   { id: 'settings', keys: ['Alt+I'], win: '⌘,', group: 'apps', en: 'Settings', ar: 'الإعدادات' },
   { id: 'personalize', keys: ['Alt+P'], win: '', group: 'apps', en: 'Personalization (wallpaper & colors)', ar: 'التخصيص (الخلفية والألوان)' },
   { id: 'explorer', keys: ['Alt+E'], win: '⌘N', group: 'apps', en: 'Open This PC (file explorer)', ar: 'فتح جهازي (مستكشف الملفات)' },

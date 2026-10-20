@@ -21,7 +21,8 @@ import { globalActionFor, keyOf } from './shortcuts';
 import { isSystemNode, useDesktopSync } from './sync';
 import { readLockCache, readLockedFlag, writeLockedFlag, readUnlockedFlag, writeUnlockedFlag } from './desktopApi';
 import { BatteryGlyph, CalendarFlyout, QuickSettings, WifiGlyph, useBattery, useOnline } from './flyouts';
-import { Clock, ContextMenu, LockScreen, NodeGlyph, OsDialog, RunDialog, StartMenu, TaskView } from './shell';
+import { Clock, ContextMenu, IdleWarning, LockScreen, NodeGlyph, OsDialog, RunDialog, SleepScreen, StartMenu, TaskView } from './shell';
+import { readSec, useDesktopSecurity } from './security';
 import { wallpaperById, wallpaperCss } from './wallpapers';
 import { chromeH, initialWm, winTitle, wmReducer } from './wm';
 import { restoreWm, saveWm } from './wmPersist';
@@ -101,6 +102,7 @@ const RUN_ALIASES = {
   shortcuts: 'shortcuts', help: 'shortcuts', 'الاختصارات': 'shortcuts',
   cloud: 'cloud', backup: 'cloud', storage: 'cloud', 'النسخ الاحتياطي': 'cloud', 'التخزين': 'cloud',
   lock: 'lock', 'قفل': 'lock', portal: 'portal', exit: 'portal', 'البوابة': 'portal',
+  sleep: 'sleep', 'سكون': 'sleep', security: 'security', devices: 'security', 'الأمان': 'security', 'الأجهزة': 'security',
 };
 
 /** The student's real "Desktop" folder on My PC (created on first use) + recycle-bin state + usage. */
@@ -141,7 +143,7 @@ export default function DesktopOS() {
   const dir = ar ? 'rtl' : 'ltr';
   const tt = useCallback((en, a) => (ar ? a : en), [ar]);
   const { theme, mode, setMode, toggleTheme } = useTheme();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [, setParams] = usePrivateParams();
   usePageMeta(ar ? 'جهازي' : 'My PC', '');
@@ -179,7 +181,7 @@ export default function DesktopOS() {
   const bootLock = useRef(false);
   const [locked, setLockedRaw] = useState(() => {
     const uid = user?.id; const cached = readLockCache(uid);
-    if (cached === false) { writeUnlockedFlag(uid, true); return false; }
+    if (cached === false || readSec(uid).lockOnStart === false) { writeUnlockedFlag(uid, true); return false; } // no password, or the person chose not to start locked
     if (readUnlockedFlag(uid)) return readLockedFlag(uid);
     bootLock.current = true; return true;
   });
@@ -229,6 +231,7 @@ export default function DesktopOS() {
     return () => window.removeEventListener('uip-open-cloud-settings', h);
   }, [openApp]);
 
+  const sleepRef = useRef(null);
   const runCommand = useCallback((id) => {
     switch (id) {
       case 'explorer': openExplorer({}); break;
@@ -240,6 +243,8 @@ export default function DesktopOS() {
       case 'shortcuts': openApp('shortcuts'); break;
       case 'run': setOverlay('run'); break;
       case 'lock': setOverlay(null); setLocked(true); break;
+      case 'sleep': setOverlay(null); sleepRef.current?.(); break;
+      case 'security': openApp('settings', { tab: 'security' }); break;
       case 'portal': navigate(roleHome(user?.role)); break;
       default: break;
     }
@@ -347,10 +352,20 @@ export default function DesktopOS() {
     }, [commitPos, mode, locale, setMode, setLocale, user?.id]),
   });
   lockOnRef.current = lockEnabled;
+  // Security & devices: auto-lock, sleep, lock-on-leave, remote lock, sign-out countdown (see ./security.js)
+  const onSecLock = useCallback((reason) => {
+    setOverlay(null); setLocked(true);
+    if (reason === 'remote') flash(tt('This device was locked from another device.', 'الجهاز ده اتقفل من جهاز تاني.'), 'ok');
+  }, [setLocked, flash, tt]);
+  const { sec, applySec, asleep, sleep, wake, idleLeft, stay } = useDesktopSecurity({ uid: user?.id, locked, onLock: onSecLock });
+  sleepRef.current = sleep;
+  const secRef = useRef(sec); secRef.current = sec;
+  const onWake = useCallback(() => { wake(); if (secRef.current.lockAfterSleep && lockOnRef.current === true) setLocked(true); }, [wake, setLocked]);
   useEffect(() => {
-    if (lockEnabled === false && bootLock.current) { bootLock.current = false; setLockedRaw(false); writeUnlockedFlag(uidRef.current, true); } // no password set: nothing to ask on a new device
-    else if (lockEnabled === true && !readUnlockedFlag(uidRef.current)) setLockedRaw(true); // password was set on another device
-  }, [lockEnabled]);
+    const startLocked = sec.lockOnStart !== false;
+    if ((lockEnabled === false || !startLocked) && bootLock.current) { bootLock.current = false; setLockedRaw(false); writeUnlockedFlag(uidRef.current, true); } // no password set / chose not to start locked: nothing to ask on a new device
+    else if (lockEnabled === true && startLocked && !readUnlockedFlag(uidRef.current)) setLockedRaw(true); // password was set on another device
+  }, [lockEnabled, sec.lockOnStart]);
   // remember where every icon sits (new ones get the first free cell, deleted ones are forgotten)
   useEffect(() => {
     if (!synced || !desk.ready || desk.error || store.key !== posKey || !deskSize.h) return;
@@ -592,11 +607,11 @@ export default function DesktopOS() {
 
   // ---- keyboard shortcuts ------------------------------------------------------------------------------
   const S = useRef({});
-  S.current = { wm, overlay, locked, dlg, taskItems, taskClick, runCommand };
+  S.current = { wm, overlay, locked, asleep, dlg, taskItems, taskClick, runCommand };
   useEffect(() => {
     const onKey = (e) => {
       const s = S.current;
-      if (e.defaultPrevented || s.locked || s.dlg) return;
+      if (e.defaultPrevented || s.locked || s.asleep || s.dlg) return;
       const id = globalActionFor(e);
       // the code workbench / viewer keep their own keys; only the window-level Alt combos pass through
       if (e.target?.closest?.('.zb, .st-fv, .mp-editor') && !/^(close|next|prev|desktop|taskview|pin\d)$/.test(id || '')) return;
@@ -611,7 +626,7 @@ export default function DesktopOS() {
         case 'start': setOverlay((o) => (o === 'start' ? null : 'start')); break;
         case 'run': setOverlay((o) => (o === 'run' ? null : 'run')); break;
         case 'taskview': setOverlay((o) => (o === 'taskview' ? null : 'taskview')); break;
-        case 'lock': case 'settings': case 'personalize': case 'explorer': case 'bin': case 'taskmgr': s.runCommand(id); break;
+        case 'lock': case 'sleep': case 'settings': case 'personalize': case 'explorer': case 'bin': case 'taskmgr': s.runCommand(id); break;
         case 'help': s.runCommand('shortcuts'); break;
         case 'next': dispatch({ type: 'cycle', dir: 1 }); break;
         case 'prev': dispatch({ type: 'cycle', dir: -1 }); break;
@@ -654,7 +669,8 @@ export default function DesktopOS() {
       case 'viewer': return <ViewerWindow files={w.props.files} startId={w.props.startId} locale={locale} registerGuard={guardFor(w.id)} onClose={() => dispatch({ type: 'close', id: w.id, force: true })}
         onEditText={(f) => openFileWin({ kind: 'editor', editor: { kind: 'text', node: { id: f.driveId ?? f.id, name: f.original_name } } })} />;
       case 'editor': return <EditorWindow editor={w.props.editor} locale={locale} registerGuard={guardFor(w.id)} />;
-      case 'settings': return <SettingsApp tab={w.props.tab} prefs={prefs} setPrefs={setPrefs} ar={ar} tt={tt} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale} usage={desk.usage} user={user} lockEnabled={lockEnabled} onLockChanged={setLockEnabled} />;
+      case 'settings': return <SettingsApp tab={w.props.tab} prefs={prefs} setPrefs={setPrefs} ar={ar} tt={tt} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale} usage={desk.usage} user={user} lockEnabled={lockEnabled} onLockChanged={setLockEnabled}
+        sec={sec} onSec={applySec} onLockNow={() => runCommand('lock')} onSleepNow={() => runCommand('sleep')} onSelfLogout={logout} />;
       case 'taskmgr': return <TaskManagerApp list={wm.list} ar={ar} tt={tt} usage={desk.usage} onEnd={(id) => dispatch({ type: 'close', id })} onFocus={(id) => dispatch({ type: 'focus', id })} />;
       case 'shortcuts': return <ShortcutsApp ar={ar} tt={tt} />;
       default: return null;
@@ -673,6 +689,8 @@ export default function DesktopOS() {
       { label: tt('Task Manager', 'مدير المهام'), onClick: () => runCommand('taskmgr') },
       'sep',
       { label: tt('Lock Screen', 'قفل الشاشة'), hint: 'Alt+L', onClick: () => runCommand('lock') },
+      { label: tt('Sleep', 'وضع السكون'), hint: 'Alt+Shift+S', onClick: () => runCommand('sleep') },
+      { label: tt('Security & devices…', 'الأمان والأجهزة…'), onClick: () => runCommand('security') },
       { label: tt('Back to the portal…', 'الرجوع للبوابة…'), onClick: () => runCommand('portal') },
     ] },
     { id: 'app', bold: true, label: appName, items: [
@@ -829,7 +847,9 @@ export default function DesktopOS() {
         />
       )}
       {toast && <div className={`os-toast${toast.tone === 'error' ? ' is-error' : ''}`} role="status">{toast.msg}</div>}
-      {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} onUnlock={() => setLocked(false)} onPortal={() => runCommand('portal')} />}
+      {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} hideDetails={sec.hideLockDetails} onUnlock={() => setLocked(false)} onPortal={() => runCommand('portal')} />}
+      {idleLeft !== null && !asleep && <IdleWarning tt={tt} left={idleLeft} onStay={stay} onSignOut={logout} />}
+      {asleep && <SleepScreen ar={ar} tt={tt} dim={sec.sleepDimOnly} onWake={onWake} />}
       {brightness < 100 && <div className="os-dim" style={{ opacity: ((100 - brightness) / 100) * 0.7 }} aria-hidden="true" />}
       <div className={`os-boot${booting ? '' : ' is-done'}`} aria-hidden="true"><UipMark size={72} /><span className="os-boot__bar"><i /></span></div>
     </div>,
