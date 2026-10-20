@@ -1,0 +1,39 @@
+/* courses.css — student course cards (cr-*). Token driven. */
+.cr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; padding: 4px 20px 22px; }
+.cr-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border: 1.5px solid var(--border-subtle); border-radius: 14px; background: var(--bg-surface); transition: border-color .15s, box-shadow .15s; }
+.cr-card:hover { border-color: rgba(var(--color-primary-rgb), .4); box-shadow: 0 4px 16px rgba(19, 21, 38, .06); }
+.cr-card.is-on { border-color: rgba(var(--color-success-rgb), .45); background: rgba(var(--color-success-rgb), .04); }
+.cr-card__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cr-card__top .ex-chip { margin-bottom: 0; }
+.cr-card h3 { margin: 4px 0 0; font-size: 15px; font-weight: 800; line-height: 1.35; }
+.cr-card__meta { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+.cr-card__staff { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: 12.5px; color: var(--text-secondary); }
+.cr-card .btn { margin-top: auto; width: 100%; justify-content: center; }
+@media (max-width: 640px) { .cr-grid { padding-inline: 12px; } }
+
+/* ---- enrol / drop requests ---- */
+.cr-warn { display: flex; gap: 12px; padding: 12px 14px; margin-bottom: 14px; border-radius: 12px; border: 1.5px solid rgba(var(--color-warning-rgb, 217, 119, 6), .5); background: rgba(var(--color-warning-rgb, 217, 119, 6), .08); font-size: 13.5px; line-height: 1.6; }
+.cr-warn--danger { border-color: rgba(var(--color-danger-rgb, 220, 38, 38), .5); background: rgba(var(--color-danger-rgb, 220, 38, 38), .07); }
+.cr-warn ul { margin: 6px 0 0; padding-inline-start: 18px; }
+.cr-warn svg { flex: none; margin-top: 2px; }
+.cr-confirm { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+.cr-confirm input { margin-top: 4px; }
+.cr-pending { display: inline-flex; align-items: center; gap: 6px; margin-top: auto; padding: 8px 10px; border-radius: 10px; font-size: 12.5px; font-weight: 700; background: rgba(var(--color-warning-rgb, 217, 119, 6), .12); }
+.cr-dot { display: inline-block; width: 7px; height: 7px; margin-inline-start: 4px; border-radius: 50%; background: var(--color-danger, #dc2626); }
+.cr-inbox { padding-bottom: 8px; }
+.cr-inbox__head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 20px 4px; }
+.cr-inbox__head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; font-weight: 800; }
+.cr-inbox__empty { padding: 14px 20px; margin: 0; color: var(--text-secondary); font-size: 13.5px; }
+.cr-req-list { list-style: none; margin: 0; padding: 4px 20px 14px; display: flex; flex-direction: column; gap: 10px; }
+.cr-req { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1.5px solid var(--border-subtle); border-radius: 12px; background: var(--bg-surface); }
+.cr-req__top { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.cr-req__top .ex-chip { margin-bottom: 0; }
+.cr-req__top strong { flex: 1; min-width: 160px; font-size: 14px; }
+.cr-req__who { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+.cr-req__msg { margin: 0; padding: 8px 10px; border-radius: 10px; background: rgba(0, 0, 0, .04); font-size: 13.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cr-req__actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.cr-req .btn { width: auto; align-self: flex-start; }
+.cr-status { padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 800; background: rgba(0, 0, 0, .06); }
+.cr-status--pending { background: rgba(var(--color-warning-rgb, 217, 119, 6), .18); }
+.cr-status--approved { background: rgba(var(--color-success-rgb, 22, 163, 74), .18); }
+.cr-status--rejected { background: rgba(var(--color-danger-rgb, 220, 38, 38), .16); }

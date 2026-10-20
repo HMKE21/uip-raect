@@ -1,0 +1,1129 @@
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { unzipSync, zipSync } from 'fflate';
+import Icon from '../Icon';
+import SearchPanel from './SearchPanel';
+import Menu from './Menus';
+import RunPanel from './RunPanel';
+import SandboxPanel from './SandboxPanel';
+import { detectApps, defaultApp } from './runner/detectApps';
+import { useRunner } from './runner/useRunner';
+import { useSandbox } from './runner/useSandbox';
+import { RUNNER_URL } from '../../config/runner';
+import { DEFAULT_THEME, THEMES, themeById, themeVars } from './zipThemes';
+import {
+  MAX_UPLOAD_FILE, MAX_UPLOAD_TOTAL, cleanRel, itemsFromFileList, readDataTransfer, uniquePath,
+} from './zipImport';
+import {
+  IMAGE_MIME, MAX_EDIT_BYTES, STORE_EXT, badgeOf, baseName, buildTree, dirName, extOf, fmtBytes, isBinary, languageName,
+} from './zipUtils';
+import '../../styles/css/zip-workbench.css';
+
+const CodeEditor = lazy(() => import('./CodeEditor'));
+const CsvGrid = lazy(() => import('./CsvGrid'));
+const isGridPath = (p) => /\.(csv|tsv)$/i.test(p || '');
+
+const MAX_ZIP_BYTES = 150 * 1024 * 1024;
+const MAX_TOTAL_UNPACKED = 600 * 1024 * 1024;
+const MAX_SEARCH_RESULTS = 200;
+const enc = new TextEncoder();
+const dec = new TextDecoder('utf-8');
+const isNoise = (name) => name.startsWith('__MACOSX/') || baseName(name) === '.DS_Store';
+
+// folder part of a tree path, always with a trailing "/" ('' = archive root)
+const dirOf = (path) => {
+  if (!path) return '';
+  if (path.endsWith('/')) return path;
+  const d = dirName(path);
+  return d ? `${d}/` : '';
+};
+
+function Badge({ path }) {
+  const [label, color] = badgeOf(path);
+  return <span className="zb-badge" style={{ '--k': color }}>{label}</span>;
+}
+
+/**
+ * VS Code–style ZIP workbench: explorer tree, tabs, CodeMirror editor, status bar — and "Download ZIP"
+ * which rebuilds the archive (with edits / new / renamed / deleted files) entirely in the browser.
+ *
+ * When the parent passes `onSave(blob, { force })`, a "Save" button (and Ctrl+S) also appears: it rebuilds
+ * the archive the same way and uploads it as the new version of the file on the server, so everyone on
+ * the project sees the edits (the previous version stays in the file's version history).
+ * Without `onSave` (reviewers, locked projects) the archive stays read-only on the server.
+ */
+const MAX_SAVE_BYTES = 50 * 1024 * 1024; // matches the server's upload limit
+
+export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, projectId, sandboxTokenPath }) {
+  const [phase, setPhase] = useState('loading'); // loading | ready | error
+  const [error, setError] = useState('');
+  const [vfs, setVfs] = useState(() => new Map()); // path -> { path, dir, size, origPath, isNew }
+  const [deletedCount, setDeletedCount] = useState(0);
+  const [dirty, setDirty] = useState(() => new Set());
+  const [open, setOpen] = useState(() => new Set());
+  const [tabs, setTabs] = useState([]);
+  const [active, setActive] = useState(null);
+  const [editorDoc, setEditorDoc] = useState(null); // { path, docId, text }
+  const [query, setQuery] = useState('');
+  const [cursor, setCursor] = useState({ line: 1, col: 1 });
+  const [wrap, setWrap] = useState(false);
+  const [fontSize, setFontSize] = useState(13.5);
+  const [explorer, setExplorer] = useState(() => typeof window === 'undefined' || !window.matchMedia('(max-width: 760px)').matches);
+  const [dlg, setDlg] = useState(null); // { type: 'new'|'rename'|'delete'|'reset', path?, value? }
+  const [busy, setBusy] = useState(false);
+  const [rawText, setRawText] = useState(() => new Set()); // csv / tsv tabs the user switched to the plain-text view
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState('');
+  const [sideTab, setSideTab] = useState('files'); // files | search
+  const [searchFocus, setSearchFocus] = useState(0);
+  const [sel, setSel] = useState(''); // selected tree entry ('' = archive root) -> where "new / upload" goes
+  const [menu, setMenu] = useState(null); // { x, y, items, title }
+  const [dropDir, setDropDir] = useState(null); // folder currently hovered by a drag (null = no drag)
+  const [importing, setImporting] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    try { const v = window.localStorage.getItem('zb-theme'); return THEMES.some((t) => t.id === v) ? v : DEFAULT_THEME; } catch { return DEFAULT_THEME; }
+  });
+  const [reveal, setReveal] = useState(null); // { key, path, line, col, len, spec } -> jump-to-match in the editor
+  const [runOpen, setRunOpen] = useState(false); // bottom "Run" panel (Python / React / HTML in the browser)
+  const [runChoice, setRunChoice] = useState(null); // user's explicit pick in the app dropdown (null = automatic)
+  const [runBig, setRunBig] = useState(false);
+  const runner = useRunner();
+  const sandbox = useSandbox(projectId, sandboxTokenPath); // real server / terminal on the uip-sandbox gateway (needs a project id)
+
+  const zipBytes = useRef(null);
+  const ownBlob = useRef(null); // the archive we just saved ourselves — a re-delivered copy of it must not reload the workbench
+  const vfsRef = useRef(vfs);
+  vfsRef.current = vfs;
+  const edits = useRef(new Map()); // path -> edited text (only when different from the original)
+  const origTexts = useRef(new Map());
+  const newData = useRef(new Map()); // path -> Uint8Array (files created here)
+  const cache = useRef(new Map()); // origPath -> Uint8Array (decompressed)
+  const docs = useRef(new Map()); // path -> { kind, url?, size }
+  const gens = useRef(new Map());
+  const activeRef = useRef(null);
+  activeRef.current = active;
+  const editorDocRef = useRef(null);
+  editorDocRef.current = editorDoc;
+  const tabsRef = useRef([]);
+  tabsRef.current = tabs;
+  const toastTimer = useRef(0);
+  const revealSeq = useRef(0);
+  const rootRef = useRef(null);
+  const fileInput = useRef(null);
+  const dirInput = useRef(null);
+  const uploadBase = useRef('');
+  const defaultSel = useRef('');
+  const dragSrc = useRef(null); // tree path being dragged inside the explorer
+
+  const flash = useCallback((msg) => {
+    setToast(msg);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 2600);
+  }, []);
+
+  // ---- load archive -------------------------------------------------------------------------------
+  useEffect(() => {
+    if (ownBlob.current === blob) return undefined; // our own save coming back from the server: state is already in sync
+    let dead = false;
+    // a different archive was delivered (e.g. a newer version saved by someone else): start clean
+    docs.current.forEach((d) => { if (d.url) URL.revokeObjectURL(d.url); });
+    docs.current.clear(); edits.current.clear(); origTexts.current.clear(); newData.current.clear(); cache.current.clear();
+    setTabs([]); setActive(null); setEditorDoc(null); setDirty(new Set()); setDeletedCount(0);
+    (async () => {
+      try {
+        if (blob.size > MAX_ZIP_BYTES) throw new Error(tt('This archive is too large to open here — download it instead.', 'الأرشيف كبير جدًا للفتح هنا — نزّله بدل ذلك.'));
+        const u8 = new Uint8Array(await blob.arrayBuffer());
+        const list = [];
+        let total = 0;
+        unzipSync(u8, { filter: (f) => { if (!isNoise(f.name)) { list.push({ path: f.name, size: f.originalSize }); total += f.originalSize; } return false; } });
+        if (total > MAX_TOTAL_UNPACKED) throw new Error(tt('This archive expands to too much data to open here.', 'الأرشيف بعد فك الضغط كبير جدًا للفتح هنا.'));
+        if (dead) return;
+        zipBytes.current = u8;
+        const map = new Map();
+        list.forEach((e) => map.set(e.path, { path: e.path, dir: e.path.endsWith('/'), size: e.size, origPath: e.path, isNew: false }));
+        setVfs(map);
+        const tops = [...new Set(list.map((e) => e.path.split('/')[0]).filter((n) => list.some((x) => x.path.startsWith(`${n}/`))))];
+        setOpen(new Set(tops.length === 1 ? [`${tops[0]}/`] : []));
+        defaultSel.current = tops.length === 1 ? `${tops[0]}/` : ''; // single project folder -> add things inside it by default
+        setSel(defaultSel.current);
+        setPhase('ready');
+      } catch (err) {
+        if (!dead) { setError(String(err?.message || err)); setPhase('error'); }
+      }
+    })();
+    return () => { dead = true; };
+  }, [blob, tt]);
+
+  useEffect(() => () => {
+    docs.current.forEach((d) => { if (d.url) URL.revokeObjectURL(d.url); });
+    clearTimeout(toastTimer.current);
+  }, []);
+
+  // ---- content access -----------------------------------------------------------------------------
+  const getBytes = useCallback((path) => {
+    if (edits.current.has(path)) return enc.encode(edits.current.get(path));
+    const n = vfsRef.current.get(path);
+    if (!n || n.dir) return new Uint8Array();
+    if (n.isNew || !n.origPath) return newData.current.get(path) || new Uint8Array();
+    if (cache.current.has(n.origPath)) return cache.current.get(n.origPath);
+    const out = unzipSync(zipBytes.current, { filter: (f) => f.name === n.origPath })[n.origPath] || new Uint8Array();
+    cache.current.set(n.origPath, out);
+    return out;
+  }, []);
+
+  const markDirty = useCallback((path, on) => {
+    setDirty((prev) => {
+      if (prev.has(path) === on) return prev;
+      const next = new Set(prev);
+      if (on) next.add(path); else next.delete(path);
+      return next;
+    });
+  }, []);
+
+  const onEdit = useCallback((text) => {
+    const doc = editorDocRef.current;
+    if (!doc) return;
+    const orig = origTexts.current.get(doc.path) ?? '';
+    if (text === orig) { edits.current.delete(doc.path); markDirty(doc.path, false); } else { edits.current.set(doc.path, text); markDirty(doc.path, true); }
+  }, [markDirty]);
+
+  const setTextFor = useCallback((path, text) => {
+    const orig = origTexts.current.get(path) ?? '';
+    if (text === orig) { edits.current.delete(path); markDirty(path, false); } else { edits.current.set(path, text); markDirty(path, true); }
+  }, [markDirty]);
+  const switchView = useCallback((path, toText) => {
+    setRawText((prev) => { const n = new Set(prev); if (toText) n.add(path); else n.delete(path); return n; });
+    if (toText) { // the code editor must start from the text the grid produced
+      gens.current.set(path, (gens.current.get(path) || 0) + 1);
+      setEditorDoc({ path, docId: `${path}#${gens.current.get(path)}`, text: edits.current.get(path) ?? origTexts.current.get(path) ?? '' });
+    }
+  }, []);
+
+  // ---- tabs ---------------------------------------------------------------------------------------
+  const openFile = useCallback((path) => {
+    const node = vfsRef.current.get(path);
+    if (!node || node.dir) return;
+    let doc = docs.current.get(path);
+    if (!doc) {
+      if (node.size > MAX_EDIT_BYTES && !node.isNew && !edits.current.has(path)) {
+        doc = { kind: 'large', size: node.size };
+      } else {
+        const bytes = getBytes(path);
+        if (isBinary(path, bytes)) {
+          const mime = IMAGE_MIME[extOf(path)];
+          doc = mime ? { kind: 'image', size: bytes.length, url: URL.createObjectURL(new Blob([bytes], { type: mime })) } : { kind: 'binary', size: bytes.length };
+        } else {
+          if (!origTexts.current.has(path)) origTexts.current.set(path, node.isNew ? '' : dec.decode(bytes));
+          doc = { kind: 'text', size: bytes.length };
+        }
+      }
+      docs.current.set(path, doc);
+    }
+    if (doc.kind === 'text') {
+      const gen = gens.current.get(path) || 0;
+      setEditorDoc({ path, docId: `${path}#${gen}`, text: edits.current.get(path) ?? origTexts.current.get(path) ?? '' });
+    }
+    setTabs((t) => (t.includes(path) ? t : [...t, path]));
+    setActive(path);
+    if (window.matchMedia('(max-width: 760px)').matches) setExplorer(false);
+  }, [getBytes]);
+
+  const closeTab = useCallback((path) => {
+    const cur = tabsRef.current;
+    const i = cur.indexOf(path);
+    if (i < 0) return;
+    const rest = cur.filter((p) => p !== path);
+    gens.current.set(path, (gens.current.get(path) || 0) + 1);
+    const d = docs.current.get(path);
+    if (d?.url) URL.revokeObjectURL(d.url);
+    docs.current.delete(path);
+    setTabs(rest);
+    if (activeRef.current === path) {
+      const next = rest[Math.min(i, rest.length - 1)] || null;
+      setActive(next);
+      if (next) {
+        const nd = docs.current.get(next);
+        if (nd?.kind === 'text') setEditorDoc({ path: next, docId: `${next}#${gens.current.get(next) || 0}`, text: edits.current.get(next) ?? origTexts.current.get(next) ?? '' });
+      }
+    }
+    if (!rest.some((p) => docs.current.get(p)?.kind === 'text')) setEditorDoc(null);
+  }, []);
+
+  const closeMany = useCallback((paths) => { paths.forEach((p) => closeTab(p)); }, [closeTab]);
+
+  // ---- search in files ----------------------------------------------------------------------------
+  const getSearchFiles = useCallback(() => {
+    const out = [];
+    vfsRef.current.forEach((v) => { if (!v.dir) out.push({ path: v.path, size: v.size }); });
+    return out;
+  }, []);
+
+  // Decompresses a whole batch in one pass; unsaved edits and new files win over the archive copy.
+  const readBatch = useCallback(async (paths) => {
+    const out = new Map();
+    const need = [];
+    paths.forEach((p) => {
+      if (edits.current.has(p)) { out.set(p, enc.encode(edits.current.get(p))); return; }
+      const n = vfsRef.current.get(p);
+      if (!n || n.dir) return;
+      if (n.isNew || !n.origPath) { out.set(p, newData.current.get(p) || new Uint8Array()); return; }
+      if (cache.current.has(n.origPath)) { out.set(p, cache.current.get(n.origPath)); return; }
+      need.push([p, n.origPath]);
+    });
+    if (need.length) {
+      const want = new Set(need.map((x) => x[1]));
+      const got = unzipSync(zipBytes.current, { filter: (f) => want.has(f.name) });
+      need.forEach(([p, o]) => { if (got[o]) out.set(p, got[o]); });
+    }
+    return out;
+  }, []);
+
+  const showSearch = useCallback(() => {
+    setExplorer(true);
+    setSideTab('search');
+    setSearchFocus((k) => k + 1);
+  }, []);
+
+  const openMatch = useCallback((path, m, spec) => {
+    openFile(path);
+    revealSeq.current += 1;
+    setReveal({ key: revealSeq.current, path, line: m.line, col: m.col, len: m.len, spec });
+  }, [openFile]);
+
+  // ---- file operations ----------------------------------------------------------------------------
+  const exists = (p) => vfsRef.current.has(p) || vfsRef.current.has(`${p}/`) || [...vfsRef.current.keys()].some((k) => k.startsWith(`${p}/`));
+
+  // true when some parent segment of `p` is a regular file (can't put things "inside" a file)
+  const underFile = (p) => {
+    const parts = p.split('/').filter(Boolean);
+    for (let i = 1; i < parts.length; i += 1) { const v = vfsRef.current.get(parts.slice(0, i).join('/')); if (v && !v.dir) return true; }
+    return false;
+  };
+
+  const expandTo = (path) => {
+    const parts = path.split('/').filter(Boolean);
+    setOpen((o) => { const n = new Set(o); for (let i = 1; i < parts.length; i += 1) n.add(`${parts.slice(0, i).join('/')}/`); return n; });
+  };
+
+  const createEntry = (raw, kind) => {
+    let clean = raw.trim().replace(/^\/+/, '').replace(/\\/g, '/').replace(/\/{2,}/g, '/');
+    if (kind === 'folder' && clean && !clean.endsWith('/')) clean += '/';
+    if (!clean || clean.split('/').some((s2) => s2 === '..' || s2 === '.')) return tt('Enter a valid path.', 'اكتب مسارًا صحيحًا.');
+    const isDir = clean.endsWith('/');
+    if (kind === 'file' && isDir) return tt('Type a file name after the folder path.', 'اكتب اسم الملف بعد مسار المجلد.');
+    const path = clean;
+    if (exists(isDir ? path.slice(0, -1) : path)) return tt('That name already exists.', 'الاسم موجود بالفعل.');
+    if (underFile(path)) return tt('A file with that name is in the way.', 'يوجد ملف بنفس اسم أحد المجلدات في المسار.');
+    const next = new Map(vfsRef.current);
+    next.set(path, { path, dir: isDir, size: 0, origPath: null, isNew: true });
+    if (!isDir) newData.current.set(path, new Uint8Array());
+    setVfs(next);
+    expandTo(path);
+    if (isDir) setOpen((o) => new Set(o).add(path));
+    setSel(path);
+    if (!isDir) setTimeout(() => openFile(path), 0);
+    return null;
+  };
+
+  // Moves / renames a file or folder (and everything inside it). Returns an error string or null.
+  const relocate = (oldPath, newPath) => {
+    const isDir = oldPath.endsWith('/');
+    if (newPath === oldPath) return null;
+    if (isDir && newPath.startsWith(oldPath)) return tt('A folder can’t be moved into itself.', 'لا يمكن نقل المجلد إلى داخل نفسه.');
+    if (exists(isDir ? newPath.slice(0, -1) : newPath)) return tt('That name already exists.', 'الاسم موجود بالفعل.');
+    if (underFile(newPath)) return tt('A file with that name is in the way.', 'يوجد ملف بنفس اسم أحد المجلدات في المسار.');
+    const moved = [...vfsRef.current.keys()].filter((k) => (isDir ? k.startsWith(oldPath) : k === oldPath));
+    closeMany(moved.filter((k) => tabsRef.current.includes(k)));
+    const next = new Map();
+    vfsRef.current.forEach((v, k) => {
+      if (moved.includes(k)) {
+        const nk = isDir ? newPath + k.slice(oldPath.length) : newPath;
+        next.set(nk, { ...v, path: nk });
+        [edits, origTexts, newData].forEach((m) => { if (m.current.has(k)) { m.current.set(nk, m.current.get(k)); m.current.delete(k); } });
+        if (dirty.has(k)) { markDirty(k, false); markDirty(nk, true); }
+      } else next.set(k, v);
+    });
+    setVfs(next);
+    if (isDir) setOpen((o) => { const n = new Set(); o.forEach((p) => n.add(p.startsWith(oldPath) ? newPath + p.slice(oldPath.length) : p)); return n; });
+    expandTo(newPath);
+    setSel(newPath);
+    return null;
+  };
+
+  const renameEntry = (oldPath, rawName) => {
+    const isDir = oldPath.endsWith('/');
+    const name = rawName.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+    if (!name || name.split('/').some((s2) => s2 === '..' || s2 === '.')) return tt('Enter a valid name.', 'اكتب اسمًا صحيحًا.');
+    const parent = dirName(oldPath);
+    return relocate(oldPath, `${parent ? `${parent}/` : ''}${name}${isDir ? '/' : ''}`);
+  };
+
+  const moveInto = (src, destDir) => {
+    const isDir = src.endsWith('/');
+    if (dirOf(src) === destDir && !(isDir && destDir === src)) return null; // already there
+    return relocate(src, `${destDir}${baseName(src)}${isDir ? '/' : ''}`);
+  };
+
+  const duplicateFile = (path) => {
+    const taken = (p) => exists(p);
+    const dot = path.lastIndexOf('.');
+    const slash = path.lastIndexOf('/');
+    const guess = dot > slash + 1 ? `${path.slice(0, dot)} copy${path.slice(dot)}` : `${path} copy`;
+    const target = taken(guess) ? uniquePath(guess, taken) : guess;
+    const bytes = getBytes(path);
+    const next = new Map(vfsRef.current);
+    next.set(target, { path: target, dir: false, size: bytes.length, origPath: null, isNew: true });
+    newData.current.set(target, bytes.slice());
+    setVfs(next);
+    expandTo(target);
+    setSel(target);
+    setTimeout(() => openFile(target), 0);
+  };
+
+  const deleteEntry = (path) => {
+    const isDir = path.endsWith('/');
+    const gone = [...vfsRef.current.keys()].filter((k) => (isDir ? k.startsWith(path) : k === path));
+    closeMany(gone.filter((k) => tabsRef.current.includes(k)));
+    const next = new Map(vfsRef.current);
+    let removedOrig = 0;
+    gone.forEach((k) => {
+      const v = next.get(k);
+      if (v && !v.isNew && !v.dir) removedOrig += 1;
+      next.delete(k);
+      edits.current.delete(k); origTexts.current.delete(k); newData.current.delete(k); markDirty(k, false);
+    });
+    setVfs(next);
+    setDeletedCount((c) => c + removedOrig);
+    setSel((cur) => (cur === path || (isDir && cur.startsWith(path)) ? dirOf(path.endsWith('/') ? dirName(path) : path) : cur));
+  };
+
+  const resetAll = () => {
+    closeMany([...tabsRef.current]);
+    edits.current.clear(); origTexts.current.clear(); newData.current.clear();
+    const map = new Map();
+    unzipSync(zipBytes.current, { filter: (f) => { if (!isNoise(f.name)) map.set(f.name, { path: f.name, dir: f.name.endsWith('/'), size: f.originalSize, origPath: f.name, isNew: false }); return false; } });
+    setVfs(map); setDirty(new Set()); setDeletedCount(0); setEditorDoc(null); setSel(defaultSel.current);
+  };
+
+  // ---- change summary + download ------------------------------------------------------------------
+  const changes = useMemo(() => {
+    let n = deletedCount;
+    vfs.forEach((v) => { if (!v.dir && (v.isNew || v.path !== v.origPath || dirty.has(v.path))) n += 1; });
+    // dirty files that are also new/renamed were counted once above
+    return n;
+  }, [vfs, dirty, deletedCount]);
+
+  useEffect(() => {
+    if (!guardRef) return undefined;
+    guardRef.current = () => changes === 0 || window.confirm(onSave
+      ? tt('You have unsaved edits in this archive. Close without saving?', 'عندك تعديلات لم تُحفظ على هذا الأرشيف. تقفل بدون حفظ؟')
+      : tt('You have unsaved edits in this archive. Close without downloading the new ZIP?', 'عندك تعديلات لم تُنزَّل على هذا الأرشيف. تقفل بدون تنزيل الـ ZIP الجديد؟'));
+    return () => { guardRef.current = null; };
+  }, [guardRef, changes, tt, onSave]);
+
+  const saveBlob = (data, name, type) => {
+    const url = URL.createObjectURL(new Blob([data], { type }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+  };
+
+  // the whole archive as it is right now (edits, new, renamed and deleted entries applied)
+  const buildZipBytes = () => {
+    const out = {};
+    vfsRef.current.forEach((v) => {
+      if (v.dir) { out[v.path] = new Uint8Array(); return; }
+      out[v.path] = [getBytes(v.path), { level: STORE_EXT.has(extOf(v.path)) ? 0 : 6, mtime: new Date() }];
+    });
+    return zipSync(out);
+  };
+
+  const downloadZip = () => {
+    setBusy(true);
+    setTimeout(() => {
+      try {
+        const stem = fileName.replace(/\.zip$/i, '');
+        saveBlob(buildZipBytes(), `${stem}${changes ? '-edited' : ''}.zip`, 'application/zip');
+        flash(tt('ZIP built and downloaded.', 'تم إنشاء الـ ZIP وتنزيله.'));
+      } catch (err) {
+        flash(tt('Could not build the ZIP: ', 'تعذّر إنشاء الـ ZIP: ') + String(err?.message || err));
+      } finally { setBusy(false); }
+    }, 30);
+  };
+
+  // After a successful save the saved archive becomes the new baseline: nothing is "changed" any more,
+  // while open tabs, the selection and the editor contents stay exactly as they were.
+  const rebase = (bytes) => {
+    docs.current.forEach((d, p) => { if (d.kind === 'text') origTexts.current.set(p, edits.current.get(p) ?? origTexts.current.get(p) ?? ''); });
+    edits.current.clear(); newData.current.clear(); cache.current.clear();
+    zipBytes.current = bytes;
+    const map = new Map();
+    unzipSync(bytes, { filter: (f) => { if (!isNoise(f.name)) map.set(f.name, { path: f.name, dir: f.name.endsWith('/'), size: f.originalSize, origPath: f.name, isNew: false }); return false; } });
+    setVfs(map); setDirty(new Set()); setDeletedCount(0);
+  };
+
+  const doSave = async (force = false) => {
+    if (!onSave || saving || busy) return;
+    if (changes === 0 && !force) { flash(tt('No changes to save.', 'لا توجد تعديلات للحفظ.')); return; }
+    setSaving(true);
+    await new Promise((r) => { setTimeout(r, 30); }); // let the "Saving…" state paint before the heavy zip work
+    let saveBlobData = null;
+    try {
+      const bytes = buildZipBytes();
+      if (bytes.length > MAX_SAVE_BYTES) throw new Error(tt('The archive is larger than the 50MB upload limit — remove some files, or download it instead.', 'الأرشيف أكبر من حد الرفع (50MB) — احذف بعض الملفات أو نزّله بدل الحفظ.'));
+      saveBlobData = new Blob([bytes], { type: 'application/zip' });
+      ownBlob.current = saveBlobData; // set before the parent re-renders with the saved copy
+      const saved = await onSave(saveBlobData, { force });
+      rebase(bytes);
+      flash(saved?.message || (saved?.version
+        ? tt(`Saved — version ${saved.version} is now what everyone on the project sees.`, `تم الحفظ — النسخة ${saved.version} هي اللي هيشوفها كل أعضاء المشروع.`)
+        : tt('Saved for everyone on the project.', 'تم الحفظ لكل أعضاء المشروع.')));
+    } catch (err) {
+      if (ownBlob.current === saveBlobData) ownBlob.current = null;
+      if (err?.status === 409) setDlg({ type: 'overwrite' });
+      else flash(tt('Could not save: ', 'تعذّر الحفظ: ') + String(err?.message || err));
+    } finally { setSaving(false); }
+  };
+
+  const downloadFile = (path) => {
+    const bytes = getBytes(path);
+    saveBlob(bytes, baseName(path), 'application/octet-stream');
+  };
+
+  const downloadFolder = (path) => {
+    const root = baseName(path);
+    const out = {};
+    vfsRef.current.forEach((v, k) => {
+      if (!k.startsWith(path)) return;
+      const rel = `${root}/${k.slice(path.length)}`;
+      if (v.dir) { out[rel.endsWith('/') ? rel : `${rel}/`] = new Uint8Array(); return; }
+      out[rel] = [getBytes(k), { level: STORE_EXT.has(extOf(k)) ? 0 : 6, mtime: new Date() }];
+    });
+    saveBlob(zipSync(out), `${root}.zip`, 'application/zip');
+  };
+
+  // ---- adding files / folders ---------------------------------------------------------------------
+  const commitImport = (read, dirs, mode) => {
+    const next = new Map(vfsRef.current);
+    const added = [];
+    let replaced = 0;
+    read.forEach(({ path, data }) => {
+      let target = path;
+      const cur = next.get(path);
+      if (cur && !cur.dir) {
+        if (mode === 'skip') return;
+        if (mode === 'both') target = uniquePath(path, (p) => next.has(p) || next.has(`${p}/`));
+        else {
+          if (tabsRef.current.includes(path)) closeTab(path);
+          edits.current.delete(path); origTexts.current.delete(path); markDirty(path, false);
+          replaced += 1;
+        }
+      }
+      next.set(target, { path: target, dir: false, size: data.length, origPath: null, isNew: true });
+      newData.current.set(target, data);
+      added.push(target);
+    });
+    dirs.forEach((d) => { if (!next.has(d)) next.set(d, { path: d, dir: true, size: 0, origPath: null, isNew: true }); });
+    setVfs(next);
+    setOpen((o) => {
+      const n = new Set(o);
+      [...added, ...dirs].forEach((p) => { const parts = p.split('/').filter(Boolean); for (let i = 1; i < parts.length; i += 1) n.add(`${parts.slice(0, i).join('/')}/`); });
+      dirs.forEach((d) => n.add(d));
+      return n;
+    });
+    if (added.length) setSel(added[added.length - 1]);
+    else if (dirs.length) setSel(dirs[0]);
+    if (added.length === 1 && !dirs.length) setTimeout(() => openFile(added[0]), 0);
+    const parts = [];
+    if (added.length) parts.push(tt(`${added.length} file${added.length === 1 ? '' : 's'} added`, `تمت إضافة ${added.length} ملف`));
+    if (dirs.length && !added.length) parts.push(tt(`${dirs.length} folder${dirs.length === 1 ? '' : 's'} added`, `تمت إضافة ${dirs.length} مجلد`));
+    if (replaced) parts.push(tt(`${replaced} replaced`, `${replaced} تم استبداله`));
+    return parts.join(' · ');
+  };
+
+  const importItems = async (items, base, truncated) => {
+    if (!items.length) return;
+    setImporting(true);
+    try {
+      const picked = [];
+      const dirs = [];
+      let skipped = truncated ? 1 : 0;
+      let total = 0;
+      items.forEach((it) => {
+        const rel = cleanRel(it.rel);
+        if (!rel) { skipped += 1; return; }
+        const path = base + rel;
+        if (underFile(path)) { skipped += 1; return; }
+        if (it.dir || rel.endsWith('/')) { dirs.push(path.endsWith('/') ? path : `${path}/`); return; }
+        if (it.file.size > MAX_UPLOAD_FILE || total + it.file.size > MAX_UPLOAD_TOTAL) { skipped += 1; return; }
+        total += it.file.size;
+        picked.push({ path, file: it.file });
+      });
+      const read = [];
+      for (const f of picked) {
+        // eslint-disable-next-line no-await-in-loop
+        read.push({ path: f.path, data: new Uint8Array(await f.file.arrayBuffer()) });
+      }
+      // a file can't replace a folder of the same name
+      const ok = read.filter((r) => { const blocked = vfsRef.current.has(`${r.path}/`) || [...vfsRef.current.keys()].some((k) => k.startsWith(`${r.path}/`)); if (blocked) skipped += 1; return !blocked; });
+      const conflicts = ok.filter((r) => vfsRef.current.get(r.path)?.dir === false).map((r) => r.path);
+      if (skipped) flash(tt(`${skipped} item${skipped === 1 ? ' was' : 's were'} skipped (too large, unsafe path, or a name clash).`, `تم تخطي ${skipped} عنصر (كبير جدًا أو مسار غير آمن أو تعارض أسماء).`));
+      if (conflicts.length) { setDlg({ type: 'conflict', pack: { read: ok, dirs, conflicts } }); return; }
+      const msg = commitImport(ok, dirs, 'replace');
+      if (msg && !skipped) flash(msg);
+    } catch (err) {
+      flash(tt('Could not add files: ', 'تعذّرت إضافة الملفات: ') + String(err?.message || err));
+    } finally { setImporting(false); }
+  };
+
+  const pickUpload = (kind, base) => {
+    uploadBase.current = base;
+    const el = kind === 'dir' ? dirInput.current : fileInput.current;
+    if (!el) return;
+    el.value = '';
+    el.click();
+  };
+
+  const onPicked = (e, keepFolders) => {
+    const { items, truncated } = itemsFromFileList(e.target.files || [], keepFolders);
+    e.target.value = '';
+    importItems(items, uploadBase.current, truncated);
+  };
+
+  const startNew = (kind, base) => setDlg({ type: 'new', kind, value: base, base });
+
+  // ---- drag & drop (files from the desktop, and moving entries inside the tree) --------------------
+  const isFileDrag = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  const destFromEvent = (e) => {
+    if (e.target.closest?.('.zb-side')) {
+      const row = e.target.closest('[data-dir]');
+      return row ? row.getAttribute('data-dir') : '';
+    }
+    return dirOf(sel);
+  };
+  const onDragOver = (e) => {
+    if (dragSrc.current) {
+      if (!e.target.closest?.('.zb-side')) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDropDir(destFromEvent(e)); return;
+    }
+    if (!isFileDrag(e)) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropDir(destFromEvent(e));
+  };
+  const onDragLeave = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropDir(null); };
+  const onDrop = async (e) => {
+    const src = dragSrc.current;
+    if (src) {
+      e.preventDefault();
+      const dest = destFromEvent(e);
+      dragSrc.current = null; setDropDir(null);
+      const err = moveInto(src, dest);
+      if (err) flash(err);
+      return;
+    }
+    if (!isFileDrag(e)) return;
+    e.preventDefault();
+    const dest = destFromEvent(e);
+    setDropDir(null);
+    const { items, truncated } = await readDataTransfer(e.dataTransfer);
+    await importItems(items, dest, truncated);
+  };
+
+  // ---- menus --------------------------------------------------------------------------------------
+  const copyPath = (p) => {
+    const text = p.replace(/\/$/, '');
+    (navigator.clipboard?.writeText(text) || Promise.reject()).then(() => flash(tt('Path copied.', 'تم نسخ المسار.')), () => flash(text));
+  };
+
+  const addItems = (base) => [
+    { label: tt('New file', 'ملف جديد'), icon: 'file-plus', onClick: () => startNew('file', base) },
+    { label: tt('New folder', 'مجلد جديد'), icon: 'folder-plus', onClick: () => startNew('folder', base) },
+    { sep: true },
+    { label: tt('Upload files…', 'رفع ملفات…'), icon: 'file-up', onClick: () => pickUpload('file', base) },
+    { label: tt('Upload folder…', 'رفع مجلد…'), icon: 'folder-up', onClick: () => pickUpload('dir', base) },
+  ];
+
+  const menuFor = (path) => {
+    const base = dirOf(path);
+    if (!path) return addItems('');
+    const isDir = path.endsWith('/');
+    const items = isDir ? addItems(base) : [
+      { label: tt('Open', 'فتح'), icon: 'file', onClick: () => openFile(path) },
+      { label: tt('Download', 'تنزيل'), icon: 'download', onClick: () => downloadFile(path) },
+      { label: tt('Duplicate', 'تكرار'), icon: 'copy', onClick: () => duplicateFile(path) },
+    ];
+    items.push({ sep: true });
+    items.push({ label: tt('Rename', 'إعادة تسمية'), icon: 'edit', hint: 'F2', onClick: () => setDlg({ type: 'rename', path, value: baseName(path) }) });
+    items.push({ label: tt('Delete', 'حذف'), icon: 'trash', danger: true, hint: 'Del', onClick: () => setDlg({ type: 'delete', path }) });
+    items.push({ sep: true });
+    if (isDir) items.push({ label: tt('Download as ZIP', 'تنزيل كـ ZIP'), icon: 'archive', onClick: () => downloadFolder(path) });
+    items.push({ label: tt('Copy path', 'نسخ المسار'), icon: 'link', onClick: () => copyPath(path) });
+    return items;
+  };
+
+  const openCtx = (e, path) => {
+    e.preventDefault(); e.stopPropagation();
+    setSel(path);
+    setMenu({ x: e.clientX, y: e.clientY, items: menuFor(path) });
+  };
+  const openMenuAt = (el, items, title) => {
+    const r = el.getBoundingClientRect();
+    setMenu({ x: r.left, y: r.bottom + 4, items, title });
+  };
+  const pickTheme = (id) => {
+    setTheme(id);
+    try { window.localStorage.setItem('zb-theme', id); } catch { /* storage unavailable */ }
+  };
+  const themeItems = () => THEMES.map((th) => ({ label: th.name, hint: th.hint, swatch: [th.ui.bg, th.ui.accent, th.ed.keyword], checked: th.id === theme, onClick: () => pickTheme(th.id) }));
+
+  // ---- run (Python / React / HTML run inside the browser, on the isolated runner origin) --------------
+  const runApps = useMemo(() => {
+    const paths = [];
+    vfs.forEach((v) => { if (!v.dir) paths.push(v.path); });
+    const readText = (p) => { if (!vfsRef.current.has(p)) return null; try { return dec.decode(getBytes(p)); } catch { return null; } };
+    return detectApps(paths, { activePath: active, readText, sandbox: !!(projectId || sandboxTokenPath) });
+  }, [vfs, active, getBytes, projectId, sandboxTokenPath]);
+  const runApp = runApps.find((a) => a.id === runChoice) || runApps.find((a) => a.current) || defaultApp(runApps) || runApps[0] || null;
+
+  // What gets shipped to the runner. A Python run only needs the script's own project folder (not the whole archive),
+  // minus build output / dependency folders and big binaries — otherwise a Python file dropped into a big React
+  // project would copy ~1000 unrelated files into the Python engine on every Run.
+  const PY_SKIP_DIRS = /(^|\/)(node_modules|\.git|vendor|__pycache__|\.venv|venv|dist|build|\.next|\.cache|coverage|android|ios)\//;
+  const collectRunFiles = (app) => {
+    const files = {}; let total = 0; let skipped = 0;
+    const py = app?.kind === 'python';
+    const prefix = py && app.root ? app.root : '';
+    const limit = py ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
+    vfsRef.current.forEach((v, path) => {
+      if (v.dir || /(^|\/)(node_modules|\.git|vendor|__pycache__|\.venv|venv)\//.test(path)) return;
+      if (py && ((prefix && !path.startsWith(prefix)) || PY_SKIP_DIRS.test(path.slice(prefix.length ? prefix.length - 1 : 0)))) return;
+      const bytes = getBytes(path);
+      if (bytes.length > limit) { skipped += 1; return; }
+      total += bytes.length; files[path] = bytes;
+    });
+    // a loose JavaScript file runs in the browser tab: the runner gets a tiny page that loads it (prompt() / alert() / console work as in DevTools)
+    if (app?.kind === 'web' && app.jsEntry && app.entry) {
+      const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+      files[(app.root || '') + 'index.html'] = enc.encode(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(app.entry)}</title></head><body><script src="./${encodeURI(app.entry)}"></script></body></html>`);
+    }
+    // a loose HTML page (not called index.html) is handed to the runner as the document to render
+    if (app?.kind === 'web' && app.entry && /\.html?$/i.test(app.entry)) {
+      const eb = vfsRef.current.has((app.root || '') + app.entry) ? getBytes((app.root || '') + app.entry) : null;
+      if (eb) files[(app.root || '') + 'index.html'] = eb;
+    }
+    return { files, total, skipped };
+  };
+
+  // The sandbox gets the app's own folder as a zip (paths relative to the app root). Dependencies are installed THERE
+  // (npm / composer / pip), so node_modules, vendor, virtualenvs and build output are left out.
+  const SBX_SKIP = /(^|\/)(node_modules|\.git|vendor|__pycache__|\.venv|venv|\.next|\.cache|coverage|android|ios)\/|^\/(dist|build)\//; // (public/build of a Laravel app is kept)
+  const SBX_MAX_TOTAL = 50 * 1024 * 1024;
+  const collectSandboxZip = (app) => {
+    const prefix = app.root || '';
+    const entries = {}; let total = 0; let skipped = 0;
+    vfsRef.current.forEach((v, path) => {
+      if (v.dir || (prefix && !path.startsWith(prefix))) return;
+      const rel = path.slice(prefix.length);
+      if (!rel || SBX_SKIP.test(`/${rel}`)) return;
+      const bytes = getBytes(path);
+      if (bytes.length > 10 * 1024 * 1024) { skipped += 1; return; }
+      total += bytes.length; entries[rel] = bytes;
+    });
+    return { zip: total > SBX_MAX_TOTAL ? null : zipSync(entries, { level: 1 }), total, skipped };
+  };
+  const startSandbox = ({ cols, rows } = {}) => {
+    const { zip, skipped } = collectSandboxZip(runApp);
+    if (!zip) { flash(tt('This project is too large for the sandbox (50 MB without dependencies).', 'المشروع كبير جدًا على الـ sandbox (50 ميجا من غير المكتبات).')); return; }
+    if (skipped) flash(tt(`${skipped} large file(s) were left out of the run.`, `${skipped} ملف كبير اتستبعد من التشغيل.`));
+    sandbox.start({ kind: runApp.sandbox, entry: runApp.entry || '', zip, cols, rows });
+  };
+
+  const startRun = (opts = {}) => {
+    setRunOpen(true);
+    if (runApp?.kind === 'sandbox') { startSandbox(opts); return; }
+    if (!runApp || runApp.kind === 'unsupported') return;
+    const { files, total, skipped } = collectRunFiles(runApp);
+    if (total > 80 * 1024 * 1024) { flash(tt('This project is too large to run in the browser.', 'المشروع كبير جدًا للتشغيل في المتصفح.')); return; }
+    if (skipped) flash(tt(`${skipped} large file(s) were left out of the run.`, `${skipped} ملف كبير اتستبعد من التشغيل.`));
+    runner.run({ kind: runApp.kind, files, root: runApp.root, entry: runApp.entry, stdin: opts.stdin || '' });
+  };
+  const closeRun = () => { runner.stop(); runner.reset(); sandbox.reset(); setRunOpen(false); };
+
+  // ---- keyboard (VS Code habits) ------------------------------------------------------------------
+  const onKeyDown = (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      if (onSave) doSave();
+      else flash(tt('Edits are kept here — press “Download ZIP” to export them.', 'التعديلات محفوظة هنا — اضغط «تنزيل ZIP» لتصديرها.'));
+    }
+    else if (mod && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); showSearch(); }
+    else if (mod && e.key.toLowerCase() === 'b') { e.preventDefault(); setExplorer((v) => !v); }
+    else if (e.altKey && e.key.toLowerCase() === 'w' && activeRef.current) { e.preventDefault(); closeTab(activeRef.current); }
+    else if ((e.key === 'F2' || e.key === 'Delete') && sel && e.target.closest?.('.zb-side') && !/INPUT|TEXTAREA/.test(e.target.tagName)) {
+      e.preventDefault();
+      setDlg(e.key === 'F2' ? { type: 'rename', path: sel, value: baseName(sel) } : { type: 'delete', path: sel });
+    }
+  };
+
+  // ---- derived view -------------------------------------------------------------------------------
+  const tree = useMemo(() => buildTree([...vfs.keys()]), [vfs]);
+  const fileCount = useMemo(() => { let n = 0; vfs.forEach((v) => { if (!v.dir) n += 1; }); return n; }, [vfs]);
+  const needle = query.trim().toLowerCase();
+  const results = useMemo(() => {
+    if (!needle) return null;
+    const out = [];
+    for (const v of vfs.values()) {
+      if (!v.dir && v.path.toLowerCase().includes(needle)) { out.push(v); if (out.length >= MAX_SEARCH_RESULTS) break; }
+    }
+    return out;
+  }, [needle, vfs]);
+
+  const activeDoc = active ? docs.current.get(active) : null;
+  const gridOn = !!(active && activeDoc?.kind === 'text' && isGridPath(active) && !rawText.has(active) && (edits.current.get(active) ?? origTexts.current.get(active) ?? '').length < 6000000);
+  const toggleDir = (p) => setOpen((o) => { const n = new Set(o); if (n.has(p)) n.delete(p); else n.add(p); return n; });
+
+  const keyAct = (fn) => (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
+
+  const renderNode = (n, depth) => {
+    const isOpen = open.has(n.path);
+    const v = vfs.get(n.path);
+    const added = !n.dir && !!v?.isNew;
+    const changed = !n.dir && !added && (dirty.has(n.path) || (v && v.path !== v.origPath));
+    const click = () => { setSel(n.path); if (n.dir) toggleDir(n.path); else openFile(n.path); };
+    const rowCls = `zb-row${active === n.path ? ' is-active' : ''}${sel === n.path ? ' is-sel' : ''}${n.dir && dropDir === n.path ? ' is-drop' : ''}`;
+    return (
+      <li key={n.path}>
+        <div
+          className={rowCls}
+          style={{ '--d': depth }}
+          data-dir={n.dir ? n.path : dirOf(n.path)}
+          draggable
+          onDragStart={(e) => { dragSrc.current = n.path; e.dataTransfer.setData('application/x-zb-path', n.path); e.dataTransfer.effectAllowed = 'move'; }}
+          onDragEnd={() => { dragSrc.current = null; setDropDir(null); }}
+          onContextMenu={(e) => openCtx(e, n.path)}
+        >
+          <div role="button" tabIndex={0} className="zb-row__main" onClick={click} onKeyDown={keyAct(click)} title={n.path}>
+            {n.dir ? (
+              <>
+                <span className={`zb-chev${isOpen ? ' is-open' : ''}`}><Icon name="chevron-right" size={13} /></span>
+                <span className="zb-folder"><Icon name="folder" size={15} /></span>
+              </>
+            ) : <><span className="zb-chev zb-chev--none" /><Badge path={n.path} /></>}
+            <span className={`zb-row__name${changed ? ' is-changed' : ''}${added ? ' is-added' : ''}`}>{n.name}</span>
+            {(changed || added) && <span className={`zb-dot${added ? ' zb-dot--new' : ''}`} aria-hidden="true" />}
+          </div>
+          <span className="zb-row__acts">
+            {n.dir ? (
+              <>
+                <button type="button" aria-label={tt('New file', 'ملف جديد')} title={tt('New file', 'ملف جديد')} onClick={() => startNew('file', n.path)}><Icon name="file-plus" size={14} /></button>
+                <button type="button" aria-label={tt('New folder', 'مجلد جديد')} title={tt('New folder', 'مجلد جديد')} onClick={() => startNew('folder', n.path)}><Icon name="folder-plus" size={14} /></button>
+                <button type="button" aria-label={tt('Upload files here', 'رفع ملفات هنا')} title={tt('Upload files here', 'رفع ملفات هنا')} onClick={() => pickUpload('file', n.path)}><Icon name="file-up" size={14} /></button>
+              </>
+            ) : (
+              <>
+                <button type="button" aria-label={tt('Rename', 'إعادة تسمية')} title={tt('Rename', 'إعادة تسمية')} onClick={() => setDlg({ type: 'rename', path: n.path, value: n.name })}><Icon name="edit" size={13} /></button>
+                <button type="button" aria-label={tt('Delete', 'حذف')} title={tt('Delete', 'حذف')} onClick={() => setDlg({ type: 'delete', path: n.path })}><Icon name="trash" size={13} /></button>
+              </>
+            )}
+            <button type="button" aria-label={tt('More actions', 'المزيد')} title={tt('More actions', 'المزيد')} onClick={(e) => { setSel(n.path); openMenuAt(e.currentTarget, menuFor(n.path)); }}><Icon name="more-horizontal" size={14} /></button>
+          </span>
+        </div>
+        {n.dir && isOpen && n.list.length > 0 && <ul className="zb-tree">{n.list.map((c) => renderNode(c, depth + 1))}</ul>}
+      </li>
+    );
+  };
+
+  if (phase === 'loading') return <div className="zb zb--center" dir="ltr" style={themeVars(theme)}><span className="st-fv-spinner" /><p>{tt('Opening archive…', 'جاري فتح الأرشيف…')}</p></div>;
+  if (phase === 'error') return <div className="zb zb--center" dir="ltr" style={themeVars(theme)}><p className="zb-err">{error || tt('This archive could not be opened.', 'تعذّر فتح هذا الأرشيف.')}</p></div>;
+
+  const crumbs = active ? active.split('/') : [];
+  const target = dirOf(sel);
+  const dlgTitle = dlg && ({
+    new: dlg.kind === 'folder' ? tt('New folder', 'مجلد جديد') : tt('New file', 'ملف جديد'), rename: tt('Rename', 'إعادة تسمية'),
+    delete: tt('Delete', 'حذف'), reset: tt('Discard all changes?', 'تجاهل كل التعديلات؟'), conflict: tt('Files already exist', 'ملفات موجودة بالفعل'),
+    overwrite: tt('A newer version exists', 'فيه نسخة أحدث'),
+  })[dlg.type];
+  const th = themeById(theme);
+  const draggingFiles = dropDir !== null && !dragSrc.current;
+
+  return (
+    <div
+      ref={rootRef}
+      className="zb"
+      dir="ltr"
+      data-theme={theme}
+      style={themeVars(theme)}
+      onKeyDown={onKeyDown}
+    >
+      <input ref={fileInput} type="file" multiple hidden onChange={(e) => onPicked(e, false)} />
+      <input
+        ref={(el) => { dirInput.current = el; if (el) { el.setAttribute('webkitdirectory', ''); el.setAttribute('directory', ''); } }}
+        type="file"
+        multiple
+        hidden
+        onChange={(e) => onPicked(e, true)}
+      />
+
+      {/* toolbar */}
+      <div className="zb-top">
+        <button type="button" className={`zb-ibtn${explorer && sideTab === 'files' ? ' is-on' : ''}`} onClick={() => { setSideTab('files'); setExplorer((v) => (sideTab === 'files' ? !v : true)); }} title={tt('Explorer (Ctrl+B)', 'المستكشف (Ctrl+B)')} aria-label={tt('Toggle explorer', 'إظهار/إخفاء المستكشف')}><Icon name="folder" size={17} /></button>
+        <button type="button" className={`zb-ibtn${explorer && sideTab === 'search' ? ' is-on' : ''}`} onClick={showSearch} title={tt('Search in files (Ctrl+Shift+F)', 'بحث داخل الملفات (Ctrl+Shift+F)')} aria-label={tt('Search in files', 'بحث داخل الملفات')}><Icon name="search" size={17} /></button>
+        <div className="zb-top__title"><strong>{fileName}</strong><small>{tt(`${fileCount} files`, `${fileCount} ملف`)}</small></div>
+        <div className="zb-top__acts">
+          {runApps.length > 0 && (
+            <button type="button" className="zb-btn zb-btn--run" onClick={() => startRun()} disabled={runner.busy || sandbox.busy} title={runApp?.kind === 'sandbox' ? tt('Run the project on the sandbox server', 'شغّل المشروع على سيرفر الـ sandbox') : RUNNER_URL ? tt('Run the project in the browser', 'شغّل المشروع في المتصفح') : tt('The runner is not configured yet', 'الـ Runner لسه مش متظبط')}>
+              <Icon name="play" size={15} /> <span>{tt('Run', 'تشغيل')}</span>
+            </button>
+          )}
+          <button type="button" className="zb-btn zb-btn--add" onClick={(e) => openMenuAt(e.currentTarget, addItems(target), target ? `/${target.replace(/\/$/, '')}` : tt('Archive root', 'جذر الأرشيف'))} title={tt('Add files or folders', 'إضافة ملفات أو مجلدات')} aria-haspopup="menu">
+            <Icon name="plus" size={15} /> <span>{tt('Add', 'إضافة')}</span> <Icon name="chevron-down" size={12} />
+          </button>
+          <button type="button" className={`zb-ibtn zb-hide-sm${wrap ? ' is-on' : ''}`} onClick={() => setWrap((v) => !v)} title={tt('Word wrap', 'التفاف الأسطر')} aria-label={tt('Word wrap', 'التفاف الأسطر')}>↵</button>
+          <button type="button" className="zb-ibtn zb-hide-sm" onClick={() => setFontSize((x) => Math.max(10, x - 1))} aria-label={tt('Smaller text', 'تصغير الخط')}>A−</button>
+          <button type="button" className="zb-ibtn zb-hide-sm" onClick={() => setFontSize((x) => Math.min(22, x + 1))} aria-label={tt('Larger text', 'تكبير الخط')}>A+</button>
+          <button type="button" className="zb-ibtn" onClick={(e) => openMenuAt(e.currentTarget, themeItems(), tt('Color theme', 'مظهر الألوان'))} title={`${tt('Color theme', 'مظهر الألوان')}: ${th.name}`} aria-label={tt('Color theme', 'مظهر الألوان')} aria-haspopup="menu"><Icon name="palette" size={17} /></button>
+          {changes > 0 && <button type="button" className="zb-btn" onClick={() => setDlg({ type: 'reset' })}>{tt('Discard', 'تجاهل')}</button>}
+          {onSave && (
+            <button
+              type="button"
+              className="zb-btn zb-btn--primary"
+              onClick={() => doSave()}
+              disabled={saving || busy || changes === 0}
+              title={changes === 0 ? tt('Nothing to save yet', 'مفيش تعديلات للحفظ') : tt('Save to the project for everyone (Ctrl+S)', 'احفظ في المشروع لكل الفريق (Ctrl+S)')}
+            >
+              <Icon name="save" size={15} /> <span>{saving ? tt('Saving…', 'جاري الحفظ…') : tt('Save', 'حفظ')}</span>{changes > 0 && <b className="zb-pill">{changes}</b>}
+            </button>
+          )}
+          <button type="button" className={`zb-btn${onSave ? '' : ' zb-btn--primary'}`} onClick={downloadZip} disabled={busy || saving}>
+            <Icon name="download" size={15} /> <span>{busy ? tt('Building…', 'جاري البناء…') : tt('Download ZIP', 'تنزيل ZIP')}</span>{!onSave && changes > 0 && <b className="zb-pill">{changes}</b>}
+          </button>
+        </div>
+      </div>
+
+      <div className="zb-main" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+        {explorer && <button type="button" className="zb-scrim" onClick={() => setExplorer(false)} aria-label={tt('Close explorer', 'إغلاق المستكشف')} />}
+        <aside className={`zb-side${explorer ? ' is-open' : ''}${sideTab === 'search' ? ' is-wide' : ''}`}>
+          <div className="zb-side__tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={sideTab === 'files'} className={sideTab === 'files' ? 'is-on' : ''} onClick={() => setSideTab('files')}>{tt('EXPLORER', 'المستكشف')}</button>
+            <button type="button" role="tab" aria-selected={sideTab === 'search'} className={sideTab === 'search' ? 'is-on' : ''} onClick={showSearch}>{tt('SEARCH', 'بحث')}</button>
+          </div>
+          <SearchPanel tt={tt} off={sideTab !== 'search'} getFiles={getSearchFiles} readBatch={readBatch} onOpen={openMatch} focusKey={searchFocus} />
+          <div className={`zb-pane${sideTab === 'files' ? '' : ' is-off'}`}>
+            <div className="zb-xbar">
+              <button type="button" onClick={() => startNew('file', target)} title={tt('New file', 'ملف جديد')} aria-label={tt('New file', 'ملف جديد')}><Icon name="file-plus" size={16} /></button>
+              <button type="button" onClick={() => startNew('folder', target)} title={tt('New folder', 'مجلد جديد')} aria-label={tt('New folder', 'مجلد جديد')}><Icon name="folder-plus" size={16} /></button>
+              <span className="zb-xbar__sep" />
+              <button type="button" onClick={() => pickUpload('file', target)} title={tt('Upload files', 'رفع ملفات')} aria-label={tt('Upload files', 'رفع ملفات')}><Icon name="file-up" size={16} /></button>
+              <button type="button" onClick={() => pickUpload('dir', target)} title={tt('Upload folder', 'رفع مجلد')} aria-label={tt('Upload folder', 'رفع مجلد')}><Icon name="folder-up" size={16} /></button>
+              <span className="zb-xbar__sp" />
+              <button type="button" onClick={() => setOpen(new Set())} title={tt('Collapse all', 'طيّ الكل')} aria-label={tt('Collapse all', 'طيّ الكل')}><Icon name="collapse-all" size={16} /></button>
+            </div>
+            <div className="zb-target" title={tt('New files and uploads go here — select a folder to change it.', 'الملفات الجديدة والمرفوعة تُضاف هنا — اختر مجلدًا لتغييره.')}>
+              <Icon name="folder-plus" size={12} /> <span>{tt('Adding to', 'الإضافة إلى')}</span> <b>{target ? `/${target.replace(/\/$/, '')}` : tt('archive root', 'جذر الأرشيف')}</b>
+            </div>
+            <div className="zb-search">
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={tt('Filter files by name…', 'ابحث عن ملف بالاسم…')} aria-label={tt('Search files', 'بحث عن ملف')} />
+              {query && <button type="button" onClick={() => setQuery('')} aria-label={tt('Clear', 'مسح')}><Icon name="x" size={13} /></button>}
+            </div>
+            <div className="zb-side__scroll" onContextMenu={(e) => openCtx(e, '')} onClick={(e) => { if (e.target === e.currentTarget) setSel(''); }}>
+              {results ? (
+                results.length === 0 ? <p className="zb-hint">{tt('No matching files.', 'لا توجد ملفات مطابقة.')}</p> : (
+                  <ul className="zb-tree">
+                    {results.map((r) => (
+                      <li key={r.path}>
+                        <div className={`zb-row${active === r.path ? ' is-active' : ''}`} style={{ '--d': 0 }} onContextMenu={(e) => openCtx(e, r.path)}>
+                          <div role="button" tabIndex={0} className="zb-row__main" onClick={() => { setSel(r.path); openFile(r.path); }} onKeyDown={keyAct(() => openFile(r.path))} title={r.path}>
+                            <span className="zb-chev zb-chev--none" /><Badge path={r.path} />
+                            <span className="zb-row__name zb-row__name--col"><b>{baseName(r.path)}</b><small>{dirName(r.path)}</small></span>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : (
+                <>
+                  <div className={`zb-row zb-row--root${sel === '' ? ' is-sel' : ''}${dropDir === '' ? ' is-drop' : ''}`} data-dir="" onClick={() => setSel('')} onContextMenu={(e) => openCtx(e, '')}>
+                    <div className="zb-row__main" title={fileName}><span className="zb-folder zb-folder--root"><Icon name="archive" size={15} /></span><span className="zb-row__name">{fileName}</span></div>
+                  </div>
+                  {tree.list.length === 0
+                    ? (
+                      <div className="zb-empty">
+                        <Icon name="upload" size={26} />
+                        <p>{tt('This archive is empty.', 'الأرشيف فارغ.')}</p>
+                        <button type="button" className="zb-btn zb-btn--primary" onClick={() => pickUpload('file', '')}>{tt('Upload files', 'رفع ملفات')}</button>
+                      </div>
+                    )
+                    : <ul className="zb-tree">{tree.list.map((n) => renderNode(n, 0))}</ul>}
+                </>
+              )}
+            </div>
+          </div>
+        </aside>
+
+        <section className="zb-editor">
+          {tabs.length > 0 && (
+            <>
+              <div className="zb-tabs" role="tablist">
+                {tabs.map((p) => (
+                  <div key={p} role="tab" aria-selected={p === active} className={`zb-tab${p === active ? ' is-on' : ''}`}>
+                    <button type="button" className="zb-tab__main" onClick={() => { setSel(p); openFile(p); }} title={p}><Badge path={p} /><span>{baseName(p)}</span></button>
+                    <button type="button" className="zb-tab__x" onClick={() => closeTab(p)} aria-label={tt('Close tab', 'إغلاق التبويب')}>
+                      {dirty.has(p) ? <span className="zb-dot zb-dot--tab" /> : null}<Icon name="x" size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="zb-crumbs">{crumbs.map((c, i) => <span key={i}>{i > 0 && <i>›</i>}{c}</span>)}
+                {activeDoc?.kind === 'text' && isGridPath(active) && (
+                  <button type="button" className="zb-crumbs__dl zb-crumbs__view" onClick={() => switchView(active, gridOn)} title={gridOn ? tt('Show as plain text', 'عرض كنص') : tt('Show as spreadsheet', 'عرض كجدول')}>{gridOn ? tt('Text', 'نص') : tt('Table', 'جدول')}</button>
+                )}
+                {activeDoc && <button type="button" className="zb-crumbs__dl" onClick={() => downloadFile(active)} title={tt('Download this file', 'تنزيل هذا الملف')}><Icon name="download" size={13} /></button>}
+              </div>
+            </>
+          )}
+
+          <div className="zb-stage">
+            {editorDoc && (
+              <div className="zb-cm-wrap" style={{ display: activeDoc?.kind === 'text' && !gridOn ? 'block' : 'none' }}>
+                <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
+                  <CodeEditor docId={editorDoc.docId} path={editorDoc.path} initialText={editorDoc.text} onChange={onEdit} onCursor={setCursor} readOnly={false} wrap={wrap} fontSize={fontSize} reveal={reveal} theme={theme} />
+                </Suspense>
+              </div>
+            )}
+            {gridOn && (
+              <div className="zb-cm-wrap" key={`${active}#${gens.current.get(active) || 0}`}>
+                <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
+                  <CsvGrid path={active} text={edits.current.get(active) ?? origTexts.current.get(active) ?? ''} onText={(t) => setTextFor(active, t)} tt={tt} rtl={tt('', 'x') === 'x'} />
+                </Suspense>
+              </div>
+            )}
+            {activeDoc?.kind === 'image' && <div className="zb-img"><img src={activeDoc.url} alt={baseName(active)} draggable={false} /></div>}
+            {(activeDoc?.kind === 'binary' || activeDoc?.kind === 'large') && (
+              <div className="zb--center zb-card">
+                <Badge path={active} />
+                <strong>{baseName(active)}</strong>
+                <p>{activeDoc.kind === 'large'
+                  ? tt(`This file is ${fmtBytes(activeDoc.size)} — too large to open in the editor.`, `حجم الملف ${fmtBytes(activeDoc.size)} — كبير جدًا للفتح في المحرر.`)
+                  : tt(`Binary file (${fmtBytes(activeDoc.size)}) — it can’t be shown as text.`, `ملف ثنائي (${fmtBytes(activeDoc.size)}) — لا يمكن عرضه كنص.`)}</p>
+                <button type="button" className="zb-btn zb-btn--primary" onClick={() => downloadFile(active)}><Icon name="download" size={15} /> {tt('Download file', 'تنزيل الملف')}</button>
+              </div>
+            )}
+            {!activeDoc && (
+              <div className="zb--center zb-welcome">
+                <span className="zb-welcome__ico"><Icon name="archive" size={34} /></span>
+                <strong>{fileName}</strong>
+                <p>{tt('Pick a file from the explorer to read or edit it. Add files or whole folders with the Add button or by dragging them in. ' + (onSave ? 'Press “Save” to store your changes in the project for the whole team, or “Download ZIP” to keep a copy.' : 'Changes stay in your browser — use “Download ZIP” to export the updated archive.'), 'اختر ملفًا من المستكشف لقراءته أو تعديله. أضف ملفات أو مجلدات كاملة بزر «إضافة» أو بسحبها هنا. ' + (onSave ? 'اضغط «حفظ» لتخزين تعديلاتك في المشروع لكل الفريق، أو «تنزيل ZIP» لنسخة عندك.' : 'التعديلات تبقى في متصفحك — استخدم «تنزيل ZIP» لتصدير الأرشيف المحدّث.'))}</p>
+                <div className="zb-welcome__acts">
+                  <button type="button" className="zb-btn" onClick={() => startNew('file', target)}><Icon name="file-plus" size={15} /> <span>{tt('New file', 'ملف جديد')}</span></button>
+                  <button type="button" className="zb-btn" onClick={() => pickUpload('file', target)}><Icon name="file-up" size={15} /> <span>{tt('Upload files', 'رفع ملفات')}</span></button>
+                  <button type="button" className="zb-btn" onClick={() => pickUpload('dir', target)}><Icon name="folder-up" size={15} /> <span>{tt('Upload folder', 'رفع مجلد')}</span></button>
+                </div>
+                <ul className="zb-keys"><li><kbd>Ctrl</kbd>+<kbd>B</kbd> {tt('explorer', 'المستكشف')}</li><li><kbd>Ctrl</kbd>+<kbd>F</kbd> {tt('find in file', 'بحث في الملف')}</li><li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>F</kbd> {tt('search all files', 'بحث في كل الملفات')}</li><li><kbd>F2</kbd> {tt('rename', 'إعادة تسمية')}</li><li><kbd>Alt</kbd>+<kbd>W</kbd> {tt('close tab', 'إغلاق التبويب')}</li></ul>
+              </div>
+            )}
+          </div>
+        </section>
+
+        {draggingFiles && (
+          <div className="zb-dropzone" aria-hidden="true">
+            <div><Icon name="upload" size={28} /><strong>{tt('Drop to add to', 'أفلت للإضافة إلى')} {dropDir ? `/${dropDir.replace(/\/$/, '')}` : tt('archive root', 'جذر الأرشيف')}</strong><small>{tt('Files and whole folders are supported', 'يدعم الملفات والمجلدات الكاملة')}</small></div>
+          </div>
+        )}
+      </div>
+
+      {runOpen && runApp?.kind === 'sandbox' && (
+        <SandboxPanel
+          tt={tt}
+          sandbox={sandbox}
+          apps={runApps.filter((a) => a.kind !== 'unsupported')}
+          allApps={runApps}
+          app={runApp}
+          onSelect={(id) => { setRunChoice(id); runner.stop(); sandbox.reset(); }}
+          onRun={startRun}
+          onClose={closeRun}
+          expanded={runBig}
+          onToggleExpand={() => setRunBig((v) => !v)}
+        />
+      )}
+      {runOpen && runApp?.kind !== 'sandbox' && (
+        <RunPanel
+          tt={tt}
+          runner={runner}
+          apps={runApps}
+          app={runApp}
+          onSelect={(id) => { setRunChoice(id); runner.stop(); sandbox.reset(); }}
+          onRun={startRun}
+          onClose={closeRun}
+          expanded={runBig}
+          onToggleExpand={() => setRunBig((v) => !v)}
+        />
+      )}
+
+      {/* status bar */}
+      <footer className="zb-status">
+        <span>{importing ? tt('Adding files…', 'جاري إضافة الملفات…') : changes > 0 ? tt(`${changes} change${changes === 1 ? '' : 's'}`, `${changes} تعديل`) : tt('No changes', 'لا تعديلات')}</span>
+        <span className="zb-status__sp" />
+        {activeDoc?.kind === 'text' && <><span>{tt('Ln', 'سطر')} {cursor.line}, {tt('Col', 'عمود')} {cursor.col}</span><span className="zb-hide-sm">UTF-8</span><span>{languageName(active)}</span></>}
+        {activeDoc && activeDoc.kind !== 'text' && <span>{fmtBytes(activeDoc.size)}</span>}
+        <button type="button" className="zb-status__theme zb-hide-sm" onClick={(e) => openMenuAt(e.currentTarget, themeItems(), tt('Color theme', 'مظهر الألوان'))} title={tt('Color theme', 'مظهر الألوان')}><Icon name="palette" size={12} /> {th.name}</button>
+      </footer>
+
+      {toast && <div className="zb-toast" role="status">{toast}</div>}
+
+      {menu && <Menu x={menu.x} y={menu.y} items={menu.items} title={menu.title} hostRef={rootRef} onClose={() => setMenu(null)} />}
+
+      {dlg && (
+        <div className="zb-dlg" onMouseDown={(e) => { if (e.target === e.currentTarget) setDlg(null); }}>
+          <form className="zb-dlg__box" onSubmit={(e) => {
+            e.preventDefault();
+            if (dlg.type === 'conflict') return;
+            let err = null;
+            if (dlg.type === 'new') err = createEntry(dlg.value, dlg.kind);
+            else if (dlg.type === 'rename') err = renameEntry(dlg.path, dlg.value);
+            else if (dlg.type === 'delete') deleteEntry(dlg.path);
+            else if (dlg.type === 'reset') resetAll();
+            else if (dlg.type === 'overwrite') { setDlg(null); doSave(true); return; }
+            if (err) setDlg({ ...dlg, error: err }); else setDlg(null);
+          }}>
+            <h3>{dlgTitle}</h3>
+            {(dlg.type === 'new' || dlg.type === 'rename') && (
+              <input
+                autoFocus
+                value={dlg.value}
+                onChange={(e) => setDlg({ ...dlg, value: e.target.value, error: null })}
+                onFocus={(e) => { if (dlg.type === 'new') { const l = e.target.value.length; e.target.setSelectionRange(l, l); } }}
+                placeholder={dlg.type === 'new' ? (dlg.kind === 'folder' ? 'src/new-folder' : 'src/example.js') : ''}
+                spellCheck={false}
+              />
+            )}
+            {dlg.type === 'new' && <p className="zb-dlg__tip">{tt('Tip: type a path like folder/sub/file.js to create nested folders at once.', 'نصيحة: اكتب مسارًا مثل folder/sub/file.js لإنشاء المجلدات المتداخلة دفعة واحدة.')}</p>}
+            {dlg.type === 'delete' && <p>{tt(`Delete “${baseName(dlg.path)}”${dlg.path.endsWith('/') ? ' and everything inside it' : ''}? You can undo this with “Discard”.`, `حذف «${baseName(dlg.path)}»${dlg.path.endsWith('/') ? ' وكل ما بداخله' : ''}؟ تقدر تتراجع عن ده من «تجاهل».`)}</p>}
+            {dlg.type === 'overwrite' && <p>{tt('Someone else on the project saved a newer version of this ZIP while you were editing. If you save anyway, your version becomes the current one — theirs stays in the file’s version history.', 'حد تاني في المشروع حفظ نسخة أحدث من الـ ZIP ده وانت بتعدّل. لو حفظت دلوقتي نسختك هتبقى هي الحالية — ونسخته هتفضل في سجل إصدارات الملف.')}</p>}
+            {dlg.type === 'reset' && <p>{tt('This restores the archive exactly as it was uploaded.', 'ده هيرجّع الأرشيف زي ما اترفع بالظبط.')}</p>}
+            {dlg.type === 'conflict' && (
+              <>
+                <p>{tt(`${dlg.pack.conflicts.length} file${dlg.pack.conflicts.length === 1 ? '' : 's'} with the same name already ${dlg.pack.conflicts.length === 1 ? 'exists' : 'exist'} here. What should happen?`, `يوجد ${dlg.pack.conflicts.length} ملف بنفس الاسم بالفعل. ماذا تريد أن يحدث؟`)}</p>
+                <ul className="zb-dlg__list">{dlg.pack.conflicts.slice(0, 5).map((c) => <li key={c}>{c}</li>)}{dlg.pack.conflicts.length > 5 && <li>…</li>}</ul>
+              </>
+            )}
+            {dlg.error && <p className="zb-err">{dlg.error}</p>}
+            {dlg.type === 'conflict' ? (
+              <div className="zb-dlg__row zb-dlg__row--wrap">
+                <button type="button" className="zb-btn" onClick={() => setDlg(null)}>{tt('Cancel', 'إلغاء')}</button>
+                <button type="button" className="zb-btn" onClick={() => { const m = commitImport(dlg.pack.read, dlg.pack.dirs, 'skip'); setDlg(null); if (m) flash(m); }}>{tt('Skip existing', 'تخطي الموجود')}</button>
+                <button type="button" className="zb-btn" onClick={() => { const m = commitImport(dlg.pack.read, dlg.pack.dirs, 'both'); setDlg(null); if (m) flash(m); }}>{tt('Keep both', 'الاحتفاظ بالاثنين')}</button>
+                <button type="button" className="zb-btn zb-btn--primary" autoFocus onClick={() => { const m = commitImport(dlg.pack.read, dlg.pack.dirs, 'replace'); setDlg(null); if (m) flash(m); }}>{tt('Replace', 'استبدال')}</button>
+              </div>
+            ) : (
+              <div className="zb-dlg__row">
+                <button type="button" className="zb-btn" onClick={() => setDlg(null)}>{tt('Cancel', 'إلغاء')}</button>
+                <button type="submit" className={`zb-btn zb-btn--primary${dlg.type === 'delete' || dlg.type === 'reset' ? ' zb-btn--danger' : ''}`}>{dlg.type === 'delete' ? tt('Delete', 'حذف') : dlg.type === 'reset' ? tt('Discard', 'تجاهل') : dlg.type === 'new' ? tt('Create', 'إنشاء') : dlg.type === 'overwrite' ? tt('Save anyway', 'احفظ على أي حال') : tt('OK', 'تأكيد')}</button>
+              </div>
+            )}
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}

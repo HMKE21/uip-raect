@@ -1,0 +1,498 @@
+/* pages/meeting-room.css — Round 3 (Signaling) + Round 4 (WebRTC Core).
+   Same "pin the shell to the viewport via a body class" technique as
+   messaging-app.css's own Bugfix (2026-08-08) block — reused verbatim
+   rather than reinvented, see MeetingRoomShell.jsx's useEffect that
+   toggles `meeting-room-active` on <body> for the page's lifetime. */
+
+body.meeting-room-active .app-shell { height: 100dvh; overflow: hidden; }
+body.meeting-room-active .app-shell .app-shell__content { height: 100dvh; overflow: hidden; }
+body.meeting-room-active main.app-shell__main {
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding: 0 !important;
+}
+
+.meeting-room {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: #101114;
+  color: #fff;
+  position: relative;
+}
+
+.meeting-room__stage {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-auto-rows: minmax(140px, 1fr);
+  overflow-y: auto;
+  position: relative;
+}
+
+.meeting-room__topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+
+
+/* Desktop/tablet: the stage is a flat grid, so the spotlight/strip
+   wrapper split (needed for mobile below) shouldn't create its own box —
+   `display: contents` makes the strip's children participate directly in
+   the parent grid, right alongside the spotlight tile, as one uniform
+   grid. The spotlight wrapper itself is just an ordinary grid item. */
+.meeting-room__strip { display: contents; }
+
+.meeting-room__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: rgba(255, 255, 255, 0.04);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.meeting-room__control-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: var(--cur-pointer, pointer);
+  transition: background 120ms ease;
+}
+.meeting-room__control-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.meeting-room__control-btn.is-off { background: #ef4444; border-color: #ef4444; }
+.meeting-room__control-btn.is-active { background: var(--color-primary); border-color: var(--color-primary); }
+.meeting-room__control-btn.is-leave { background: #ef4444; border-color: #ef4444; }
+.meeting-room__control-btn.is-leave:hover { background: #dc2626; }
+
+.meeting-tile-wrap { min-height: 0; min-width: 0; }
+
+/* Mobile — spotlight (one large tile) + a horizontally-scrolling thumbnail
+   strip for everyone else, per the round plan's explicit mobile layout
+   requirement (as opposed to the desktop's plain auto-fit grid above). */
+@media (max-width: 768px) {
+  .meeting-room__stage {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-2);
+    overflow: hidden;
+  }
+  .meeting-room__spotlight {
+    flex: 1;
+    min-height: 0;
+  }
+  .meeting-room__strip {
+    display: flex;
+    gap: var(--space-2);
+    overflow-x: auto;
+    padding: var(--space-2) 0;
+    flex-shrink: 0;
+  }
+  .meeting-room__strip .meeting-tile-wrap {
+    flex: 0 0 96px;
+    height: 128px;
+  }
+  .meeting-room__controls { gap: var(--space-2); padding: var(--space-2) var(--space-3); }
+  .meeting-room__control-btn { width: 42px; height: 42px; }
+}
+/* Tablet — fewer columns than the free-flowing desktop auto-fit. */
+@media (min-width: 769px) and (max-width: 1100px) {
+  .meeting-room__stage { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Round 5 (Live Collaboration) — بند 9 (per-participant screen-share host
+   menu, hangs off ParticipantTile's own "more" button). */
+.meeting-tile__host-menu {
+  position: absolute;
+  top: 30px;
+  inset-inline-end: 0;
+  z-index: 5;
+  min-width: 190px;
+  background: #1b1c22;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+}
+.meeting-tile__host-menu button {
+  background: none;
+  border: none;
+  color: #fff;
+  text-align: start;
+  font-size: var(--text-caption);
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: var(--cur-pointer, pointer);
+}
+.meeting-tile__host-menu button:hover { background: rgba(255, 255, 255, 0.1); }
+.meeting-tile__host-menu button.is-danger { color: #f87171; }
+
+/* Round 6 (Host Controls) — بند 5: Participants Panel. Same slide-in
+   layout as .meeting-chat-panel (shares its __header class) — a
+   dedicated list of every participant with inline row actions rather
+   than the compose box the chat panel ends in. */
+.meeting-participants-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-end: 0;
+  width: min(340px, 100%);
+  background: #16171c;
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+.meeting-participants-panel__lock-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: var(--text-caption);
+  flex-shrink: 0;
+  cursor: var(--cur-pointer, pointer);
+}
+.meeting-participants-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.meeting-participants-panel__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 6px;
+  border-radius: var(--radius-md);
+}
+.meeting-participants-panel__row:hover { background: rgba(255, 255, 255, 0.05); }
+.meeting-participants-panel__identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-caption);
+  font-weight: 600;
+}
+.meeting-participants-panel__avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+.meeting-participants-panel__status { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.meeting-participants-panel__actions { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.meeting-participants-panel__actions button {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: var(--cur-pointer, pointer);
+}
+.meeting-participants-panel__actions button:hover { background: rgba(255, 255, 255, 0.18); }
+.meeting-participants-panel__actions button:disabled { opacity: 0.5; cursor: var(--cur-default, default); }
+.meeting-participants-panel__actions button.is-danger { color: #f87171; }
+.meeting-participants-panel__actions button.is-danger:hover { background: rgba(239, 68, 68, 0.2); }
+
+@media (max-width: 768px) {
+  .meeting-participants-panel { width: 100%; }
+}
+
+/* بند 11 — Reactions popover (control bar) + floating reaction bubbles
+   (stage overlay). Ephemeral by design (see useMeetingRoom's `reactions`
+   docblock) — each bubble removes itself from state after ~3s; the CSS
+   animation here is purely cosmetic (rise + fade) and doesn't drive that
+   timing. */
+.meeting-room__reactions-popover {
+  position: absolute;
+  bottom: 56px;
+  inset-inline-start: 0;
+  z-index: 5;
+  display: flex;
+  gap: 4px;
+  background: #1b1c22;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 6px 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+.meeting-room__reactions-popover button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  line-height: 1;
+  cursor: var(--cur-pointer, pointer);
+  padding: 4px;
+}
+.meeting-room__reactions-popover button:hover { transform: scale(1.15); }
+
+.meeting-room__reactions-overlay {
+  position: absolute;
+  inset-inline-end: var(--space-4);
+  bottom: var(--space-3);
+  width: 60px;
+  height: 70%;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  overflow: visible;
+}
+.meeting-room__floating-reaction {
+  font-size: 28px;
+  animation: meeting-reaction-float 3s ease-out forwards;
+}
+@keyframes meeting-reaction-float {
+  0% { opacity: 0; transform: translateY(0) scale(0.6); }
+  15% { opacity: 1; transform: translateY(-10px) scale(1); }
+  100% { opacity: 0; transform: translateY(-160px) scale(1); }
+}
+
+.meeting-room__badge-dot {
+  position: absolute;
+  top: -2px;
+  inset-inline-end: -2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 700;
+}
+
+/* بند 7/8 — Chat panel. Slide-in overlay (not a modal — the call keeps
+   running behind it, same "docked over the stage" approach messaging-app
+   uses for its own thread panel). */
+.meeting-chat-panel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  inset-inline-end: 0;
+  width: min(340px, 100%);
+  background: #16171c;
+  border-inline-start: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+.meeting-chat-panel__header {
+  display: flex;
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+.meeting-chat-panel__list {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.meeting-chat-panel__compose {
+  flex-shrink: 0;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.meeting-chat-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 100%;
+}
+.meeting-chat-msg__meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-caption);
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.7);
+}
+.meeting-chat-msg.is-mine .meeting-chat-msg__meta { color: var(--color-primary); }
+.meeting-chat-msg__body {
+  font-size: var(--text-caption);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  word-break: break-word;
+  align-self: flex-start;
+}
+.meeting-chat-msg.is-mine .meeting-chat-msg__body { background: rgba(59, 130, 246, 0.25); align-self: flex-end; }
+.meeting-chat-msg__reactions { display: flex; gap: 4px; flex-wrap: wrap; }
+.meeting-chat-msg__reaction {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 1px 6px;
+  cursor: var(--cur-pointer, pointer);
+  color: #fff;
+}
+.meeting-chat-msg__reaction.is-mine { background: rgba(59, 130, 246, 0.3); border-color: var(--color-primary); }
+.meeting-chat-msg__quick-react {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.meeting-chat-msg:hover .meeting-chat-msg__quick-react { opacity: 0.8; }
+.meeting-chat-msg__quick-react button {
+  background: none;
+  border: none;
+  cursor: var(--cur-pointer, pointer);
+  font-size: 13px;
+  padding: 1px 3px;
+}
+
+@media (max-width: 768px) {
+  .meeting-chat-panel { width: 100%; }
+}
+
+/* Round 7 (Collaboration Extras) — بند 19 (File Sharing). File rows,
+   reusing .meeting-chat-panel's own header/list/compose shell. */
+.meeting-files-panel__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: var(--radius-md);
+}
+.meeting-files-panel__row:hover { background: rgba(255, 255, 255, 0.05); }
+.meeting-files-panel__name {
+  display: block;
+  color: #fff;
+  font-size: var(--text-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.meeting-files-panel__name:hover { text-decoration: underline; }
+
+/* بند 20 (Meeting Notes + Action Items). */
+.meeting-notes-panel__textarea { width: 100%; resize: vertical; font-size: var(--text-caption); }
+.meeting-notes-panel__readonly {
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0;
+}
+.meeting-notes-panel__form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+}
+.meeting-notes-panel__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: var(--radius-md);
+}
+.meeting-notes-panel__item:hover { background: rgba(255, 255, 255, 0.05); }
+.meeting-notes-panel__item-check {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: var(--cur-pointer, pointer);
+  padding: 0;
+  line-height: 0;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.meeting-notes-panel__item-check.is-done { color: #34d399; }
+.meeting-notes-panel__item-check:disabled { cursor: var(--cur-default, default); opacity: 0.6; }
+.meeting-notes-panel__item-title--done { text-decoration: line-through; opacity: 0.6; }
+
+/* بند 21 (Polls). */
+.meeting-polls-panel__card {
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+}
+.meeting-polls-panel__option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: start;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  color: #fff;
+  cursor: var(--cur-pointer, pointer);
+  overflow: hidden;
+  font-size: var(--text-caption);
+}
+.meeting-polls-panel__option:disabled { cursor: var(--cur-default, default); }
+.meeting-polls-panel__option.is-selected { border-color: var(--color-primary); }
+.meeting-polls-panel__option-bar {
+  position: absolute;
+  inset-inline-start: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(59, 130, 246, 0.22);
+  transition: width 200ms ease;
+  z-index: 0;
+}
+.meeting-polls-panel__option-label, .meeting-polls-panel__option-pct { position: relative; z-index: 1; }
+.meeting-polls-panel__option-pct { flex-shrink: 0; color: rgba(255, 255, 255, 0.6); }
+
+/* Round 9 (Recording) — بند 18. Topbar "Recording" badge (see
+   MeetingRoomShell's own docblock: "must be clearly indicated to all
+   participants", not just to whoever has RecordingsPanel open). */
+.meeting-room__record-pulse { animation: meeting-room-record-pulse 1.6s ease-in-out infinite; }
+@keyframes meeting-room-record-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}

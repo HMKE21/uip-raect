@@ -1,0 +1,62 @@
+/* base.css — global element defaults built on top of variables.css */
+html {
+  font-family: var(--font-body-ltr);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility; font-optical-sizing: auto;
+}
+html[dir="rtl"] {
+  font-family: var(--font-body-rtl);
+}
+
+body {
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  max-width: 100vw;
+  transition: background var(--duration-normal) var(--ease-standard),
+              color var(--duration-normal) var(--ease-standard);
+}
+/* `hidden` turns html/body into scroll containers, which breaks position: sticky
+   (the app sidebar). `clip` hides horizontal overflow without doing that. */
+@supports (overflow: clip) {
+  html, body { overflow-x: clip; }
+}
+
+/* Long-content safety net (audit item 24): body/html overflow-x:hidden above
+   only stops the *page* from scrolling horizontally — it does nothing for a
+   long unbroken token (a long email, URL, or name with no spaces) inside a
+   fixed-width card, which would otherwise silently bleed past that card's
+   edge instead of wrapping. overflow-wrap is inherited, so setting it once
+   here covers every text-bearing element site-wide without touching every
+   component file individually. word-break is a belt-and-braces fallback for
+   older engines that don't honor overflow-wrap: anywhere. */
+body, input, textarea, select, button {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  color: var(--text-primary);
+}
+
+p { color: var(--text-secondary); }
+
+code, .mono { font-family: var(--font-mono); }
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection { background: var(--uip-indigo-100); color: var(--uip-navy-950); }
+
+.container {
+  max-width: var(--content-max-width);
+  margin-inline: auto;
+  padding-inline: var(--space-5);
+}

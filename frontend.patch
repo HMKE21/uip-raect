@@ -1,0 +1,359 @@
+diff -ruN orig/react/React-full-main/src/components/FileViewer.jsx react/React-full-main/src/components/FileViewer.jsx
+--- orig/react/React-full-main/src/components/FileViewer.jsx	2026-10-11 15:27:44.000000000 +0300
++++ react/React-full-main/src/components/FileViewer.jsx	2026-10-11 16:10:39.821280208 +0300
+@@ -50,6 +50,8 @@
+ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+ const isBlobUrl = (u) => typeof u === 'string' && u.startsWith('blob:');
+ const revoke = (data) => { if (data && isBlobUrl(data.url)) URL.revokeObjectURL(data.url); };
++// All versions of one file share a root id; the viewer follows that, so a saved ZIP (new row, new id) stays on screen.
++const rootOf = (f) => (f ? (f.root_id ?? f.id) : null);
+ const directKind = (ext) => (VIDEO_EXT.includes(ext) ? 'video' : AUDIO_EXT.includes(ext) ? 'audio' : null);
+ 
+ function humanBytes(n) {
+@@ -234,13 +236,16 @@
+   );
+ }
+ 
+-export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp, locale = 'en' }) {
++export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp, locale = 'en', onSaveZip }) {
+   const rtl = locale === 'ar';
+   const tt = useCallback((en, ar) => (locale === 'ar' ? ar : en), [locale]);
+   const list = useMemo(() => files.filter((f) => f && f.url), [files]);
+   // Track the open file by id (not position) so a reload of the list can't swap it for another file.
+   const [activeId, setActiveId] = useState(() => list[clamp(startIndex, 0, Math.max(0, list.length - 1))]?.id);
+-  const index = Math.max(0, list.findIndex((f) => f.id === activeId));
++  const lastRoot = useRef(null);
++  let found = list.findIndex((f) => f.id === activeId);
++  if (found < 0 && lastRoot.current != null) found = list.findIndex((f) => rootOf(f) === lastRoot.current); // list reloaded with a newer version
++  const index = Math.max(0, found);
+   const [view, setView] = useState({ status: 'loading', progress: 0 });
+   const [retryKey, setRetryKey] = useState(0);
+   const [sheet, setSheet] = useState(0);
+@@ -257,6 +262,7 @@
+   const cache = useRef(new Map());
+ 
+   const file = list[index];
++  lastRoot.current = rootOf(file);
+   const ext = extOf(file?.original_name);
+   const color = colorOf(file?.original_name);
+   const downloadName = file?.original_name || 'file';
+@@ -271,6 +277,17 @@
+     }
+   }, []);
+ 
++  // ZIP editor "Save": uploads the rebuilt archive as the new version, then keeps showing it without reloading.
++  const saveZip = useCallback(async (blob, opts) => {
++    const saved = await onSaveZip(file, blob, opts);
++    if (saved?.id != null) {
++      cache.current.delete(file.id);
++      remember(saved.id, { kind: 'zip', blob });
++      setActiveId(saved.id);
++    }
++    return saved;
++  }, [onSaveZip, file, remember]);
++
+   const go = useCallback((delta) => {
+     if (guardRef.current && !guardRef.current()) return;
+     const target = list[clamp(index + delta, 0, list.length - 1)];
+@@ -430,7 +447,7 @@
+         </div>
+       </header>
+ 
+-      <main className={`st-fv__stage${stage === 'zip' ? ' st-fv__stage--bench' : ''}`} key={file.id}>
++      <main className={`st-fv__stage${stage === 'zip' ? ' st-fv__stage--bench' : ''}`} key={rootOf(file)}>
+         {stage === 'loading' && (
+           <div className="st-fv__center">
+             <Spinner />
+@@ -476,7 +493,7 @@
+         )}
+         {stage === 'zip' && (
+           <Suspense fallback={<div className="st-fv__center"><Spinner /></div>}>
+-            <ZipWorkbench key={file.id} blob={data.blob} fileName={downloadName} tt={tt} guardRef={guardRef} />
++            <ZipWorkbench key={rootOf(file)} blob={data.blob} fileName={downloadName} tt={tt} guardRef={guardRef} onSave={onSaveZip ? saveZip : undefined} />
+           </Suspense>
+         )}
+         {stage === 'table' && (
+diff -ruN orig/react/React-full-main/src/components/Icon.jsx react/React-full-main/src/components/Icon.jsx
+--- orig/react/React-full-main/src/components/Icon.jsx	2026-10-11 15:27:44.000000000 +0300
++++ react/React-full-main/src/components/Icon.jsx	2026-10-11 16:09:55.735449553 +0300
+@@ -36,6 +36,7 @@
+   menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+   upload: '<path d="M12 3v12"/><path d="m7 8 5-5 5 5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
+   check: '<path d="M20 6 9 17l-5-5"/>',
++  save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8"/><path d="M7 3v5h8"/>',
+   'check-circle': '<circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.5 2.5 5-5"/>',
+   x: '<path d="M18 6 6 18M6 6l12 12"/>',
+   'x-circle': '<circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/>',
+diff -ruN orig/react/React-full-main/src/components/student/FileManager.jsx react/React-full-main/src/components/student/FileManager.jsx
+--- orig/react/React-full-main/src/components/student/FileManager.jsx	2026-10-11 15:27:44.000000000 +0300
++++ react/React-full-main/src/components/student/FileManager.jsx	2026-10-11 16:10:39.821813842 +0300
+@@ -210,6 +210,21 @@
+     return () => window.removeEventListener('beforeunload', warn);
+   }, [busy]);
+ 
++  // ZIP editor "Save": the rebuilt archive replaces the file as its newest version (the old one stays in the version
++  // history), so everyone on the project gets it. A 409 means someone else saved first — the editor then asks.
++  const saveZip = useCallback(async (file, blob, { force } = {}) => {
++    const fd = new FormData();
++    fd.append('file', new File([blob], file.original_name, { type: 'application/zip' }));
++    if (force) fd.append('force', '1');
++    const res = await api.postForm(`/api/v1/projects/${id}/files/${file.id}/replace`, fd);
++    await reloadFiles();
++    return res.data;
++  }, [id, reloadFiles]);
++
++  // The viewer follows a file by its root id, so a newer saved version replaces the open one instead of closing it.
++  const rootOf = (f) => f.root_id ?? f.id;
++  const openViewer = (f) => { setViewerId(rootOf(f)); reloadFiles(); }; // reload: pick up versions others saved meanwhile
++
+   async function handleDelete(fileId) {
+     setDeletingId(fileId);
+     try {
+@@ -317,9 +332,9 @@
+               const mine = canEdit && (isOwner || (userId != null && Number(f.uploaded_by) === Number(userId)));
+               return (
+                 <li key={f.id} className="st-fm-file" style={{ '--k': k.color }}>
+-                  <button type="button" className="st-fm-badge st-fm-badge--btn" onClick={() => f.url && setViewerId(f.id)} aria-label={t('Preview', 'معاينة')}>{k.ext}</button>
++                  <button type="button" className="st-fm-badge st-fm-badge--btn" onClick={() => f.url && openViewer(f)} aria-label={t('Preview', 'معاينة')}>{k.ext}</button>
+                   <div className="st-fm-file__body">
+-                    <button type="button" className="st-fm-file__name" dir="auto" title={f.original_name} onClick={() => f.url && setViewerId(f.id)}>{f.original_name}</button>
++                    <button type="button" className="st-fm-file__name" dir="auto" title={f.original_name} onClick={() => f.url && openViewer(f)}>{f.original_name}</button>
+                     <span className="st-fm-file__meta">
+                       {[f.size_human, f.uploader_name, f.created_at && timeAgo(f.created_at, locale), Number(f.version) > 1 && `v${f.version}`].filter(Boolean).join(' · ')}
+                     </span>
+@@ -327,7 +342,7 @@
+                   <div className="st-fm-file__acts">
+                     {f.url && (
+                       <>
+-                        <button type="button" className="st-fm-iconbtn" onClick={() => setViewerId(f.id)} title={t('Preview', 'معاينة')} aria-label={t('Preview', 'معاينة')}><Icon name="eye" size={16} /></button>
++                        <button type="button" className="st-fm-iconbtn" onClick={() => openViewer(f)} title={t('Preview', 'معاينة')} aria-label={t('Preview', 'معاينة')}><Icon name="eye" size={16} /></button>
+                         <a href={f.url} target="_blank" rel="noopener noreferrer" className="st-fm-iconbtn" title={t('Open in a new tab', 'فتح في تبويب جديد')} aria-label={t('Open in a new tab', 'فتح في تبويب جديد')}><Icon name="expand" size={16} /></a>
+                         <a href={f.url} download className="st-fm-iconbtn" title={t('Download', 'تنزيل')} aria-label={t('Download', 'تنزيل')}><Icon name="download" size={16} /></a>
+                       </>
+@@ -350,12 +365,13 @@
+           </div>
+         )}
+       </section>
+-      {viewerId != null && files.some((x) => x.id === viewerId && x.url) && (
++      {viewerId != null && files.some((x) => rootOf(x) === viewerId && x.url) && (
+         <FileViewer
+           files={files.filter((x) => x.url)}
+-          startIndex={Math.max(0, files.filter((x) => x.url).findIndex((x) => x.id === viewerId))}
++          startIndex={Math.max(0, files.filter((x) => x.url).findIndex((x) => rootOf(x) === viewerId))}
+           onClose={() => setViewerId(null)}
+           locale={locale}
++          onSaveZip={canEdit ? saveZip : undefined}
+         />
+       )}
+     </div>
+diff -ruN orig/react/React-full-main/src/components/zipbench/ZipWorkbench.jsx react/React-full-main/src/components/zipbench/ZipWorkbench.jsx
+--- orig/react/React-full-main/src/components/zipbench/ZipWorkbench.jsx	2026-10-11 15:27:44.000000000 +0300
++++ react/React-full-main/src/components/zipbench/ZipWorkbench.jsx	2026-10-11 16:10:27.493617450 +0300
+@@ -37,9 +37,15 @@
+ /**
+  * VS Code–style ZIP workbench: explorer tree, tabs, CodeMirror editor, status bar — and "Download ZIP"
+  * which rebuilds the archive (with edits / new / renamed / deleted files) entirely in the browser.
+- * The original upload on the server is never modified.
++ *
++ * When the parent passes `onSave(blob, { force })`, a "Save" button (and Ctrl+S) also appears: it rebuilds
++ * the archive the same way and uploads it as the new version of the file on the server, so everyone on
++ * the project sees the edits (the previous version stays in the file's version history).
++ * Without `onSave` (reviewers, locked projects) the archive stays read-only on the server.
+  */
+-export default function ZipWorkbench({ blob, fileName, tt, guardRef }) {
++const MAX_SAVE_BYTES = 50 * 1024 * 1024; // matches the server's upload limit
++
++export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave }) {
+   const [phase, setPhase] = useState('loading'); // loading | ready | error
+   const [error, setError] = useState('');
+   const [vfs, setVfs] = useState(() => new Map()); // path -> { path, dir, size, origPath, isNew }
+@@ -56,6 +62,7 @@
+   const [explorer, setExplorer] = useState(() => typeof window === 'undefined' || !window.matchMedia('(max-width: 760px)').matches);
+   const [dlg, setDlg] = useState(null); // { type: 'new'|'rename'|'delete'|'reset', path?, value? }
+   const [busy, setBusy] = useState(false);
++  const [saving, setSaving] = useState(false);
+   const [toast, setToast] = useState('');
+   const [sideTab, setSideTab] = useState('files'); // files | search
+   const [searchFocus, setSearchFocus] = useState(0);
+@@ -69,6 +76,7 @@
+   const [reveal, setReveal] = useState(null); // { key, path, line, col, len, spec } -> jump-to-match in the editor
+ 
+   const zipBytes = useRef(null);
++  const ownBlob = useRef(null); // the archive we just saved ourselves — a re-delivered copy of it must not reload the workbench
+   const vfsRef = useRef(vfs);
+   vfsRef.current = vfs;
+   const edits = useRef(new Map()); // path -> edited text (only when different from the original)
+@@ -100,7 +108,12 @@
+ 
+   // ---- load archive -------------------------------------------------------------------------------
+   useEffect(() => {
++    if (ownBlob.current === blob) return undefined; // our own save coming back from the server: state is already in sync
+     let dead = false;
++    // a different archive was delivered (e.g. a newer version saved by someone else): start clean
++    docs.current.forEach((d) => { if (d.url) URL.revokeObjectURL(d.url); });
++    docs.current.clear(); edits.current.clear(); origTexts.current.clear(); newData.current.clear(); cache.current.clear();
++    setTabs([]); setActive(null); setEditorDoc(null); setDirty(new Set()); setDeletedCount(0);
+     (async () => {
+       try {
+         if (blob.size > MAX_ZIP_BYTES) throw new Error(tt('This archive is too large to open here — download it instead.', 'الأرشيف كبير جدًا للفتح هنا — نزّله بدل ذلك.'));
+@@ -375,9 +388,11 @@
+ 
+   useEffect(() => {
+     if (!guardRef) return undefined;
+-    guardRef.current = () => changes === 0 || window.confirm(tt('You have unsaved edits in this archive. Close without downloading the new ZIP?', 'عندك تعديلات لم تُنزَّل على هذا الأرشيف. تقفل بدون تنزيل الـ ZIP الجديد؟'));
++    guardRef.current = () => changes === 0 || window.confirm(onSave
++      ? tt('You have unsaved edits in this archive. Close without saving?', 'عندك تعديلات لم تُحفظ على هذا الأرشيف. تقفل بدون حفظ؟')
++      : tt('You have unsaved edits in this archive. Close without downloading the new ZIP?', 'عندك تعديلات لم تُنزَّل على هذا الأرشيف. تقفل بدون تنزيل الـ ZIP الجديد؟'));
+     return () => { guardRef.current = null; };
+-  }, [guardRef, changes, tt]);
++  }, [guardRef, changes, tt, onSave]);
+ 
+   const saveBlob = (data, name, type) => {
+     const url = URL.createObjectURL(new Blob([data], { type }));
+@@ -387,17 +402,22 @@
+     setTimeout(() => URL.revokeObjectURL(url), 4000);
+   };
+ 
++  // the whole archive as it is right now (edits, new, renamed and deleted entries applied)
++  const buildZipBytes = () => {
++    const out = {};
++    vfsRef.current.forEach((v) => {
++      if (v.dir) { out[v.path] = new Uint8Array(); return; }
++      out[v.path] = [getBytes(v.path), { level: STORE_EXT.has(extOf(v.path)) ? 0 : 6, mtime: new Date() }];
++    });
++    return zipSync(out);
++  };
++
+   const downloadZip = () => {
+     setBusy(true);
+     setTimeout(() => {
+       try {
+-        const out = {};
+-        vfsRef.current.forEach((v) => {
+-          if (v.dir) { out[v.path] = new Uint8Array(); return; }
+-          out[v.path] = [getBytes(v.path), { level: STORE_EXT.has(extOf(v.path)) ? 0 : 6, mtime: new Date() }];
+-        });
+         const stem = fileName.replace(/\.zip$/i, '');
+-        saveBlob(zipSync(out), `${stem}${changes ? '-edited' : ''}.zip`, 'application/zip');
++        saveBlob(buildZipBytes(), `${stem}${changes ? '-edited' : ''}.zip`, 'application/zip');
+         flash(tt('ZIP built and downloaded.', 'تم إنشاء الـ ZIP وتنزيله.'));
+       } catch (err) {
+         flash(tt('Could not build the ZIP: ', 'تعذّر إنشاء الـ ZIP: ') + String(err?.message || err));
+@@ -405,6 +425,40 @@
+     }, 30);
+   };
+ 
++  // After a successful save the saved archive becomes the new baseline: nothing is "changed" any more,
++  // while open tabs, the selection and the editor contents stay exactly as they were.
++  const rebase = (bytes) => {
++    docs.current.forEach((d, p) => { if (d.kind === 'text') origTexts.current.set(p, edits.current.get(p) ?? origTexts.current.get(p) ?? ''); });
++    edits.current.clear(); newData.current.clear(); cache.current.clear();
++    zipBytes.current = bytes;
++    const map = new Map();
++    unzipSync(bytes, { filter: (f) => { if (!isNoise(f.name)) map.set(f.name, { path: f.name, dir: f.name.endsWith('/'), size: f.originalSize, origPath: f.name, isNew: false }); return false; } });
++    setVfs(map); setDirty(new Set()); setDeletedCount(0);
++  };
++
++  const doSave = async (force = false) => {
++    if (!onSave || saving || busy) return;
++    if (changes === 0 && !force) { flash(tt('No changes to save.', 'لا توجد تعديلات للحفظ.')); return; }
++    setSaving(true);
++    await new Promise((r) => { setTimeout(r, 30); }); // let the "Saving…" state paint before the heavy zip work
++    let saveBlobData = null;
++    try {
++      const bytes = buildZipBytes();
++      if (bytes.length > MAX_SAVE_BYTES) throw new Error(tt('The archive is larger than the 50MB upload limit — remove some files, or download it instead.', 'الأرشيف أكبر من حد الرفع (50MB) — احذف بعض الملفات أو نزّله بدل الحفظ.'));
++      saveBlobData = new Blob([bytes], { type: 'application/zip' });
++      ownBlob.current = saveBlobData; // set before the parent re-renders with the saved copy
++      const saved = await onSave(saveBlobData, { force });
++      rebase(bytes);
++      flash(saved?.version
++        ? tt(`Saved — version ${saved.version} is now what everyone on the project sees.`, `تم الحفظ — النسخة ${saved.version} هي اللي هيشوفها كل أعضاء المشروع.`)
++        : tt('Saved for everyone on the project.', 'تم الحفظ لكل أعضاء المشروع.'));
++    } catch (err) {
++      if (ownBlob.current === saveBlobData) ownBlob.current = null;
++      if (err?.status === 409) setDlg({ type: 'overwrite' });
++      else flash(tt('Could not save: ', 'تعذّر الحفظ: ') + String(err?.message || err));
++    } finally { setSaving(false); }
++  };
++
+   const downloadFile = (path) => {
+     const bytes = getBytes(path);
+     saveBlob(bytes, baseName(path), 'application/octet-stream');
+@@ -598,7 +652,11 @@
+   // ---- keyboard (VS Code habits) ------------------------------------------------------------------
+   const onKeyDown = (e) => {
+     const mod = e.ctrlKey || e.metaKey;
+-    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); flash(tt('Edits are kept here — press “Download ZIP” to export them.', 'التعديلات محفوظة هنا — اضغط «تنزيل ZIP» لتصديرها.')); }
++    if (mod && e.key.toLowerCase() === 's') {
++      e.preventDefault();
++      if (onSave) doSave();
++      else flash(tt('Edits are kept here — press “Download ZIP” to export them.', 'التعديلات محفوظة هنا — اضغط «تنزيل ZIP» لتصديرها.'));
++    }
+     else if (mod && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); showSearch(); }
+     else if (mod && e.key.toLowerCase() === 'b') { e.preventDefault(); setExplorer((v) => !v); }
+     else if (e.altKey && e.key.toLowerCase() === 'w' && activeRef.current) { e.preventDefault(); closeTab(activeRef.current); }
+@@ -683,6 +741,7 @@
+   const dlgTitle = dlg && ({
+     new: dlg.kind === 'folder' ? tt('New folder', 'مجلد جديد') : tt('New file', 'ملف جديد'), rename: tt('Rename', 'إعادة تسمية'),
+     delete: tt('Delete', 'حذف'), reset: tt('Discard all changes?', 'تجاهل كل التعديلات؟'), conflict: tt('Files already exist', 'ملفات موجودة بالفعل'),
++    overwrite: tt('A newer version exists', 'فيه نسخة أحدث'),
+   })[dlg.type];
+   const th = themeById(theme);
+   const draggingFiles = dropDir !== null && !dragSrc.current;
+@@ -719,8 +778,19 @@
+           <button type="button" className="zb-ibtn zb-hide-sm" onClick={() => setFontSize((x) => Math.min(22, x + 1))} aria-label={tt('Larger text', 'تكبير الخط')}>A+</button>
+           <button type="button" className="zb-ibtn" onClick={(e) => openMenuAt(e.currentTarget, themeItems(), tt('Color theme', 'مظهر الألوان'))} title={`${tt('Color theme', 'مظهر الألوان')}: ${th.name}`} aria-label={tt('Color theme', 'مظهر الألوان')} aria-haspopup="menu"><Icon name="palette" size={17} /></button>
+           {changes > 0 && <button type="button" className="zb-btn" onClick={() => setDlg({ type: 'reset' })}>{tt('Discard', 'تجاهل')}</button>}
+-          <button type="button" className="zb-btn zb-btn--primary" onClick={downloadZip} disabled={busy}>
+-            <Icon name="download" size={15} /> <span>{busy ? tt('Building…', 'جاري البناء…') : tt('Download ZIP', 'تنزيل ZIP')}</span>{changes > 0 && <b className="zb-pill">{changes}</b>}
++          {onSave && (
++            <button
++              type="button"
++              className="zb-btn zb-btn--primary"
++              onClick={() => doSave()}
++              disabled={saving || busy || changes === 0}
++              title={changes === 0 ? tt('Nothing to save yet', 'مفيش تعديلات للحفظ') : tt('Save to the project for everyone (Ctrl+S)', 'احفظ في المشروع لكل الفريق (Ctrl+S)')}
++            >
++              <Icon name="save" size={15} /> <span>{saving ? tt('Saving…', 'جاري الحفظ…') : tt('Save', 'حفظ')}</span>{changes > 0 && <b className="zb-pill">{changes}</b>}
++            </button>
++          )}
++          <button type="button" className={`zb-btn${onSave ? '' : ' zb-btn--primary'}`} onClick={downloadZip} disabled={busy || saving}>
++            <Icon name="download" size={15} /> <span>{busy ? tt('Building…', 'جاري البناء…') : tt('Download ZIP', 'تنزيل ZIP')}</span>{!onSave && changes > 0 && <b className="zb-pill">{changes}</b>}
+           </button>
+         </div>
+       </div>
+@@ -828,7 +898,7 @@
+               <div className="zb--center zb-welcome">
+                 <span className="zb-welcome__ico"><Icon name="archive" size={34} /></span>
+                 <strong>{fileName}</strong>
+-                <p>{tt('Pick a file from the explorer to read or edit it. Add files or whole folders with the Add button or by dragging them in. Changes stay in your browser — use “Download ZIP” to export the updated archive.', 'اختر ملفًا من المستكشف لقراءته أو تعديله. أضف ملفات أو مجلدات كاملة بزر «إضافة» أو بسحبها هنا. التعديلات تبقى في متصفحك — استخدم «تنزيل ZIP» لتصدير الأرشيف المحدّث.')}</p>
++                <p>{tt('Pick a file from the explorer to read or edit it. Add files or whole folders with the Add button or by dragging them in. ' + (onSave ? 'Press “Save” to store your changes in the project for the whole team, or “Download ZIP” to keep a copy.' : 'Changes stay in your browser — use “Download ZIP” to export the updated archive.'), 'اختر ملفًا من المستكشف لقراءته أو تعديله. أضف ملفات أو مجلدات كاملة بزر «إضافة» أو بسحبها هنا. ' + (onSave ? 'اضغط «حفظ» لتخزين تعديلاتك في المشروع لكل الفريق، أو «تنزيل ZIP» لنسخة عندك.' : 'التعديلات تبقى في متصفحك — استخدم «تنزيل ZIP» لتصدير الأرشيف المحدّث.'))}</p>
+                 <div className="zb-welcome__acts">
+                   <button type="button" className="zb-btn" onClick={() => startNew('file', target)}><Icon name="file-plus" size={15} /> <span>{tt('New file', 'ملف جديد')}</span></button>
+                   <button type="button" className="zb-btn" onClick={() => pickUpload('file', target)}><Icon name="file-up" size={15} /> <span>{tt('Upload files', 'رفع ملفات')}</span></button>
+@@ -870,6 +940,7 @@
+             else if (dlg.type === 'rename') err = renameEntry(dlg.path, dlg.value);
+             else if (dlg.type === 'delete') deleteEntry(dlg.path);
+             else if (dlg.type === 'reset') resetAll();
++            else if (dlg.type === 'overwrite') { setDlg(null); doSave(true); return; }
+             if (err) setDlg({ ...dlg, error: err }); else setDlg(null);
+           }}>
+             <h3>{dlgTitle}</h3>
+@@ -885,6 +956,7 @@
+             )}
+             {dlg.type === 'new' && <p className="zb-dlg__tip">{tt('Tip: type a path like folder/sub/file.js to create nested folders at once.', 'نصيحة: اكتب مسارًا مثل folder/sub/file.js لإنشاء المجلدات المتداخلة دفعة واحدة.')}</p>}
+             {dlg.type === 'delete' && <p>{tt(`Delete “${baseName(dlg.path)}”${dlg.path.endsWith('/') ? ' and everything inside it' : ''}? You can undo this with “Discard”.`, `حذف «${baseName(dlg.path)}»${dlg.path.endsWith('/') ? ' وكل ما بداخله' : ''}؟ تقدر تتراجع عن ده من «تجاهل».`)}</p>}
++            {dlg.type === 'overwrite' && <p>{tt('Someone else on the project saved a newer version of this ZIP while you were editing. If you save anyway, your version becomes the current one — theirs stays in the file’s version history.', 'حد تاني في المشروع حفظ نسخة أحدث من الـ ZIP ده وانت بتعدّل. لو حفظت دلوقتي نسختك هتبقى هي الحالية — ونسخته هتفضل في سجل إصدارات الملف.')}</p>}
+             {dlg.type === 'reset' && <p>{tt('This restores the archive exactly as it was uploaded.', 'ده هيرجّع الأرشيف زي ما اترفع بالظبط.')}</p>}
+             {dlg.type === 'conflict' && (
+               <>
+@@ -903,7 +975,7 @@
+             ) : (
+               <div className="zb-dlg__row">
+                 <button type="button" className="zb-btn" onClick={() => setDlg(null)}>{tt('Cancel', 'إلغاء')}</button>
+-                <button type="submit" className={`zb-btn zb-btn--primary${dlg.type === 'delete' || dlg.type === 'reset' ? ' zb-btn--danger' : ''}`}>{dlg.type === 'delete' ? tt('Delete', 'حذف') : dlg.type === 'reset' ? tt('Discard', 'تجاهل') : dlg.type === 'new' ? tt('Create', 'إنشاء') : tt('OK', 'تأكيد')}</button>
++                <button type="submit" className={`zb-btn zb-btn--primary${dlg.type === 'delete' || dlg.type === 'reset' ? ' zb-btn--danger' : ''}`}>{dlg.type === 'delete' ? tt('Delete', 'حذف') : dlg.type === 'reset' ? tt('Discard', 'تجاهل') : dlg.type === 'new' ? tt('Create', 'إنشاء') : dlg.type === 'overwrite' ? tt('Save anyway', 'احفظ على أي حال') : tt('OK', 'تأكيد')}</button>
+               </div>
+             )}
+           </form>
