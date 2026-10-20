@@ -57,7 +57,7 @@ function loadRuntimeToken(rawFetch) {
  * headers) for every video above that size while small ones went through. Files bigger than DIRECT_UPLOAD_MIN go straight to the
  * API host instead (its CORS already allows the app origin). Override with VITE_DIRECT_UPLOAD_BASE; set it to "off" to disable.
  */
-const DIRECT_RAW = (import.meta.env.VITE_DIRECT_UPLOAD_BASE ?? (import.meta.env.PROD ? 'https://full-api-production-084f.up.railway.app' : '')).trim();
+const DIRECT_RAW = (import.meta.env.VITE_DIRECT_UPLOAD_BASE ?? (import.meta.env.PROD ? 'https://uip-laravel-production.up.railway.app' : '')).trim();
 export const DIRECT_UPLOAD_BASE = DIRECT_RAW === 'off' ? '' : DIRECT_RAW.replace(/\/+$/, '');
 export const DIRECT_UPLOAD_MIN = 3 * 1024 * 1024;
 export function directUploadUrl(path, formData) {
@@ -354,7 +354,7 @@ export function hideSplash() {
 // ---- Staff sign-in (admin / data analyst / security) ----------------------------
 // The staff page is deliberately not linked anywhere and the app has no address bar, so it is reached by
 //  1) tapping the UIP logo 7 times in a row (within 4 s) on any public/sign-in screen, or
-//  2) opening a link:  uip://staff-access  (or https://uip-v1.vercel.app/staff-access if the phone is set
+//  2) opening a link:  uip://staff-access  (or https://uip-nub.vercel.app/staff-access if the phone is set
 //     to open that site's links in the app).
 function goTo(path) {
   window.history.pushState({}, '', path);
