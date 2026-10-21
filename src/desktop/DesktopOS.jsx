@@ -37,6 +37,7 @@ import './mac.css';
 const EMPTY_POS = {};
 const CELL = { s: { w: 78, h: 88, g: 34 }, m: { w: 94, h: 104, g: 48 }, l: { w: 114, h: 126, g: 64 } };
 const PAD_X = 10; const PAD_Y = 14; const GAP = 2; // must match the old grid padding / gap
+const BOTTOM_PAD = 4; const ROW_SLACK = 22; // the last row may overhang a little (a cell has empty padding), so a nearly-fitting row is not wasted
 const keyId = (c, r) => `${c},${r}`;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
@@ -339,7 +340,7 @@ export default function DesktopOS() {
     const ro = new ResizeObserver(measure); ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const rows = Math.max(1, Math.floor((deskSize.h - 2 * PAD_Y + GAP) / (cell.h + GAP)));
+  const rows = Math.max(1, Math.floor((deskSize.h - PAD_Y - BOTTOM_PAD + GAP + ROW_SLACK) / (cell.h + GAP)));
   const cols = Math.max(1, Math.floor((deskSize.w - 2 * PAD_X + GAP) / (cell.w + GAP)));
   const layout = useMemo(() => layoutIcons(icons.map((i) => i.key), saved, rows, cols), [icons, saved, rows, cols]);
   // settings (+ lock password status) follow the student to every device — stored on the server, see ./sync.js
