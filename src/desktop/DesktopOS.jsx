@@ -30,6 +30,7 @@ import { EditorWindow, ViewerWindow } from './FileWindows';
 import { opensInEditor } from '../lib/driveFileKinds';
 import NewFileDialog from '../components/NewFileDialog';
 import WindowFrame from './Window';
+import SnapAssist from './SnapAssist';
 import './desktop.css';
 import './mac.css';
 
@@ -190,6 +191,7 @@ export default function DesktopOS() {
   const [booting, setBooting] = useState(true);
   const [menu, setMenu] = useState(null);
   const [dlg, setDlg] = useState(null);
+  const [assist, setAssist] = useState(null); // Snap Assist: { zones, skip }
   const [toast, setToast] = useState(null);
   const [sel, setSel] = useState(() => new Set());
   const [dropping, setDropping] = useState(false);
@@ -811,10 +813,11 @@ export default function DesktopOS() {
 
       <div className="os-wins">
         {wm.list.map((w) => (
-          <WindowFrame key={w.id} win={w} title={winTitle(w, APPS, ar)} active={wm.active === w.id} dir={dir} tt={tt} dispatch={dispatch} unified={w.app === 'explorer'} icon={<AppGlyph app={w.app} size={16} />}>
+          <WindowFrame key={w.id} win={w} title={winTitle(w, APPS, ar)} active={wm.active === w.id} dir={dir} tt={tt} dispatch={dispatch} unified={w.app === 'explorer'} onAssist={setAssist} icon={<AppGlyph app={w.app} size={16} />}>
             {bodyOf(w)}
           </WindowFrame>
         ))}
+        <SnapAssist assist={assist} list={wm.list} titleOf={(w) => winTitle(w, APPS, ar)} iconOf={(w) => <AppGlyph app={w.app} size={20} />} tt={tt} dispatch={dispatch} setAssist={setAssist} />
       </div>
 
       {overlay === 'taskview' && <TaskView list={wm.list} ar={ar} tt={tt} onClose={() => setOverlay(null)} onPick={(id) => { dispatch({ type: 'focus', id }); setOverlay(null); }} onCloseWin={(id) => dispatch({ type: 'close', id })} />}

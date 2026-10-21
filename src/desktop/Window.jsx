@@ -16,7 +16,7 @@ const Glyph = {
 };
 
 /** A draggable / resizable / snappable window frame. Drag and resize move the DOM node directly and commit once on release. */
-function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, children }) {
+function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onAssist, children }) {
   const ref = useRef(null);
   const [preview, setPreview] = useState(null);
   const [fly, setFly] = useState(null); // { x, y } of the snap-layouts flyout, relative to the windows area
@@ -85,7 +85,10 @@ function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, chi
       setPreview(null);
       if (!moved) return;
       dispatch({ type: 'rect', id: win.id, rect: cur });
-      if (side) dispatch({ type: 'snap', id: win.id, side });
+      if (side) {
+        dispatch({ type: 'snap', id: win.id, side });
+        if (onAssist && (side === 'left' || side === 'right')) onAssist({ zones: [side === 'left' ? 'right' : 'left'], skip: [win.id] });
+      }
     });
   };
 
@@ -137,7 +140,7 @@ function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, chi
               {zones.map((z) => {
                 const r = SNAP_RECTS[z];
                 return <button key={z} type="button" role="menuitem" className={win.snap === z ? 'is-on' : ''} title={tt('Snap here', 'ضع النافذة هنا')} style={{ left: `${r[0] * 100}%`, top: `${r[1] * 100}%`, width: `calc(${r[2] * 100}% - 3px)`, height: `calc(${r[3] * 100}% - 3px)` }}
-                  onClick={() => { setFly(null); dispatch({ type: 'focus', id: win.id }); dispatch({ type: 'snap', id: win.id, side: z }); }} />;
+                  onClick={() => { setFly(null); dispatch({ type: 'focus', id: win.id }); dispatch({ type: 'snap', id: win.id, side: z }); if (onAssist) onAssist({ zones: zones.filter((o) => o !== z), skip: [win.id] }); }} />;
               })}
             </div>
           ))}
