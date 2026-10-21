@@ -760,6 +760,11 @@ export default function DesktopOS() {
     return () => window.removeEventListener('pointermove', h);
   }, [wmax, dockPeek]);
   useEffect(() => { if (!wmax) setDockPeek(false); }, [wmax]);
+  // The desktop owns the whole screen: hide the portal layout (sidebar / topbar / bottom bar) underneath so nothing of it shows below or around the PC.
+  useEffect(() => {
+    document.body.classList.add('os-active');
+    return () => document.body.classList.remove('os-active');
+  }, []);
 
   return createPortal(
     <div

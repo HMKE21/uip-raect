@@ -256,3 +256,8 @@
 .os-lock__row button.os-lock__go:disabled { background: rgba(255, 255, 255, .22); }
 .os-lock__row .os-lock__eye { background: transparent; }
 .os-lock__row .os-lock__eye:hover { background: rgba(255, 255, 255, .16); }
+
+/* full-screen desktop: nothing of the portal layout may show below / around it */
+body.os-active { overflow: hidden; background: #000; }
+body.os-active #root { display: none; }
+@supports (height: 100dvh) { .os { height: 100dvh; bottom: auto; } }
