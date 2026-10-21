@@ -18,7 +18,7 @@ export const LANGS = {
   js: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript', ts: 'TypeScript', mts: 'TypeScript', php: 'PHP', java: 'Java',
   c: 'C', cpp: 'C++', cc: 'C++', cxx: 'C++', cs: 'C#', go: 'Go', rs: 'Rust', rb: 'Ruby', pl: 'Perl', lua: 'Lua', r: 'R', jl: 'Julia',
   sh: 'Bash', bash: 'Bash', kt: 'Kotlin', kts: 'Kotlin', dart: 'Dart', hs: 'Haskell', f90: 'Fortran', f95: 'Fortran', f03: 'Fortran',
-  pas: 'Pascal', pp: 'Pascal', sql: 'SQL (SQLite)',
+  pas: 'Pascal', pp: 'Pascal', sql: 'SQL',
   zig: 'Zig', nim: 'Nim', d: 'D', adb: 'Ada', cob: 'COBOL', cbl: 'COBOL', cobol: 'COBOL', asm: 'Assembly (NASM)', nasm: 'Assembly (NASM)', s: 'Assembly (GNU)',
   fs: 'F#', fsx: 'F#', vb: 'VB.NET', scala: 'Scala', groovy: 'Groovy', gvy: 'Groovy', clj: 'Clojure', cljc: 'Clojure',
   ex: 'Elixir', exs: 'Elixir', erl: 'Erlang', ml: 'OCaml', lisp: 'Common Lisp', lsp: 'Common Lisp', scm: 'Scheme', ss: 'Scheme', rkt: 'Racket',
