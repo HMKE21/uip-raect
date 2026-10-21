@@ -120,12 +120,12 @@
 .os-win.is-active { box-shadow: 0 26px 70px rgba(0, 0, 0, .38), 0 6px 18px rgba(0, 0, 0, .2), 0 0 0 .5px rgba(0, 0, 0, .32); border-color: transparent; }
 .os--dark .os-win.is-active { box-shadow: 0 28px 74px rgba(0, 0, 0, .6), 0 6px 18px rgba(0, 0, 0, .35), 0 0 0 1px rgba(255, 255, 255, .16); }
 .os-win.is-max { border-radius: 0; box-shadow: none; }
-.os-win__bar { flex: none; position: relative; height: 44px; display: flex; align-items: center; padding-inline: 14px; background: var(--bar); border-bottom: 1px solid var(--g-line); touch-action: none; }
-.os-win__ctl { display: flex; align-items: center; gap: 10px; direction: ltr; flex: none; height: 100%; z-index: 2; }
+.os-win__bar { flex: none; position: relative; height: 44px; display: flex; align-items: center; padding-inline: 16px; background: var(--bar); border-bottom: 1px solid var(--g-line); touch-action: none; }
+.os-win__ctl { display: flex; align-items: center; gap: 12px; direction: ltr; flex: none; height: 100%; z-index: 2; }
 .os-win__ctl button {
-  width: 18px; height: 18px; padding: 0; border-radius: 50%; border: .5px solid rgba(0, 0, 0, .2); display: grid; place-items: center; cursor: default; color: rgba(70, 20, 10, .78); transition: background .1s;
+  width: 26px; height: 26px; padding: 0; border-radius: 50%; border: .5px solid rgba(0, 0, 0, .2); display: grid; place-items: center; cursor: default; color: rgba(70, 20, 10, .9); transition: background .1s;
 }
-.os-win__ctl button svg { width: 11px; height: 11px; opacity: 0; transition: opacity .08s; }
+.os-win__ctl button svg { width: 15px; height: 15px; opacity: 1; stroke-width: 1.6; }  /* glyphs always visible (no hover needed) */
 @media (hover: none) { .os-win__ctl button svg { opacity: 1; } }
 .os-win__ctl button:focus-visible svg { opacity: 1; }
 .os-win__ctl:hover button svg { opacity: 1; }
@@ -137,7 +137,7 @@
 .os-win:not(.is-active) .os-win__ctl:hover .is-close { background: #ff5f57; }
 .os-win:not(.is-active) .os-win__ctl:hover .is-min { background: #febc2e; }
 .os-win:not(.is-active) .os-win__ctl:hover .is-max { background: #28c840; }
-.os-win__ttl { position: absolute; inset: 0 96px; display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; pointer-events: none; }
+.os-win__ttl { position: absolute; inset: 0 128px; display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; pointer-events: none; }
 .os-win__ico { display: inline-grid; place-items: center; flex: none; }
 .os-win__ico > * { width: 15px !important; height: 15px !important; }
 .os-win__ico .os-tile { border-radius: 4px !important; }
