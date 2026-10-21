@@ -189,5 +189,5 @@
 
 /* editors / workbench: stack the "restored draft" bar ABOVE the editor (the stage is a flex row, so it used to squeeze the editor into a narrow column) */
 .st-fv__stage--bench { flex-direction: column; }
-.st-fv__stage--bench > .uip-draftbar { flex: none; width: 100%; box-sizing: border-box; border-radius: 10px; margin: 8px 0; color: var(--fv-text, #e8ecf3); }
+.st-fv__stage--bench > .uip-draftbar { flex: none; width: 100%; box-sizing: border-box; border-radius: 10px; margin: 8px 0; }
 .st-fv__stage--bench > .ed, .st-fv__stage--bench > .zb { width: 100%; flex: 1; min-height: 0; }
