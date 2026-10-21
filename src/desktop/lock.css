@@ -24,7 +24,7 @@
 .lk-bg__c { width: 34vmax; height: 34vmax; left: 30%; bottom: -22vmax; background: #7c3aed; opacity: .45; }
 .lk-bg__photo {
   inset: 0 0 0 auto !important; width: min(48vw, 780px); height: 100%; border-radius: 0 !important; filter: none !important; opacity: 1 !important;
-  background: url('/images/lock/campus.jpg') right bottom / cover no-repeat;
+  background: url('/images/lock/campus.svg') right bottom / cover no-repeat;
   -webkit-mask-image: linear-gradient(to right, transparent 0, #000 46%), linear-gradient(to bottom, transparent 0, #000 26%); -webkit-mask-composite: source-in;
   mask-image: linear-gradient(to right, transparent 0, #000 46%), linear-gradient(to bottom, transparent 0, #000 26%); mask-composite: intersect;
 }
