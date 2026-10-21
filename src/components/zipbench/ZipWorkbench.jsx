@@ -10,6 +10,7 @@ import { useRunner } from './runner/useRunner';
 import { useSandbox } from './runner/useSandbox';
 import { useAiFix } from './ai/useAiFix';
 import AiFixPanel from './ai/AiFixPanel';
+import { fetchCompletion } from './ai/ghostComplete';
 import { CONVERT_TARGETS, applyEdit, guessErrorFile, languageOf, looksLikeError, suggestFileName, tailOutput } from './ai/aiFixUtils';
 import { useAuth } from '../../context/AuthContext';
 import { RUNNER_URL } from '../../config/runner';
@@ -29,6 +30,7 @@ import '../../styles/css/zip-workbench.css';
 import '../../styles/css/zip-markdown.css';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
+const NO_GHOST_EXT = new Set(['md', 'txt', 'csv', 'tsv', 'log']); // prose / data files: no AI autocomplete
 import { isEditableJson } from './jsonCheck';
 const CsvGrid = lazy(() => import('./CsvGrid'));
 const JsonEdit = lazy(() => import('./JsonEdit'));
@@ -81,6 +83,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState({ line: 1, col: 1 });
   const [wrap, setWrap] = useState(false);
+  const [ghostPref, setGhostPref] = useState(() => { try { return window.localStorage.getItem('zb-ghost') !== '0'; } catch { return true; } }); // AI autocomplete on/off (per browser)
+  const [ghostDead, setGhostDead] = useState(false); // the server refused (permission / exam lock / unavailable): stay off until reload
   const [fontSize, setFontSize] = useState(13.5);
   const [explorer, setExplorer] = useState(() => typeof window === 'undefined' || !window.matchMedia('(max-width: 760px)').matches);
   const [dlg, setDlg] = useState(null); // { type: 'new'|'rename'|'delete'|'reset', path?, value? }
@@ -115,6 +119,15 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const sandbox = useSandbox(projectId, sandboxTokenPath); // real server / terminal on the uip-sandbox gateway (needs a project id)
   const { can } = useAuth();
   const ai = useAiFix({ enabled: can('ai.code_assist'), tt }); // "explain / fix this error" (needs the ai.code_assist permission)
+
+  const toggleGhost = useCallback(() => {
+    setGhostPref((v) => { const n = !v; try { window.localStorage.setItem('zb-ghost', n ? '1' : '0'); } catch { /* storage unavailable */ } return n; });
+  }, []);
+  const ghostOpts = useMemo(() => ({
+    enabled: ai.autocompleteAvailable && ghostPref && !ghostDead && !NO_GHOST_EXT.has(extOf(editorDoc?.path || '')),
+    request: fetchCompletion,
+    onDisable: () => setGhostDead(true),
+  }), [ai.autocompleteAvailable, ghostPref, ghostDead, editorDoc?.path]);
 
   const zipBytes = useRef(null);
   const ownBlob = useRef(null); // the archive we just saved ourselves — a re-delivered copy of it must not reload the workbench
@@ -1169,6 +1182,9 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
           <button type="button" className="zb-btn zb-btn--add" onClick={(e) => openMenuAt(e.currentTarget, addItems(target), target ? `/${target.replace(/\/$/, '')}` : tt('Archive root', 'جذر الأرشيف'))} title={tt('Add files or folders', 'إضافة ملفات أو مجلدات')} aria-haspopup="menu">
             <Icon name="plus" size={15} /> <span>{tt('Add', 'إضافة')}</span> <Icon name="chevron-down" size={12} />
           </button>
+          {ai.autocompleteAvailable && !ghostDead && (
+            <button type="button" className={`zb-ibtn zb-hide-sm${ghostPref ? ' is-on' : ''}`} onClick={toggleGhost} aria-pressed={ghostPref} title={ghostPref ? tt('AI autocomplete is on — Tab accepts, Esc dismisses (click to turn off)', 'الإكمال التلقائي بالـ AI شغّال — Tab يقبل، Esc يلغي (اضغط لإيقافه)') : tt('Turn on AI autocomplete', 'تشغيل الإكمال التلقائي بالـ AI')} aria-label={tt('AI autocomplete', 'الإكمال التلقائي بالـ AI')}>✦</button>
+          )}
           <button type="button" className={`zb-ibtn zb-hide-sm${wrap ? ' is-on' : ''}`} onClick={() => setWrap((v) => !v)} title={tt('Word wrap', 'التفاف الأسطر')} aria-label={tt('Word wrap', 'التفاف الأسطر')}>↵</button>
           <button type="button" className="zb-ibtn zb-hide-sm" onClick={() => setFontSize((x) => Math.max(10, x - 1))} aria-label={tt('Smaller text', 'تصغير الخط')}>A−</button>
           <button type="button" className="zb-ibtn zb-hide-sm" onClick={() => setFontSize((x) => Math.min(22, x + 1))} aria-label={tt('Larger text', 'تكبير الخط')}>A+</button>
@@ -1289,7 +1305,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
             {editorDoc && (
               <div className={`zb-cm-wrap${mdOn && mdView === 'split' ? ' zb-cm-wrap--split' : ''}`} style={{ display: cmShown ? 'block' : 'none' }}>
                 <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
-                  <CodeEditor docId={editorDoc.docId} path={editorDoc.path} initialText={editorDoc.text} onChange={onEdit} onCursor={setCursor} onContext={onEditorContext} readOnly={false} wrap={wrap} fontSize={fontSize} reveal={reveal} theme={theme} />
+                  <CodeEditor docId={editorDoc.docId} path={editorDoc.path} initialText={editorDoc.text} onChange={onEdit} onCursor={setCursor} onContext={onEditorContext} readOnly={false} wrap={wrap} fontSize={fontSize} reveal={reveal} theme={theme} ghost={ghostOpts} />
                 </Suspense>
               </div>
             )}

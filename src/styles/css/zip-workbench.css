@@ -131,6 +131,8 @@
 .zb-cm .cm-editor.cm-focused { outline: none; }
 .zb-cm .cm-scroller { font-family: 'Cascadia Code', 'JetBrains Mono', Consolas, 'SF Mono', Menlo, monospace; line-height: 1.55; overscroll-behavior: contain; }
 .zb-cm .cm-gutters { border-right: 0; }
+/* AI autocomplete suggestion (ghost text): inline after the cursor, Tab accepts */
+.zb-cm .cm-ghost-text { opacity: .45; font-style: normal; white-space: pre; pointer-events: none; user-select: none; }
 .zb-cm .cm-panels { font-family: inherit; }
 .zb-img { flex: 1; min-height: 0; display: grid; place-items: center; padding: 16px; overflow: auto; background: repeating-conic-gradient(var(--zb-chk1) 0% 25%, var(--zb-chk2) 0% 50%) 50% / 20px 20px; }
 .zb-img img { max-width: 100%; max-height: 100%; object-fit: contain; }

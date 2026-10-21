@@ -27,6 +27,7 @@ import { toml } from '@codemirror/legacy-modes/mode/toml';
 import { properties } from '@codemirror/legacy-modes/mode/properties';
 import { extOf } from './zipUtils';
 import { buildEditorTheme } from './zipThemes';
+import { ghostComplete, clearGhostEffect } from './ai/ghostComplete';
 
 function languageFor(path) {
   switch (extOf(path)) {
@@ -63,7 +64,7 @@ function languageFor(path) {
  * One CodeMirror view for the whole workbench. Each open file keeps its own EditorState
  * (undo history, selection, scroll) in `statesRef`, swapped in when its tab becomes active.
  */
-export default function CodeEditor({ docId, path, initialText, onChange, onCursor, onContext, readOnly, wrap, fontSize, reveal, theme }) {
+export default function CodeEditor({ docId, path, initialText, onChange, onCursor, onContext, readOnly, wrap, fontSize, reveal, theme, ghost }) {
   const host = useRef(null);
   const view = useRef(null);
   const states = useRef(new Map());
@@ -71,6 +72,11 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
   const current = useRef(null);
   const cb = useRef({ onChange, onCursor, onContext });
   cb.current = { onChange, onCursor, onContext };
+  // AI autocomplete options ({ enabled, request, onDisable }), read lazily by the extension so a change needs no rebuild
+  const ghostRef = useRef(ghost);
+  ghostRef.current = ghost;
+  const pathRef = useRef(path);
+  pathRef.current = path;
   const wrapComp = useRef(new Compartment());
   const roComp = useRef(new Compartment());
   const sizeComp = useRef(new Compartment());
@@ -81,6 +87,10 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
     extensions: [
       basicSetup,
       search({ top: true }),
+      ghostComplete(() => {
+        const g = ghostRef.current;
+        return g && { ...g, meta: () => ({ filename: pathRef.current, language: extOf(pathRef.current) }) };
+      }),
       keymap.of([indentWithTab]),
       themeComp.current.of(buildEditorTheme(theme)),
       languageFor(p),
@@ -139,6 +149,7 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
     v.setState(next);
     // compartments of a stored state may be stale -> re-apply the global toggles
     v.dispatch({ effects: [
+      clearGhostEffect,
       wrapComp.current.reconfigure(wrap ? EditorView.lineWrapping : []),
       roComp.current.reconfigure(EditorState.readOnly.of(!!readOnly)),
       sizeComp.current.reconfigure(EditorView.theme({ '&': { fontSize: `${fontSize}px` } })),
@@ -173,6 +184,9 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reveal?.key, docId]);
+
+  // turning the AI autocomplete off removes a suggestion that is still showing
+  useEffect(() => { if (!ghost?.enabled) view.current?.dispatch({ effects: clearGhostEffect }); }, [ghost?.enabled]);
 
   // global toggles
   useEffect(() => { view.current?.dispatch({ effects: themeComp.current.reconfigure(buildEditorTheme(theme)) }); }, [theme]);
