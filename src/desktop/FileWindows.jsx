@@ -87,7 +87,7 @@ export function EditorWindow({ editor, locale, registerGuard }) {
           <Suspense fallback={<div className="mp-editor__msg"><span className="mp-spin" /></div>}>
             <ZipWorkbench
               blob={state.blob} fileName={`${node.name}.zip`} tt={tt} guardRef={guardRef} onSave={onSave} draftKey={draftKey}
-              sandboxTokenPath={editor.kind === 'folder' ? drive.sandboxTokenPath(node.id) : undefined}
+              sandboxTokenPath={drive.sandboxTokenPath(node.id)} /* folders, ZIPs AND single files (a lone .cpp / .java / … opens as a one-file archive) */
             />
           </Suspense>
         )}
