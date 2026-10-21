@@ -382,3 +382,12 @@ body.os-dragging .os-wall { transition: none; }
    so the File / Window / Help dropdowns opened underneath it and looked empty. Now every window stays inside this layer (20); the Dock (80),
    the menu bar and its dropdowns (90), flyouts, dialogs and the context menu always sit above any window. */
 .os-wins { z-index: 20; }
+
+/* Spotlight: the highlighted row lost its accent background (".os-dlg--run .os-spot__list button { background: transparent }" is later and equally specific),
+   leaving white text on a light panel — unreadable. Re-assert the highlight with a higher specificity. */
+.os-dlg--run .os-spot__list button.is-sel,
+.os-dlg--run .os-spot__list button:hover { background: var(--os-accent); color: #fff; }
+.os-dlg--run .os-spot__list button.is-sel .os-spot__txt b,
+.os-dlg--run .os-spot__list button:hover .os-spot__txt b { color: #fff; }
+.os-dlg--run .os-spot__list button:hover .os-spot__txt small { color: rgba(255, 255, 255, .82); }
+.os-dlg--run .os-spot__list button:hover .os-spot__enter { display: grid; }
