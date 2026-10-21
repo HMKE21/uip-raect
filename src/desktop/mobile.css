@@ -34,8 +34,9 @@
 
 /* ── home ── */
 .mos-home {
-  position: absolute; z-index: 5; inset: 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  padding: calc(var(--mos-status-h) + var(--mos-top) + 6px) 16px 0; display: flex; flex-direction: column; gap: 14px;
+  /* the scroll area starts BELOW the status bar, so scrolled content is clipped there instead of running underneath the clock / battery */
+  position: absolute; z-index: 5; inset: calc(var(--mos-status-h) + var(--mos-top)) 0 0; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: 6px 16px 0; display: flex; flex-direction: column; gap: 14px;
 }
 .mos.has-app .mos-home { visibility: hidden; }
 .mos-home__pad { flex: 0 0 calc(var(--mos-dock-h) + var(--mos-gest-h) + var(--mos-bot) + 28px); }
