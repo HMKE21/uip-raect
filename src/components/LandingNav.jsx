@@ -13,7 +13,7 @@ import AppDownloadLink from './AppDownloadLink';
  * (Landing, Explore, Privacy, Verify Certificate, error pages). Must be
  * rendered inside a `.lp2` wrapper — that wrapper carries the palette (see
  * styles/css/landing.css). `anchors` shows the in-page links used by the
- * landing page. Below 820px the links collapse into a hamburger menu.
+ * landing page. Below 1120px the links collapse into a hamburger menu.
  */
 export default function LandingNav({ anchors = false }) {
   const { locale, toggleLocale } = useLanguage();
@@ -30,7 +30,7 @@ export default function LandingNav({ anchors = false }) {
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
-    const mq = window.matchMedia('(min-width: 821px)');
+    const mq = window.matchMedia('(min-width: 1121px)');
     const onMq = () => { if (mq.matches) setOpen(false); };
     document.addEventListener('keydown', onKey);
     mq.addEventListener('change', onMq);
