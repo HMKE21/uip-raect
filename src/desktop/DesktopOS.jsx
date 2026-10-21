@@ -45,59 +45,72 @@ const EMPTY_POS = {};
 const CELL = { s: { w: 78, h: 88, g: 34 }, m: { w: 94, h: 104, g: 48 }, l: { w: 114, h: 126, g: 64 } };
 const PAD_X = 10; const PAD_Y = 14; const GAP = 2; // must match the old grid padding / gap
 const BOTTOM_PAD = 0; const ROW_SLACK = 36; // the last row may overhang a little (a cell has empty padding), so a nearly-fitting row is not wasted
-const keyId = (c, r) => `${c},${r}`;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-/** Cell for every icon: remembered cells first (clamped to the screen), the rest fill the first free cells, column by column. */
-function layoutIcons(keys, saved, rows, cols) {
-  const taken = new Set(); const out = {};
+/* Icons sit at FREE pixel positions: { x, y } = distance from the desktop's inline-end edge (left in Arabic, right in English) and from the top.
+   (Old saved layouts used grid cells { c, r }; they are converted on load.) */
+const OVERLAP = 10; // icons may touch, but not sit on top of each other
+const collides = (a, b, cell) => Math.abs(a.x - b.x) < cell.w - OVERLAP && Math.abs(a.y - b.y) < cell.h - OVERLAP;
+const bounds = (cell, size) => ({ maxX: size.w ? Math.max(0, size.w - cell.w) : 100000, maxY: size.h ? Math.max(0, size.h - cell.h) : 100000 });
+const legacyPx = (p, cell) => ({ x: PAD_X + p.c * (cell.w + GAP), y: PAD_Y + p.r * (cell.h + GAP) });
+
+/** Position of every icon: remembered ones first (kept on screen), new ones fill the first free grid slot, column by column. */
+function layoutIcons(keys, saved, cell, size, rows, cols) {
+  const { maxX, maxY } = bounds(cell, size);
+  const out = {}; const placed = [];
   keys.forEach((k) => {
     const p = saved[k];
     if (!p) return;
-    const c = clamp(p.c, 0, cols - 1); const r = clamp(p.r, 0, rows - 1);
-    if (!taken.has(keyId(c, r))) { out[k] = { c, r }; taken.add(keyId(c, r)); }
+    const q = p.x !== undefined ? p : legacyPx(p, cell);
+    out[k] = { x: clamp(q.x, 0, maxX), y: clamp(q.y, 0, maxY) }; placed.push(out[k]);
   });
-  let c = 0; let r = 0;
   keys.forEach((k) => {
     if (out[k]) return;
-    while (taken.has(keyId(c, r))) { r += 1; if (r >= rows) { r = 0; c += 1; } }
-    out[k] = { c, r }; taken.add(keyId(c, r));
+    let spot = null;
+    for (let c = 0; c < cols && !spot; c += 1) {
+      for (let r = 0; r < rows && !spot; r += 1) {
+        const q = legacyPx({ c, r }, cell);
+        if (!placed.some((o) => collides(o, q, cell))) spot = q;
+      }
+    }
+    out[k] = spot || { x: PAD_X, y: PAD_Y }; placed.push(out[k]);
   });
   return out;
 }
-/** Nearest cell to (c, r) that is not in `taken`. */
-function nearestFree(c, r, taken, rows, cols) {
-  for (let d = 0; d <= rows + cols; d += 1) {
-    let best = null; let bestScore = Infinity;
-    for (let dc = -d; dc <= d; dc += 1) {
-      for (let dr = -d; dr <= d; dr += 1) {
-        if (Math.max(Math.abs(dc), Math.abs(dr)) !== d) continue;
-        const cc = c + dc; const rr = r + dr;
-        if (cc < 0 || rr < 0 || cc >= cols || rr >= rows || taken.has(keyId(cc, rr))) continue;
-        const score = dc * dc + dr * dr;
-        if (score < bestScore) { best = { c: cc, r: rr }; bestScore = score; }
-      }
+/** Nearest free spot to (x, y): the spot itself if nothing is there, otherwise the closest non-overlapping one. */
+function nearestFree(x, y, taken, cell, size) {
+  const { maxX, maxY } = bounds(cell, size);
+  const at = (px, py) => ({ x: clamp(Math.round(px), 0, maxX), y: clamp(Math.round(py), 0, maxY) });
+  const first = at(x, y);
+  if (!taken.some((o) => collides(o, first, cell))) return first;
+  let best = null; let bestD = Infinity;
+  for (let d = 8; d <= 900 && !best; d += 8) {
+    for (let a = -d; a <= d; a += 8) {
+      [[a, -d], [a, d], [-d, a], [d, a]].forEach(([dx, dy]) => {
+        const q = at(first.x + dx, first.y + dy);
+        if (taken.some((o) => collides(o, q, cell))) return;
+        const dist = (q.x - x) ** 2 + (q.y - y) ** 2;
+        if (dist < bestD) { best = q; bestD = dist; }
+      });
     }
-    if (best) return best;
   }
-  return { c: 0, r: 0 };
+  return best || first;
 }
-/** Where a dragged group lands if it is moved by (dc, dr) cells: it keeps its shape, stays on screen, and pushes nothing — occupied cells make an icon take the nearest free one. */
-function planMove(group, layout, dc, dr, rows, cols) {
-  const cells = group.map((k) => layout[k]).filter(Boolean);
-  if (!cells.length) return {};
-  const minC = Math.min(...cells.map((p) => p.c)); const maxC = Math.max(...cells.map((p) => p.c));
-  const minR = Math.min(...cells.map((p) => p.r)); const maxR = Math.max(...cells.map((p) => p.r));
-  const mc = clamp(dc, -minC, Math.max(-minC, cols - 1 - maxC)); const mr = clamp(dr, -minR, Math.max(-minR, rows - 1 - maxR));
+/** Where a dragged group lands when moved by (dx, dy) PIXELS (already converted to the x axis of `layout`): it keeps its shape, stays on screen, and an icon that would land on another one slides to the nearest free spot. */
+function planMove(group, layout, dx, dy, cell, size) {
+  const pts = group.map((k) => layout[k]).filter(Boolean);
+  if (!pts.length) return {};
+  const { maxX, maxY } = bounds(cell, size);
+  const mx = clamp(dx, -Math.min(...pts.map((p) => p.x)), Math.max(-Math.min(...pts.map((p) => p.x)), maxX - Math.max(...pts.map((p) => p.x))));
+  const my = clamp(dy, -Math.min(...pts.map((p) => p.y)), Math.max(-Math.min(...pts.map((p) => p.y)), maxY - Math.max(...pts.map((p) => p.y))));
   const inGroup = new Set(group);
-  const taken = new Set(Object.keys(layout).filter((k) => !inGroup.has(k)).map((k) => keyId(layout[k].c, layout[k].r)));
+  const taken = Object.keys(layout).filter((k) => !inGroup.has(k)).map((k) => layout[k]);
   const out = {};
   group.forEach((k) => {
     const p = layout[k];
     if (!p) return;
-    let t = { c: p.c + mc, r: p.r + mr };
-    if (taken.has(keyId(t.c, t.r))) t = nearestFree(t.c, t.r, taken, rows, cols);
-    taken.add(keyId(t.c, t.r)); out[k] = t;
+    const t = nearestFree(p.x + mx, p.y + my, taken, cell, size);
+    taken.push(t); out[k] = t;
   });
   return out;
 }
@@ -146,7 +159,7 @@ function useDesktopFolder() {
   return [st, reload, hideLocal];
 }
 
-const cellStyle = (p, cell) => ({ insetInlineEnd: PAD_X + p.c * (cell.w + GAP), top: PAD_Y + p.r * (cell.h + GAP), width: cell.w, height: cell.h });
+const cellStyle = (p, cell) => ({ insetInlineEnd: p.x, top: p.y, width: cell.w, height: cell.h });
 
 export default function DesktopOS() {
   const { locale, setLocale, toggleLocale } = useLanguage();
@@ -373,7 +386,7 @@ export default function DesktopOS() {
   }, [mobile]);
   const rows = Math.max(1, Math.floor((deskSize.h - PAD_Y - BOTTOM_PAD + GAP + ROW_SLACK) / (cell.h + GAP)));
   const cols = Math.max(1, Math.floor((deskSize.w - 2 * PAD_X + GAP) / (cell.w + GAP)));
-  const layout = useMemo(() => layoutIcons(icons.map((i) => i.key), saved, rows, cols), [icons, saved, rows, cols]);
+  const layout = useMemo(() => layoutIcons(icons.map((i) => i.key), saved, cell, deskSize, rows, cols), [icons, saved, cell, deskSize, rows, cols]);
   // settings (+ lock password status) follow the student to every device — stored on the server, see ./sync.js
   const { synced, lockEnabled, setLockEnabled } = useDesktopSync({
     uid: user?.id,
@@ -404,15 +417,15 @@ export default function DesktopOS() {
   useEffect(() => {
     if (!synced || !desk.ready || desk.error || store.key !== posKey || !deskSize.h) return;
     const keys = icons.map((i) => i.key);
-    if (!keys.some((k) => !saved[k]) && !Object.keys(saved).some((k) => !keys.includes(k))) return;
+    if (!keys.some((k) => saved[k]?.x === undefined) && !Object.keys(saved).some((k) => !keys.includes(k))) return; // also migrates old grid-cell layouts to pixels
     const next = {};
-    keys.forEach((k) => { next[k] = saved[k] || layout[k]; });
+    keys.forEach((k) => { next[k] = saved[k]?.x !== undefined ? saved[k] : layout[k]; });
     commitPos(next);
   }, [synced, desk.ready, desk.error, store.key, posKey, deskSize.h, icons, saved, layout, commitPos]);
   const live = useRef({}); // latest values for the pointer handlers below
   const selRef = useRef(sel);
   selRef.current = sel;
-  live.current = { layout, rows, cols, cell, ar, icons, commitPos, prefs };
+  live.current = { layout, rows, cols, cell, ar, icons, commitPos, prefs, deskSize };
 
   const newFolder = useCallback(async () => {
     const v = await ask({ kind: 'prompt', title: tt('New folder', 'مجلد جديد'), label: tt('Folder name', 'اسم المجلد'), value: tt('New folder', 'مجلد جديد'), selectAll: true, action: tt('Create', 'إنشاء') });
@@ -505,8 +518,8 @@ export default function DesktopOS() {
           .catch((err) => flash(errorMessage(err), 'error'));
         return;
       }
-      const stride = { w: L.cell.w + GAP, h: L.cell.h + GAP };
-      const moved = planMove(group, L.layout, Math.round(dx / stride.w) * (L.ar ? -1 : 1), Math.round(dy / stride.h), L.rows, L.cols);
+      // x counts from the inline-end edge: that is the LEFT edge in Arabic and the RIGHT edge in English, so a drag to the right adds to x only in Arabic
+      const moved = planMove(group, L.layout, dx * (L.ar ? 1 : -1), dy, L.cell, L.deskSize);
       L.commitPos({ ...L.layout, ...moved });
     };
     window.addEventListener('pointermove', move);
@@ -658,14 +671,15 @@ export default function DesktopOS() {
       e.preventDefault();
       const here = cur.length ? layout[cur[cur.length - 1].key] : null;
       if (!here) { setSel(new Set(keys.slice(0, 1))); return; }
-      const side = ar ? -1 : 1;
-      const [vc, vr] = { ArrowDown: [0, 1], ArrowUp: [0, -1], ArrowRight: [side, 0], ArrowLeft: [-side, 0] }[k];
+      const [vc, vr] = { ArrowDown: [0, 1], ArrowUp: [0, -1], ArrowRight: [1, 0], ArrowLeft: [-1, 0] }[k]; // screen directions
+      const sx = (p) => (ar ? p.x : deskSize.w - p.x - cell.w); // screen-left of an icon
       let best = null; let bestScore = Infinity;
       icons.forEach((i) => {
         const p = layout[i.key];
-        const along = (p.c - here.c) * vc + (p.r - here.r) * vr; // distance in the arrow's direction
-        const across = Math.abs((p.c - here.c) * vr) + Math.abs((p.r - here.r) * vc);
-        if (along <= 0) return;
+        const dX = sx(p) - sx(here); const dY = p.y - here.y;
+        const along = dX * vc + dY * vr; // distance in the arrow's direction
+        const across = Math.abs(dX * vr) + Math.abs(dY * vc);
+        if (along <= 4) return;
         const score = along + across * 3;
         if (score < bestScore) { best = i.key; bestScore = score; }
       });
@@ -895,9 +909,6 @@ export default function DesktopOS() {
         onPointerDown={onDeskPointerDown} onContextMenu={deskMenu}
         onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setDropping(true); } }} onDragLeave={() => setDropping(false)} onDrop={onDrop}
       >
-        {drag && Object.entries(planMove(drag.keys, layout, Math.round(drag.dx / (cell.w + GAP)) * (ar ? 1 : -1), Math.round(drag.dy / (cell.h + GAP)), rows, cols)).map(([k, p]) => (
-          !drag.over && <i key={`slot:${k}`} className="os-slot" style={{ ...cellStyle(p, cell) }} />
-        ))}
         {icons.map((ic) => {
           const p = layout[ic.key];
           const moving = drag?.keys.includes(ic.key);

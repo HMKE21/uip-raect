@@ -27,13 +27,17 @@ export function savePrefs(p, uid) {
   try { localStorage.setItem(prefsKey(uid), JSON.stringify(p)); return true; } catch { return false; }
 }
 
-/** Where each desktop icon sits: { [iconKey]: { c: column, r: row } } — per user, in grid cells (not pixels). */
+/** Where each desktop icon sits: { [iconKey]: { x, y } } in pixels from the inline-end edge / the top — per user. (Older versions stored grid cells { c, r }.) */
 export const iconPosKey = (uid) => `uip_desktop_icons_v1_${uid ?? 'anon'}`;
 export function loadIconPos(key) {
   try {
     const o = JSON.parse(localStorage.getItem(key) || '{}') || {};
     const out = {};
-    Object.keys(o).forEach((k) => { const p = o[k]; if (p && Number.isInteger(p.c) && Number.isInteger(p.r) && p.c >= 0 && p.r >= 0) out[k] = { c: p.c, r: p.r }; });
+    Object.keys(o).forEach((k) => {
+      const p = o[k];
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.y >= 0) out[k] = { x: Math.round(p.x), y: Math.round(p.y) }; // free pixel position
+      else if (p && Number.isInteger(p.c) && Number.isInteger(p.r) && p.c >= 0 && p.r >= 0) out[k] = { c: p.c, r: p.r }; // old grid cell (converted by DesktopOS)
+    });
     return out;
   } catch { return {}; }
 }
