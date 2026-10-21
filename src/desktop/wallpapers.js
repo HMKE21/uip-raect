@@ -63,12 +63,21 @@ export function imageToWallpaper(file) {
     const url = URL.createObjectURL(file);
     const img = new Image();
     img.onload = () => {
-      const k = Math.min(1, 1920 / Math.max(img.width, img.height));
-      const c = document.createElement('canvas');
-      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
-      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      // Synced to the server through the encrypted channel + the Vercel proxy (4.5 MB body limit incl. ~1.8x overhead):
+      // keep the data URL under ~1.2 M chars by lowering quality, then size, until it fits.
+      const MAX_CHARS = 1_200_000;
+      let side = 1920; let q = 0.82; let out = '';
+      for (let i = 0; i < 8; i += 1) {
+        const k = Math.min(1, side / Math.max(img.width, img.height));
+        const c = document.createElement('canvas');
+        c.width = Math.max(1, Math.round(img.width * k)); c.height = Math.max(1, Math.round(img.height * k));
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        out = c.toDataURL('image/jpeg', q);
+        if (out.length <= MAX_CHARS) break;
+        if (q > 0.6) q -= 0.12; else side = Math.round(side * 0.8);
+      }
       URL.revokeObjectURL(url);
-      resolve(c.toDataURL('image/jpeg', 0.82));
+      resolve(out);
     };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('bad image')); };
     img.src = url;

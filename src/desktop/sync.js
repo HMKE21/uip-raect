@@ -101,7 +101,7 @@ export function useDesktopSync({ uid, state, apply }) {
       if (res?.stale) { await adopt(res); pending.current = false; } // another device changed things after us
       else if (sigRef.current === mySig) pending.current = false;
       if (typeof res?.lockEnabled === 'boolean') setLockEnabled(res.lockEnabled);
-    } catch { pending.current = true; } // offline / server hiccup: retried by the 30 s timer below
+    } catch (e) { pending.current = true; try { console.warn('[desktop-sync] push failed, will retry:', e?.status || '', e?.message || e); } catch { /* ignore */ } } // offline / server hiccup: retried by the 30 s timer below
     finally { busy.current = false; }
     if (pending.current && sigRef.current !== mySig) { clearTimeout(timer.current); timer.current = setTimeout(push, 600); }
   };
@@ -114,7 +114,8 @@ export function useDesktopSync({ uid, state, apply }) {
       const remote = await desktopApi.settings();
       if (typeof remote?.lockEnabled === 'boolean') setLockEnabled(remote.lockEnabled);
       const meta = readMeta(R.current.uid);
-      if (remote?.exists && Number(remote.updatedAt) > meta.updatedAt && !pending.current) {
+      const lacksPicture = !!remote?.wp && remote.wp !== meta.wp && remote.prefs?.wallpaper === 'custom' && !R.current.state.prefs.customWallpaper;
+      if (remote?.exists && (Number(remote.updatedAt) > meta.updatedAt || lacksPicture) && !pending.current) {
         await adopt(remote);
       } else if (first) {
         if (!remote?.exists || meta.updatedAt > Number(remote.updatedAt || 0)) { if (!meta.updatedAt) writeMeta(R.current.uid, { updatedAt: Date.now() }); await pushRef.current(); }
@@ -122,7 +123,7 @@ export function useDesktopSync({ uid, state, apply }) {
         lastSig.current = sigRef.current;
       }
       if (first) setSynced(true);
-    } catch { /* offline / not ready: the next focus / timer tick tries again */ } finally { pulling.current = false; }
+    } catch (e) { try { console.warn('[desktop-sync] pull failed:', e?.status || '', e?.message || e); } catch { /* ignore */ } } finally { pulling.current = false; } // offline / not ready: the next focus / timer tick tries again
   };
   const pullRef = useRef(pull); pullRef.current = pull;
 
