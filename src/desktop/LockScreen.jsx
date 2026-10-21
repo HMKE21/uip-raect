@@ -172,4 +172,22 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
   );
 }
 
+/** Sleep mode: black screen with a dim clock. Any mouse move / click / key / touch wakes it (see useDesktopSecurity in ./security.js). */
+export function SleepScreen({ ar, tt, dim, onWake }) {
+  useEffect(() => {
+    let armed = false;
+    const t = setTimeout(() => { armed = true; }, 400); // ignore the input that put it to sleep
+    const wake = () => { if (armed) onWake(); };
+    const ev = ['pointermove', 'pointerdown', 'keydown', 'touchstart', 'wheel'];
+    ev.forEach((e) => window.addEventListener(e, wake, true));
+    return () => { clearTimeout(t); ev.forEach((e) => window.removeEventListener(e, wake, true)); };
+  }, [onWake]);
+  return (
+    <div className={`os-sleep${dim ? ' is-dim' : ''}`} role="dialog" aria-modal="true" aria-label={tt('Sleeping', 'السكون')}>
+      <div className="os-sleep__clock"><Clock ar={ar} big /></div>
+      <p className="os-sleep__hint"><Icon name="moon" size={13} />{tt('Move the mouse or press any key to wake', 'حرّك الماوس أو اضغط أي زر عشان تصحّي الجهاز')}</p>
+    </div>
+  );
+}
+
 export default LockScreen;
