@@ -37,8 +37,28 @@ export const NEW_TYPES = [
     templates: [{ id: 'white', label: L('White canvas 1280×720', 'لوحة بيضاء ١٢٨٠×٧٢٠') }, { id: 'square', label: L('White square 1024×1024', 'مربع أبيض ١٠٢٤×١٠٢٤') }, { id: 'transparent', label: L('Transparent 1280×720', 'شفافة ١٢٨٠×٧٢٠') }, { id: 'dark', label: L('Dark canvas 1280×720', 'لوحة داكنة ١٢٨٠×٧٢٠') }] },
   { id: 'html', ext: 'html', group: 'code', color: '#e34c26', label: L('HTML page', 'صفحة HTML'), hint: L('A starter web page', 'صفحة ويب جاهزة للبدء'), templates: [{ id: 'blank', label: L('Starter page', 'صفحة بداية') }] },
   { id: 'css', ext: 'css', group: 'code', color: '#2563eb', label: L('CSS stylesheet', 'ملف CSS'), hint: L('Styles', 'تنسيقات'), templates: [{ id: 'blank', label: L('Empty', 'فارغ') }] },
-  { id: 'js', ext: 'js', group: 'code', color: '#eab308', label: L('JavaScript', 'JavaScript'), hint: L('Script', 'سكربت'), templates: [{ id: 'blank', label: L('Empty', 'فارغ') }] },
-  { id: 'py', ext: 'py', group: 'code', color: '#3b82f6', label: L('Python', 'Python'), hint: L('Script', 'سكربت'), templates: [{ id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'js', ext: 'js', group: 'code', color: '#eab308', label: L('JavaScript', 'JavaScript'), hint: L('Script', 'سكربت'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'py', ext: 'py', group: 'code', color: '#3b82f6', label: L('Python', 'Python'), hint: L('Script', 'سكربت'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'c', ext: 'c', group: 'code', color: '#5b9bd5', label: L('C', 'C'), hint: L('C program', 'C program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'cpp', ext: 'cpp', group: 'code', color: '#00599c', label: L('C++', 'C++'), hint: L('C++ program', 'C++ program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'java', ext: 'java', group: 'code', color: '#e76f00', label: L('Java', 'Java'), hint: L('Java program', 'Java program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'cs', ext: 'cs', group: 'code', color: '#8e44ad', label: L('C#', 'C#'), hint: L('C# program', 'C# program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'go', ext: 'go', group: 'code', color: '#00add8', label: L('Go', 'Go'), hint: L('Go program', 'Go program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'rs', ext: 'rs', group: 'code', color: '#dea584', label: L('Rust', 'Rust'), hint: L('Rust program', 'Rust program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'php', ext: 'php', group: 'code', color: '#8892bf', label: L('PHP', 'PHP'), hint: L('PHP script', 'PHP script'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'rb', ext: 'rb', group: 'code', color: '#cc342d', label: L('Ruby', 'Ruby'), hint: L('Ruby script', 'Ruby script'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'ts', ext: 'ts', group: 'code', color: '#3b82f6', label: L('TypeScript', 'TypeScript'), hint: L('TypeScript script', 'TypeScript script'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'kt', ext: 'kt', group: 'code', color: '#a97bff', label: L('Kotlin', 'Kotlin'), hint: L('Kotlin program', 'Kotlin program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'dart', ext: 'dart', group: 'code', color: '#00b4ab', label: L('Dart', 'Dart'), hint: L('Dart program', 'Dart program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'lua', ext: 'lua', group: 'code', color: '#000080', label: L('Lua', 'Lua'), hint: L('Lua script', 'Lua script'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'pl', ext: 'pl', group: 'code', color: '#39457e', label: L('Perl', 'Perl'), hint: L('Perl script', 'Perl script'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'r', ext: 'r', group: 'code', color: '#276dc3', label: L('R', 'R'), hint: L('R script', 'R script'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'jl', ext: 'jl', group: 'code', color: '#9558b2', label: L('Julia', 'Julia'), hint: L('Julia script', 'Julia script'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'sh', ext: 'sh', group: 'code', color: '#4eaa25', label: L('Bash', 'Bash'), hint: L('Shell script', 'Shell script'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'sql', ext: 'sql', group: 'code', color: '#e38c00', label: L('SQL', 'SQL'), hint: L('SQL (SQLite)', 'SQL (SQLite)'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'hs', ext: 'hs', group: 'code', color: '#5e5086', label: L('Haskell', 'Haskell'), hint: L('Haskell program', 'Haskell program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'f90', ext: 'f90', group: 'code', color: '#734f96', label: L('Fortran', 'Fortran'), hint: L('Fortran program', 'Fortran program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'pas', ext: 'pas', group: 'code', color: '#e3a51f', label: L('Pascal', 'Pascal'), hint: L('Pascal program', 'Pascal program'), templates: [{ id: 'hello', label: L('Hello World', 'Hello World') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
 ];
 export const NEW_GROUPS = [
   { id: 'office', label: L('Office & PDF', 'مستندات و PDF') }, { id: 'data', label: L('Data', 'بيانات') }, { id: 'text', label: L('Text', 'نصوص') },
@@ -56,7 +76,7 @@ export function withExt(name, ext) {
 }
 export const defaultName = (type, locale) => {
   const t = typeById(type); const ar = locale === 'ar';
-  const base = { docx: ['Document', 'مستند'], xlsx: ['Workbook', 'جدول'], pptx: ['Presentation', 'عرض تقديمي'], pdf: ['Document', 'ملف'], png: ['Image', 'صورة'], csv: ['Table', 'جدول'], tsv: ['Table', 'جدول'], md: ['Note', 'ملاحظة'], txt: ['Untitled', 'بدون عنوان'], json: ['data', 'data'], html: ['index', 'index'], css: ['style', 'style'], js: ['script', 'script'], py: ['main', 'main'] }[type] || ['Untitled', 'بدون عنوان'];
+  const base = { docx: ['Document', 'مستند'], xlsx: ['Workbook', 'جدول'], pptx: ['Presentation', 'عرض تقديمي'], pdf: ['Document', 'ملف'], png: ['Image', 'صورة'], csv: ['Table', 'جدول'], tsv: ['Table', 'جدول'], md: ['Note', 'ملاحظة'], txt: ['Untitled', 'بدون عنوان'], json: ['data', 'data'], html: ['index', 'index'], css: ['style', 'style'], js: ['script', 'script'], py: ['main', 'main'], java: ['Main', 'Main'] }[type] || (t?.group === 'code' ? ['main', 'main'] : ['Untitled', 'بدون عنوان']);
   return `${base[ar ? 1 : 0]}.${t?.ext || type}`;
 };
 
@@ -152,9 +172,34 @@ function makeText(type, template, title) {
   if (type === 'md') return template === 'readme' ? `# ${base}\n\n## About\n\n## Getting started\n\n## Usage\n\n## License\n` : `# ${base}\n\n`;
   if (type === 'json') return template === 'list' ? '[]\n' : '{}\n';
   if (type === 'html') return `<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>${esc(base)}</title>\n</head>\n<body>\n  <h1>${esc(base)}</h1>\n</body>\n</html>\n`;
-  if (type === 'csv' || type === 'tsv' || type === 'txt' || type === 'css' || type === 'js' || type === 'py') return '';
+  if (template === 'hello' && HELLO[type]) return HELLO[type];
   return '';
 }
+
+const HELLO = {
+  js: "console.log(\"Hello, World!\");\n",
+  py: "print(\"Hello, World!\")\n",
+  c: "#include <stdio.h>\n\nint main(void) {\n    printf(\"Hello, World!\\n\");\n    return 0;\n}\n",
+  cpp: "#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << \"Hello, World!\" << endl;\n    return 0;\n}\n",
+  java: "public class Main {\n    public static void main(String[] args) {\n        System.out.println(\"Hello, World!\");\n    }\n}\n",
+  cs: "using System;\n\nclass Program {\n    static void Main() {\n        Console.WriteLine(\"Hello, World!\");\n    }\n}\n",
+  go: "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello, World!\")\n}\n",
+  rs: "fn main() {\n    println!(\"Hello, World!\");\n}\n",
+  php: "<?php\necho \"Hello, World!\\n\";\n",
+  rb: "puts \"Hello, World!\"\n",
+  ts: "const message: string = \"Hello, World!\";\nconsole.log(message);\n",
+  kt: "fun main() {\n    println(\"Hello, World!\")\n}\n",
+  dart: "void main() {\n  print('Hello, World!');\n}\n",
+  lua: "print(\"Hello, World!\")\n",
+  pl: "use strict;\nuse warnings;\n\nprint \"Hello, World!\\n\";\n",
+  r: "cat(\"Hello, World!\\n\")\n",
+  jl: "println(\"Hello, World!\")\n",
+  sh: "#!/bin/bash\necho \"Hello, World!\"\n",
+  sql: "-- SQLite\nCREATE TABLE students (id INTEGER PRIMARY KEY, name TEXT);\nINSERT INTO students (name) VALUES ('Sara'), ('Omar');\nSELECT * FROM students;\n",
+  hs: "main :: IO ()\nmain = putStrLn \"Hello, World!\"\n",
+  f90: "program hello\n  print *, \"Hello, World!\"\nend program hello\n",
+  pas: "program Hello;\nbegin\n  writeln('Hello, World!');\nend.\n",
+};
 
 /** @returns {Promise<File>} */
 export async function createFile({ type, template, name, locale = 'en' }) {
