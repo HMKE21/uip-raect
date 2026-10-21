@@ -89,7 +89,7 @@ function dismissGhost(view) {
 }
 
 /** Plain fetch of one completion. Resolves { text } | { text:'', backoff:true } | { text:'', disable:true }; never throws. */
-export async function fetchCompletion({ prefix, suffix, language, filename, signal }, retried = false) {
+export async function fetchCompletion({ prefix, suffix, language, filename, signal, projectId }, retried = false) {
   try {
     const { accessToken } = getTokens();
     const res = await fetch(ENDPOINT, {
@@ -102,11 +102,11 @@ export async function fetchCompletion({ prefix, suffix, language, filename, sign
         'X-Requested-With': 'XMLHttpRequest',
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
-      body: JSON.stringify({ prefix, suffix, language: language || '', filename: filename || '' }),
+      body: JSON.stringify({ prefix, suffix, language: language || '', filename: filename || '', project_id: projectId || undefined }),
     });
     if (res.status === 401 && !retried) {
       await api.get('/api/v1/ai-code/status'); // a normal client call refreshes the expired token; then replay once
-      return fetchCompletion({ prefix, suffix, language, filename, signal }, true);
+      return fetchCompletion({ prefix, suffix, language, filename, signal, projectId }, true);
     }
     if (res.status === 429) return { text: '', backoff: true };
     if (res.status === 403 || res.status === 503 || res.status === 401) return { text: '', disable: true };

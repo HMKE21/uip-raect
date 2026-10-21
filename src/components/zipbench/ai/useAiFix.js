@@ -27,7 +27,7 @@ function httpMessage(status, serverMsg, tt) {
  * Talks to POST /api/v1/ai-code/fix (SSE: start → token* → [edits] → done | error) with fetch + ReadableStream (the
  * request needs a POST body, so EventSource is not an option) — same approach as the site's AI assistant widget.
  */
-export function useAiFix({ enabled, tt }) {
+export function useAiFix({ enabled, tt, projectId }) {
   const [status, setStatus] = useState(null); // { available, default_mode, allow_mode_switch, modes, limits } | null
   const [panel, setPanel] = useState(null);   // null = closed, else the current question + answer (see ask())
   const abortRef = useRef(null);
@@ -38,11 +38,12 @@ export function useAiFix({ enabled, tt }) {
   useEffect(() => {
     if (!enabled) { setStatus(null); return undefined; }
     let dead = false;
-    api.get(`${BASE}/status`)
+    // inside a project the supervising doctor may have fixed the AI mode (off / tutor / assistant): the server answers for that project
+    api.get(projectId ? `${BASE}/status?project_id=${encodeURIComponent(projectId)}` : `${BASE}/status`)
       .then((res) => { if (!dead) setStatus((res && res.data) || res || null); })
       .catch(() => { if (!dead) setStatus(null); });
     return () => { dead = true; };
-  }, [enabled]);
+  }, [enabled, projectId]);
 
   const abort = useCallback(() => {
     seqRef.current += 1;
@@ -73,10 +74,10 @@ export function useAiFix({ enabled, tt }) {
 
     const body = JSON.stringify(isAssist ? {
       action: q.action, code: q.code, sel_from: q.selFrom || undefined, sel_to: q.selTo || undefined, target: q.target || undefined,
-      language: q.language || '', filename: q.filename || '', mode, locale: isAr() ? 'ar' : 'en',
+      language: q.language || '', filename: q.filename || '', mode, locale: isAr() ? 'ar' : 'en', project_id: projectId || undefined,
     } : {
       code: q.code, error: q.error, language: q.language || '', filename: q.filename || '', line: q.line || undefined,
-      mode, locale: isAr() ? 'ar' : 'en',
+      mode, locale: isAr() ? 'ar' : 'en', project_id: projectId || undefined,
     });
 
     const handle = (evt) => {
@@ -144,7 +145,7 @@ export function useAiFix({ enabled, tt }) {
       }
     };
     run(false);
-  }, [abort, status]);
+  }, [abort, status, projectId]);
 
   const close = useCallback(() => { abort(); setPanel(null); }, [abort]);
   const mark = useCallback((id, state) => setPanel((cur) => (cur ? { ...cur, edits: cur.edits.map((e) => (e.id === id ? { ...e, state } : e)) } : cur)), []);
@@ -155,6 +156,7 @@ export function useAiFix({ enabled, tt }) {
     autocompleteAvailable: !!(status && status.available && status.autocomplete && status.autocomplete.available),
     modes: (status && status.modes) || ['tutor'],
     defaultMode: (status && status.default_mode) || 'tutor',
+    projectMode: (status && status.project_mode) || null, // set by the supervising doctor for this project: 'off' | 'tutor' | 'assistant' | null
     limits: (status && status.limits) || {},
     panel, ask, abort, close, mark,
     streaming: panel?.phase === 'streaming',

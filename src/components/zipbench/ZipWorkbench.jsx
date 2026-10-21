@@ -122,7 +122,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const runner = useRunner();
   const sandbox = useSandbox(projectId, sandboxTokenPath); // real server / terminal on the uip-sandbox gateway (needs a project id)
   const { can } = useAuth();
-  const ai = useAiFix({ enabled: can('ai.code_assist'), tt });
+  const ai = useAiFix({ enabled: can('ai.code_assist'), tt, projectId }); // projectId: the supervising doctor may have set this project's AI mode
   const chat = useAiChat({ tt }); // side-panel chat: knows the open file, selection, terminal output and the other open tabs
   const [chatOpen, setChatOpen] = useState(false);
   const [chatCtx, setChatCtx] = useState({ file: true, selection: true, others: true, output: false }); // what the chat sends as context
@@ -133,9 +133,9 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   }, []);
   const ghostOpts = useMemo(() => ({
     enabled: ai.autocompleteAvailable && ghostPref && !ghostDead && !NO_GHOST_EXT.has(extOf(editorDoc?.path || '')),
-    request: fetchCompletion,
+    request: (c, retried) => fetchCompletion({ ...c, projectId }, retried),
     onDisable: () => setGhostDead(true),
-  }), [ai.autocompleteAvailable, ghostPref, ghostDead, editorDoc?.path]);
+  }), [ai.autocompleteAvailable, ghostPref, ghostDead, editorDoc?.path, projectId]);
 
   useEffect(() => { if (ai.panel) setChatOpen(false); }, [ai.panel]);
 
@@ -1016,6 +1016,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     const go = (action, target) => askAssist(action, { path, target });
     const targets = CONVERT_TARGETS.filter((l) => l !== cur && !(cur === 'React JSX' && l === 'JavaScript')).slice(0, 3);
     const items = [
+      ...(ai.projectMode ? [{ label: tt(`Set by your supervisor: ${ai.projectMode === 'tutor' ? 'Tutor' : 'Assistant'} mode`, `الدكتور ضابط الوضع: ${ai.projectMode === 'tutor' ? 'مدرّس (تلميحات)' : 'مساعد (حلول)'}`), icon: 'lock', disabled: true }, { sep: true }] : []),
       ...(ai.chatAvailable ? [{ label: tt('Chat with AI', 'شات مع الذكاء الاصطناعي'), icon: 'chat', checked: chatOpen, onClick: () => (chatOpen ? closeChat() : openChat()) }, { sep: true }] : []),
       { label: tt('Explain this file', 'اشرح الملف'), icon: 'sparkles', disabled: !isText, onClick: () => go('explain') },
       { label: tt('Fix bugs', 'صلّح الأخطاء'), icon: 'wrench', disabled: !isText, onClick: () => go('fix') },
@@ -1106,6 +1107,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
       files, tree: tree.slice(0, 400),
       sel_from: sel ? sel.from : undefined, sel_to: sel ? sel.to : undefined,
       error: out || undefined,
+      project_id: projectId || undefined,
     };
   };
   const sendChat = (text) => chat.send({ text, mode: chatModeNow, buildRequest: buildChatRequest });
@@ -1307,6 +1309,9 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
           </button>
           {ai.chatAvailable && (
             <button type="button" className={`zb-ibtn${chatOpen ? ' is-on' : ''}`} onClick={() => (chatOpen ? closeChat() : openChat())} title={tt('AI chat', 'شات الذكاء الاصطناعي')} aria-label={tt('AI chat', 'شات الذكاء الاصطناعي')} aria-pressed={chatOpen}><Icon name="chat" size={17} /></button>
+          )}
+          {ai.projectMode === 'off' && (
+            <span className="zb-ibtn zb-ibtn--ai" style={{ opacity: .55, cursor: 'default' }} title={tt('Your supervisor turned the AI assistant off for this project', 'الدكتور المشرف قفل مساعد الذكاء الاصطناعي على المشروع ده')} role="img" aria-label={tt('AI assistant is off for this project', 'مساعد الذكاء الاصطناعي مقفول على المشروع ده')}><Icon name="lock" size={14} /></span>
           )}
           {ai.available && (
             <button type="button" className={`zb-ibtn zb-ibtn--ai${ai.streaming ? ' is-on' : ''}`} onClick={(e) => openAiMenu(e.currentTarget)} title={tt('AI assistant', 'مساعد الذكاء الاصطناعي')} aria-label={tt('AI assistant', 'مساعد الذكاء الاصطناعي')} aria-haspopup="menu">✨</button>

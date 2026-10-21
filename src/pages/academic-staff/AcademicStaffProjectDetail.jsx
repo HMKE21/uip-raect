@@ -74,6 +74,16 @@ export default function AcademicStaffProjectDetail() {
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
 
+  // AI code-assistant mode for this project's students (official supervisor only): '' = default (admin settings) | off | tutor | assistant
+  async function saveAiMode(mode) {
+    setBusy(true); setError(null);
+    try {
+      const j = await api.patch(`/api/v1/academic-staff/projects/${encodeURIComponent(id)}/ai-mode`, { mode: mode || 'inherit' });
+      setData((d) => ({ ...d, ai_code_mode: j.data?.ai_code_mode ?? null }));
+      setMsg(ar ? 'تم حفظ وضع مساعد الذكاء الاصطناعي للمشروع.' : 'AI assistant mode saved for this project.');
+    } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+  }
+
   async function decide() {
     setBusy(true); setError(null);
     try {
@@ -160,6 +170,28 @@ export default function AcademicStaffProjectDetail() {
       </section>
 
       <CodeReviewReportPanel projectId={id} className="st-panel" />
+
+      <section className="st-panel">
+        <h3>{ar ? 'مساعد الذكاء الاصطناعي في المحرر' : 'AI assistant in the code editor'}</h3>
+        <p className="st-muted" style={{ fontSize: 12.5 }}>
+          {ar
+            ? 'تتحكم في وضع المساعد لطلبة المشروع ده. الوضع اللي تختاره بيغلب إعدادات الإدارة، والطالب مبيقدرش يبدّله.'
+            : "Controls the assistant for this project's students. Your choice overrides the platform default and students cannot switch it."}
+        </p>
+        <select
+          className="form-input"
+          value={data.ai_code_mode || ''}
+          disabled={busy || !data.can_set_ai_mode}
+          onChange={(e) => saveAiMode(e.target.value)}
+          aria-label={ar ? 'وضع مساعد الذكاء الاصطناعي' : 'AI assistant mode'}
+        >
+          <option value="">{ar ? 'الافتراضي (إعدادات الإدارة)' : 'Default (platform setting)'}</option>
+          <option value="off">{ar ? 'مقفول — بدون مساعد' : 'Off — no AI assistant'}</option>
+          <option value="tutor">{ar ? 'مدرّس — يشرح ويلمّح من غير حل جاهز' : 'Tutor — explains and hints, no ready-made fix'}</option>
+          <option value="assistant">{ar ? 'مساعد — يدّي حلول وتعديلات' : 'Assistant — gives fixes and edits'}</option>
+        </select>
+        {!data.can_set_ai_mode && <p className="st-muted" style={{ fontSize: 12.5, marginTop: 8 }}>{ar ? 'الضبط للدكتور المشرف بس (ربطك استشاري).' : 'Only the supervising doctor can change this (your link is advisory).'}</p>}
+      </section>
 
       <section className="st-panel">
         <h3>{ar ? 'الفريق' : 'Team'}</h3>
