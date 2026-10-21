@@ -16,7 +16,7 @@ const STATE_LABEL = {
 };
 
 /** Bottom panel of the workbench: pick what to run, Run / Stop, live preview (web) and console (stdout, stderr, errors). */
-export default function RunPanel({ tt, runner, apps, app, onSelect, onRun, onClose, expanded, onToggleExpand }) {
+export default function RunPanel({ tt, runner, apps, app, onSelect, onRun, onClose, expanded, onToggleExpand, ai }) {
   const [tab, setTab] = useState('console');
   const [stdin, setStdin] = useState('');
   const [line, setLine] = useState('');
@@ -64,6 +64,9 @@ export default function RunPanel({ tt, runner, apps, app, onSelect, onRun, onClo
             ? <button type="button" className="zb-btn zb-btn--danger" onClick={runner.stop}><Icon name="stop" size={14} /> <span>{tt('Stop', 'إيقاف')}</span></button>
             : <button type="button" className="zb-btn zb-btn--primary" onClick={() => onRun({ stdin })} disabled={!canRun}><Icon name={live ? 'refresh' : 'play'} size={14} /> <span>{live ? tt('Reload', 'إعادة تحميل') : tt('Run', 'تشغيل')}</span></button>}
           {live && <button type="button" className="zb-btn" onClick={runner.stop}><Icon name="stop" size={14} /> <span>{tt('Stop', 'إيقاف')}</span></button>}
+          {ai?.show && (
+            <button type="button" className={`zb-btn zb-btn--ai${ai.hot ? ' is-hot' : ''}`} onClick={() => ai.onExplain()} disabled={ai.busy} title={tt('Ask the AI to explain the error in the output', 'اطلب من الذكاء الاصطناعي يشرح الخطأ اللي في الناتج')}><Icon name="sparkles" size={14} /> <span>{tt('Explain error', 'اشرح الخطأ')}</span></button>
+          )}
           <span className={`zb-run__state is-${state}`} role="status" title={statusText && running ? statusText : tt(...stateText)}><i className="zb-run__dot" /><em>{statusText && running ? statusText : tt(...stateText)}</em></span>
         </div>
         <div className="zb-run__tools">

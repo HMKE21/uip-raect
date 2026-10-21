@@ -148,5 +148,7 @@ export function useSandbox(projectId, tokenPath) {
   useEffect(() => () => { runRef.current += 1; try { wsRef.current?.send(JSON.stringify({ t: 'stop' })); } catch { /* ignore */ } closeSocket(); }, [closeSocket]);
 
   const busy = phase === 'connecting' || phase === 'starting';
-  return { phase, busy, statusText, previewUrl, hint, error, expiresAt, attach, start, reconnect, resumable, resumeSaved, restart, stop, input, resize, reset };
+  /** everything printed in the terminal so far (last 200 KB) — read by the "explain this error" button */
+  const getOutput = useCallback(() => outRef.current, []);
+  return { phase, busy, statusText, previewUrl, hint, error, expiresAt, getOutput, attach, start, reconnect, resumable, resumeSaved, restart, stop, input, resize, reset };
 }

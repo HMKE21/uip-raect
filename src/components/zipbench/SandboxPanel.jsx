@@ -19,7 +19,7 @@ const KIND_NOTE = {
  * The project runs inside an isolated container on the uip-sandbox gateway; this panel shows its terminal (xterm.js)
  * and the live preview (an iframe on the sandbox's own preview domain — never on the UIP origin).
  */
-export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect, onRun, onClose, expanded, onToggleExpand }) {
+export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect, onRun, onClose, expanded, onToggleExpand, ai }) {
   const [tab, setTab] = useState('terminal');
   const [frameKey, setFrameKey] = useState(0);
   const { panelRef, height, setHeight, onGripDown } = useResizeGrip();
@@ -84,6 +84,9 @@ export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect
             </>
           ) : (
             <button type="button" className="zb-btn zb-btn--primary" onClick={run}><Icon name="play" size={14} /> <span>{tt('Run', 'تشغيل')}</span></button>
+          )}
+          {ai?.show && (
+            <button type="button" className={`zb-btn zb-btn--ai${ai.hot ? ' is-hot' : ''}`} onClick={() => ai.onExplain()} disabled={ai.busy} title={tt('Ask the AI to explain the error in the output', 'اطلب من الذكاء الاصطناعي يشرح الخطأ اللي في الناتج')}><Icon name="sparkles" size={14} /> <span>{tt('Explain error', 'اشرح الخطأ')}</span></button>
           )}
           <span className={`zb-run__state is-${phase === 'running' ? 'running' : phase === 'error' || phase === 'disconnected' ? 'error' : busy ? 'building' : 'idle'}`} role="status" title={busy && statusText ? statusText : tt(...label)}>
             <i className="zb-run__dot" /><em>{busy && statusText ? statusText : tt(...label)}</em>

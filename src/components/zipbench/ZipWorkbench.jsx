@@ -8,6 +8,10 @@ import SandboxPanel from './SandboxPanel';
 import { detectApps, defaultApp } from './runner/detectApps';
 import { useRunner } from './runner/useRunner';
 import { useSandbox } from './runner/useSandbox';
+import { useAiFix } from './ai/useAiFix';
+import AiFixPanel from './ai/AiFixPanel';
+import { applyEdit, guessErrorFile, languageOf, looksLikeError, tailOutput } from './ai/aiFixUtils';
+import { useAuth } from '../../context/AuthContext';
 import { RUNNER_URL } from '../../config/runner';
 import { DEFAULT_THEME, THEMES, themeById, themeVars } from './zipThemes';
 import {
@@ -109,6 +113,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const deletedRef = useRef(0);
   const runner = useRunner();
   const sandbox = useSandbox(projectId, sandboxTokenPath); // real server / terminal on the uip-sandbox gateway (needs a project id)
+  const { can } = useAuth();
+  const ai = useAiFix({ enabled: can('ai.code_assist'), tt }); // "explain / fix this error" (needs the ai.code_assist permission)
 
   const zipBytes = useRef(null);
   const ownBlob = useRef(null); // the archive we just saved ourselves — a re-delivered copy of it must not reload the workbench
@@ -903,6 +909,68 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     autoOpened.current = true;
     setRunOpen(true);
   }, [phase, runApp]);
+  // ---- AI: explain / fix the error shown in the terminal / console --------------------------------------------------
+  const textOf = (path) => {
+    if (edits.current.has(path)) return edits.current.get(path);
+    if (origTexts.current.has(path)) return origTexts.current.get(path);
+    const n = vfsRef.current.get(path);
+    if (!n || n.dir) return null;
+    try { const b = getBytes(path); return isBinary(path, b) ? null : dec.decode(b); } catch { return null; }
+  };
+  const runOutput = () => (runApp?.kind === 'sandbox'
+    ? sandbox.getOutput()
+    : runner.logs.map((l) => (/\n$/.test(l.text) ? l.text : `${l.text}\n`)).join(''));
+  const explainError = (mode) => {
+    const error = tailOutput(runOutput(), ai.limits.max_error_chars || 6000);
+    if (!error) { flash(tt('Run the code first — there is no output to explain yet.', 'شغّل الكود الأول — مفيش ناتج أشرحه لسه.')); return; }
+    const paths = [];
+    vfsRef.current.forEach((v) => { if (!v.dir) paths.push(v.path); });
+    const hit = guessErrorFile(error, paths, activeRef.current);
+    const path = hit?.path || (docs.current.get(activeRef.current)?.kind === 'text' ? activeRef.current : null);
+    if (!path) { flash(tt('Open the file the error comes from, then press “Explain error” again.', 'افتح الملف اللي فيه الخطأ وبعدين اضغط «اشرح الخطأ» تاني.')); return; }
+    const code = textOf(path);
+    if (code == null || !code.trim()) { flash(tt('Could not read that file.', 'مقدرتش أقرا الملف ده.')); return; }
+    const max = ai.limits.max_code_chars || 30000;
+    if (code.length > max) { flash(tt(`This file is too large for the assistant (max ${max} characters).`, `الملف كبير على المساعد (الحد الأقصى ${max} حرف).`)); return; }
+    ai.ask({ path, code, error, line: hit?.line || null, language: languageOf(path), filename: baseName(path), mode });
+  };
+  // put new text into the editor (a fresh editor state: the old one still holds the previous text)
+  const commitAiText = (path, text) => {
+    setTextFor(path, text);
+    gens.current.set(path, (gens.current.get(path) || 0) + 1);
+    if (activeRef.current === path) setEditorDoc({ path, docId: `${path}#${gens.current.get(path)}`, text });
+    else openFile(path);
+  };
+  const applyAi = (id) => {
+    const p = ai.panel; const e = p?.edits.find((x) => x.id === id);
+    if (!e) return;
+    const cur = textOf(p.path);
+    const r = cur == null ? { ok: false } : applyEdit(cur, e);
+    if (!r.ok) { ai.mark(id, 'stale'); return; }
+    commitAiText(p.path, r.text);
+    ai.mark(id, 'applied');
+  };
+  const applyAllAi = () => {
+    const p = ai.panel; if (!p) return;
+    let cur = textOf(p.path); let changed = false;
+    p.edits.filter((e) => e.state === 'pending').forEach((e) => {
+      const r = cur == null ? { ok: false } : applyEdit(cur, e);
+      if (r.ok) { cur = r.text; changed = true; ai.mark(e.id, 'applied'); } else ai.mark(e.id, 'stale');
+    });
+    if (changed) commitAiText(p.path, cur);
+  };
+  const gotoAi = () => {
+    const p = ai.panel; if (!p) return;
+    openFile(p.path);
+    if (p.line) { revealSeq.current += 1; setReveal({ key: `ai${revealSeq.current}`, path: p.path, line: p.line, col: 0, len: 0 }); }
+  };
+  const aiOut = ai.available && runOpen ? (runApp?.kind === 'sandbox' ? sandbox.getOutput() : runner.logs.length ? 'x' : '') : '';
+  const aiBtn = {
+    show: ai.available && !!aiOut,
+    hot: runApp?.kind === 'sandbox' ? (sandbox.phase === 'error' || looksLikeError(aiOut)) : (runner.state === 'error' || looksLikeError(runOutput())),
+    busy: ai.streaming,
+    onExplain: () => explainError(ai.panel?.mode || ai.defaultMode),
+  };
   const closeRun = () => { runner.stop(); runner.reset(); sandbox.reset(); setRunOpen(false); };
 
   // ---- keyboard (VS Code habits) ------------------------------------------------------------------
@@ -1223,6 +1291,23 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
           </div>
         </section>
 
+        {ai.panel && (
+          <AiFixPanel
+            tt={tt}
+            panel={ai.panel}
+            modes={ai.modes}
+            canSwitchMode={ai.modes.length > 1}
+            fileLabel={baseName(ai.panel.path)}
+            onMode={explainError}
+            onRetry={() => explainError(ai.panel.mode)}
+            onClose={ai.close}
+            onApply={applyAi}
+            onApplyAll={applyAllAi}
+            onReject={(id) => ai.mark(id, 'rejected')}
+            onGoto={gotoAi}
+          />
+        )}
+
         {draggingFiles && (
           <div className="zb-dropzone" aria-hidden="true">
             <div><Icon name="upload" size={28} /><strong>{tt('Drop to add to', 'أفلت للإضافة إلى')} {dropDir ? `/${dropDir.replace(/\/$/, '')}` : tt('archive root', 'جذر الأرشيف')}</strong><small>{tt('Files and whole folders are supported', 'يدعم الملفات والمجلدات الكاملة')}</small></div>
@@ -1242,6 +1327,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
           onClose={closeRun}
           expanded={runBig}
           onToggleExpand={() => setRunBig((v) => !v)}
+          ai={aiBtn}
         />
       )}
       {runOpen && runApp?.kind !== 'sandbox' && (
@@ -1255,6 +1341,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
           onClose={closeRun}
           expanded={runBig}
           onToggleExpand={() => setRunBig((v) => !v)}
+          ai={aiBtn}
         />
       )}
 
