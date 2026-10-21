@@ -37,6 +37,10 @@ export async function cloudFetch(url, init) {
     const t = await res.clone().text().catch(() => '');
     if (/quota|storageQuotaExceeded|insufficient/i.test(t)) throw new CloudQuotaError();
     if (/rateLimit|userRateLimit|dailyLimit/i.test(t)) throw new CloudRetryError('Rate limited.', 403);
+    if (/accessNotConfigured|has not been used in project|SERVICE_DISABLED|is disabled/i.test(t)) throw new CloudAuthError('Google Drive API is not enabled for this app\'s Google Cloud project. Enable "Google Drive API" in the Cloud Console.', 'api_disabled');
+    if (/insufficientPermissions|ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficient authentication scopes/i.test(t)) throw new CloudAuthError('Tick the Google Drive permission on the consent screen, then connect again.', 'scope');
+    if (/access_denied|testers|not completed the Google verification/i.test(t)) throw new CloudAuthError('This Google account is not an approved test user of the app.', 'test_user');
+    try { console.warn('[cloud] 403 from', url.split('?')[0], t.slice(0, 300)); } catch { /* ignore */ }
     throw new CloudAuthError('Permission was not granted.', 'denied');
   }
   if (res.status === 507) throw new CloudQuotaError();
