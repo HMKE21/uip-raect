@@ -47,3 +47,17 @@
 .wg-todo__list li:hover button { opacity: .8; }
 .wg-todo__add { width: 100%; padding: 7px 9px; border: 0; outline: 0; border-radius: 8px; background: rgba(255, 255, 255, .14); color: inherit; font: 13px/1.2 inherit; }
 .wg-todo__add:focus { background: rgba(255, 255, 255, .22); }
+
+/* phone home screen (MobileWidgets): cards in the page flow, controls always visible */
+.mos-wgts { display: flex; flex-direction: column; gap: 12px; margin: 14px 0 6px; }
+.mos-wgts .os-wgt { position: relative; width: auto; height: auto; box-shadow: 0 4px 16px rgba(0, 0, 0, .25); }
+.mos-wgts .os-wgt__bar { opacity: 1; cursor: default; height: 28px; }
+.mos-wgts .os-wgt__x { width: 24px; height: 24px; }
+.mos-wgts .os-wgt__dot { width: 18px; height: 18px; }
+.mos-wgts .os-wgt--note .os-wgt__body textarea { min-height: 120px; font-size: 16px; -webkit-user-select: text; user-select: text; }
+.mos-wgts .wg-todo { min-height: 0; }
+.mos-wgts .wg-todo__title, .mos-wgts .wg-todo__add { font-size: 16px; -webkit-user-select: text; user-select: text; }
+.mos-wgts .wg-todo__list { max-height: 260px; }
+.mos-wgts .wg-todo__list li { padding: 6px 0; font-size: 15px; }
+.mos-wgts .wg-todo__list li button { opacity: .7; width: 26px; height: 26px; }
+.mos-wgts .wg-todo__list li input[type="checkbox"] { width: 20px; height: 20px; }

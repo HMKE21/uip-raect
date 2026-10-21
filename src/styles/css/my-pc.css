@@ -150,7 +150,9 @@
   box-shadow: 0 14px 44px rgba(0, 0, 0, .34), 0 0 0 1px rgba(0, 0, 0, .04); animation: mp-pop .1s ease both; }
 .mp-ctx li { list-style: none; }
 .mp-ctx button { width: 100%; display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; background: transparent; color: inherit; border-radius: 6px; font: inherit; cursor: pointer; text-align: start; }
-.mp-ctx button:hover:not(:disabled), .mp-ctx button:focus-visible { background: var(--g-hover, var(--bg-muted)); outline: none; }
+.mp-ctx button:hover:not(:disabled), .mp-ctx button:focus-visible { background: var(--os-accent, var(--color-primary, #0a84ff)); color: #fff; outline: none; } /* clear highlight: white on the accent colour, readable in light and dark */
+.mp-ctx button:hover:not(:disabled) svg, .mp-ctx button:focus-visible svg, .mp-ctx button:hover:not(:disabled) kbd, .mp-ctx button:focus-visible kbd { color: #fff !important; }
+.mp-ctx button.mp-danger:hover:not(:disabled), .mp-ctx button.mp-danger:focus-visible { background: #e5484d; color: #fff !important; }
 .mp-ctx button:disabled { opacity: .4; cursor: default; }
 .mp-ctx button svg { color: var(--g-mute, var(--text-secondary)); }
 .mp-ctx button.mp-danger, .mp-ctx button.mp-danger svg { color: #e5484d !important; }

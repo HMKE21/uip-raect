@@ -146,3 +146,43 @@ export default function WidgetLayer({ items, ar, focusId, bounds, onChange, onRe
     </div>
   );
 }
+
+function MobileItem({ it, ar, focus, onChange, onRemove }) {
+  const box = useRef(null); const ta = useRef(null);
+  useEffect(() => {
+    if (!focus) return undefined;
+    const h = setTimeout(() => { box.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' }); ta.current?.focus({ preventScroll: true }); }, 350); // after the "New" sheet has closed
+    return () => clearTimeout(h);
+  }, [focus]);
+  const color = it.color || 'yellow';
+  const ch = (patch) => onChange(it.id, patch);
+  return (
+    <div ref={box} className={`os-wgt os-wgt--${it.type}${it.type === 'note' ? ` is-${color}` : ''}`}>
+      <div className="os-wgt__bar">
+        {it.type === 'note' && (
+          <span className="os-wgt__dots">
+            {NOTE_COLORS.map((c) => <button key={c} type="button" className={`os-wgt__dot is-${c}${c === color ? ' is-on' : ''}`} onClick={() => ch({ color: c })} aria-label={c} />)}
+          </span>
+        )}
+        <button type="button" className="os-wgt__x" onClick={() => onRemove(it)} aria-label={ar ? 'إزالة' : 'Remove'}><Icon name="x" size={12} /></button>
+      </div>
+      <div className="os-wgt__body">
+        {it.type === 'note' && <textarea ref={ta} dir="auto" value={it.text || ''} maxLength={5000} spellCheck={false} placeholder={ar ? 'اكتب ملاحظتك هنا…' : 'Write a note…'} onChange={(e) => ch({ text: e.target.value })} />}
+        {it.type === 'clock' && <ClockBody it={it} ar={ar} onChange={ch} />}
+        {it.type === 'calendar' && <CalendarBody ar={ar} />}
+        {it.type === 'todo' && <TodoBody it={it} ar={ar} onChange={ch} />}
+      </div>
+    </div>
+  );
+}
+
+/** Phone home screen: the same notes / widgets as a stack of cards (no free dragging on a phone). */
+export function MobileWidgets({ items, ar, focusId, onChange, onRemove }) {
+  if (!items.length) return null;
+  const ordered = items.slice().sort((a, b) => (a.y - b.y) || (a.x - b.x) || (a.z || 0) - (b.z || 0));
+  return (
+    <section className="mos-wgts" aria-label={ar ? 'الويدجت والملاحظات' : 'Widgets and notes'}>
+      {ordered.map((it) => <MobileItem key={it.id} it={it} ar={ar} focus={focusId === it.id} onChange={onChange} onRemove={onRemove} />)}
+    </section>
+  );
+}

@@ -923,6 +923,8 @@ export default function DesktopOS() {
           battery={battery} online={online} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale}
           brightness={brightness} setBrightness={(v) => setPrefs({ brightness: v })} fullscreen={fullscreen} fs={fs}
           wallpaper={wallpaperCss(prefs)} lightWp={wp.dark === false}
+          widgets={widgets.items} newWidgetId={newWidgetId} onWidgetChange={(id, patch) => widgets.update(id, patch)} onWidgetRemove={removeWidget}
+          onWidgetAdd={(type) => { const id = widgets.add(type, { x: 20, y: 20 }); setNewWidgetId(type === 'note' ? id : null); }}
         />
         </Suspense>
       ) : (

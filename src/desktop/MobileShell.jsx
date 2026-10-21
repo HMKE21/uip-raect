@@ -8,6 +8,7 @@ import { BatteryGlyph, WifiGlyph } from './flyouts';
 import { Clock, NodeGlyph } from './shell';
 import { APPS } from './apps';
 import { winTitle } from './wm';
+import { MobileWidgets } from './Widgets';
 import './mobile.css';
 
 export { useIsMobileOS } from './useIsMobileOS';
@@ -128,6 +129,7 @@ export default function MobileShell(p) {
     ar, tt, user, desk, deskItems, wm, dispatch, bodyOf, openNode, openExplorer, runCommand, flash, reloadDesk, hideLocal, refreshAll,
     clip, copyNodes, pasteInto, trashNodes, renameNode, newFolder, newFile, newDoc, battery, online, theme, toggleTheme, toggleLocale,
     brightness, setBrightness, fullscreen, fs, wallpaper, lightWp,
+    widgets = [], newWidgetId = null, onWidgetAdd, onWidgetChange, onWidgetRemove,
   } = p;
 
   const [sheet, setSheet] = useState(null); // { type: 'new' | 'item' | 'move' | 'cc' | 'search' | 'desk', node?, nodes? }
@@ -240,6 +242,7 @@ export default function MobileShell(p) {
             <button type="button" className="mos-search" onClick={() => setSheet({ type: 'search' })}>
               <Icon name="search" size={18} /><span>{tt('Search apps and files', 'ابحث في التطبيقات والملفات')}</span>
             </button>
+            <MobileWidgets items={widgets} ar={ar} focusId={newWidgetId} onChange={onWidgetChange} onRemove={onWidgetRemove} />
           </>
         )}
 
@@ -329,6 +332,10 @@ export default function MobileShell(p) {
       {/* ── sheets ── */}
       {sheet?.type === 'new' && (
         <Sheet title={tt('New', 'جديد')} onClose={closeSheet}>
+          <Row icon="note" label={tt('Sticky note', 'ملاحظة لاصقة')} onClick={after(() => onWidgetAdd?.('note'))} />
+          <Row icon="check" label={tt('To-do list', 'قائمة مهام')} onClick={after(() => onWidgetAdd?.('todo'))} />
+          <Row icon="calendar" label={tt('Calendar widget', 'ويدجت تقويم')} onClick={after(() => onWidgetAdd?.('calendar'))} />
+          <Row icon="clock" label={tt('Clock widget', 'ويدجت ساعة')} onClick={after(() => onWidgetAdd?.('clock'))} />
           <Row icon="file-up" label={tt('Upload from this device', 'رفع من الجهاز')} sub={tt('Files, photos, videos', 'ملفات، صور، فيديوهات')} onClick={after(() => fileRef.current?.click())} />
           <Row icon="folder-plus" label={tt('New folder', 'مجلد جديد')} onClick={after(newFolder)} />
           <Row icon="file-plus" label={tt('Text file', 'ملف نصي')} onClick={after(newFile)} />
