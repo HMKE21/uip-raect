@@ -120,9 +120,17 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
       EditorView.updateListener.of((u) => {
         if (u.docChanged) cb.current.onChange?.(u.state.doc.toString());
         if (u.selectionSet || u.docChanged) {
-          const pos = u.state.selection.main.head;
+          const { main } = u.state.selection;
+          const pos = main.head;
           const line = u.state.doc.lineAt(pos);
-          cb.current.onCursor?.({ line: line.number, col: pos - line.from + 1 });
+          // selected lines (1-based; a selection ending at the very start of a line does not include that line) — the AI chat sends them as context
+          let sel = null;
+          if (!main.empty) {
+            const a = u.state.doc.lineAt(main.from);
+            const b = u.state.doc.lineAt(main.to);
+            sel = { from: a.number, to: b.from === main.to ? Math.max(a.number, b.number - 1) : b.number };
+          }
+          cb.current.onCursor?.({ line: line.number, col: pos - line.from + 1, sel });
         }
       }),
     ],
@@ -159,7 +167,7 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
     requestAnimationFrame(() => { v.scrollDOM.scrollTop = scrolls.current.get(docId) || 0; });
     const pos = next.selection.main.head;
     const line = next.doc.lineAt(pos);
-    cb.current.onCursor?.({ line: line.number, col: pos - line.from + 1 });
+    cb.current.onCursor?.({ line: line.number, col: pos - line.from + 1, sel: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId]);
 

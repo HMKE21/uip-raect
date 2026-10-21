@@ -10,6 +10,8 @@ import { useRunner } from './runner/useRunner';
 import { useSandbox } from './runner/useSandbox';
 import { useAiFix } from './ai/useAiFix';
 import AiFixPanel from './ai/AiFixPanel';
+import AiChatPanel from './ai/AiChatPanel';
+import { useAiChat } from './ai/useAiChat';
 import { fetchCompletion } from './ai/ghostComplete';
 import { CONVERT_TARGETS, applyEdit, guessErrorFile, languageOf, looksLikeError, suggestFileName, tailOutput } from './ai/aiFixUtils';
 import { useAuth } from '../../context/AuthContext';
@@ -118,7 +120,11 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const runner = useRunner();
   const sandbox = useSandbox(projectId, sandboxTokenPath); // real server / terminal on the uip-sandbox gateway (needs a project id)
   const { can } = useAuth();
-  const ai = useAiFix({ enabled: can('ai.code_assist'), tt }); // "explain / fix this error" (needs the ai.code_assist permission)
+  const ai = useAiFix({ enabled: can('ai.code_assist'), tt });
+  const chat = useAiChat({ tt }); // side-panel chat: knows the open file, selection, terminal output and the other open tabs
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatCtx, setChatCtx] = useState({ file: true, selection: true, others: true, output: false }); // what the chat sends as context
+  const [chatMode, setChatMode] = useState(null); // null = the server's default mode // "explain / fix this error" (needs the ai.code_assist permission)
 
   const toggleGhost = useCallback(() => {
     setGhostPref((v) => { const n = !v; try { window.localStorage.setItem('zb-ghost', n ? '1' : '0'); } catch { /* storage unavailable */ } return n; });
@@ -128,6 +134,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     request: fetchCompletion,
     onDisable: () => setGhostDead(true),
   }), [ai.autocompleteAvailable, ghostPref, ghostDead, editorDoc?.path]);
+
+  useEffect(() => { if (ai.panel) setChatOpen(false); }, [ai.panel]);
 
   const zipBytes = useRef(null);
   const ownBlob = useRef(null); // the archive we just saved ourselves — a re-delivered copy of it must not reload the workbench
@@ -459,6 +467,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     next.set(path, { path, dir: isDir, size: 0, origPath: null, isNew: true });
     if (!isDir) newData.current.set(path, new Uint8Array());
     setVfs(next);
+    vfsRef.current = next; // several entries created in one go (AI chat) must see each other before the next render
     expandTo(path);
     if (isDir) setOpen((o) => new Set(o).add(path));
     setSel(path);
@@ -974,6 +983,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     setMenu({
       x, y, title: tt('AI assistant', 'مساعد الذكاء الاصطناعي'),
       items: [
+        { label: tt('Ask in chat…', 'اسأل في الشات…'), icon: 'chat', onClick: () => openChat({ selection: true }) },
+        { sep: true },
         { label: tt('Explain this code', 'اشرح الكود'), icon: 'sparkles', onClick: () => go('explain') },
         { label: tt('Fix bugs', 'صلّح الأخطاء'), icon: 'wrench', onClick: () => go('fix') },
         { label: tt('Improve', 'حسّن الكود'), icon: 'edit', onClick: () => go('improve') },
@@ -995,6 +1006,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     const go = (action, target) => askAssist(action, { path, target });
     const targets = CONVERT_TARGETS.filter((l) => l !== cur && !(cur === 'React JSX' && l === 'JavaScript')).slice(0, 3);
     const items = [
+      ...(ai.chatAvailable ? [{ label: tt('Chat with AI', 'شات مع الذكاء الاصطناعي'), icon: 'chat', checked: chatOpen, onClick: () => (chatOpen ? closeChat() : openChat()) }, { sep: true }] : []),
       { label: tt('Explain this file', 'اشرح الملف'), icon: 'sparkles', disabled: !isText, onClick: () => go('explain') },
       { label: tt('Fix bugs', 'صلّح الأخطاء'), icon: 'wrench', disabled: !isText, onClick: () => go('fix') },
       { label: tt('Improve', 'حسّن الكود'), icon: 'edit', disabled: !isText, onClick: () => go('improve') },
@@ -1051,6 +1063,83 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     openFile(p.path);
     if (p.line) { revealSeq.current += 1; setReveal({ key: `ai${revealSeq.current}`, path: p.path, line: p.line, col: 0, len: 0 }); }
   };
+  // ---- AI chat side panel: the context it sends, and applying the (multi-file) edits the student accepted -----------
+  const chatModeNow = chatMode && ai.modes.includes(chatMode) ? chatMode : ai.defaultMode;
+  const openChat = (o = {}) => {
+    ai.close();
+    setChatOpen(true);
+    if (o.selection) setChatCtx((c) => ({ ...c, selection: true }));
+  };
+  const closeChat = () => { chat.stop(); setChatOpen(false); };
+  const CHAT_FILE_MAX = 100000; // never ship more than this per file (the server clips to its own, smaller limits)
+  const chatActive = () => { const p = activeRef.current; return p && docs.current.get(p)?.kind === 'text' ? p : null; };
+  const chatSel = () => { const p = chatActive(); return p && cursor.sel && chatCtx.selection ? cursor.sel : null; };
+  const buildChatRequest = () => {
+    const active = chatActive();
+    const files = [];
+    if (active && chatCtx.file) { const t = textOf(active); if (t != null) files.push({ path: active, content: t.slice(0, CHAT_FILE_MAX) }); }
+    if (chatCtx.others) {
+      tabsRef.current.forEach((p) => {
+        if (p === active || files.length >= 6) return;
+        if (docs.current.get(p)?.kind !== 'text') return;
+        const t = textOf(p);
+        if (t != null && t.trim()) files.push({ path: p, content: t.slice(0, CHAT_FILE_MAX) });
+      });
+    }
+    const tree = [];
+    vfsRef.current.forEach((v) => { if (!v.dir) tree.push(v.path); });
+    tree.sort();
+    const sel = chatSel();
+    const out = chatCtx.output ? tailOutput(runOutput(), ai.limits.max_error_chars || 6000) : '';
+    return {
+      active_path: active && chatCtx.file ? active : undefined,
+      files, tree: tree.slice(0, 400),
+      sel_from: sel ? sel.from : undefined, sel_to: sel ? sel.to : undefined,
+      error: out || undefined,
+    };
+  };
+  const sendChat = (text) => chat.send({ text, mode: chatModeNow, buildRequest: buildChatRequest });
+  const retryChat = () => chat.retry({ mode: chatModeNow, buildRequest: buildChatRequest });
+  const chatChips = (() => {
+    const active = chatActive();
+    const sel = active ? cursor.sel : null;
+    const others = tabs.filter((p) => p !== active && docs.current.get(p)?.kind === 'text').length;
+    const chips = [];
+    if (active) chips.push({ key: 'file', label: baseName(active), on: chatCtx.file });
+    if (active && sel) chips.push({ key: 'selection', label: tt(`Lines ${sel.from}–${sel.to}`, `السطور ${sel.from}–${sel.to}`), on: chatCtx.selection && chatCtx.file });
+    if (others > 0) chips.push({ key: 'others', label: tt(`${others} other tab${others > 1 ? 's' : ''}`, `${others} تاب تانية`), on: chatCtx.others });
+    if (ai.available && runOpen && runOutput().trim()) chips.push({ key: 'output', label: tt('Terminal output', 'ناتج الـ terminal'), on: chatCtx.output });
+    return chips;
+  })();
+  const chatSuggestions = chatActive()
+    ? [tt('Explain this file', 'اشرح الملف ده'), tt('Find the bug', 'دوّر على الغلط'), tt('How can I improve it?', 'أحسّنه إزاي؟')]
+    : [tt('How do I get started?', 'أبدأ منين؟')];
+  // one edit → the new text of its file (null = it no longer matches / cannot be applied)
+  const chatApplyOne = (e, texts) => {
+    if (e.kind === 'create') {
+      if (exists(e.path)) return { ok: false };
+      const err = createEntry(e.path, 'file');
+      if (err) return { ok: false };
+      setTextFor(e.path, e.replace);
+      return { ok: true, created: true };
+    }
+    const cur = texts.has(e.path) ? texts.get(e.path) : textOf(e.path);
+    const r = cur == null ? { ok: false } : applyEdit(cur, e);
+    if (!r.ok) return { ok: false };
+    texts.set(e.path, r.text);
+    return { ok: true };
+  };
+  const applyChatEdits = (msgId, ids) => {
+    const m = chat.messages.find((x) => x.id === msgId); if (!m) return;
+    const texts = new Map();
+    (m.edits || []).filter((e) => ids.includes(e.id) && e.state === 'pending').forEach((e) => {
+      const r = chatApplyOne(e, texts);
+      chat.mark(msgId, e.id, r.ok ? 'applied' : 'stale');
+    });
+    texts.forEach((text, path) => commitAiText(path, text));
+  };
+  const openChatFile = (path) => { if (vfsRef.current.has(path)) openFile(path); else flash(tt('That file no longer exists.', 'الملف ده مبقاش موجود.')); };
+
   const aiOut = ai.available && runOpen ? (runApp?.kind === 'sandbox' ? sandbox.getOutput() : runner.logs.length ? 'x' : '') : '';
   const aiBtn = {
     show: ai.available && !!aiOut,
@@ -1206,6 +1295,9 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
           <button type="button" className="zb-btn zb-btn--add" onClick={(e) => openMenuAt(e.currentTarget, addItems(target), target ? `/${target.replace(/\/$/, '')}` : tt('Archive root', 'جذر الأرشيف'))} title={tt('Add files or folders', 'إضافة ملفات أو مجلدات')} aria-haspopup="menu">
             <Icon name="plus" size={15} /> <span>{tt('Add', 'إضافة')}</span> <Icon name="chevron-down" size={12} />
           </button>
+          {ai.chatAvailable && (
+            <button type="button" className={`zb-ibtn${chatOpen ? ' is-on' : ''}`} onClick={() => (chatOpen ? closeChat() : openChat())} title={tt('AI chat', 'شات الذكاء الاصطناعي')} aria-label={tt('AI chat', 'شات الذكاء الاصطناعي')} aria-pressed={chatOpen}><Icon name="chat" size={17} /></button>
+          )}
           {ai.available && (
             <button type="button" className={`zb-ibtn zb-ibtn--ai${ai.streaming ? ' is-on' : ''}`} onClick={(e) => openAiMenu(e.currentTarget)} title={tt('AI assistant', 'مساعد الذكاء الاصطناعي')} aria-label={tt('AI assistant', 'مساعد الذكاء الاصطناعي')} aria-haspopup="menu">✨</button>
           )}
@@ -1396,6 +1488,31 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
             onApplyAll={applyAllAi}
             onReject={(id) => ai.mark(id, 'rejected')}
             onGoto={gotoAi}
+          />
+        )}
+
+        {chatOpen && ai.chatAvailable && (
+          <AiChatPanel
+            tt={tt}
+            messages={chat.messages}
+            busy={chat.busy}
+            modes={ai.modes}
+            mode={chatModeNow}
+            canSwitchMode={ai.modes.length > 1}
+            onMode={setChatMode}
+            chips={chatChips}
+            onChip={(k) => setChatCtx((c) => ({ ...c, [k]: !c[k] }))}
+            suggestions={chatSuggestions}
+            onSend={sendChat}
+            onStop={chat.stop}
+            onRetry={retryChat}
+            onClear={chat.clear}
+            onClose={closeChat}
+            onApply={(msgId, id) => applyChatEdits(msgId, [id])}
+            onApplyAll={(msgId) => applyChatEdits(msgId, (chat.messages.find((x) => x.id === msgId)?.edits || []).map((e) => e.id))}
+            onReject={(msgId, id) => chat.mark(msgId, id, 'rejected')}
+            onOpen={openChatFile}
+            activeLabel={chatActive() ? baseName(chatActive()) : ''}
           />
         )}
 

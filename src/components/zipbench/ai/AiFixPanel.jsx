@@ -33,7 +33,7 @@ function CodeBlock({ code, tt, onNewFile }) {
   );
 }
 
-function Answer({ text, tt, onNewFile, streaming }) {
+export function Answer({ text, tt, onNewFile, streaming }) {
   const blocks = [];
   const re = /```[^\n]*\n([\s\S]*?)(?:```|$)/g; // an unfinished fence (still streaming) renders as code too
   let last = 0; let m;
@@ -59,7 +59,7 @@ function Answer({ text, tt, onNewFile, streaming }) {
   );
 }
 
-function Diff({ edit }) {
+export function Diff({ edit }) {
   const rows = diffRows(edit);
   return (
     <div className="zb-ai__diff" dir="ltr" role="group">

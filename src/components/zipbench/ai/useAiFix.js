@@ -151,6 +151,7 @@ export function useAiFix({ enabled, tt }) {
 
   return {
     available: !!(status && status.available),
+    chatAvailable: !!(status && status.available && status.chat && status.chat.available),
     autocompleteAvailable: !!(status && status.available && status.autocomplete && status.autocomplete.available),
     modes: (status && status.modes) || ['tutor'],
     defaultMode: (status && status.default_mode) || 'tutor',
