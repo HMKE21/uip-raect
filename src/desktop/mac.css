@@ -374,3 +374,11 @@ body.os-dragging .os-wall { transition: none; }
 .os-dlg--confirm .os-btn--primary kbd, .os-dlg--confirm .os-btn--danger kbd { background: rgba(255, 255, 255, .25); color: #fff; }
 .os-dlg--confirm .os-btn--primary { box-shadow: 0 6px 16px color-mix(in srgb, var(--os-accent) 40%, transparent); }
 .os-dlg--confirm .os-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--os-accent) 40%, transparent); }
+
+
+/* ── layering: the window layer is ONE stacking context ─────────────────────────────────────────────────────────────
+   Every window gets z-index = a counter that grows with each focus (10, 11, … 90, 91 …). Because .os-wins was not a stacking context, that
+   counter competed directly with the menu bar (90) and the Dock (80): after enough clicks (or restored windows) a window sat ABOVE the menu bar,
+   so the File / Window / Help dropdowns opened underneath it and looked empty. Now every window stays inside this layer (20); the Dock (80),
+   the menu bar and its dropdowns (90), flyouts, dialogs and the context menu always sit above any window. */
+.os-wins { z-index: 20; }

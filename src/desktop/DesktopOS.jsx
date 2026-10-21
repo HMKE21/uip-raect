@@ -15,7 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { APPS, ExplorerApp, PINNED, SettingsApp, ShortcutsApp, TaskManagerApp } from './apps';
 import { AppGlyph, BinGlyph, PcGlyph, Tile, UipMark } from './OsIcons';
 import { Dock, MenuBar } from './macShell';
-import { iconPosKey, loadIconPos, loadPrefs, saveIconPos, savePrefs } from './prefs';
+import { DESK_ICONS, DOCK_ICONS, hiddenList, iconPosKey, loadIconPos, loadPrefs, saveIconPos, savePrefs } from './prefs';
 import { useSharedClip } from '../lib/driveClipboard';
 import { globalActionFor, keyOf } from './shortcuts';
 import { isSystemNode, useDesktopSync } from './sync';
@@ -328,10 +328,13 @@ export default function DesktopOS() {
 
   // ---- taskbar model -----------------------------------------------------------------------------------
   // pinned apps (one button each) + every other open window (one button per window, e.g. each opened file)
+  const hiddenDock = hiddenList(prefs.hiddenDock);
+  const hiddenIcons = hiddenList(prefs.hiddenIcons);
   const taskItems = useMemo(() => [
-    ...PINNED.map((app) => ({ key: app, app })),
+    // a Dock app the person removed stays out of the Dock, except while one of its windows is open (so that window can still be reached)
+    ...PINNED.filter((app) => !hiddenDock.includes(app) || wm.list.some((w) => w.app === app)).map((app) => ({ key: app, app })),
     ...wm.list.filter((w) => !PINNED.includes(w.app)).map((w) => ({ key: w.id, app: w.app, winId: w.id })),
-  ], [wm.list]);
+  ], [wm.list, hiddenDock]);
   const winOf = useCallback((it) => (it.winId ? wm.list.find((x) => x.id === it.winId) : wm.list.find((x) => x.app === it.app)), [wm.list]);
   const taskClick = useCallback((it) => {
     const w = winOf(it);
@@ -350,7 +353,7 @@ export default function DesktopOS() {
     { key: 'sys:shortcuts', sys: true, label: tt('Shortcuts', 'الاختصارات'), glyph: 'shortcuts', run: () => runCommand('shortcuts') },
   ], [tt, openExplorer, runCommand]);
   const deskItems = useMemo(() => desk.items.filter((n) => !isSystemNode(n)), [desk.items]); // hide the hidden settings files
-  const icons = useMemo(() => [...sysIcons, ...deskItems.map((n) => ({ key: `n:${n.id}`, node: n, label: n.name, run: () => openNode(n) }))], [sysIcons, deskItems, openNode]);
+  const icons = useMemo(() => [...sysIcons.filter((i) => !hiddenIcons.includes(i.key)), ...deskItems.map((n) => ({ key: `n:${n.id}`, node: n, label: n.name, run: () => openNode(n) }))], [sysIcons, hiddenIcons, deskItems, openNode]);
   const selNodes = icons.filter((i) => sel.has(i.key) && i.node).map((i) => i.node);
 
   // ---- icon grid + remembered positions ----------------------------------------------------------------
@@ -409,7 +412,7 @@ export default function DesktopOS() {
   const live = useRef({}); // latest values for the pointer handlers below
   const selRef = useRef(sel);
   selRef.current = sel;
-  live.current = { layout, rows, cols, cell, ar, icons, commitPos };
+  live.current = { layout, rows, cols, cell, ar, icons, commitPos, prefs };
 
   const newFolder = useCallback(async () => {
     const v = await ask({ kind: 'prompt', title: tt('New folder', 'مجلد جديد'), label: tt('Folder name', 'اسم المجلد'), value: tt('New folder', 'مجلد جديد'), selectAll: true, action: tt('Create', 'إنشاء') });
@@ -490,7 +493,12 @@ export default function DesktopOS() {
       const L = live.current;
       const nodes = group.map((k) => L.icons.find((i) => i.key === k)?.node).filter(Boolean);
       const target = over ? L.icons.find((i) => i.key === over) : null;
-      if (target?.key === 'sys:bin') { if (nodes.length) trashNodes(nodes); return; }
+      if (target?.key === 'sys:bin') { // dropping on the Recycle Bin: files go in it, built-in icons are removed from the desktop (restorable from Settings)
+        if (nodes.length) trashNodes(nodes);
+        const sysKeys = group.filter((k) => k.startsWith('sys:') && k !== 'sys:bin');
+        if (sysKeys.length) hideIcons(sysKeys);
+        return;
+      }
       if (target?.node && nodes.length) {
         drive.move(nodes.map((n) => n.id), target.node.id)
           .then(() => { flash(tt(`Moved into “${target.node.name}”.`, `تم النقل إلى «${target.node.name}».`)); setSel(new Set()); reloadDesk(); })
@@ -540,6 +548,33 @@ export default function DesktopOS() {
     window.addEventListener('pointercancel', end);
   };
 
+  // ---- remove / restore the built-in icons (desktop + Dock). Files on the desktop are real files: those go to the Recycle Bin instead. -----
+  const removedCount = hiddenIcons.filter((k) => DESK_ICONS.some((d) => d[0] === k)).length + hiddenDock.filter((k) => DOCK_ICONS.some((d) => d[0] === k)).length;
+  const hideIcons = useCallback((keys) => {
+    const add = keys.filter((k) => k.startsWith('sys:'));
+    if (!add.length) return;
+    setPrefs({ hiddenIcons: [...new Set([...hiddenList(live.current.prefs.hiddenIcons), ...add])] });
+    setSel(new Set());
+    flash(tt('Icon removed — bring it back from Settings ▸ Personalization ▸ Icons.', 'تم حذف الأيقونة — ترجّعها من الإعدادات ▸ التخصيص ▸ الأيقونات.'));
+  }, [flash, setPrefs, tt]);
+  const hideDockIcon = useCallback((key, open) => {
+    setPrefs({ hiddenDock: [...new Set([...hiddenList(live.current.prefs.hiddenDock), key])] });
+    flash(open
+      ? tt('Removed from the Dock — it disappears once its window is closed. Restore it from Settings ▸ Personalization ▸ Icons.', 'اتشالت من الـ Dock — هتختفي لما تقفل نافذتها. ترجّعها من الإعدادات ▸ التخصيص ▸ الأيقونات.')
+      : tt('Removed from the Dock — bring it back from Settings ▸ Personalization ▸ Icons.', 'اتشالت من الـ Dock — ترجّعها من الإعدادات ▸ التخصيص ▸ الأيقونات.'));
+  }, [flash, setPrefs, tt]);
+  const restoreIcons = useCallback(() => {
+    setPrefs({ hiddenIcons: [], hiddenDock: [] });
+    flash(tt('All icons restored.', 'تم استرجاع كل الأيقونات.'));
+  }, [flash, setPrefs, tt]);
+  const dockSpecialMenu = (key, e) => {
+    e.preventDefault(); e.stopPropagation();
+    setOverlay(null);
+    const label = { launchpad: tt('Launchpad', 'لوحة التطبيقات'), lock: tt('Lock screen', 'قفل الشاشة'), portal: tt('UIP Portal', 'بوابة UIP'), bin: tt('Recycle Bin', 'سلة المحذوفات') }[key];
+    const act = { launchpad: () => setOverlay('start'), lock: confirmLock, portal: () => runCommand('portal'), bin: () => runCommand('bin') }[key];
+    setMenu({ x: e.clientX, y: e.clientY - 110, items: [{ label, icon: 'eye', onClick: act }, 'sep', { label: tt('Remove from Dock', 'إزالة من الـ Dock'), icon: 'trash', danger: true, onClick: () => hideDockIcon(key, false) }] });
+  };
+
   const deskMenu = (e) => {
     e.preventDefault();
     setOverlay(null);
@@ -547,6 +582,7 @@ export default function DesktopOS() {
       x: e.clientX, y: e.clientY, items: [
         { label: tt('Refresh', 'تحديث'), icon: 'refresh', hint: 'F5', onClick: refreshAll },
         { label: tt('Auto-arrange icons', 'ترتيب الأيقونات تلقائيًا'), icon: 'layers', onClick: () => commitPos({}) },
+        ...(removedCount ? [{ label: tt(`Restore removed icons (${removedCount})`, `استرجاع الأيقونات المحذوفة (${removedCount})`), icon: 'refresh', onClick: restoreIcons }] : []),
         'sep',
         { label: tt('Paste', 'لصق'), icon: 'file-plus', hint: 'Ctrl+V', onClick: () => pasteInto(desk.id), disabled: !desk.id || !clip },
         'sep',
@@ -568,7 +604,10 @@ export default function DesktopOS() {
     setOverlay(null);
     if (!sel.has(ic.key)) setSel(new Set([ic.key]));
     const items = [{ label: tt('Open', 'فتح'), icon: 'eye', hint: 'Enter', onClick: ic.run }];
-    if (!ic.sys) {
+    if (ic.sys) {
+      const group = sel.has(ic.key) ? [...sel].filter((k) => k.startsWith('sys:')) : [ic.key];
+      items.push('sep', { label: group.length > 1 ? tt(`Remove ${group.length} icons from the desktop`, `حذف ${group.length} أيقونات من سطح المكتب`) : tt('Remove from the desktop', 'حذف من سطح المكتب'), icon: 'trash', hint: 'Del', danger: true, onClick: () => hideIcons(group) });
+    } else {
       const many = selNodes.length > 1 && sel.has(ic.key) ? selNodes : [ic.node];
       items.push('sep',
         { label: tt('Copy', 'نسخ'), icon: 'copy', hint: 'Ctrl+C', onClick: () => copyNodes(many, 'copy') },
@@ -603,7 +642,7 @@ export default function DesktopOS() {
     else if (mod && pk === 'V' && clip && desk.id) { e.preventDefault(); pasteInto(desk.id); }
     else if (k === 'Enter' && cur.length) { e.preventDefault(); cur.forEach((i) => i.run()); }
     else if (k === 'F2' && cur.length === 1 && cur[0].node) { e.preventDefault(); renameNode(cur[0].node); }
-    else if (k === 'Delete' && selNodes.length) { e.preventDefault(); trashNodes(selNodes); }
+    else if (k === 'Delete' && (selNodes.length || cur.some((i) => i.sys))) { e.preventDefault(); if (selNodes.length) trashNodes(selNodes); hideIcons(cur.filter((i) => i.sys).map((i) => i.key)); }
     else if (k === 'F5') { e.preventDefault(); refreshAll(); }
     else if (k === 'Escape') setSel(new Set());
     else if (k.startsWith('Arrow')) {
@@ -729,6 +768,8 @@ export default function DesktopOS() {
   const brightness = Math.min(100, Math.max(40, Number(prefs.brightness) || 100));
   const activeWin = wm.list.find((w) => w.id === wm.active && !w.min) || null;
   const appName = activeWin ? (ar ? APPS[activeWin.app].ar : APPS[activeWin.app].en) : tt('This PC', 'جهازي');
+  // a menu-bar menu opened: Spotlight / Mission Control / Start / flyouts and any right-click menu close, so only one thing is ever open
+  const closeFloating = useCallback(() => { setOverlay(null); setMenu(null); }, []);
   const menus = [
     { id: 'sys', logo: true, items: [
       { label: tt('About UIP Desktop', 'عن سطح مكتب UIP'), onClick: () => runCommand('settings') },
@@ -795,7 +836,7 @@ export default function DesktopOS() {
       onMiddle: () => w && dispatch({ type: 'close', id: w.id }),
       onContext: (e) => {
         e.preventDefault(); e.stopPropagation();
-        setMenu({ x: e.clientX, y: e.clientY - 110, items: [{ label, icon: 'eye', onClick: () => taskClick(it) }, ...(w ? [{ label: tt('Close window', 'إغلاق النافذة'), icon: 'x', hint: 'Alt+W', onClick: () => dispatch({ type: 'close', id: w.id }) }] : [])] });
+        setMenu({ x: e.clientX, y: e.clientY - 110, items: [{ label, icon: 'eye', onClick: () => taskClick(it) }, ...(w ? [{ label: tt('Close window', 'إغلاق النافذة'), icon: 'x', hint: 'Alt+W', onClick: () => dispatch({ type: 'close', id: w.id }) }] : []), ...(PINNED.includes(it.app) && it.key === it.app ? ['sep', { label: tt('Remove from Dock', 'إزالة من الـ Dock'), icon: 'trash', danger: true, onClick: () => hideDockIcon(it.app, !!w) }] : [])] });
       },
       i,
     };
@@ -899,13 +940,14 @@ export default function DesktopOS() {
       )}
       {overlay === 'cal' && <CalendarFlyout tt={tt} ar={ar} />}
 
-      <MenuBar ar={ar} tt={tt} menus={menus} tray={tray} />
+      <MenuBar ar={ar} tt={tt} menus={menus} tray={tray} onOpen={closeFloating} closeKey={`${overlay || ''}${menu ? 'm' : ''}${dlg ? 'd' : ''}${locked || asleep ? 'l' : ''}`} />
       {wmax && !dockPeek && <div className="os-dockhot" onPointerEnter={() => setDockPeek(true)} aria-hidden="true" />}
       <Dock
         items={dockItems} tt={tt} mag={prefs.dockMag !== false} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}
         onBin={() => runCommand('bin')} binFull={desk.binFull} binLabel={tt('Recycle Bin', 'سلة المحذوفات')}
         onPortal={() => runCommand('portal')} portalLabel={tt('UIP Portal', 'بوابة UIP')}
         onLock={confirmLock} lockLabel={tt('Lock screen', 'قفل الشاشة')}
+        hidden={hiddenDock} onSpecialMenu={dockSpecialMenu}
       />
 
       </>

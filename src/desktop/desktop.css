@@ -414,3 +414,22 @@ body.os-dragging iframe { pointer-events: none; }
 .os-hist__item .os-hist__row > small em { font-style: normal; font-weight: 600; color: var(--g-fg); }
 .os-hist__item .os-hist__row > small i { font-style: normal; font-size: 11px; color: var(--g-mute); }
 @media (max-width: 520px) { .os-hist__item .os-hist__row { column-gap: 8px; padding-inline: 6px; } }
+
+
+/* ── Settings ▸ Icons (remove / restore) ─────────────────────────────────────────────────────────────────────── */
+.os-ic-list { display: flex; flex-direction: column; border: 1px solid var(--g-line); border-radius: 10px; overflow: hidden; background: var(--panel-2); }
+.os-ic-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; cursor: pointer; }
+.os-ic-row + .os-ic-row { border-top: 1px solid var(--g-line); }
+.os-ic-row:hover { background: var(--g-hover); }
+.os-ic-row__g { display: inline-grid; place-items: center; width: 30px; height: 30px; flex: none; }
+.os-ic-row__t { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-ic-row__s { font-size: 12px; color: var(--g-mute); }
+.os-ic-row.is-off .os-ic-row__g { opacity: .4; filter: grayscale(1); }
+.os-ic-row.is-off .os-ic-row__t { color: var(--g-mute); text-decoration: line-through; }
+.os-ic-row input { appearance: none; -webkit-appearance: none; position: relative; width: 38px; height: 22px; flex: none; margin: 0; border-radius: 99px; background: var(--g-line); cursor: pointer; transition: background .15s; }
+.os-ic-row input::after { content: ''; position: absolute; top: 2px; inset-inline-start: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3); transition: transform .15s; }
+.os-ic-row input:checked { background: var(--os-accent); }
+.os-ic-row input:checked::after { transform: translateX(16px); }
+[dir='rtl'] .os-ic-row input:checked::after { transform: translateX(-16px); }
+.os-ic-row input:focus-visible { outline: 2px solid var(--os-accent); outline-offset: 2px; }
+.os-ic-actions { margin-top: 12px; }

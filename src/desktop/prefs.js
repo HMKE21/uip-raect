@@ -1,5 +1,5 @@
 const prefsKey = (uid) => `uip_desktop_prefs_v1_${uid ?? 'anon'}`; // per account: another student on the same browser never inherits it
-export const DEFAULT_PREFS = { wallpaper: 'sequoia', customWallpaper: null, accent: '#0a84ff', iconSize: 'm', dockMag: true, openMax: true, brightness: 100 };
+export const DEFAULT_PREFS = { wallpaper: 'sequoia', customWallpaper: null, accent: '#0a84ff', iconSize: 'm', dockMag: true, openMax: true, brightness: 100, hiddenIcons: [], hiddenDock: [] };
 /** macOS accent palette (blue, purple, pink, red, orange, yellow, green, graphite) + the old UIP indigo. */
 export const ACCENTS = ['#0a84ff', '#bf5af2', '#ff375f', '#ff453a', '#ff9f0a', '#ffd60a', '#30d158', '#8e8e93', '#6366f1'];
 
@@ -8,6 +8,18 @@ export function migratePrefs(p) {
   if (p && p.wallpaper === 'aurora' && (!p.accent || p.accent === '#6366f1') && !p.customWallpaper) return { ...p, wallpaper: DEFAULT_PREFS.wallpaper, accent: DEFAULT_PREFS.accent };
   return p;
 }
+/** Icons the person can remove from the desktop / the Dock and bring back from Settings ▸ Personalization ▸ Icons. */
+export const DESK_ICONS = [
+  ['sys:explorer', 'This PC', 'جهازي', 'explorer'], ['sys:bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'], ['sys:portal', 'UIP Portal', 'بوابة UIP', 'portal'],
+  ['sys:settings', 'Settings', 'الإعدادات', 'settings'], ['sys:shortcuts', 'Shortcuts', 'الاختصارات', 'shortcuts'],
+];
+export const DOCK_ICONS = [
+  ['launchpad', 'Launchpad', 'لوحة التطبيقات', 'launchpad'], ['explorer', 'This PC', 'جهازي', 'explorer'], ['settings', 'Settings', 'الإعدادات', 'settings'],
+  ['shortcuts', 'Keyboard shortcuts', 'اختصارات الكيبورد', 'shortcuts'], ['lock', 'Lock screen', 'قفل الشاشة', 'lock'], ['portal', 'UIP Portal', 'بوابة UIP', 'portal'], ['bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'],
+];
+export const NO_ICONS = []; // one shared empty list, so memo dependencies do not change on every render
+export const hiddenList = (v) => (Array.isArray(v) && v.every((x) => typeof x === 'string') ? v : NO_ICONS); // same array back (stable identity for useMemo)
+
 export function loadPrefs(uid) {
   try { return migratePrefs({ ...DEFAULT_PREFS, ...(JSON.parse(localStorage.getItem(prefsKey(uid)) || '{}') || {}) }); } catch { return { ...DEFAULT_PREFS }; }
 }

@@ -1,6 +1,6 @@
 import { lazy, memo, Suspense, useEffect, useRef, useState } from 'react';
 import Icon from '../components/Icon';
-import { ACCENTS, DEFAULT_PREFS } from './prefs';
+import { ACCENTS, DEFAULT_PREFS, DESK_ICONS, DOCK_ICONS, hiddenList } from './prefs';
 import { WALLPAPERS, imageToWallpaper } from './wallpapers';
 import { EXPLORER_SHORTCUTS, GROUPS, SHORTCUTS, fmtKeys } from './shortcuts';
 import { AppGlyph } from './OsIcons';
@@ -34,6 +34,26 @@ export const ExplorerApp = memo(function ExplorerApp({ onOpenWindow }) {
 const Section = ({ title, children }) => (
   <section className="os-set__sec"><h3>{title}</h3>{children}</section>
 );
+
+/** Settings ▸ Personalization ▸ Icons: one switch per built-in icon. Off = removed from the desktop / Dock; on = back. */
+function IconToggles({ list, hidden, onToggle, ar }) {
+  return (
+    <div className="os-ic-list">
+      {list.map(([k, en, arb, glyph]) => {
+        const on = !hidden.includes(k);
+        const name = ar ? arb : en;
+        return (
+          <label key={k} className={`os-ic-row${on ? '' : ' is-off'}`}>
+            <span className="os-ic-row__g"><AppGlyph app={glyph} size={30} /></span>
+            <span className="os-ic-row__t" dir="auto">{name}</span>
+            <span className="os-ic-row__s">{on ? (ar ? 'ظاهرة' : 'Shown') : (ar ? 'محذوفة' : 'Removed')}</span>
+            <input type="checkbox" role="switch" checked={on} onChange={(e) => onToggle(k, e.target.checked)} aria-label={name} />
+          </label>
+        );
+      })}
+    </div>
+  );
+}
 
 /** Settings > Lock screen: optional password for the lock screen (stored hashed on the server). */
 function LockSettings({ tt, lockEnabled, onLockChanged }) {
@@ -165,6 +185,16 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
             <Section title={tt('Open files', 'فتح الملفات')}>
               <div className="os-seg">
                 {[[true, tt('Full screen', 'ملء الصفحة')], [false, tt('In a window', 'في نافذة')]].map(([k, l]) => <button key={String(k)} type="button" className={(prefs.openMax !== false) === k ? 'is-on' : ''} onClick={() => setPrefs({ openMax: k })}>{l}</button>)}
+              </div>
+            </Section>
+            <Section title={tt('Desktop icons', 'أيقونات سطح المكتب')}>
+              <p className="os-set__hint os-set__hint--top">{tt('Remove an icon with right-click ▸ Remove, or the Delete key. Turn it back on here.', 'احذف أي أيقونة بالزر اليمين ▸ حذف، أو بزر Delete. وشغّلها تاني من هنا.')}</p>
+              <IconToggles list={DESK_ICONS} hidden={hiddenList(prefs.hiddenIcons)} ar={ar} onToggle={(k, on) => { const cur = hiddenList(prefs.hiddenIcons); setPrefs({ hiddenIcons: on ? cur.filter((x) => x !== k) : [...new Set([...cur, k])] }); }} />
+            </Section>
+            <Section title={tt('Dock icons', 'أيقونات الـ Dock')}>
+              <IconToggles list={DOCK_ICONS} hidden={hiddenList(prefs.hiddenDock)} ar={ar} onToggle={(k, on) => { const cur = hiddenList(prefs.hiddenDock); setPrefs({ hiddenDock: on ? cur.filter((x) => x !== k) : [...new Set([...cur, k])] }); }} />
+              <div className="os-ic-actions">
+                <button type="button" className="os-btn" disabled={!hiddenList(prefs.hiddenIcons).length && !hiddenList(prefs.hiddenDock).length} onClick={() => setPrefs({ hiddenIcons: [], hiddenDock: [] })}>{tt('Restore all icons', 'استرجاع كل الأيقونات')}</button>
               </div>
             </Section>
             <Section title={tt('Icon size', 'حجم الأيقونات')}>
