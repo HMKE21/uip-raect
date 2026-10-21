@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stripAnsi, tailOutput, looksLikeError, extractRefs, guessErrorFile, applyEdit, applyEdits, diffRows, languageOf } from '../aiFixUtils.js';
+import { stripAnsi, tailOutput, looksLikeError, extractRefs, guessErrorFile, applyEdit, applyEdits, diffRows, languageOf, suggestFileName } from '../aiFixUtils.js';
 
 test('stripAnsi removes colours and normalises line endings', () => {
   assert.equal(stripAnsi('\x1b[31mError\x1b[0m: x\r\ny\rz'), 'Error: x\ny\nz');
@@ -76,4 +76,14 @@ test('languageOf', () => {
   assert.equal(languageOf('a/b/x.py'), 'Python');
   assert.equal(languageOf('resources/views/a.blade.php'), 'Blade (Laravel)');
   assert.equal(languageOf('Makefile'), '');
+});
+
+test('suggestFileName: converted file and test file names', () => {
+  assert.equal(suggestFileName('convert', 'src/app/calc.py', 'C++'), 'src/app/calc.cpp');
+  assert.equal(suggestFileName('convert', 'calc.py', 'Weird'), 'calc.txt');
+  assert.equal(suggestFileName('test', 'src/calc.py'), 'src/test_calc.py');
+  assert.equal(suggestFileName('test', 'src/calc.jsx'), 'src/calc.test.jsx');
+  assert.equal(suggestFileName('test', 'app/cart.php'), 'app/CartTest.php');
+  assert.equal(suggestFileName('test', 'Main.java'), 'MainTest.java');
+  assert.equal(suggestFileName('test', 'main.go'), 'main_test.go');
 });

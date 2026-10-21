@@ -142,3 +142,27 @@ export function languageOf(path) {
   const ext = name.includes('.') ? name.split('.').pop() : '';
   return LANG[ext] || '';
 }
+
+// ---- "convert" / "tests" results: suggested name of the new file --------------------------------------------------
+
+/** Languages offered in the "Convert to …" items of the right-click menu. */
+export const CONVERT_TARGETS = ['Python', 'JavaScript', 'Java', 'C++', 'PHP', 'C#'];
+const TARGET_EXT = { python: 'py', javascript: 'js', typescript: 'ts', java: 'java', 'c++': 'cpp', php: 'php', 'c#': 'cs', c: 'c', go: 'go', ruby: 'rb', kotlin: 'kt', swift: 'swift', rust: 'rs', dart: 'dart' };
+
+/** Where the code block of a "convert" / "test" answer is saved: next to the source file, named after it. */
+export function suggestFileName(action, path, target = '') {
+  const p = String(path || 'file');
+  const slash = p.lastIndexOf('/');
+  const dir = p.slice(0, slash + 1);
+  const name = p.slice(slash + 1) || 'file';
+  const dot = name.lastIndexOf('.');
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot + 1) : '';
+  if (action === 'convert') return `${dir}${stem}.${TARGET_EXT[String(target).toLowerCase()] || 'txt'}`;
+  const e = ext.toLowerCase();
+  if (e === 'py') return `${dir}test_${stem}.py`;
+  if (['js', 'jsx', 'ts', 'tsx', 'mjs', 'cjs'].includes(e)) return `${dir}${stem}.test.${e}`;
+  if (e === 'php') return `${dir}${stem[0].toUpperCase()}${stem.slice(1)}Test.php`;
+  if (e === 'java') return `${dir}${stem}Test.java`;
+  return `${dir}${stem}_test${ext ? `.${ext}` : ''}`;
+}

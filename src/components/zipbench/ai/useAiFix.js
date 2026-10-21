@@ -57,7 +57,8 @@ export function useAiFix({ enabled, tt }) {
     const seq = seqRef.current;
     const t = (en, ar) => ttRef.current(en, ar);
     const mode = q.mode || status?.default_mode || 'tutor';
-    setPanel({ path: q.path, line: q.line || null, mode, question: q, text: '', edits: [], phase: 'streaming', error: '' });
+    const isAssist = !!q.action; // right-click menu action (explain / fix / improve / comment / convert / test) vs. "explain this error"
+    setPanel({ path: q.path, line: q.line || null, mode, action: q.action || 'error', question: q, text: '', edits: [], phase: 'streaming', error: '' });
 
     const patch = (p) => { if (seq === seqRef.current) setPanel((cur) => (cur ? { ...cur, ...p } : cur)); };
 
@@ -70,7 +71,10 @@ export function useAiFix({ enabled, tt }) {
     const bump = () => { clearTimeout(stall); stall = setTimeout(() => { if (settled) return; try { ctrl?.abort(); } catch { /* ignore */ } finish(timeoutErr()); }, STALL_MS); };
     hardStop = setTimeout(() => { if (settled) return; try { ctrl?.abort(); } catch { /* ignore */ } finish(timeoutErr()); }, MAX_MS);
 
-    const body = JSON.stringify({
+    const body = JSON.stringify(isAssist ? {
+      action: q.action, code: q.code, sel_from: q.selFrom || undefined, sel_to: q.selTo || undefined, target: q.target || undefined,
+      language: q.language || '', filename: q.filename || '', mode, locale: isAr() ? 'ar' : 'en',
+    } : {
       code: q.code, error: q.error, language: q.language || '', filename: q.filename || '', line: q.line || undefined,
       mode, locale: isAr() ? 'ar' : 'en',
     });
@@ -89,7 +93,7 @@ export function useAiFix({ enabled, tt }) {
       const { accessToken } = getTokens();
       bump();
       try {
-        const res = await fetch(`${BASE}/fix`, {
+        const res = await fetch(`${BASE}/${isAssist ? 'assist' : 'fix'}`, {
           method: 'POST',
           signal: ctrl ? ctrl.signal : undefined,
           credentials: 'same-origin',

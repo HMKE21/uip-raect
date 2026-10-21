@@ -1,18 +1,10 @@
-# AI: Explain / Fix error — frontend (step 1)
+# AI in the MyPC editor — frontend (cumulative: step 1 + step 2)
 
-Copy the `src/` folder over the project's `src/` (merge, keep paths).
+Copy `src/` over the project's `src/`.
 
-New files
-- src/components/zipbench/ai/aiFixUtils.js
-- src/components/zipbench/ai/useAiFix.js
-- src/components/zipbench/ai/AiFixPanel.jsx
-- src/components/zipbench/ai/__tests__/aiFixUtils.test.js   (node --test)
-- src/styles/css/zip-ai-fix.css
+Step 1 (explain / fix error): ai/*, SandboxPanel, RunPanel, useSandbox, zip-ai-fix.css
+Step 2 (right-click menu on selected code): CodeEditor.jsx (onContext), ai/useAiFix.js (/assist),
+  ai/AiFixPanel.jsx (titles, Copy / New file), ai/aiFixUtils.js (suggestFileName), ZipWorkbench.jsx, zip-ai-fix.css
 
-Modified files
-- src/components/zipbench/ZipWorkbench.jsx
-- src/components/zipbench/SandboxPanel.jsx
-- src/components/zipbench/RunPanel.jsx
-- src/components/zipbench/runner/useSandbox.js   (adds getOutput())
-
-Backend: uip-laravel-ai-code-backend.zip (run the migration for ai.code_assist).
+Needs backend: POST /api/v1/ai-code/assist (uip-laravel-ai-code-backend.zip).
+Tests: node --test src/components/zipbench/ai/__tests__/aiFixUtils.test.js

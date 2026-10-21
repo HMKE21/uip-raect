@@ -57,3 +57,10 @@
 @media (max-width: 760px) {
   .zb-ai { position: absolute; inset: 0; width: auto; max-width: none; z-index: 20; border-inline-start: 0; }
 }
+
+/* fenced code of an answer: Copy / New file */
+.zb-ai__block { margin: 6px 0 10px; }
+.zb-ai__block .zb-ai__code { margin: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+.zb-ai__blockbar { display: flex; justify-content: flex-end; gap: 4px; padding: 3px 6px; background: var(--zb-bar); border: 1px solid var(--zb-line); border-bottom: 0; border-radius: 7px 7px 0 0; }
+.zb-ai__mini { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: none; color: var(--zb-muted); font-size: 11px; font-weight: 700; cursor: var(--cur-pointer, pointer); }
+.zb-ai__mini:hover { background: var(--zb-hover); color: var(--zb-strong); }

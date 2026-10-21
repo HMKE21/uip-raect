@@ -10,7 +10,7 @@ import { useRunner } from './runner/useRunner';
 import { useSandbox } from './runner/useSandbox';
 import { useAiFix } from './ai/useAiFix';
 import AiFixPanel from './ai/AiFixPanel';
-import { applyEdit, guessErrorFile, languageOf, looksLikeError, tailOutput } from './ai/aiFixUtils';
+import { CONVERT_TARGETS, applyEdit, guessErrorFile, languageOf, looksLikeError, suggestFileName, tailOutput } from './ai/aiFixUtils';
 import { useAuth } from '../../context/AuthContext';
 import { RUNNER_URL } from '../../config/runner';
 import { DEFAULT_THEME, THEMES, themeById, themeVars } from './zipThemes';
@@ -934,6 +934,56 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     if (code.length > max) { flash(tt(`This file is too large for the assistant (max ${max} characters).`, `الملف كبير على المساعد (الحد الأقصى ${max} حرف).`)); return; }
     ai.ask({ path, code, error, line: hit?.line || null, language: languageOf(path), filename: baseName(path), mode });
   };
+  // ---- AI: right-click menu on the selected code (explain / fix / improve / comment / convert / tests) ----------------
+  const askAssist = (action, o = {}) => {
+    const path = o.path || activeRef.current;
+    const code = path ? textOf(path) : null;
+    if (code == null || !code.trim()) { flash(tt('Could not read that file.', 'مقدرتش أقرا الملف ده.')); return; }
+    const max = ai.limits.max_code_chars || 30000;
+    if (code.length > max) { flash(tt(`This file is too large for the assistant (max ${max} characters).`, `الملف كبير على المساعد (الحد الأقصى ${max} حرف).`)); return; }
+    ai.ask({
+      action, path, code, selFrom: o.fromLine || null, selTo: o.toLine || null, target: o.target || '', line: o.fromLine || null,
+      language: languageOf(path), filename: baseName(path), mode: o.mode || ai.panel?.mode || ai.defaultMode,
+    });
+  };
+  // "ask again" / mode switch in the panel: repeat the last question (an error explanation or a menu action)
+  const rerunAi = (mode) => {
+    const q = ai.panel?.question;
+    if (q?.action) askAssist(q.action, { path: q.path, fromLine: q.selFrom, toLine: q.selTo, target: q.target, mode });
+    else explainError(mode);
+  };
+  const onEditorContext = ({ x, y, empty, fromLine, toLine, text }) => {
+    if (!ai.available || empty) return false; // no AI / nothing selected: the browser's own menu (copy, paste…)
+    const path = activeRef.current;
+    const cur = languageOf(path);
+    const go = (action, target) => askAssist(action, { path, fromLine, toLine, target });
+    const targets = CONVERT_TARGETS.filter((l) => l !== cur && !(cur === 'React JSX' && l === 'JavaScript')).slice(0, 4);
+    setMenu({
+      x, y, title: tt('AI assistant', 'مساعد الذكاء الاصطناعي'),
+      items: [
+        { label: tt('Explain this code', 'اشرح الكود'), icon: 'sparkles', onClick: () => go('explain') },
+        { label: tt('Fix bugs', 'صلّح الأخطاء'), icon: 'wrench', onClick: () => go('fix') },
+        { label: tt('Improve', 'حسّن الكود'), icon: 'edit', onClick: () => go('improve') },
+        { label: tt('Add comments', 'أضف تعليقات'), icon: 'note', onClick: () => go('comment') },
+        { label: tt('Write tests', 'اكتب اختبارات'), icon: 'flask', onClick: () => go('test') },
+        { sep: true },
+        ...targets.map((l) => ({ label: tt(`Convert to ${l}`, `حوّل إلى ${l}`), icon: 'refresh', onClick: () => go('convert', l) })),
+        { sep: true },
+        { label: tt('Copy', 'نسخ'), icon: 'copy', onClick: () => { try { navigator.clipboard.writeText(text || ''); } catch { /* clipboard blocked */ } } },
+      ],
+    });
+    return true;
+  };
+  // the code block of a "convert" / "tests" answer becomes a new file next to the source file
+  const newFileFromAi = (code) => {
+    const p = ai.panel; if (!p) return;
+    let path = suggestFileName(p.action, p.path, p.question?.target);
+    if (exists(path)) path = uniquePath(path, exists);
+    const err = createEntry(path, 'file');
+    if (err) { flash(err); return; }
+    setTextFor(path, code);
+    flash(tt(`Created ${path}`, `اتعمل ${path}`));
+  };
   // put new text into the editor (a fresh editor state: the old one still holds the previous text)
   const commitAiText = (path, text) => {
     setTextFor(path, text);
@@ -1239,7 +1289,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
             {editorDoc && (
               <div className={`zb-cm-wrap${mdOn && mdView === 'split' ? ' zb-cm-wrap--split' : ''}`} style={{ display: cmShown ? 'block' : 'none' }}>
                 <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
-                  <CodeEditor docId={editorDoc.docId} path={editorDoc.path} initialText={editorDoc.text} onChange={onEdit} onCursor={setCursor} readOnly={false} wrap={wrap} fontSize={fontSize} reveal={reveal} theme={theme} />
+                  <CodeEditor docId={editorDoc.docId} path={editorDoc.path} initialText={editorDoc.text} onChange={onEdit} onCursor={setCursor} onContext={onEditorContext} readOnly={false} wrap={wrap} fontSize={fontSize} reveal={reveal} theme={theme} />
                 </Suspense>
               </div>
             )}
@@ -1296,10 +1346,11 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
             tt={tt}
             panel={ai.panel}
             modes={ai.modes}
-            canSwitchMode={ai.modes.length > 1}
+            canSwitchMode={ai.modes.length > 1 && !['explain', 'comment'].includes(ai.panel.action)}
             fileLabel={baseName(ai.panel.path)}
-            onMode={explainError}
-            onRetry={() => explainError(ai.panel.mode)}
+            onMode={rerunAi}
+            onRetry={() => rerunAi(ai.panel.mode)}
+            onNewFile={newFileFromAi}
             onClose={ai.close}
             onApply={applyAi}
             onApplyAll={applyAllAi}

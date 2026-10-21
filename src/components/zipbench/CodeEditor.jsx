@@ -63,14 +63,14 @@ function languageFor(path) {
  * One CodeMirror view for the whole workbench. Each open file keeps its own EditorState
  * (undo history, selection, scroll) in `statesRef`, swapped in when its tab becomes active.
  */
-export default function CodeEditor({ docId, path, initialText, onChange, onCursor, readOnly, wrap, fontSize, reveal, theme }) {
+export default function CodeEditor({ docId, path, initialText, onChange, onCursor, onContext, readOnly, wrap, fontSize, reveal, theme }) {
   const host = useRef(null);
   const view = useRef(null);
   const states = useRef(new Map());
   const scrolls = useRef(new Map());
   const current = useRef(null);
-  const cb = useRef({ onChange, onCursor });
-  cb.current = { onChange, onCursor };
+  const cb = useRef({ onChange, onCursor, onContext });
+  cb.current = { onChange, onCursor, onContext };
   const wrapComp = useRef(new Compartment());
   const roComp = useRef(new Compartment());
   const sizeComp = useRef(new Compartment());
@@ -87,6 +87,26 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
       wrapComp.current.of(wrap ? EditorView.lineWrapping : []),
       roComp.current.of(EditorState.readOnly.of(!!readOnly)),
       sizeComp.current.of(EditorView.theme({ '&': { fontSize: `${fontSize}px` } })),
+      // right-click: hands the selection (lines + text) to the workbench, which may show its own menu (return false = native menu)
+      EditorView.domEventHandlers({
+        contextmenu: (e, v) => {
+          const h = cb.current.onContext;
+          if (!h) return false;
+          const { main } = v.state.selection;
+          const doc = v.state.doc;
+          const info = { x: e.clientX, y: e.clientY, empty: main.empty };
+          if (!main.empty) {
+            const endLine = doc.lineAt(main.to);
+            info.fromLine = doc.lineAt(main.from).number;
+            // a selection that ends at the very start of a line does not include that line
+            info.toLine = endLine.from === main.to ? Math.max(info.fromLine, endLine.number - 1) : endLine.number;
+            info.text = doc.sliceString(main.from, Math.min(main.to, main.from + 100000));
+          }
+          if (h(info) === false) return false;
+          e.preventDefault();
+          return true;
+        },
+      }),
       EditorView.updateListener.of((u) => {
         if (u.docChanged) cb.current.onChange?.(u.state.doc.toString());
         if (u.selectionSet || u.docChanged) {

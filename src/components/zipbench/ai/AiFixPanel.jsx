@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import Icon from '../../Icon';
 import { diffRows } from './aiFixUtils';
 import '../../../styles/css/zip-ai-fix.css';
@@ -16,7 +16,24 @@ function Inline({ text }) {
   });
 }
 
-function Answer({ text }) {
+/** A fenced block of the answer: Copy, and (convert / tests) "New file" which saves it next to the source file. */
+function CodeBlock({ code, tt, onNewFile }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(code); setCopied(true); window.setTimeout(() => setCopied(false), 1400); } catch { /* clipboard blocked */ }
+  };
+  return (
+    <div className="zb-ai__block">
+      <div className="zb-ai__blockbar">
+        <button type="button" className="zb-ai__mini" onClick={copy}><Icon name={copied ? 'check' : 'copy'} size={12} /> {copied ? tt('Copied', 'تم النسخ') : tt('Copy', 'نسخ')}</button>
+        {onNewFile && <button type="button" className="zb-ai__mini" onClick={() => onNewFile(code)}><Icon name="file-plus" size={12} /> {tt('New file', 'ملف جديد')}</button>}
+      </div>
+      <pre className="zb-ai__code" dir="ltr"><code>{code}</code></pre>
+    </div>
+  );
+}
+
+function Answer({ text, tt, onNewFile, streaming }) {
   const blocks = [];
   const re = /```[^\n]*\n([\s\S]*?)(?:```|$)/g; // an unfinished fence (still streaming) renders as code too
   let last = 0; let m;
@@ -31,7 +48,7 @@ function Answer({ text }) {
   return (
     <div className="zb-ai__answer">
       {blocks.map((b, i) => {
-        if (b.k === 'code') return <pre key={i} className="zb-ai__code" dir="ltr"><code>{b.v}</code></pre>;
+        if (b.k === 'code') return streaming ? <pre key={i} className="zb-ai__code" dir="ltr"><code>{b.v}</code></pre> : <CodeBlock key={i} code={b.v} tt={tt} onNewFile={onNewFile} />;
         return b.v.split(/\n{2,}/).map((para, j) => {
           const lines = para.split('\n').filter((l) => l.trim() !== '');
           if (!lines.length) return null;
@@ -62,10 +79,17 @@ function Diff({ edit }) {
  * (assistant mode) the proposed fix as a diff the student applies or rejects. Nothing changes in the code until the
  * student presses Apply.
  */
-export default function AiFixPanel({ tt, panel, modes, canSwitchMode, onMode, onRetry, onClose, onApply, onApplyAll, onReject, onGoto, fileLabel }) {
+const TITLES = {
+  error: ['Explain this error', 'شرح الخطأ'], explain: ['Explain this code', 'شرح الكود'], fix: ['Fix this code', 'تصليح الكود'],
+  improve: ['Improve this code', 'تحسين الكود'], comment: ['Add comments', 'إضافة تعليقات'], convert: ['Convert code', 'تحويل الكود'], test: ['Write tests', 'كتابة اختبارات'],
+};
+
+export default function AiFixPanel({ tt, panel, modes, canSwitchMode, onMode, onRetry, onClose, onApply, onApplyAll, onReject, onGoto, onNewFile, fileLabel }) {
   const bodyRef = useRef(null);
   const stick = useRef(true);
   const { phase, text, edits, error, mode, line } = panel;
+  const action = panel.action || 'error';
+  const target = panel.question?.target;
   const streaming = phase === 'streaming';
   const pending = edits.filter((e) => e.state === 'pending');
 
@@ -73,7 +97,9 @@ export default function AiFixPanel({ tt, panel, modes, canSwitchMode, onMode, on
   const onScroll = () => { const el = bodyRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; };
 
   const modeName = (m) => (m === 'assistant' ? tt('Assistant', 'مساعد') : tt('Tutor', 'مدرّس'));
-  const modeHint = mode === 'assistant'
+  const modeHint = action === 'explain' ? tt('Explains what the selected code does.', 'بيشرح الكود المحدد بيعمل إيه.')
+    : action === 'comment' ? tt('Suggests comments as a change you can review. The code itself is not touched.', 'بيقترح تعليقات كتعديل تراجعه. الكود نفسه ما بيتغيّرش.')
+      : mode === 'assistant'
     ? tt('Explains the error and suggests the fix as a change you can review.', 'بيشرح الخطأ وبيقترح التصليح كتعديل تراجعه.')
     : tt('Explains the error and gives you a hint — you write the fix.', 'بيشرح الخطأ وبيدّيك تلميح — وإنت اللي بتكتب الحل.');
 
@@ -82,7 +108,7 @@ export default function AiFixPanel({ tt, panel, modes, canSwitchMode, onMode, on
       <header className="zb-ai__head">
         <span className="zb-ai__ico"><Icon name="sparkles" size={15} /></span>
         <div className="zb-ai__title">
-          <strong>{tt('Explain this error', 'شرح الخطأ')}</strong>
+          <strong>{tt(...(TITLES[action] || TITLES.error))}{action === 'convert' && target ? ` → ${target}` : ''}</strong>
           {fileLabel && (
             <button type="button" className="zb-ai__file" onClick={onGoto} title={tt('Open this file', 'افتح الملف ده')} dir="ltr">
               {fileLabel}{line ? `:${line}` : ''}
@@ -103,7 +129,7 @@ export default function AiFixPanel({ tt, panel, modes, canSwitchMode, onMode, on
 
       <div className="zb-ai__body" ref={bodyRef} onScroll={onScroll}>
         {streaming && !text && <div className="zb-ai__wait"><span className="zb-ai__dots" aria-hidden="true"><i /><i /><i /></span>{tt('Reading your code and the error…', 'بقرأ الكود والخطأ…')}</div>}
-        {text && <Answer text={text} />}
+        {text && <Answer text={text} tt={tt} streaming={streaming} onNewFile={(action === 'convert' || action === 'test') ? onNewFile : undefined} />}
         {streaming && text && <span className="zb-ai__cursor" aria-hidden="true" />}
 
         {edits.length > 0 && (
