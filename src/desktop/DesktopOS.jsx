@@ -140,7 +140,9 @@ function useDesktopFolder() {
     }
   }, []);
   useEffect(() => { reload(); const h = setInterval(reload, 45000); return () => clearInterval(h); }, [reload]);
-  return [st, reload];
+  // optimistic: drop items from the list right away (e.g. after "Move to…"); the next reload brings back anything that failed
+  const hideLocal = useCallback((ids) => { const gone = new Set(ids); setSt((x) => ({ ...x, items: x.items.filter((n) => !gone.has(n.id)) })); }, []);
+  return [st, reload, hideLocal];
 }
 
 const cellStyle = (p, cell) => ({ insetInlineEnd: PAD_X + p.c * (cell.w + GAP), top: PAD_Y + p.r * (cell.h + GAP), width: cell.w, height: cell.h });
@@ -177,7 +179,7 @@ export default function DesktopOS() {
     if (!guardFns.current.has(id)) guardFns.current.set(id, (fn) => { if (fn) guards.current.set(id, fn); else guards.current.delete(id); });
     return guardFns.current.get(id);
   }, []);
-  const [desk, reloadDesk] = useDesktopFolder();
+  const [desk, reloadDesk, hideLocal] = useDesktopFolder();
   const mobile = useIsMobileOS(); // phone-sized screen -> <MobileShell> (a purpose-built phone UI) instead of the windowed desktop
   const [overlay, setOverlay] = useState(null); // 'start' | 'run' | 'taskview' | 'qs' | 'cal'
   const battery = useBattery();
