@@ -987,6 +987,30 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     });
     return true;
   };
+  // permanent ✨ button in the top bar: the AI features are discoverable without waiting for an error
+  const openAiMenu = (el) => {
+    const path = activeRef.current;
+    const isText = !!path && docs.current.get(path)?.kind === 'text';
+    const cur = isText ? languageOf(path) : '';
+    const go = (action, target) => askAssist(action, { path, target });
+    const targets = CONVERT_TARGETS.filter((l) => l !== cur && !(cur === 'React JSX' && l === 'JavaScript')).slice(0, 3);
+    const items = [
+      { label: tt('Explain this file', 'اشرح الملف'), icon: 'sparkles', disabled: !isText, onClick: () => go('explain') },
+      { label: tt('Fix bugs', 'صلّح الأخطاء'), icon: 'wrench', disabled: !isText, onClick: () => go('fix') },
+      { label: tt('Improve', 'حسّن الكود'), icon: 'edit', disabled: !isText, onClick: () => go('improve') },
+      { label: tt('Add comments', 'أضف تعليقات'), icon: 'note', disabled: !isText, onClick: () => go('comment') },
+      { label: tt('Write tests', 'اكتب اختبارات'), icon: 'flask', disabled: !isText, onClick: () => go('test') },
+      ...targets.map((l) => ({ label: tt(`Convert to ${l}`, `حوّل إلى ${l}`), icon: 'refresh', disabled: !isText, onClick: () => go('convert', l) })),
+      { sep: true },
+      { label: tt('Explain the last error', 'اشرح آخر خطأ'), icon: 'alert-triangle', disabled: !aiOut, hint: aiOut ? undefined : tt('Run the code first', 'شغّل الكود الأول'), onClick: () => explainError(ai.panel?.mode || ai.defaultMode) },
+    ];
+    if (ai.autocompleteAvailable && !ghostDead) {
+      items.push({ sep: true }, {
+        label: tt('Autocomplete (Tab to accept)', 'الإكمال التلقائي (Tab للقبول)'), icon: 'ai-spark', checked: ghostPref, onClick: toggleGhost,
+      });
+    }
+    openMenuAt(el, items, tt('AI assistant', 'مساعد الذكاء الاصطناعي'));
+  };
   // the code block of a "convert" / "tests" answer becomes a new file next to the source file
   const newFileFromAi = (code) => {
     const p = ai.panel; if (!p) return;
@@ -1182,8 +1206,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
           <button type="button" className="zb-btn zb-btn--add" onClick={(e) => openMenuAt(e.currentTarget, addItems(target), target ? `/${target.replace(/\/$/, '')}` : tt('Archive root', 'جذر الأرشيف'))} title={tt('Add files or folders', 'إضافة ملفات أو مجلدات')} aria-haspopup="menu">
             <Icon name="plus" size={15} /> <span>{tt('Add', 'إضافة')}</span> <Icon name="chevron-down" size={12} />
           </button>
-          {ai.autocompleteAvailable && !ghostDead && (
-            <button type="button" className={`zb-ibtn zb-hide-sm${ghostPref ? ' is-on' : ''}`} onClick={toggleGhost} aria-pressed={ghostPref} title={ghostPref ? tt('AI autocomplete is on — Tab accepts, Esc dismisses (click to turn off)', 'الإكمال التلقائي بالـ AI شغّال — Tab يقبل، Esc يلغي (اضغط لإيقافه)') : tt('Turn on AI autocomplete', 'تشغيل الإكمال التلقائي بالـ AI')} aria-label={tt('AI autocomplete', 'الإكمال التلقائي بالـ AI')}>✦</button>
+          {ai.available && (
+            <button type="button" className={`zb-ibtn zb-ibtn--ai${ai.streaming ? ' is-on' : ''}`} onClick={(e) => openAiMenu(e.currentTarget)} title={tt('AI assistant', 'مساعد الذكاء الاصطناعي')} aria-label={tt('AI assistant', 'مساعد الذكاء الاصطناعي')} aria-haspopup="menu">✨</button>
           )}
           <button type="button" className={`zb-ibtn zb-hide-sm${wrap ? ' is-on' : ''}`} onClick={() => setWrap((v) => !v)} title={tt('Word wrap', 'التفاف الأسطر')} aria-label={tt('Word wrap', 'التفاف الأسطر')}>↵</button>
           <button type="button" className="zb-ibtn zb-hide-sm" onClick={() => setFontSize((x) => Math.max(10, x - 1))} aria-label={tt('Smaller text', 'تصغير الخط')}>A−</button>

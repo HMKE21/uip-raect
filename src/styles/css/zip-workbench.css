@@ -440,3 +440,6 @@ a.zb-ibtn { display: inline-grid; place-items: center; text-decoration: none; co
 }
 
 .zb .zb-run__main .zb-btn span { display: inline; }   /* the generic ≤760px rule hides button labels — Run / Stop / Cancel must stay readable */
+
+/* permanent AI button in the top bar: always visible while the assistant is available (also on phones) */
+.zb-ibtn--ai { font-size: 15px; }
