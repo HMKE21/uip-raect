@@ -22,6 +22,7 @@ import { agoText, discardDraft, getDraft } from '../../lib/draftStore';
 import { restoreDraft, sigOf, snapshotDraft } from './zipDraft';
 import '../../styles/css/drafts.css';
 import '../../styles/css/zip-workbench.css';
+import '../../styles/css/zip-markdown.css';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
 import { isEditableJson } from './jsonCheck';
@@ -29,6 +30,8 @@ const CsvGrid = lazy(() => import('./CsvGrid'));
 const JsonEdit = lazy(() => import('./JsonEdit'));
 const isGridPath = (p) => /\.(csv|tsv)$/i.test(p || '');
 const isJsonFile = (p) => /\.json$/i.test(p || '');
+const MarkdownView = lazy(() => import('./MarkdownView'));
+const isMdFile = (p) => /\.(md|markdown|mdown|mkd)$/i.test(p || '');
 
 const MAX_ZIP_BYTES = 150 * 1024 * 1024;
 const MAX_TOTAL_UNPACKED = 600 * 1024 * 1024;
@@ -79,6 +82,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const [dlg, setDlg] = useState(null); // { type: 'new'|'rename'|'delete'|'reset', path?, value? }
   const [busy, setBusy] = useState(false);
   const [rawText, setRawText] = useState(() => new Set()); // csv / tsv tabs the user switched to the plain-text view
+  const [mdMode, setMdMode] = useState(() => new Map()); // markdown tab -> 'preview' | 'split' | 'text'
+  const [mdTick, setMdTick] = useState(0); // bumped (debounced) while typing so the split preview follows the editor
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState('');
   const [sideTab, setSideTab] = useState('files'); // files | search
@@ -122,6 +127,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const tabsRef = useRef([]);
   tabsRef.current = tabs;
   const toastTimer = useRef(0);
+  const mdTimer = useRef(0);
+  const mdUrls = useRef(new Map()); // image path -> { url, sig } (images referenced from a markdown file)
   const revealSeq = useRef(0);
   const rootRef = useRef(null);
   const fileInput = useRef(null);
@@ -189,7 +196,9 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
 
   useEffect(() => () => {
     docs.current.forEach((d) => { if (d.url) URL.revokeObjectURL(d.url); });
+    mdUrls.current.forEach((m) => URL.revokeObjectURL(m.url));
     clearTimeout(toastTimer.current);
+    clearTimeout(mdTimer.current);
   }, []);
 
   // ---- content access -----------------------------------------------------------------------------
@@ -219,6 +228,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     const orig = origTexts.current.get(doc.path) ?? '';
     if (text === orig) { edits.current.delete(doc.path); markDirty(doc.path, false); } else { edits.current.set(doc.path, text); markDirty(doc.path, true); }
     touchRef.current();
+    if (isMdFile(doc.path)) { clearTimeout(mdTimer.current); mdTimer.current = setTimeout(() => setMdTick((t) => t + 1), 180); }
   }, [markDirty]);
 
   const setTextFor = useCallback((path, text) => {
@@ -262,6 +272,74 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     setActive(path);
     if (window.matchMedia('(max-width: 760px)').matches) setExplorer(false);
   }, [getBytes]);
+
+  // ---- markdown preview ---------------------------------------------------------------------------
+  const setMdView = useCallback((path, mode) => {
+    setMdMode((prev) => new Map(prev).set(path, mode));
+  }, []);
+
+  // opening a markdown file: rendered preview, unless the file is empty (then the editor, so a new note can be typed)
+  useEffect(() => {
+    if (!active || !isMdFile(active)) return;
+    setMdMode((prev) => {
+      if (prev.has(active)) return prev;
+      const t = edits.current.get(active) ?? origTexts.current.get(active) ?? '';
+      return new Map(prev).set(active, t.trim() ? 'preview' : 'text');
+    });
+  }, [active]);
+
+  // a path written inside a markdown file ("img/logo.png", "../docs/a.md") -> the matching file of the archive (or null)
+  const resolveMdPath = useCallback((mdPath, rel) => {
+    let r = String(rel || '').split('#')[0].split('?')[0];
+    try { r = decodeURI(r); } catch { /* keep as written */ }
+    if (!r) return null;
+    const out = [];
+    for (const seg of (r.startsWith('/') ? r.slice(1) : `${dirOf(mdPath)}${r}`).split('/')) {
+      if (seg === '' || seg === '.') continue;
+      if (seg === '..') out.pop(); else out.push(seg);
+    }
+    const p = out.join('/');
+    const hit = vfsRef.current.get(p);
+    if (hit && !hit.dir) return p;
+    const low = p.toLowerCase();
+    for (const [k, v] of vfsRef.current) if (!v.dir && k.toLowerCase() === low) return k;
+    return null;
+  }, []);
+
+  // images referenced from a markdown file live inside the archive: hand the preview a blob URL for them
+  const resolveMdAsset = useCallback((mdPath, src) => {
+    const p = resolveMdPath(mdPath, src);
+    const mime = p ? IMAGE_MIME[extOf(p)] : null;
+    if (!p || !mime) return null;
+    const sig = `${vfsRef.current.get(p)?.size}:${edits.current.get(p)?.length ?? ''}`;
+    const hit = mdUrls.current.get(p);
+    if (hit && hit.sig === sig) return hit.url;
+    const url = URL.createObjectURL(new Blob([getBytes(p)], { type: mime }));
+    mdUrls.current.set(p, { url, sig });
+    return url;
+  }, [getBytes, resolveMdPath]);
+
+  const openMdLink = useCallback((mdPath, href) => {
+    const p = resolveMdPath(mdPath, href);
+    if (p) { setSel(p); openFile(p); } else flash(`${tt('File not found in this archive: ', 'الملف غير موجود في هذا الأرشيف: ')}${href}`);
+  }, [resolveMdPath, openFile, flash, tt]);
+
+  // clicking a task checkbox in the preview flips "[ ]" / "[x]" in the markdown source
+  const toggleMdTask = useCallback((path, n) => {
+    const cur = edits.current.get(path) ?? origTexts.current.get(path) ?? '';
+    const lines = cur.split('\n');
+    const re = /^((?:\s*>)*\s*(?:[-*+]|\d+[.)])\s+\[)([ xX])(\])/;
+    if (!re.test(lines[n] || '')) return;
+    lines[n] = lines[n].replace(re, (_m, a, b, c) => `${a}${b === ' ' ? 'x' : ' '}${c}`);
+    const next = lines.join('\n');
+    setTextFor(path, next);
+    gens.current.set(path, (gens.current.get(path) || 0) + 1);
+    setEditorDoc({ path, docId: `${path}#${gens.current.get(path)}`, text: next });
+    setMdTick((t) => t + 1);
+  }, [setTextFor]);
+  const mdResolve = useCallback((src) => resolveMdAsset(activeRef.current, src), [resolveMdAsset]);
+  const mdOpen = useCallback((href) => openMdLink(activeRef.current, href), [openMdLink]);
+  const mdToggle = useCallback((n) => toggleMdTask(activeRef.current, n), [toggleMdTask]);
 
   // reopen the tabs that were open before the refresh
   useEffect(() => {
@@ -855,6 +933,11 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const jsonText = active && activeDoc?.kind === 'text' && isJsonFile(active) ? (edits.current.get(active) ?? origTexts.current.get(active) ?? '') : null;
   const jsonValid = jsonText !== null && isEditableJson(jsonText);
   const jsonOn = jsonValid && !rawText.has(active);
+  const mdOn = !!(active && activeDoc?.kind === 'text' && isMdFile(active));
+  const mdText = mdOn ? (edits.current.get(active) ?? origTexts.current.get(active) ?? '') : '';
+  const mdView = mdOn ? (mdMode.get(active) || (mdText.trim() ? 'preview' : 'text')) : null;
+  const cmShown = activeDoc?.kind === 'text' && !gridOn && !jsonOn && (!mdOn || mdView !== 'preview');
+  void mdTick; // re-render trigger only
   const toggleDir = (p) => setOpen((o) => { const n = new Set(o); if (n.has(p)) n.delete(p); else n.add(p); return n; });
 
   const keyAct = (fn) => (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(); } };
@@ -1065,6 +1148,13 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
                 {activeDoc?.kind === 'text' && isGridPath(active) && (
                   <button type="button" className="zb-crumbs__dl zb-crumbs__view" onClick={() => switchView(active, gridOn)} title={gridOn ? tt('Show as plain text', 'عرض كنص') : tt('Show as spreadsheet', 'عرض كجدول')}>{gridOn ? tt('Text', 'نص') : tt('Table', 'جدول')}</button>
                 )}
+                {mdOn && (
+                  <div className="zb-seg" role="group" aria-label={tt('Markdown view', 'طريقة عرض Markdown')}>
+                    {[['preview', tt('Preview', 'معاينة')], ['split', tt('Split', 'مقسوم')], ['text', tt('Text', 'نص')]].map(([id, label]) => (
+                      <button key={id} type="button" className={mdView === id ? 'is-on' : ''} onClick={() => setMdView(active, id)}>{label}</button>
+                    ))}
+                  </div>
+                )}
                 {activeDoc && <button type="button" className="zb-crumbs__dl" onClick={() => downloadFile(active)} title={tt('Download this file', 'تنزيل هذا الملف')}><Icon name="download" size={13} /></button>}
               </div>
             </>
@@ -1072,7 +1162,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
 
           <div className="zb-stage">
             {editorDoc && (
-              <div className="zb-cm-wrap" style={{ display: activeDoc?.kind === 'text' && !gridOn && !jsonOn ? 'block' : 'none' }}>
+              <div className={`zb-cm-wrap${mdOn && mdView === 'split' ? ' zb-cm-wrap--split' : ''}`} style={{ display: cmShown ? 'block' : 'none' }}>
                 <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
                   <CodeEditor docId={editorDoc.docId} path={editorDoc.path} initialText={editorDoc.text} onChange={onEdit} onCursor={setCursor} readOnly={false} wrap={wrap} fontSize={fontSize} reveal={reveal} theme={theme} />
                 </Suspense>
@@ -1089,6 +1179,13 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
               <div className="zb-cm-wrap" key={`${active}#${gens.current.get(active) || 0}`}>
                 <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
                   <JsonEdit path={active} text={jsonText} onText={(t) => setTextFor(active, t)} tt={tt} />
+                </Suspense>
+              </div>
+            )}
+            {mdOn && mdView !== 'text' && (
+              <div className={`zb-md${mdView === 'split' ? ' zb-md--split' : ''}`}>
+                <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
+                  <MarkdownView key={active} text={mdText} path={active} tt={tt} themeEd={themeById(theme).ed} resolveAsset={mdResolve} openPath={mdOpen} onToggleTask={mdToggle} rtl={tt('', 'x') === 'x'} />
                 </Suspense>
               </div>
             )}
