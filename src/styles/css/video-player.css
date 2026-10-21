@@ -81,7 +81,7 @@
 /* speed menu: compact grid so it fits even inside a small chat player */
 .vp__menuwrap { position: relative; }
 .vp__menu {
-  position: absolute; bottom: 44px; inset-inline-end: 0; width: 212px; max-width: calc(100vw - 24px); max-height: min(260px, calc(100cqh - 72px)); overflow: auto; padding: 8px; border-radius: 14px;
+  position: absolute; bottom: 44px; right: 0; left: auto; width: 212px; max-width: calc(100vw - 24px); max-height: min(260px, calc(100cqh - 72px)); overflow: auto; padding: 8px; border-radius: 14px;
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
   background: rgba(20, 24, 36, .96); border: 1px solid rgba(255, 255, 255, .12); box-shadow: 0 14px 40px rgba(0, 0, 0, .55);
   backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); animation: vp-pop .16s ease;

@@ -420,7 +420,14 @@ export default function VideoPlayer({ src, poster, autoPlay = false, loop = fals
     if (!open || !m || !host) return;
     m.style.translate = '0px';
     const a = m.getBoundingClientRect();
-    const b = host.getBoundingClientRect();
+    // visible bounds = the player ∩ every clipping ancestor (the player can be wider than the window / chat bubble that crops it)
+    const hb = host.getBoundingClientRect();
+    const b = { left: hb.left, right: hb.right };
+    for (let el = document.fullscreenElement === host ? null : host.parentElement; el && el !== document.documentElement; el = el.parentElement) {
+      const cs = getComputedStyle(el);
+      if (/(hidden|auto|scroll|clip)/.test(cs.overflowX)) { const r = el.getBoundingClientRect(); b.left = Math.max(b.left, r.left); b.right = Math.min(b.right, r.right); }
+    }
+    b.left = Math.max(b.left, 0); b.right = Math.min(b.right, window.innerWidth);
     let dx = 0;
     if (a.left < b.left + 8) dx = b.left + 8 - a.left;
     else if (a.right > b.right - 8) dx = b.right - 8 - a.right;
@@ -429,6 +436,17 @@ export default function VideoPlayer({ src, poster, autoPlay = false, loop = fals
   useLayoutEffect(() => { keepInside(ccMenuRef, ccMenu); }, [ccMenu, subs.length, auto, autoOk, autoErr, full]);
   useLayoutEffect(() => { keepInside(speedMenuRef, menu); }, [menu, full]);
   useLayoutEffect(() => { keepInside(boostMenuRef, boostMenu); }, [boostMenu, full, vb.status, vb.boost >= 3]);
+  // Keep every open popup inside the player while it is open: the player / window can be resized, or the menu can grow (auto-subtitle progress, errors).
+  useEffect(() => {
+    const open = [[ccMenuRef, ccMenu], [speedMenuRef, menu], [boostMenuRef, boostMenu]].filter(([, o]) => o);
+    if (!open.length || !wrapRef.current) return undefined;
+    const fit = () => open.forEach(([r]) => keepInside(r, true));
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null;
+    ro?.observe(wrapRef.current); open.forEach(([r]) => r.current && ro?.observe(r.current));
+    window.addEventListener('resize', fit);
+    const t = setTimeout(fit, 200); // after the pop-in animation + late layout (fonts, async subtitle list)
+    return () => { ro?.disconnect(); window.removeEventListener('resize', fit); clearTimeout(t); };
+  }, [ccMenu, menu, boostMenu]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // is the automatic-subtitles feature available? (asked once, the first time the CC menu opens)
   useEffect(() => {
