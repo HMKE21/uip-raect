@@ -860,7 +860,12 @@ export default function DesktopOS() {
       {idleLeft !== null && !asleep && <IdleWarning tt={tt} left={idleLeft} onStay={stay} onSignOut={logout} />}
       {asleep && <SleepScreen ar={ar} tt={tt} dim={sec.sleepDimOnly} onWake={onWake} />}
       {brightness < 100 && <div className="os-dim" style={{ opacity: ((100 - brightness) / 100) * 0.7 }} aria-hidden="true" />}
-      <div className={`os-boot${booting ? '' : ' is-done'}`} aria-hidden="true"><UipMark size={72} /><span className="os-boot__bar"><i /></span></div>
+      <div className={`os-boot${booting ? '' : ' is-done'}`} aria-hidden="true">
+        <span className="os-boot__logo"><UipMark size={64} /></span>
+        <span className="os-boot__name"><b>UIP</b><em>NUB</em></span>
+        <span className="os-boot__tag">{tt('Your workspace is getting ready', 'مساحة عملك بتتجهّز')}</span>
+        <span className="os-boot__bar"><i /></span>
+      </div>
     </div>,
     document.body,
   );
