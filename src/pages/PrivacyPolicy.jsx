@@ -170,8 +170,8 @@ export default function PrivacyPolicy() {
             <h1>{t('Privacy Policy', 'سياسة الخصوصية')}</h1>
             <p>
               {t(
-                'This page explains what information the University Innovation Platform (UIP) collects across its Student, University, and Faculty portals, how it is used, and what choices you have.',
-                'توضح هذه الصفحة المعلومات التي تجمعها منصة الابتكار الجامعي (UIP) عبر بوابات الطلاب والجامعات والكليات والشركات والمستثمرين، وكيفية استخدامها، والخيارات المتاحة لك.'
+                'This page explains what information the Ultimate Intelligent Platform (UIP) collects across its Student, University, and Faculty portals, how it is used, and what choices you have.',
+                'توضح هذه الصفحة المعلومات التي تجمعها منصة Ultimate Intelligent Platform (UIP) عبر بوابات الطلاب والجامعات والكليات والشركات والمستثمرين، وكيفية استخدامها، والخيارات المتاحة لك.'
               )}
             </p>
             {updatedDisplay !== '' && (
@@ -201,8 +201,8 @@ export default function PrivacyPolicy() {
           <section id="s1" className="lp2-pv__sec">
             <h2><span className="lp2-pv__num">1</span>{t('Introduction', 'مقدمة')}</h2>
             <p>{t(
-              'UIP (University Innovation Platform) is a digital ecosystem that connects universities, faculties, departments, students, and graduation projects in one place — for submitting, reviewing, discovering, and showcasing academic and innovation work.',
-              'UIP (منصة الابتكار الجامعي) هي منظومة رقمية تربط الجامعات والكليات والأقسام والطلاب ومشاريع التخرج والشركات في مكان واحد — لتقديم ومراجعة واكتشاف وعرض الأعمال الأكاديمية والابتكارية.'
+              'UIP (Ultimate Intelligent Platform) is a digital ecosystem that connects universities, faculties, departments, students, and graduation projects in one place — for submitting, reviewing, discovering, and showcasing academic and innovation work.',
+              'UIP (Ultimate Intelligent Platform) هي منظومة رقمية تربط الجامعات والكليات والأقسام والطلاب ومشاريع التخرج والشركات في مكان واحد — لتقديم ومراجعة واكتشاف وعرض الأعمال الأكاديمية والابتكارية.'
             )}</p>
             <p>{t(
               'This Privacy Policy explains what information UIP collects through its portals, why it is collected, how it is used and shared, and the choices available to you as a user of the platform.',

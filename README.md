@@ -1,4 +1,4 @@
-# React-full — University Innovation Platform (UIP)
+# React-full — Ultimate Intelligent Platform (UIP)
 
 React 19 + Vite 8 single-page app for UIP (student, university, faculty, admin,
 supervisor, security and data-analysis portals, plus the public pages).

@@ -163,7 +163,10 @@
   .lk-brand { gap: 9px; }
   .lk-brand__mark { width: 36px; height: 36px; }
   .lk-brand__txt b { font-size: 19px; }
-  .lk-brand__txt small { display: none; }
+  .lk-brand__mark { filter: none; }
+  .lk-brand__txt { line-height: 1.1; }
+  .lk-brand__txt small { font-size: 11px; line-height: 1.25; max-width: 124px; letter-spacing: .01em; }
+  .lk-brand__txt small br { display: none; }
   .lk-tools { height: 38px; padding: 0 4px; }
   .lk-seg { height: 30px; }
   .lk-seg > span { width: 26px; height: 26px; }
@@ -194,7 +197,7 @@
 }
 /* short screens (landscape phone, small windows) */
 @media (max-height: 640px) {
-  .lk-clock, .lk-brand__txt small, .lk-sign { display: none; }
+  .lk-clock, .lk-sign { display: none; }
   .lk-top { grid-template-columns: auto 1fr; }
   .lk-avatar { width: 60px; height: 60px; font-size: 24px; margin-bottom: 2px; }
   .lk-card { gap: 6px; padding-block: 16px; }

@@ -21,6 +21,6 @@ export default {
   'real opportunity': 'الفرص الحقيقية',
   'Skip to form': 'تخطَّ إلى النموذج',
   'Privacy policy': 'سياسة الخصوصية',
-  'UIP — University Innovation Platform': 'UIP — منصة الابتكار الجامعي',
-  'UNIVERSITY INNOVATION PLATFORM': 'منصة الابتكار الجامعي',
+  'UIP — Ultimate Intelligent Platform': 'UIP — Ultimate Intelligent Platform',
+  'ULTIMATE INTELLIGENT PLATFORM': 'ULTIMATE INTELLIGENT PLATFORM',
 };

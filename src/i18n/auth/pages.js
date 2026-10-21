@@ -31,7 +31,7 @@ export default {
   'Sign in': 'تسجيل الدخول',
   // register
   'Create your account': 'أنشئ حسابك',
-  'Join the University Innovation Platform': 'انضم إلى منصة الابتكار الجامعي',
+  'Join the Ultimate Intelligent Platform': 'انضم إلى منصة Ultimate Intelligent Platform',
   'Full name': 'الاسم بالكامل',
   'Jane Doe': 'الاسم الثلاثي',
   'Account type': 'نوع الحساب',

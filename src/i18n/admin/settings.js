@@ -91,7 +91,7 @@ export default {
   'Model': 'النموذج',
   '6-digit code': 'رمز مكون من 6 أرقام',
   'Confirm action': 'تأكيد الإجراء',
-  'University Innovation Platform': 'منصة الابتكار الجامعي',
+  'Ultimate Intelligent Platform': 'Ultimate Intelligent Platform',
   'Profile photo': 'الصورة الشخصية',
   // Admin strings wrapped in t() (second pass)
   'Sending…': 'جارٍ الإرسال…',

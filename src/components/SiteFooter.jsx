@@ -112,7 +112,7 @@ export default function SiteFooter() {
         <VisitorCounter />
 
         <div className="uip-footer__bottom">
-          <span>&copy; {new Date().getFullYear()} {t('University Innovation Platform (UIP). All rights reserved.', 'منصة الابتكار الجامعي (UIP). جميع الحقوق محفوظة.')}</span>
+          <span>&copy; {new Date().getFullYear()} {t('Ultimate Intelligent Platform (UIP). All rights reserved.', 'Ultimate Intelligent Platform (UIP). جميع الحقوق محفوظة.')}</span>
           <div className="uip-footer__bottom-links">
             <Link to="/privacy-policy">{t('Privacy Policy', 'سياسة الخصوصية')}</Link>
           </div>
