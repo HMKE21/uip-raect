@@ -84,14 +84,14 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
         <header className="lk-top">
           <div className="lk-brand">
             <img className="lk-brand__mark" src="/images/logo/uip-mark.png" srcSet="/images/logo/uip-mark.png 1x, /images/logo/uip-mark@2x.png 2x" alt="" width="52" height="52" decoding="async" />
-            <span className="lk-brand__txt"><b>UIP</b><small>Ultimate<br />Intelligent<br />Platform</small></span>
+            <span className="lk-brand__txt"><b>UIP</b><small>Ultimate Intelligent Platform</small></span>
           </div>
           <div className="lk-clock" dir={dir}><Clock ar={ar} big /></div>
           <div className="lk-tools" dir="ltr">
             <button type="button" className="lk-seg" onClick={toggleTheme} aria-label={night ? tt('Light mode', 'الوضع النهاري') : tt('Dark mode', 'الوضع الليلي')} title={night ? tt('Light mode', 'الوضع النهاري') : tt('Dark mode', 'الوضع الليلي')}>
               <span className={night ? '' : 'is-on'}><Icon name="sun" size={15} /></span><span className={night ? 'is-on' : ''}><Icon name="moon" size={15} /></span>
             </button>
-            <button type="button" className="lk-seg lk-seg--lang" onClick={toggleLocale} aria-label={tt('Switch language', 'تغيير اللغة')}>{ar ? 'AR' : 'EN'}<Icon name="globe" size={16} /></button>
+            <button type="button" className="lk-seg lk-seg--lang" onClick={toggleLocale} aria-label={tt('Switch language', 'تغيير اللغة')} title={tt('العربية', 'English')}><Icon name="globe" size={17} /></button>
           </div>
         </header>
         <div className="lk-main">

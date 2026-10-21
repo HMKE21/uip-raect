@@ -45,13 +45,13 @@
 .lk-seg { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 6px; border: 0; border-radius: 999px; background: transparent; color: rgba(255, 255, 255, .85); font-size: 13px; font-weight: 700; letter-spacing: .03em; }
 .lk-seg > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: rgba(255, 255, 255, .6); transition: background .15s, color .15s; }
 .lk-seg > span.is-on { background: rgba(255, 255, 255, .22); color: #fff; }
-.lk-seg--lang { padding: 0 10px; gap: 8px; margin-inline-start: 4px; border-inline-start: 1px solid var(--lk-line); border-radius: 0 999px 999px 0; }
+.lk-seg--lang { padding: 0 12px; gap: 0; margin-inline-start: 4px; border-inline-start: 1px solid var(--lk-line); border-radius: 0 999px 999px 0; }
 .lk-seg:hover { color: #fff; }
 .lk-seg:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-.lk-brand__mark { width: 52px; height: 52px; object-fit: contain; filter: drop-shadow(0 4px 14px rgba(99, 102, 241, .6)); }
+.lk-brand__mark { width: 52px; height: 52px; object-fit: contain; filter: drop-shadow(0 0 10px rgba(147, 170, 255, .55)); }
 .lk-brand__txt { display: flex; flex-direction: column; line-height: 1.15; }
 .lk-brand__txt b { font-size: 22px; letter-spacing: .02em; }
-.lk-brand__txt small { font-size: 12px; font-weight: 500; color: var(--lk-mute); letter-spacing: .03em; }
+.lk-brand__txt small { font-size: 12.5px; font-weight: 600; color: var(--lk-mute); letter-spacing: .03em; white-space: nowrap; }
 
 /* ltr grid on purpose: brand panel left, card centre, clock right — each block sets its own text direction */
 .lk-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 440px) minmax(0, 1fr); align-items: center; gap: clamp(16px, 3vw, 48px); direction: ltr; padding-block: 18px; position: relative; }
@@ -140,6 +140,46 @@
 .lk-pill { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; color: rgba(255, 255, 255, .9); background: rgba(255, 255, 255, .1); border: 1px solid var(--lk-line); }
 .lk-pill--btn:hover { background: rgba(255, 255, 255, .2); color: #fff; }
 
+
+/* DAY (platform light theme): clearly different from night — bright frosted-glass look with dark text */
+.lk[data-night='0'] {
+  --lk-text: #0f1b4d; --lk-mute: #4a5a92; --lk-line: rgba(40, 60, 150, .2);
+  background: linear-gradient(135deg, #f1f4ff 0%, #dbe3ff 48%, #c3d0ff 100%);
+}
+.lk[data-night='0'] .lk-bg i { opacity: .6; }
+.lk[data-night='0'] .lk-bg__a { background: #a5b4fc; }
+.lk[data-night='0'] .lk-bg__b { background: #93c5fd; opacity: .5; }
+.lk[data-night='0'] .lk-bg__c { background: #c4b5fd; opacity: .55; }
+.lk[data-night='0'] .lk-bg::after { background: radial-gradient(120% 80% at 50% 0%, transparent 55%, rgba(110, 130, 225, .22)); }
+.lk[data-night='0'] .lk-bg__photo { filter: saturate(1.05) !important; }
+.lk[data-night='0'] .lk-brand__txt b, .lk[data-night='0'] .lk-title, .lk[data-night='0'] .lk-id b, .lk[data-night='0'] .lk-hero h2, .lk[data-night='0'] .lk-hero li b { color: #0f1b4d; }
+.lk[data-night='0'] .lk-hero h2 em { background: linear-gradient(90deg, #2563eb, #7c3aed); -webkit-background-clip: text; background-clip: text; }
+.lk[data-night='0'] .lk-hero li > span { background: rgba(255, 255, 255, .75); color: #3b4fd8; }
+.lk[data-night='0'] .lk-tools { background: rgba(255, 255, 255, .72); }
+.lk[data-night='0'] .lk-seg { color: #2a3a8c; }
+.lk[data-night='0'] .lk-seg > span { color: #6b7ab8; }
+.lk[data-night='0'] .lk-seg > span.is-on { background: rgba(37, 99, 235, .16); color: #1d4ed8; }
+.lk[data-night='0'] .lk-clock .os-clock--big b { color: #0f1b4d; }
+.lk[data-night='0'] .lk-card { background: linear-gradient(160deg, rgba(255, 255, 255, .78), rgba(255, 255, 255, .5)); border-color: rgba(255, 255, 255, .95); box-shadow: 0 30px 70px rgba(60, 80, 180, .28), inset 0 1px 0 #fff; }
+.lk[data-night='0'] .lk-field, .lk[data-night='0'] .lk-input { background: rgba(255, 255, 255, .85); border-color: rgba(60, 80, 180, .28); color: #0f1b4d; }
+.lk[data-night='0'] .lk-field:focus-within, .lk[data-night='0'] .lk-input:focus { background: #fff; border-color: #4f46e5; box-shadow: 0 0 0 4px rgba(79, 70, 229, .18); }
+.lk[data-night='0'] .lk-field input, .lk[data-night='0'] .lk-input { color: #0f1b4d; }
+.lk[data-night='0'] .lk-field input::placeholder, .lk[data-night='0'] .lk-input::placeholder { color: rgba(15, 27, 77, .45); }
+.lk[data-night='0'] .lk-field > svg { opacity: .65; }
+.lk[data-night='0'] .lk-eye { color: #4a5a92; }
+.lk[data-night='0'] .lk-eye:hover { background: rgba(60, 80, 180, .1); color: #0f1b4d; }
+.lk[data-night='0'] .lk-link { color: #2563eb; }
+.lk[data-night='0'] .lk-link:hover:not(:disabled) { color: #1e40af; }
+.lk[data-night='0'] .lk-note.is-warn { color: #b45309; }
+.lk[data-night='0'] .lk-note.is-err { color: #be123c; }
+.lk[data-night='0'] .lk-pill { color: #1f2f7a; background: rgba(255, 255, 255, .75); }
+.lk[data-night='0'] .lk-pill--btn:hover { background: #fff; color: #0f1b4d; }
+.lk[data-night='0'] .lk-sign { color: rgba(40, 60, 160, .5); }
+.lk[data-night='0'] .lk-go:focus-visible, .lk[data-night='0'] .lk-link:focus-visible, .lk[data-night='0'] .lk-pill:focus-visible, .lk[data-night='0'] .lk-eye:focus-visible, .lk[data-night='0'] .lk-round:focus-visible, .lk[data-night='0'] .lk-seg:focus-visible { outline-color: #4f46e5; }
+.lk[data-night='0'] .lk-brand__mark { filter: drop-shadow(0 2px 8px rgba(79, 70, 229, .35)); }
+/* NIGHT: a touch deeper so the two modes are obvious */
+.lk[data-night='1'] .lk-bg__photo { filter: brightness(.42) saturate(.8) !important; }
+
 /* laptop: brand | card (photo stays behind, softer) */
 @media (max-width: 1180px) {
   .lk-main { grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); }
@@ -163,10 +203,8 @@
   .lk-brand { gap: 9px; }
   .lk-brand__mark { width: 36px; height: 36px; }
   .lk-brand__txt b { font-size: 19px; }
-  .lk-brand__mark { filter: none; }
-  .lk-brand__txt { line-height: 1.1; }
-  .lk-brand__txt small { font-size: 11px; line-height: 1.25; max-width: 124px; letter-spacing: .01em; }
-  .lk-brand__txt small br { display: none; }
+  .lk-brand__txt { line-height: 1.15; }
+  .lk-brand__txt small { font-size: 10.5px; letter-spacing: 0; }
   .lk-tools { height: 38px; padding: 0 4px; }
   .lk-seg { height: 30px; }
   .lk-seg > span { width: 26px; height: 26px; }
