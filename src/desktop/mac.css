@@ -290,3 +290,21 @@ body.os-active #root { display: none; }
 .os-win.is-moving { will-change: transform, left, top; box-shadow: 0 6px 20px rgba(0, 0, 0, .3); transition: none; }
 .os-win.is-moving .os-win__body { pointer-events: none; }
 body.os-dragging .os-wall { transition: none; }
+
+/* ── lock screen: never overlap on short / narrow screens ───────────────────────────────────────────────────────────
+   The footer (Locked badge + Back to portal) used to be absolutely positioned at the bottom, so on a short window it landed on top of the
+   password field and the "Forgot password?" link. Now everything is one scrollable column and the footer is the last item in it. */
+.os-lock { overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; justify-content: flex-start; gap: 20px;
+  padding: max(14px, 6vh) 16px calc(14px + env(safe-area-inset-bottom)); }
+.os-lock > * { flex: 0 0 auto; }
+.os-lock__user { margin-top: auto; }
+.os-lock__foot { position: static; inset: auto; width: 100%; margin-top: auto; padding-top: 14px; flex-wrap: wrap; row-gap: 8px; }
+.os-lock__form { margin-bottom: 0; }
+.os-lock__badge, .os-lock__ghost { white-space: nowrap; }
+@media (max-height: 560px) {
+  .os-lock { gap: 12px; padding-top: 12px; }
+  .os-lock .os-clock--big { display: none; }
+  .os-lock__user i { width: 56px; height: 56px; font-size: 22px; margin-bottom: 2px; }
+  .os-lock__user small { display: none; }
+  .os-lock__form { gap: 8px; }
+}
