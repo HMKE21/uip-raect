@@ -22,6 +22,7 @@ const PdfEditor = lazy(() => import('./editor/PdfEditor'));
 const XlsxEditor = lazy(() => import('./editor/XlsxView'));
 const DocxEditor = lazy(() => import('./editor/DocxView'));
 const PptxEditor = lazy(() => import('./editor/PptxView'));
+const MediaEditor = lazy(() => import('./messaging/MediaEditorModal')); // the same trim / crop / filters / subtitles editor the chat uses
 const DocxPreview = lazy(() => import('./editor/DocxView').then((m) => ({ default: m.DocxPreview })));
 const XlsxPreview = lazy(() => import('./editor/XlsxView').then((m) => ({ default: m.XlsxPreview })));
 const PptxPreview = lazy(() => import('./editor/PptxView').then((m) => ({ default: m.PptxPreview })));
@@ -291,6 +292,8 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   const [sheet, setSheet] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [mediaFile, setMediaFile] = useState(null); // a video being edited in the chat's media editor
+  const savingMedia = useRef(false);
   const [restored, setRestored] = useState(null); // { blob, at } — the editor was reopened from a local draft
   const scope = useDraftScope();
   const editingRef = useRef(false);
@@ -349,7 +352,7 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   }, [list, index]);
   const jump = (i) => { if (list[i]) afterGuard(guardRef.current?.(), () => { setActiveId(list[i].id); setSheet(0); }); };
 
-  useEffect(() => { setEditing(false); setRestored(null); }, [file?.id]);
+  useEffect(() => { setEditing(false); setRestored(null); setMediaFile(null); }, [file?.id]);
 
   // A refresh / crash / lost connection while editing: reopen the editor with the unsaved edits found on this device.
   const triedDraft = useRef('');
@@ -493,6 +496,23 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   const lines = data?.kind === 'text' && data.text && data.text.split('\n').length <= MAX_LINE_NUMBERS ? data.text.split('\n') : null;
   const meta = [file.size_human, file.uploader_name, Number(file.version) > 1 && `v${file.version}`].filter(Boolean).join(' · ');
   const canEdit = !!(onSaveFile || onSaveZip) && view.status === 'ready' && !editing && ((data.kind === 'image' && ext !== 'svg' && data.blob) || ((data.kind === 'pdf' || data.kind === 'pdf-canvas') && data.blob) || (data.kind === 'pptx' && data.blob) || (data.kind === 'docx' && data.blob) || (data.kind === 'table' && data.blob && ['xlsx', 'csv', 'tsv'].includes(ext)));
+  const canEditVideo = !!(onSaveFile || onSaveZip) && view.status === 'ready' && !editing && data.kind === 'video' && !!data.blob;
+  const openVideoEditor = () => {
+    const type = data.blob.type && data.blob.type.startsWith('video/') ? data.blob.type : (ext === 'webm' ? 'video/webm' : 'video/mp4');
+    setMediaFile(new File([data.blob], downloadName, { type }));
+  };
+  const saveEditedVideo = async (out) => {
+    if (savingMedia.current) return;
+    savingMedia.current = true;
+    try {
+      const base = downloadName.replace(/\.[^.]+$/, '');
+      const outExt = extOf(out.name) || ext || 'mp4';
+      await saveFile(out, { name: `${base}.${outExt}` }); // replaces the file in place (new version), keeps its name
+      setMediaFile(null);
+    } catch (err) {
+      window.alert(tt('Could not save the edited video.', 'تعذّر حفظ الفيديو بعد التعديل.') + (err?.message ? `\n${err.message}` : ''));
+    } finally { savingMedia.current = false; }
+  };
   const hasMany = list.length > 1 && !editing;
   const prevIcon = rtl ? 'chevron-right' : 'chevron-left';
   const nextIcon = rtl ? 'chevron-left' : 'chevron-right';
@@ -529,6 +549,11 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
           )}
           {canEdit && (
             <button type="button" className="st-fv__btn st-fv__btn--primary" onClick={() => setEditing(true)} title={tt('Edit this file', 'تعديل الملف')}>
+              <Icon name="edit" size={17} /><span>{tt('Edit', 'تعديل')}</span>
+            </button>
+          )}
+          {canEditVideo && (
+            <button type="button" className="st-fv__btn st-fv__btn--primary" onClick={openVideoEditor} title={tt('Edit this video (trim, crop, filters, subtitles)', 'تعديل الفيديو (قص، تقطيع، فلاتر، ترجمة)')}>
               <Icon name="edit" size={17} /><span>{tt('Edit', 'تعديل')}</span>
             </button>
           )}
@@ -721,6 +746,11 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
             })}
           </footer>
         </>
+      )}
+      {mediaFile && (
+        <Suspense fallback={null}>
+          <MediaEditor saveMode file={mediaFile} onCancel={() => setMediaFile(null)} onDone={saveEditedVideo} onSend={saveEditedVideo} />
+        </Suspense>
       )}
     </div>
   );

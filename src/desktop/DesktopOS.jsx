@@ -273,6 +273,13 @@ export default function DesktopOS() {
   // a viewer / editor window saved something in My PC -> refresh the desktop icons
   useEffect(() => { const h = () => reloadDesk(); window.addEventListener('uip-drive-changed', h); return () => window.removeEventListener('uip-drive-changed', h); }, [reloadDesk]);
 
+  // F5 / right-click > Refresh: re-read the Desktop folder, the Recycle Bin state AND every open Explorer window (they listen to the same event),
+  // instead of silently re-fetching one list. The event makes the desktop reload itself, so reloadDesk is not called twice.
+  const refreshAll = useCallback(() => {
+    window.dispatchEvent(new Event('uip-drive-changed'));
+    flash(tt('Refreshed.', 'تم التحديث.'));
+  }, [flash, tt]);
+
   // right-click > New > Word / Excel / PowerPoint / PDF …: <NewFileDialog> saves the file on the Desktop; once the icons reload, open it in its editor window
   const pendingOpen = useRef(null);
   const newDoc = useCallback((type) => { setOverlay(null); setDlg({ kind: 'newfile', type }); }, []);
@@ -517,7 +524,7 @@ export default function DesktopOS() {
     setOverlay(null);
     setMenu({
       x: e.clientX, y: e.clientY, items: [
-        { label: tt('Refresh', 'تحديث'), icon: 'refresh', hint: 'F5', onClick: reloadDesk },
+        { label: tt('Refresh', 'تحديث'), icon: 'refresh', hint: 'F5', onClick: refreshAll },
         { label: tt('Auto-arrange icons', 'ترتيب الأيقونات تلقائيًا'), icon: 'layers', onClick: () => commitPos({}) },
         'sep',
         { label: tt('Paste', 'لصق'), icon: 'file-plus', hint: 'Ctrl+V', onClick: () => pasteInto(desk.id), disabled: !desk.id || !clip },
@@ -576,7 +583,7 @@ export default function DesktopOS() {
     else if (k === 'Enter' && cur.length) { e.preventDefault(); cur.forEach((i) => i.run()); }
     else if (k === 'F2' && cur.length === 1 && cur[0].node) { e.preventDefault(); renameNode(cur[0].node); }
     else if (k === 'Delete' && selNodes.length) { e.preventDefault(); trashNodes(selNodes); }
-    else if (k === 'F5') { e.preventDefault(); reloadDesk(); }
+    else if (k === 'F5') { e.preventDefault(); refreshAll(); }
     else if (k === 'Escape') setSel(new Set());
     else if (k.startsWith('Arrow')) {
       e.preventDefault();
@@ -610,11 +617,18 @@ export default function DesktopOS() {
 
   // ---- keyboard shortcuts ------------------------------------------------------------------------------
   const S = useRef({});
-  S.current = { wm, overlay, locked, asleep, dlg, taskItems, taskClick, runCommand };
+  S.current = { wm, overlay, locked, asleep, dlg, taskItems, taskClick, runCommand, refreshAll };
   useEffect(() => {
     const onKey = (e) => {
       const s = S.current;
       if (e.defaultPrevented || s.locked || s.asleep || s.dlg) return;
+      // F5 / Ctrl+R: "refresh" belongs to the desktop. Without this, any focus outside the icons (a window, the dock, the menu bar)
+      // let the browser reload the whole page, losing the session state. Editors keep their unsaved-edit drafts, but we do not gamble on it.
+      if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && keyOf(e) === 'R')) {
+        e.preventDefault();
+        s.refreshAll();
+        return;
+      }
       const id = globalActionFor(e);
       // the code workbench / viewer keep their own keys; only the window-level Alt combos pass through
       if (e.target?.closest?.('.zb, .st-fv, .mp-editor') && !/^(close|next|prev|desktop|taskview|pin\d)$/.test(id || '')) return;

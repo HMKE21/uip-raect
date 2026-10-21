@@ -5,7 +5,7 @@
 .os {
   --mb-h: 28px; --dock-h: 84px;
   --g-bg: rgba(246, 246, 248, .74); --g-fg: #1d1d1f; --g-mute: #6e6e73; --g-line: rgba(0, 0, 0, .1); --g-hover: rgba(0, 0, 0, .055);
-  --panel: #ffffff; --panel-2: #f5f5f7; --bar: #ececee; --menu-bg: rgba(250, 250, 252, .8);
+  --panel: #ffffff; --panel-2: #f5f5f7; --bar: #ececee; --menu-bg: rgba(250, 250, 252, .93);
   --side-bg: rgba(238, 238, 243, .62); --side-sel: rgba(0, 0, 0, .09);
   --tl-off: #d3d3d7; --dot: rgba(0, 0, 0, .55);
   --shadow: 0 22px 60px rgba(0, 0, 0, .3), 0 0 0 .5px rgba(0, 0, 0, .18);
@@ -16,7 +16,7 @@
 .os[dir='rtl'] { font-family: inherit; }
 .os--dark {
   --g-bg: rgba(40, 40, 44, .72); --g-fg: #f5f5f7; --g-mute: #a1a1a8; --g-line: rgba(255, 255, 255, .12); --g-hover: rgba(255, 255, 255, .09);
-  --panel: #1e1e20; --panel-2: #2a2a2d; --bar: #2f2f32; --menu-bg: rgba(44, 44, 48, .8);
+  --panel: #1e1e20; --panel-2: #2a2a2d; --bar: #2f2f32; --menu-bg: rgba(44, 44, 48, .94);
   --side-bg: rgba(40, 40, 46, .58); --side-sel: rgba(255, 255, 255, .13);
   --tl-off: #4a4a50; --dot: rgba(255, 255, 255, .85);
   --shadow: 0 24px 64px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .1);
@@ -29,9 +29,12 @@
 .os-menubar {
   position: absolute; inset: 0 0 auto; height: var(--mb-h); z-index: 90; display: flex; align-items: center; justify-content: space-between; padding-inline: 6px 8px;
   color: #fff; font-size: 13px; font-weight: 500; background: rgba(0, 0, 0, .2);
-  -webkit-backdrop-filter: blur(32px) saturate(180%); backdrop-filter: blur(32px) saturate(180%); box-shadow: 0 .5px 0 rgba(255, 255, 255, .12) inset, 0 .5px 0 rgba(0, 0, 0, .18);
+  box-shadow: 0 .5px 0 rgba(255, 255, 255, .12) inset, 0 .5px 0 rgba(0, 0, 0, .18);
   text-shadow: 0 0 6px rgba(0, 0, 0, .25);
 }
+/* The blur lives on a pseudo-element: with backdrop-filter on the bar itself, Chrome treats it as a "backdrop root" and the
+   dropdown menus inside it could not blur the windows behind them (they looked see-through and everything bled together). */
+.os-menubar::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; -webkit-backdrop-filter: blur(32px) saturate(180%); backdrop-filter: blur(32px) saturate(180%); }
 .os--lightwp .os-menubar { color: #14141a; background: rgba(255, 255, 255, .42); text-shadow: none; box-shadow: 0 .5px 0 rgba(0, 0, 0, .12); }
 .os-menubar__menus { display: flex; align-items: center; gap: 0; min-width: 0; }
 .os-mb { position: relative; }

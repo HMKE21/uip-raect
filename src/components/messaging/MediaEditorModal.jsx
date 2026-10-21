@@ -30,6 +30,8 @@ import { reportClientIssue } from '../../api/client';
 const TEXTS = {
   en: {
     title: 'Edit before sending',
+    titleSave: 'Edit file',
+    save: 'Save',
     newText: 'New text',
     addText: 'Add',
     hintTextPhone: 'Type your text, then drag it with your finger to where you want it.',
@@ -151,6 +153,8 @@ const TEXTS = {
   },
   ar: {
     title: 'تعديل قبل الإرسال',
+    titleSave: 'تعديل الملف',
+    save: 'حفظ',
     newText: 'نص جديد',
     addText: 'إضافة',
     hintTextPhone: 'اكتب النص وبعدين اسحبه بإصبعك للمكان اللي عايزه.',
@@ -2634,7 +2638,8 @@ function usePhone() {
   return phone;
 }
 
-export default function MediaEditorModal({ file, initialCaption = '', onCancel, onDone, onSend }) {
+/** `saveMode`: used outside chat (My PC viewer) — no caption / Send, the confirm button reads "Save" and calls onDone(file). */
+export default function MediaEditorModal({ file, initialCaption = '', onCancel, onDone, onSend, saveMode = false }) {
   const { locale } = useLanguage();
   const tx = TEXTS[locale === 'ar' ? 'ar' : 'en'];
   const isVideo = (file.type || '').startsWith('video/');
@@ -2715,7 +2720,7 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
             <EdIcon name="x" size={22} />
           </button>
           <button type="button" className="mx-ph__pill" disabled={busy || failed || !ready} onClick={() => finish(false)}>
-            <EdIcon name="check" size={16} /> {tx.done}
+            <EdIcon name="check" size={16} /> {saveMode ? tx.save : tx.done}
           </button>
         </div>
       ) : (
@@ -2723,7 +2728,7 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
           <button type="button" className="mx-ed__iconbtn" onClick={onCancel} disabled={busy} aria-label={tx.close} title={tx.close}>
             <EdIcon name="x" />
           </button>
-          <strong className="mx-ed__title">{gif ? tx.previewTitle : tx.title}</strong>
+          <strong className="mx-ed__title">{gif ? tx.previewTitle : saveMode ? tx.titleSave : tx.title}</strong>
           <span className="mx-ed__file" dir="ltr" title={file.name}>{file.name} · {fmtBytes(file.size)}</span>
         </header>
       )}
@@ -2744,7 +2749,7 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
       {err && <div className="mx-ed__err" role="alert">{err}</div>}
 
       <footer className="mx-ed__foot">
-        <input
+        {saveMode ? <span style={{ flex: 1 }} /> : <input
           className="mx-ed__caption"
           dir="auto"
           value={caption}
@@ -2757,8 +2762,12 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
               finish(true);
             }
           }}
-        />
-        {phone ? (
+        />}
+        {saveMode ? (
+          <button type="button" className="btn btn-primary mx-ed__btn" disabled={busy || failed || !ready} onClick={() => finish(false)}>
+            <EdIcon name="check" size={16} /> {tx.save}
+          </button>
+        ) : phone ? (
           <button type="button" className="mx-ph__send" disabled={busy || failed || !ready} onClick={() => finish(true)} aria-label={tx.send} title={tx.send}>
             <EdIcon name="send" size={22} />
           </button>
