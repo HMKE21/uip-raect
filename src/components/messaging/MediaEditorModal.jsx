@@ -49,6 +49,7 @@ const TEXTS = {
     rotate: 'Rotate',
     flip: 'Flip',
     undo: 'Undo',
+    redo: 'Redo',
     reset: 'Reset',
     free: 'Free',
     size: 'Size',
@@ -172,6 +173,7 @@ const TEXTS = {
     rotate: 'تدوير',
     flip: 'قلب',
     undo: 'تراجع',
+    redo: 'إعادة',
     reset: 'إعادة ضبط',
     free: 'حر',
     size: 'الحجم',
@@ -288,6 +290,7 @@ const ICONS = {
   rotate: 'M21 12a9 9 0 1 1-3-6.7M21 4v5h-5',
   flip: 'M12 3v18M8 7 3 12l5 5V7ZM16 7l5 5-5 5V7Z',
   undo: 'M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
+  redo: 'm15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3',
   reset: 'M3 12a9 9 0 1 0 3-6.7M3 4v5h5',
   x: 'M18 6 6 18M6 6l12 12',
   check: 'M20 6 9 17l-5-5',
@@ -581,6 +584,20 @@ const ImageEditor = forwardRef(function ImageEditor({ file, tx, onReady, onError
   const [adj, setAdj] = useState(DEFAULT_ADJ);
   const [qk, setQk] = useState('orig');
   const filtOk = canFilter();
+  // Undo also steps back filters / brightness / contrast / saturation / output size, one change at a time, in the order they were made
+  const adjStack = useRef([{ adj: DEFAULT_ADJ, qk: 'orig' }]);
+  const opsRef = useRef([]); // 'px' (a picture edit) | 'adj' (a filter / size change), oldest first
+  const adjTimer = useRef(null);
+  const adjNow = useRef(null);
+  adjNow.current = { adj, qk };
+  const [adjN, setAdjN] = useState(0);
+  const commitAdj = useCallback(() => {
+    clearTimeout(adjTimer.current); adjTimer.current = null;
+    const n = adjNow.current; const top = adjStack.current[adjStack.current.length - 1];
+    if (JSON.stringify(top) === JSON.stringify(n)) return;
+    adjStack.current.push(n); opsRef.current.push('adj'); setAdjN((v) => v + 1);
+  }, []);
+  useEffect(() => { adjTimer.current = setTimeout(commitAdj, 300); return () => clearTimeout(adjTimer.current); }, [adj, qk, commitAdj]);
 
   const stageRef = useRef(null);
   const wrapRef = useRef(null);
@@ -676,6 +693,7 @@ const ImageEditor = forwardRef(function ImageEditor({ file, tx, onReady, onError
   };
 
   const push = useCallback((canvas) => {
+    opsRef.current.push('px');
     setHistory((h) => [...h, canvas].slice(-MAX_HISTORY));
     setCrop({ x: 0, y: 0, w: 1, h: 1 });
     setAspect('free');
@@ -684,23 +702,33 @@ const ImageEditor = forwardRef(function ImageEditor({ file, tx, onReady, onError
   const undo = useCallback(() => {
     textRef.current = null;
     setTextBox(null);
+    commitAdj(); // a filter change made a moment ago counts as its own step
     if (textsRef.current.length) { // newest text layer goes first
       updateTexts((l) => l.slice(0, -1));
       setSelId(null);
       return;
     }
+    const last = opsRef.current.pop();
+    if (last === 'adj') { // undo just that filter / size change
+      adjStack.current.pop();
+      const prev = adjStack.current[adjStack.current.length - 1];
+      setAdj(prev.adj); setQk(prev.qk); setAdjN((v) => v + 1);
+      return;
+    }
     setHistory((h) => h.slice(0, -1));
     setCrop({ x: 0, y: 0, w: 1, h: 1 });
-  }, [updateTexts]);
+  }, [updateTexts, commitAdj]);
   const reset = () => {
     textRef.current = null;
     setTextBox(null);
     updateTexts([]);
     setSelId(null);
     setHistory([]);
+    opsRef.current = opsRef.current.filter((o) => o === 'adj');
     setCrop({ x: 0, y: 0, w: 1, h: 1 });
     setAspect('free');
   };
+  const canUndo = history.length > 0 || texts.length > 0 || (adjN >= 0 && adjStack.current.length > 1);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -1099,7 +1127,7 @@ const ImageEditor = forwardRef(function ImageEditor({ file, tx, onReady, onError
       <>
         {stageEl}
         <div className="mx-ph__float">
-          <button type="button" className="mx-ph__round" title={tx.undo} aria-label={tx.undo} disabled={!history.length && !texts.length} onClick={undo}><EdIcon name="undo" size={20} /></button>
+          <button type="button" className="mx-ph__round" title={tx.undo} aria-label={tx.undo} disabled={!canUndo} onClick={undo}><EdIcon name="undo" size={20} /></button>
           <button type="button" className="mx-ph__round" title={tx.rotate} aria-label={tx.rotate} onClick={() => cur && push(rotateCanvas(bake() || cur, 1))}><EdIcon name="rotate" size={20} /></button>
           <button type="button" className="mx-ph__round" title={tx.flip} aria-label={tx.flip} onClick={() => cur && push(flipCanvas(bake() || cur))}><EdIcon name="flip" size={20} /></button>
         </div>
@@ -1210,7 +1238,7 @@ const ImageEditor = forwardRef(function ImageEditor({ file, tx, onReady, onError
           <div className="mx-ed__actions">
             <button type="button" className="mx-ed__iconbtn" title={tx.rotate} aria-label={tx.rotate} onClick={() => cur && push(rotateCanvas(bake() || cur, 1))}><EdIcon name="rotate" /></button>
             <button type="button" className="mx-ed__iconbtn" title={tx.flip} aria-label={tx.flip} onClick={() => cur && push(flipCanvas(bake() || cur))}><EdIcon name="flip" /></button>
-            <button type="button" className="mx-ed__iconbtn" title={tx.undo} aria-label={tx.undo} disabled={!history.length && !texts.length} onClick={undo}><EdIcon name="undo" /></button>
+            <button type="button" className="mx-ed__iconbtn" title={tx.undo} aria-label={tx.undo} disabled={!canUndo} onClick={undo}><EdIcon name="undo" /></button>
             <button type="button" className="mx-ed__iconbtn" title={tx.reset} aria-label={tx.reset} disabled={!history.length && !texts.length} onClick={reset}><EdIcon name="reset" /></button>
           </div>
         </div>
@@ -1834,6 +1862,59 @@ const VideoEditor = forwardRef(function VideoEditor({ file, tx, onReady, onError
     rangeRef.current = r;
     setRange(r);
   };
+
+  /* ---- undo / redo over EVERY edit (filter, brightness…, trim, frame, rotate, flip, sound, size, subtitles, clean sound) ----
+     A snapshot is taken after each change settles (slider drags / handle drags count as one step), so any single edit can be undone on its own. */
+  const histRef = useRef({ stack: [], idx: -1, timer: null });
+  const [, setHistTick] = useState(0);
+  const snapNow = () => ({ range: rangeRef.current, mute, rot, flip, crop, aspect, adj, qk, cues, cleanOn });
+  const snapRef = useRef(snapNow);
+  snapRef.current = snapNow;
+  const commitHist = useCallback(() => {
+    const h = histRef.current;
+    clearTimeout(h.timer); h.timer = null;
+    const sn = snapRef.current(); const k = JSON.stringify(sn);
+    if (h.stack[h.idx]?.k === k) return;
+    h.stack = h.stack.slice(0, h.idx + 1);
+    h.stack.push({ sn, k });
+    if (h.stack.length > 100) h.stack.shift();
+    h.idx = h.stack.length - 1;
+    setHistTick((n) => n + 1);
+  }, []);
+  useEffect(() => {
+    if (!dur) return undefined;
+    const h = histRef.current;
+    if (h.idx < 0) { commitHist(); return undefined; } // the untouched video is the first step
+    clearTimeout(h.timer);
+    h.timer = setTimeout(commitHist, 250);
+    return () => clearTimeout(h.timer);
+  }, [dur, range, mute, rot, flip, crop, aspect, adj, qk, cues, cleanOn, commitHist]);
+  const stepHist = (d) => {
+    commitHist(); // flush an edit made a moment ago so it becomes its own step
+    const h = histRef.current;
+    const ni = h.idx + d;
+    if (ni < 0 || ni >= h.stack.length) return;
+    h.idx = ni;
+    const sn = h.stack[ni].sn;
+    setRangeBoth(sn.range); setMute(sn.mute); setRot(sn.rot); setFlip(sn.flip); setCrop(sn.crop); setAspect(sn.aspect);
+    setAdj(sn.adj); setQk(sn.qk); setCues(sn.cues); setCleanOn(sn.cleanOn);
+    setHistTick((n) => n + 1);
+  };
+  const stepRef = useRef(stepHist);
+  stepRef.current = stepHist;
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = document.activeElement?.tagName;
+      if (!(e.ctrlKey || e.metaKey) || tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const k = e.key.toLowerCase();
+      if (k === 'z') { e.preventDefault(); stepRef.current(e.shiftKey ? 1 : -1); }
+      else if (k === 'y') { e.preventDefault(); stepRef.current(1); }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+  const canUndoV = histRef.current.idx > 0;
+  const canRedoV = histRef.current.idx < histRef.current.stack.length - 1;
 
   const initDuration = (d) => {
     if (!d || !Number.isFinite(d)) {
@@ -2540,6 +2621,8 @@ const VideoEditor = forwardRef(function VideoEditor({ file, tx, onReady, onError
           <div className="mx-ph__tbar">
             <button type="button" className="mx-ph__play" onClick={togglePlay} aria-label={playing ? tx.pause : tx.play}><EdIcon name={playing ? 'pause' : 'play'} size={20} /></button>
             <span className="mx-ed__time" dir="ltr">{fmtClock(t)} / {fmtClock(dur)}</span>
+            <button type="button" className="mx-ed__iconbtn" title={`${tx.undo} (Ctrl+Z)`} aria-label={tx.undo} disabled={!canUndoV} onClick={() => stepHist(-1)}><EdIcon name="undo" /></button>
+            <button type="button" className="mx-ed__iconbtn" title={`${tx.redo} (Ctrl+Shift+Z)`} aria-label={tx.redo} disabled={!canRedoV} onClick={() => stepHist(1)}><EdIcon name="redo" /></button>
           </div>
           {trimEl}
         </div>
