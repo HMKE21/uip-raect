@@ -54,7 +54,12 @@ export function useDesktopSync({ uid, state, apply }) {
 
   const uploadWallpaper = async () => {
     const data = R.current.state.prefs.customWallpaper;
-    if (!data || data === lastWpData.current) return;
+    if (!data) {
+      // the picture was removed on this device: delete it on the server too, otherwise the next pull (or another device) would bring it back
+      if (lastWpData.current) { await desktopApi.saveWallpaper(null); lastWpData.current = null; writeMeta(R.current.uid, { wp: '' }); }
+      return;
+    }
+    if (data === lastWpData.current) return;
     const r = await desktopApi.saveWallpaper(data);
     lastWpData.current = data;
     writeMeta(R.current.uid, { wp: r?.wp || '' });
@@ -72,6 +77,9 @@ export function useDesktopSync({ uid, state, apply }) {
       } catch { /* keep what we have; retried on the next pull */ return false; }
     } else if (remote.wp && remote.wp === meta.wp && customWallpaper) {
       lastWpData.current = customWallpaper;
+    } else if (!remote.wp && meta.wp && customWallpaper) {
+      // it was deleted on another device
+      customWallpaper = null; lastWpData.current = null; writeMeta(R.current.uid, { wp: '' });
     }
     const next = {
       prefs: migratePrefs({ ...cur.prefs, ...(remote.prefs || {}), customWallpaper }),

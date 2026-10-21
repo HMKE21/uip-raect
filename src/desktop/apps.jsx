@@ -1,6 +1,6 @@
 import { lazy, memo, Suspense, useEffect, useRef, useState } from 'react';
 import Icon from '../components/Icon';
-import { ACCENTS } from './prefs';
+import { ACCENTS, DEFAULT_PREFS } from './prefs';
 import { WALLPAPERS, imageToWallpaper } from './wallpapers';
 import { EXPLORER_SHORTCUTS, GROUPS, SHORTCUTS, fmtKeys } from './shortcuts';
 import { AppGlyph } from './OsIcons';
@@ -111,6 +111,11 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
     if (!f) return;
     try { setPrefs({ wallpaper: 'custom', customWallpaper: await imageToWallpaper(f) }); setErr(''); } catch { setErr(tt('Could not read that image.', 'مقدرتش أقرأ الصورة دي.')); }
   };
+  const removeCustom = () => {
+    // drop the picture (it is also deleted on the server by the sync) and fall back to the default wallpaper if it was the one in use
+    setPrefs({ customWallpaper: null, ...(prefs.wallpaper === 'custom' ? { wallpaper: DEFAULT_PREFS.wallpaper } : {}) });
+    setErr('');
+  };
   const tabs = [
     ['personalize', 'palette', tt('Personalization', 'التخصيص')],
     ['cloud', 'cloud', tt('Storage & backup', 'التخزين والنسخ')],
@@ -137,7 +142,10 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
                   </button>
                 ))}
                 {prefs.customWallpaper && (
-                  <button type="button" className={`os-wp${prefs.wallpaper === 'custom' ? ' is-on' : ''}`} style={{ background: `center / cover url("${prefs.customWallpaper}")` }} onClick={() => setPrefs({ wallpaper: 'custom' })}><span>{tt('My picture', 'صورتي')}</span></button>
+                  <div className="os-wp-wrap">
+                    <button type="button" className={`os-wp${prefs.wallpaper === 'custom' ? ' is-on' : ''}`} style={{ background: `center / cover url("${prefs.customWallpaper}")` }} onClick={() => setPrefs({ wallpaper: 'custom' })}><span>{tt('My picture', 'صورتي')}</span></button>
+                    <button type="button" className="os-wp-del" title={tt('Remove picture', 'حذف الصورة')} aria-label={tt('Remove picture', 'حذف الصورة')} onClick={removeCustom}><Icon name="trash" size={14} /></button>
+                  </div>
                 )}
                 <button type="button" className="os-wp os-wp--add" onClick={() => file.current?.click()}><Icon name="image" size={20} /><span>{tt('Browse photo…', 'اختيار صورة…')}</span></button>
               </div>

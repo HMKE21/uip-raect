@@ -81,3 +81,23 @@ input:autofill, textarea:autofill, select:autofill {
   border-radius: inherit;
   transition: background-color 600000s 0s, color 600000s 0s;
 }
+
+/* ── Checkboxes: one custom look everywhere (the browser's white square is gone) ───────────────────────────────── */
+input[type="checkbox"]:not([role="switch"]):not([class*="switch"]):not([class*="toggle"]) {
+  -webkit-appearance: none; appearance: none; position: relative; display: inline-grid; place-content: center; flex: 0 0 auto;
+  width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; vertical-align: middle;
+  border: 1.5px solid rgba(128, 128, 140, .65); border-radius: 6px; background: transparent; cursor: var(--cur-pointer, pointer);
+  transition: background-color .14s ease, border-color .14s ease, box-shadow .14s ease;
+}
+input[type="checkbox"]:not([role="switch"]):not([class*="switch"]):not([class*="toggle"])::after {
+  content: ''; width: 5px; height: 9px; margin-top: -2px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) scale(0); transition: transform .14s ease;
+}
+input[type="checkbox"]:not([role="switch"]):not([class*="switch"]):not([class*="toggle"]):hover:not(:disabled) { border-color: var(--os-accent, var(--color-primary, #515fff)); }
+input[type="checkbox"]:not([role="switch"]):not([class*="switch"]):not([class*="toggle"]):checked,
+input[type="checkbox"]:not([role="switch"]):not([class*="switch"]):not([class*="toggle"]):indeterminate {
+  background: var(--os-accent, var(--color-primary, #515fff)); border-color: var(--os-accent, var(--color-primary, #515fff));
+}
+input[type="checkbox"]:not([role="switch"]):not([class*="switch"]):not([class*="toggle"]):checked::after { transform: rotate(45deg) scale(1); }
+input[type="checkbox"]:not([role="switch"]):not([class*="switch"]):not([class*="toggle"]):indeterminate::after { width: 8px; height: 0; margin-top: 0; border-width: 0 0 2px 0; transform: none; }
+input[type="checkbox"]:not([role="switch"]):not([class*="switch"]):not([class*="toggle"]):focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--os-accent, var(--color-primary, #515fff)) 35%, transparent); }
+input[type="checkbox"]:not([role="switch"]):not([class*="switch"]):not([class*="toggle"]):disabled { opacity: .45; cursor: not-allowed; }
