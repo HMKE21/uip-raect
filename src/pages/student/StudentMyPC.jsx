@@ -21,6 +21,7 @@ import { isSystemNode } from '../../desktop/sync';
 import { FileGlyph, FolderGlyph } from '../../desktop/OsIcons';
 import { extOf, isTextName, opensInEditor } from '../../lib/driveFileKinds';
 import { useSharedClip } from '../../lib/driveClipboard';
+import { DROP_EVENT, readDragIds, setDragData } from '../../lib/driveDnd';
 import '../../styles/css/my-pc.css';
 
 const ZipWorkbench = lazy(() => import('../../components/zipbench/ZipWorkbench'));
@@ -114,6 +115,7 @@ function TreeNode({ node, byParent, depth, openSet, toggle, activeId, onOpen, on
   return (
     <li>
       <div
+        data-tree-id={node.id}
         className={`mp-tree__row${activeId === node.id ? ' is-on' : ''}${over ? ' is-over' : ''}`}
         style={{ paddingInlineStart: 8 + depth * 14 }}
         onClick={() => onOpen(node.id)}
@@ -486,10 +488,29 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
   const dropIds = useCallback((e, targetId) => {
     e.preventDefault(); e.stopPropagation();
     let ids = [];
-    try { ids = JSON.parse(e.dataTransfer.getData('application/x-drive-ids') || '[]'); } catch { /* not ours */ }
+    ids = readDragIds(e.dataTransfer);
     ids = ids.filter((i) => i !== targetId);
     if (ids.length) run(() => drive.move(ids, targetId), tt('Moved.', 'تم النقل.'));
   }, [run, tt]);
+
+  // Desktop icons are dragged with the pointer (not HTML5 drag): when one is released over this window it arrives as a DROP_EVENT.
+  // Onto a folder row = into that folder; anywhere else = into the folder shown here.
+  const dropRef = useRef(null);
+  dropRef.current = (nodes, target) => {
+    if (inTrash) return;
+    const row = target?.closest?.('.mp-item[data-node-type="folder"]');
+    const treeRow = target?.closest?.('[data-tree-id]');
+    const targetId = row ? Number(row.getAttribute('data-node-id')) : treeRow ? Number(treeRow.getAttribute('data-tree-id')) : folderParam;
+    const ids = nodes.map((n) => n.id).filter((id) => id !== targetId && !nodes.some((n) => n.id === id && (n.parent_id ?? null) === (targetId ?? null)));
+    if (ids.length) run(() => drive.move(ids, targetId || null), tt('Moved.', 'تم النقل.')).then((r) => { if (r) window.dispatchEvent(new Event('uip-drive-changed')); });
+  };
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return undefined;
+    const h = (e) => dropRef.current?.(e.detail?.nodes || [], e.detail?.target);
+    el.addEventListener(DROP_EVENT, h);
+    return () => el.removeEventListener(DROP_EVENT, h);
+  }, []);
 
   const askName = useCallback((cfg) => setDlg({ type: 'name', ...cfg }), []);
   const newFolder = () => askName({ title: tt('New folder', 'مجلد جديد'), label: tt('Folder name', 'اسم المجلد'), value: tt('New folder', 'مجلد جديد'), selectAll: true, action: tt('Create', 'إنشاء'), onOk: (v) => run(() => drive.createFolder(folderParam, v), tt('Folder created.', 'تم إنشاء المجلد.')) });
@@ -776,7 +797,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
   const chevron = ar ? 'chevron-left' : 'chevron-right';
 
   return (
-    <div ref={rootRef} className={`mp${embedded ? ' mp--embedded' : ''}`} dir={ar ? 'rtl' : 'ltr'} tabIndex={-1} onKeyDown={onKey}
+    <div ref={rootRef} data-drive-drop="explorer" className={`mp${embedded ? ' mp--embedded' : ''}`} dir={ar ? 'rtl' : 'ltr'} tabIndex={-1} onKeyDown={onKey}
       onPointerDownCapture={(e) => { if (!e.target.closest('input, textarea, select, .mp-item, [contenteditable]')) window.setTimeout(() => { if (!rootRef.current?.contains(document.activeElement) || document.activeElement === document.body) rootRef.current?.focus({ preventScroll: true }); }, 0); }}>
       <input ref={fileInput} type="file" multiple hidden onChange={(e) => onPick(e, false)} />
       <input ref={dirInput} type="file" multiple hidden webkitdirectory="" directory="" onChange={(e) => onPick(e, true)} />
@@ -973,7 +994,8 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                       onDoubleClick={(e) => { e.stopPropagation(); openNode(n); }}
                       onContextMenu={(e) => showMenu(e, n)}
                       onKeyDown={(e) => { if (e.key === ' ') { e.preventDefault(); clickItem({ ctrlKey: true, shiftKey: false, stopPropagation: () => {} }, n); } }}
-                      onDragStart={(e) => { const ids = sel.has(n.id) ? [...sel] : [n.id]; e.dataTransfer.setData('application/x-drive-ids', JSON.stringify(ids)); e.dataTransfer.effectAllowed = 'move'; }}
+                      data-node-id={n.id} data-node-type={n.type}
+                      onDragStart={(e) => { const ids = sel.has(n.id) ? [...sel] : [n.id]; setDragData(e.dataTransfer, items.filter((x) => ids.includes(x.id)).length ? items.filter((x) => ids.includes(x.id)) : [n]); }}
                       onDragOver={(e) => { if (n.type === 'folder' && (e.dataTransfer.types.includes('application/x-drive-ids') || e.dataTransfer.types.includes('Files'))) { e.preventDefault(); e.currentTarget.classList.add('is-over'); } }}
                       onDragLeave={(e) => e.currentTarget.classList.remove('is-over')}
                       onDrop={(e) => { e.currentTarget.classList.remove('is-over'); if (n.type !== 'folder') return; if (e.dataTransfer.types.includes('application/x-drive-ids')) dropIds(e, n.id); else onDropFiles(e, n.id); }}

@@ -443,3 +443,6 @@ a.zb-ibtn { display: inline-grid; place-items: center; text-decoration: none; co
 
 /* permanent AI button in the top bar: always visible while the assistant is available (also on phones) */
 .zb-ibtn--ai { font-size: 15px; }
+
+/* a desktop icon is being dragged over the code editor: it will be added to the project */
+.zb-main[data-drop-over] { outline: 2px dashed var(--zb-accent); outline-offset: -2px; background: var(--zb-accent-soft); }

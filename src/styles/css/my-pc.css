@@ -285,3 +285,6 @@
 /* long folders: rows far outside the scroll area are not laid out or painted until they get close */
 .mp-items.is-list .mp-item { content-visibility: auto; contain-intrinsic-size: auto 36px; }
 .mp-items.is-grid .mp-item { content-visibility: auto; contain-intrinsic-size: auto 104px; }
+
+/* a desktop icon is being dragged over this window: it will receive the file (see lib/driveDnd.js) */
+.mp[data-drop-over] { outline: 3px dashed var(--mp-accent, var(--color-primary, #0a84ff)); outline-offset: -3px; }

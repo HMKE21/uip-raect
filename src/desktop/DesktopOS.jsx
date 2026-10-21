@@ -28,6 +28,7 @@ import { wallpaperById, wallpaperCss } from './wallpapers';
 import { chromeH, initialWm, winTitle, wmReducer } from './wm';
 import { restoreWm, saveWm } from './wmPersist';
 import WidgetLayer from './Widgets';
+import { clearDropMark, dropOnWindowAt, hasDriveIds, markDropTarget, readDragNodes } from '../lib/driveDnd';
 import { useDesktopWidgets } from './widgetsStore';
 import { opensInEditor } from '../lib/driveFileKinds';
 import WindowFrame from './Window';
@@ -198,6 +199,7 @@ export default function DesktopOS() {
   const [desk, reloadDesk, hideLocal] = useDesktopFolder();
   const widgets = useDesktopWidgets(user?.id); // sticky notes + clock / calendar / to-do widgets (synced to the account)
   const [newWidgetId, setNewWidgetId] = useState(null);
+  const [extOver, setExtOver] = useState(null); // desktop folder icon hovered by a file dragged in from a window
   const mobile = useIsMobileOS(); // phone-sized screen -> <MobileShell> (a purpose-built phone UI) instead of the windowed desktop
   const [overlay, setOverlay] = useState(null); // 'start' | 'run' | 'taskview' | 'qs' | 'cal'
   const battery = useBattery();
@@ -496,6 +498,7 @@ export default function DesktopOS() {
         setSel(new Set(group));
       }
       over = overOf(ev);
+      if (over) clearDropMark(); else markDropTarget(ev.clientX, ev.clientY); // a window that accepts the file (explorer / code editor) lights up
       setDrag({ keys: group, dx, dy, over });
     };
     const end = (ev) => {
@@ -503,6 +506,7 @@ export default function DesktopOS() {
       window.removeEventListener('pointerup', end);
       window.removeEventListener('pointercancel', end);
       document.body.classList.remove('os-dragging');
+      clearDropMark();
       if (!started) return;
       suppressClick.current = true; setTimeout(() => { suppressClick.current = false; }, 0);
       setDrag(null);
@@ -522,6 +526,8 @@ export default function DesktopOS() {
           .catch((err) => flash(errorMessage(err), 'error'));
         return;
       }
+      // released over a window that takes files (explorer: move there · code editor: add to the project)
+      if (nodes.length && ev.type === 'pointerup' && dropOnWindowAt(ev.clientX, ev.clientY, nodes.map((n) => ({ id: n.id, name: n.name, type: n.type, parent_id: n.parent_id ?? null })))) { setSel(new Set()); return; }
       // x counts from the inline-end edge: that is the LEFT edge in Arabic and the RIGHT edge in English, so a drag to the right adds to x only in Arabic
       const moved = planMove(group, L.layout, dx * (L.ar ? 1 : -1), dy, L.cell, L.deskSize);
       L.commitPos({ ...L.layout, ...moved });
@@ -711,8 +717,29 @@ export default function DesktopOS() {
     }
   };
 
+  // A file dragged out of an explorer window: onto the desktop = move it to the desktop folder; onto a desktop folder icon = into that folder.
+  const iconUnder = (e) => { const k = e.target?.closest?.('[data-ikey]')?.getAttribute('data-ikey'); const ic = k ? icons.find((i) => i.key === k) : null; return ic?.node?.type === 'folder' ? ic : null; };
+  const onDragOverDesk = (e) => {
+    if (hasDriveIds(e.dataTransfer)) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; const ic = iconUnder(e); setExtOver(ic ? ic.key : null); setDropping(!ic); return; }
+    if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setDropping(true); }
+  };
+  const dropDriveNodes = async (e) => {
+    const nodes = readDragNodes(e.dataTransfer);
+    const ic = iconUnder(e);
+    const targetId = ic ? ic.node.id : desk.id;
+    const inDesk = new Set((desk.items || []).map((n) => n.id));
+    const ids = nodes.map((n) => n.id).filter((id) => id !== targetId && (ic || !inDesk.has(id)));
+    if (!ids.length || !targetId) return;
+    try {
+      await drive.move(ids, targetId);
+      flash(ic ? tt(`Moved into “${ic.node.name}”.`, `تم النقل إلى «${ic.node.name}».`) : tt('Moved to the desktop.', 'تم النقل إلى سطح المكتب.'));
+      window.dispatchEvent(new Event('uip-drive-changed'));
+    } catch (err) { flash(errorMessage(err), 'error'); }
+    reloadDesk();
+  };
   const onDrop = async (e) => {
-    e.preventDefault(); setDropping(false);
+    e.preventDefault(); setDropping(false); setExtOver(null);
+    if (hasDriveIds(e.dataTransfer)) { dropDriveNodes(e); return; }
     const files = [...(e.dataTransfer?.files || [])];
     if (!files.length || !desk.id) return;
     flash(tt(`Uploading ${files.length} file(s)…`, `جارٍ رفع ${files.length} ملف…`));
@@ -933,7 +960,7 @@ export default function DesktopOS() {
       <div
         ref={deskRef} className={`os-desk${dropping ? ' is-drop' : ''}`} tabIndex={0} onKeyDown={onDeskKey}
         onPointerDown={onDeskPointerDown} onContextMenu={deskMenu}
-        onDragOver={(e) => { if (e.dataTransfer?.types?.includes('Files')) { e.preventDefault(); setDropping(true); } }} onDragLeave={() => setDropping(false)} onDrop={onDrop}
+        onDragOver={onDragOverDesk} onDragLeave={() => { setDropping(false); setExtOver(null); }} onDrop={onDrop}
       >
         {icons.map((ic) => {
           const p = layout[ic.key];
@@ -942,7 +969,7 @@ export default function DesktopOS() {
           return (
             <button
               key={ic.key} type="button" data-ikey={ic.key} ref={(el) => { if (el) iconEls.current[ic.key] = el; else delete iconEls.current[ic.key]; }}
-              className={`os-icon${sel.has(ic.key) ? ' is-sel' : ''}${moving ? ' is-dragging' : ''}${drag?.over === ic.key ? ' is-over' : ''}${cutting ? ' is-cut' : ''}`} title={ic.label}
+              className={`os-icon${sel.has(ic.key) ? ' is-sel' : ''}${moving ? ' is-dragging' : ''}${drag?.over === ic.key || extOver === ic.key ? ' is-over' : ''}${cutting ? ' is-cut' : ''}`} title={ic.label}
               style={{ ...cellStyle(p, cell), ...(moving ? { transform: `translate(${drag.dx}px, ${drag.dy}px)` } : null) }}
               onPointerDown={(e) => onIconPointerDown(e, ic)}
               onClick={(e) => clickIcon(e, ic)} onDoubleClick={(e) => { e.stopPropagation(); ic.run(); }} onContextMenu={(e) => iconMenu(e, ic)}

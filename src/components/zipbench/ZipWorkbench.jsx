@@ -27,6 +27,7 @@ import useAutoDraft, { DraftChip } from '../../lib/useAutoDraft';
 import { askUnsaved } from '../../lib/saveCenter';
 import { agoText, discardDraft, getDraft } from '../../lib/draftStore';
 import { restoreDraft, sigOf, snapshotDraft } from './zipDraft';
+import { DROP_EVENT, hasDriveIds, nodesToImportItems, readDragNodes } from '../../lib/driveDnd';
 import '../../styles/css/drafts.css';
 import '../../styles/css/zip-workbench.css';
 import '../../styles/css/zip-markdown.css';
@@ -165,6 +166,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const uploadBase = useRef('');
   const defaultSel = useRef('');
   const dragSrc = useRef(null); // tree path being dragged inside the explorer
+  const mainRef = useRef(null); // .zb-main — receives pointer-dragged desktop icons (DROP_EVENT)
 
   const flash = useCallback((msg) => {
     setToast(msg);
@@ -761,7 +763,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const startNew = (kind, base) => setDlg({ type: 'new', kind, value: base, base });
 
   // ---- drag & drop (files from the desktop, and moving entries inside the tree) --------------------
-  const isFileDrag = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
+  const isFileDrag = (e) => [...(e.dataTransfer?.types || [])].includes('Files') || hasDriveIds(e.dataTransfer); // OS files, or My PC files dragged from an explorer window
   const destFromEvent = (e) => {
     if (e.target.closest?.('.zb-side')) {
       const row = e.target.closest('[data-dir]');
@@ -777,6 +779,31 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     if (!isFileDrag(e)) return;
     e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDropDir(destFromEvent(e));
   };
+  /** My PC files / folders (from an explorer window or a desktop icon) -> into the project, at `dest`. */
+  const importDriveNodes = async (nodes, dest) => {
+    setImporting(true);
+    try {
+      const items = await nodesToImportItems(nodes);
+      setImporting(false);
+      await importItems(items, dest, false);
+    } catch (err) {
+      setImporting(false);
+      flash(tt('Could not add files: ', 'تعذّرت إضافة الملفات: ') + String(err?.message || err));
+    }
+  };
+  const dropRef = useRef(null);
+  const destFromTarget = (t) => {
+    if (t?.closest?.('.zb-side')) { const row = t.closest('[data-dir]'); return row ? row.getAttribute('data-dir') : ''; }
+    return dirOf(sel);
+  };
+  dropRef.current = (nodes, t) => importDriveNodes(nodes, destFromTarget(t));
+  useEffect(() => { // a desktop icon released over this window (see lib/driveDnd.js)
+    const el = mainRef.current;
+    if (!el) return undefined;
+    const h = (e) => dropRef.current?.(e.detail?.nodes || [], e.detail?.target);
+    el.addEventListener(DROP_EVENT, h);
+    return () => el.removeEventListener(DROP_EVENT, h);
+  }, [phase]);
   const onDragLeave = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDropDir(null); };
   const onDrop = async (e) => {
     const src = dragSrc.current;
@@ -792,6 +819,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     e.preventDefault();
     const dest = destFromEvent(e);
     setDropDir(null);
+    if (hasDriveIds(e.dataTransfer) && !e.dataTransfer.files?.length) { await importDriveNodes(readDragNodes(e.dataTransfer), dest); return; }
     const { items, truncated } = await readDataTransfer(e.dataTransfer);
     await importItems(items, dest, truncated);
   };
@@ -1339,7 +1367,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
         </div>
       </div>
 
-      <div className="zb-main" onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+      <div className="zb-main" data-drive-drop="workbench" ref={mainRef} onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
         {explorer && <button type="button" className="zb-scrim" onClick={() => setExplorer(false)} aria-label={tt('Close explorer', 'إغلاق المستكشف')} />}
         <aside className={`zb-side${explorer ? ' is-open' : ''}${sideTab === 'search' ? ' is-wide' : ''}`}>
           <div className="zb-side__tabs" role="tablist">
