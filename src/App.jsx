@@ -31,6 +31,7 @@ const PublicUniversityProfile = lazy(() => import('./pages/PublicUniversityProfi
 const PublicFacultyProfile = lazy(() => import('./pages/PublicFacultyProfile'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const VerifyCertificate = lazy(() => import('./pages/VerifyCertificate'));
+const SharedItem = lazy(() => import('./pages/SharedItem'));
 const Login = lazy(() => import('./pages/Login'));
 const StaffLogin = lazy(() => import('./pages/StaffLogin'));
 const StaffForgotPassword = lazy(() => import('./pages/StaffForgotPassword'));
@@ -249,6 +250,8 @@ export default function App() {
             <Route path="/500" element={<ServerError />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             <Route path="/verify-certificate" element={<VerifyCertificate />} />
+            {/* My PC share link — public, no sign-in (GET /api/v1/public/drive-share/{token}) */}
+            <Route path="/s/:token" element={<SharedItem />} />
 
             <Route path="/auth/login" element={<Login />} />
             {/* Hidden staff sign-in (admin / data analyst / security): not linked anywhere. */}

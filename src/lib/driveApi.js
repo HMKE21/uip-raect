@@ -128,6 +128,12 @@ export const drive = {
     emitDriveSaved({ id: unwrap(res)?.items?.[0]?.id, name: file.name, kind: 'upload', size: file.size });
     return res;
   },
+  /** Share links (GET/POST /drive/nodes/{id}/shares, PATCH/DELETE /drive/shares/{id}). expiry: '1d' | '7d' | '30d' | 'never'. */
+  shares: (id) => api.get(`${B}/nodes/${id}/shares`).then(unwrap),
+  mySharedLinks: () => api.get(`${B}/shares`).then(unwrap),
+  createShare: (id, { expiry, canDownload }) => api.post(`${B}/nodes/${id}/shares`, { expiry, can_download: !!canDownload }).then(unwrap),
+  updateShare: (shareId, patch) => api.patch(`${B}/shares/${shareId}`, patch).then(unwrap),
+  revokeShare: (shareId) => api.del(`${B}/shares/${shareId}`),
   /** Whole-tree listing (metadata only) for the cloud backup engine. */
   manifest: () => api.get(`${B}/manifest`).then(unwrap),
   sandboxTokenPath: (folderId) => `${B}/nodes/${folderId}/sandbox-token`,
@@ -202,3 +208,17 @@ export async function fetchDownload(node, opts) {
   }
   return { blob: await fetchDriveBlob(node.id, opts), name: node.name };
 }
+
+/** Public share page (no login): /api/v1/public/drive-share/{token}. */
+const P = (token) => `/api/v1/public/drive-share/${encodeURIComponent(token)}`;
+export const sharedApi = {
+  view: (token, nodeId) => api.get(P(token), nodeId ? { node: nodeId } : undefined).then(unwrap),
+  file: async (token, nodeId, { download = false } = {}) => {
+    const res = await api.blob(`${P(token)}/file`, { ...(nodeId ? { node: nodeId } : {}), ...(download ? { download: 1 } : {}) });
+    return res.blob();
+  },
+  zip: async (token, nodeId) => {
+    const res = await api.blob(`${P(token)}/zip`, nodeId ? { node: nodeId } : undefined);
+    return res.blob();
+  },
+};

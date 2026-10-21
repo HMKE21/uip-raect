@@ -6,6 +6,8 @@ import { errorMessage } from '../../api/client';
 import Icon from '../../components/Icon';
 import FileViewer from '../../components/FileViewer';
 import NewFileDialog from '../../components/NewFileDialog';
+import ShareDialog from '../../components/ShareDialog';
+import '../../styles/css/drive-share.css';
 import { useLanguage } from '../../context/LanguageContext';
 import { usePageMeta } from '../../context/PageMetaContext';
 import { StModal, EmptyState, Skeleton, timeAgo } from '../../components/student/stUi';
@@ -733,6 +735,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     if (one && one.type === 'file' && extOf(one.name) === 'zip') out.push({ icon: 'archive', label: tt('Extract here', 'فك الضغط هنا'), run: () => extract(one) });
     if (group.length) {
       out.push({ icon: 'download', label: tt('Download', 'تنزيل'), run: () => group.forEach(download), disabled: group.length > 1 });
+      if (one) out.push({ icon: 'share', label: tt('Share', 'مشاركة'), run: () => setDlg({ type: 'share', node: one }) });
       out.push({ sep: true });
       out.push({ icon: 'copy', label: tt('Copy', 'نسخ'), hint: 'Ctrl+C', run: () => setClip({ ids: group.map((x) => x.id), mode: 'copy' }) });
       out.push({ icon: 'ed-crop', label: tt('Cut', 'قص'), hint: 'Ctrl+X', run: () => setClip({ ids: group.map((x) => x.id), mode: 'cut' }) });
@@ -837,6 +840,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
             <button type="button" className="mp-ib" disabled={!selected.length} onClick={() => setClip({ ids: selected.map((n) => n.id), mode: 'cut' })} title={tt('Cut (Ctrl+X)', 'قص (Ctrl+X)')} aria-label={tt('Cut', 'قص')}><Icon name="ed-crop" size={16} /></button>
             <button type="button" className="mp-ib" disabled={!clip} onClick={() => paste()} title={tt('Paste (Ctrl+V)', 'لصق (Ctrl+V)')} aria-label={tt('Paste', 'لصق')}><Icon name="file-plus" size={16} /></button>
             <button type="button" className="mp-ib" disabled={selected.length !== 1} onClick={() => rename(selected[0])} title={tt('Rename (F2)', 'إعادة تسمية (F2)')} aria-label={tt('Rename', 'إعادة تسمية')}><Icon name="edit" size={16} /></button>
+            <button type="button" className="mp-ib" disabled={selected.length !== 1} onClick={() => setDlg({ type: 'share', node: selected[0] })} title={tt('Share', 'مشاركة')} aria-label={tt('Share', 'مشاركة')}><Icon name="share" size={16} /></button>
             <button type="button" className="mp-ib" disabled={!selected.length} onClick={() => zipSelected(selected)} title={tt('Compress to ZIP', 'ضغط إلى ZIP')} aria-label={tt('Compress to ZIP', 'ضغط إلى ZIP')}><Icon name="archive" size={16} /></button>
             <button type="button" className="mp-ib mp-danger" disabled={!selected.length} onClick={() => doDelete(selected)} title={tt('Delete (Del)', 'حذف (Del)')} aria-label={tt('Delete', 'حذف')}><Icon name="trash" size={16} /></button>
           </>
@@ -1036,6 +1040,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
         </CtxMenu>
       )}
 
+      {dlg?.type === 'share' && <ShareDialog node={dlg.node} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} />}
       {dlg?.type === 'name' && <NameDialog dlg={dlg} tt={tt} onClose={() => setDlg(null)} />}
       {dlg?.type === 'newfile' && (
         <NewFileDialog
