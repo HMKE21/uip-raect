@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../components/Icon';
+import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { drive, fetchDriveBlob } from '../lib/driveApi';
 import { desktopApi, lockError } from './desktopApi';
 import { APPS } from './apps';
@@ -335,6 +337,9 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
   const [wait, setWait] = useState(0);
   const [show, setShow] = useState(false); const [caps, setCaps] = useState(false); const [shake, setShake] = useState(0);
   const first = useRef(null);
+  const { toggleLocale } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
+  const night = theme === 'dark';
   useEffect(() => {
     if (needPw) return undefined;
     const k = (e) => { e.preventDefault(); onUnlock(); };
@@ -386,12 +391,25 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
     </div>
   );
   const shell = (card, extra = {}) => (
-    <div className="lk" dir={dir} {...extra}>
-      <div className="lk-bg" aria-hidden="true"><i className="lk-bg__a" /><i className="lk-bg__b" /><i className="lk-bg__c" /></div>
+    <div className="lk" dir={dir} data-night={night ? '1' : '0'} {...extra}>
+      <div className="lk-bg" aria-hidden="true">
+        <i className="lk-bg__a" /><i className="lk-bg__b" /><i className="lk-bg__c" />
+        <i className="lk-bg__photo" />
+        <svg className="lk-bg__wave" viewBox="0 0 1200 260" preserveAspectRatio="none"><defs><linearGradient id="lkw" x1="0" x2="1"><stop offset="0" stopColor="#2563eb" stopOpacity=".05" /><stop offset=".55" stopColor="#3b82f6" stopOpacity=".55" /><stop offset="1" stopColor="#7c3aed" stopOpacity="0" /></linearGradient></defs><path d="M0 150C220 70 430 60 640 120S1020 210 1200 150V260H0Z" fill="url(#lkw)" /><path d="M0 150C220 70 430 60 640 120S1020 210 1200 150" fill="none" stroke="#93c5fd" strokeOpacity=".55" strokeWidth="2" /></svg>
+      </div>
       <div className="lk-scroll">
-        <header className="lk-brand">
-          <img className="lk-brand__mark" src="/images/logo/uip-mark.png" srcSet="/images/logo/uip-mark.png 1x, /images/logo/uip-mark@2x.png 2x" alt="" width="52" height="52" decoding="async" />
-          <span className="lk-brand__txt"><b>UIP</b><small>Ultimate<br />Intelligent<br />Platform</small></span>
+        <header className="lk-top">
+          <div className="lk-brand">
+            <img className="lk-brand__mark" src="/images/logo/uip-mark.png" srcSet="/images/logo/uip-mark.png 1x, /images/logo/uip-mark@2x.png 2x" alt="" width="52" height="52" decoding="async" />
+            <span className="lk-brand__txt"><b>UIP</b><small>Ultimate<br />Intelligent<br />Platform</small></span>
+          </div>
+          <div className="lk-clock" dir={dir}><Clock ar={ar} big /></div>
+          <div className="lk-tools" dir="ltr">
+            <button type="button" className="lk-seg" onClick={toggleTheme} aria-label={night ? tt('Light mode', 'الوضع النهاري') : tt('Dark mode', 'الوضع الليلي')} title={night ? tt('Light mode', 'الوضع النهاري') : tt('Dark mode', 'الوضع الليلي')}>
+              <span className={night ? '' : 'is-on'}><Icon name="sun" size={15} /></span><span className={night ? 'is-on' : ''}><Icon name="moon" size={15} /></span>
+            </button>
+            <button type="button" className="lk-seg lk-seg--lang" onClick={toggleLocale} aria-label={tt('Switch language', 'تغيير اللغة')}>{ar ? 'AR' : 'EN'}<Icon name="globe" size={16} /></button>
+          </div>
         </header>
         <div className="lk-main">
           <aside className="lk-hero" dir={dir}>
@@ -402,10 +420,11 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
             ))}</ul>
           </aside>
           <main className="lk-card" dir={dir}>{card}</main>
-          <div className="lk-clock" dir={dir}><Clock ar={ar} big /></div>
+          <span className="lk-sign" aria-hidden="true">Build Your Future</span>
         </div>
         <footer className="lk-foot">
           <span className="lk-pill"><Icon name="lock" size={14} />{tt('Locked', 'مقفول')}</span>
+          <button type="button" className="lk-pill lk-pill--btn" onClick={toggleTheme}><Icon name={night ? 'sun' : 'moon'} size={14} />{night ? tt('Light mode', 'الوضع النهاري') : tt('Dark mode', 'الوضع الليلي')}</button>
           {onPortal && <button type="button" className="lk-pill lk-pill--btn" onClick={onPortal}>{tt('Back to portal', 'العودة للبوابة')}</button>}
         </footer>
       </div>
@@ -434,11 +453,14 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
       <>
         {head}
         <form className="lk-form" onSubmit={submit}>
-          <div key={shake} className={`lk-field${shake ? ' is-shake' : ''}${err ? ' is-err' : ''}`}>
-            <Icon name="lock" size={17} />
-            <input ref={first} type={show ? 'text' : 'password'} value={pw} onChange={(e) => { setPw(e.target.value); if (err) setErr(''); }} onKeyDown={capsKey} onKeyUp={capsKey} onBlur={() => setCaps(false)}
-              placeholder={tt('Enter your password', 'اكتب كلمة المرور')} aria-label={tt('Password', 'كلمة المرور')} autoComplete="current-password" maxLength={72} dir="auto" />
-            <button type="button" className="lk-eye" onClick={() => setShow((v) => !v)} aria-label={show ? tt('Hide password', 'إخفاء الباسورد') : tt('Show password', 'إظهار الباسورد')} aria-pressed={show} tabIndex={-1}><Icon name={show ? 'eye-off' : 'eye'} size={17} /></button>
+          <div key={shake} className={`lk-row${shake ? ' is-shake' : ''}`}>
+            <div className={`lk-field${err ? ' is-err' : ''}`}>
+              <Icon name="lock" size={17} />
+              <input ref={first} type={show ? 'text' : 'password'} value={pw} onChange={(e) => { setPw(e.target.value); if (err) setErr(''); }} onKeyDown={capsKey} onKeyUp={capsKey} onBlur={() => setCaps(false)}
+                placeholder={tt('Enter your password', 'اكتب كلمة المرور')} aria-label={tt('Password', 'كلمة المرور')} autoComplete="current-password" maxLength={72} dir="auto" />
+              <button type="button" className="lk-eye" onClick={() => setShow((v) => !v)} aria-label={show ? tt('Hide password', 'إخفاء الباسورد') : tt('Show password', 'إظهار الباسورد')} aria-pressed={show} tabIndex={-1}><Icon name={show ? 'eye-off' : 'eye'} size={17} /></button>
+            </div>
+            <button type="submit" className="lk-round" disabled={busy || !pw} aria-label={tt('Unlock', 'فتح القفل')}>{busy ? <span className="mp-spin" /> : <Icon name={ar ? 'arrow-left' : 'arrow-right'} size={20} />}</button>
           </div>
           {caps && <p className="lk-note is-warn"><Icon name="alert-triangle" size={13} />{tt('Caps Lock is on', 'زر Caps Lock مفعّل')}</p>}
           {err && <p className="lk-note is-err" role="alert">{err}</p>}

@@ -1,16 +1,18 @@
 /* ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-   Lock screen (see LockScreen in shell.jsx) — brand panel | glass sign-in card | clock.
+   Lock screen (see LockScreen in shell.jsx) — brand panel | glass sign-in card | campus photo; top bar = brand, clock, theme + language.
    Light on purpose: an opaque gradient + three static blurred shapes (no backdrop-filter over the desktop, no images), one fade-in.
    Opaque also means nothing of the desktop is visible while it is locked.
    ────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 .lk {
   --lk-a: #6d5dfc; --lk-b: #3b82f6; --lk-text: #fff; --lk-mute: rgba(226, 232, 255, .72); --lk-line: rgba(255, 255, 255, .16);
   position: absolute; inset: 0; z-index: 500; overflow: hidden; color: var(--lk-text); font-family: inherit;
-  background: linear-gradient(135deg, #0a1033 0%, #141b63 46%, #2a2a8f 100%);
+  background: linear-gradient(120deg, #1b2280 0%, #2c38b0 46%, #5359cf 100%);
+  transition: background .3s;
   animation: lk-fade .25s ease both; -webkit-user-select: none; user-select: none;
 }
 .lk *, .lk *::before, .lk *::after { box-sizing: border-box; }
 .lk button { font: inherit; color: inherit; cursor: pointer; }
+.lk[data-night='1'] { background: linear-gradient(135deg, #0a1033 0%, #141b63 46%, #2a2a8f 100%); }
 @keyframes lk-fade { from { opacity: 0; } }
 @keyframes lk-rise { from { opacity: 0; transform: translateY(14px); } }
 
@@ -20,6 +22,14 @@
 .lk-bg__a { width: 46vmax; height: 46vmax; left: -14vmax; top: -16vmax; background: #4f46e5; }
 .lk-bg__b { width: 40vmax; height: 40vmax; right: -12vmax; top: 6vh; background: #2563eb; opacity: .4; }
 .lk-bg__c { width: 34vmax; height: 34vmax; left: 30%; bottom: -22vmax; background: #7c3aed; opacity: .45; }
+.lk-bg__photo {
+  inset: 0 0 0 auto !important; width: min(48vw, 780px); height: 100%; border-radius: 0 !important; filter: none !important; opacity: 1 !important;
+  background: url('/images/lock/campus.jpg') right bottom / cover no-repeat;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 46%), linear-gradient(to bottom, transparent 0, #000 26%); -webkit-mask-composite: source-in;
+  mask-image: linear-gradient(to right, transparent 0, #000 46%), linear-gradient(to bottom, transparent 0, #000 26%); mask-composite: intersect;
+}
+.lk[data-night='1'] .lk-bg__photo { filter: brightness(.5) saturate(.85) !important; }
+.lk-bg__wave { position: absolute; left: 0; bottom: 0; width: min(62vw, 900px); height: 24vh; opacity: .9; }
 .lk-bg::after { content: ''; position: absolute; inset: 0; background: radial-gradient(120% 80% at 50% 0%, transparent 40%, rgba(5, 8, 30, .5)); }
 
 /* one scrollable column so nothing can overlap on a short screen */
@@ -29,14 +39,22 @@
 }
 .lk-scroll > * { flex: 0 0 auto; }
 
-.lk-brand { display: flex; align-items: center; gap: 12px; direction: ltr; align-self: flex-start; }
+.lk-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; direction: ltr; }
+.lk-brand { display: flex; align-items: center; gap: 12px; direction: ltr; justify-self: start; }
+.lk-tools { justify-self: end; display: inline-flex; align-items: center; height: 42px; padding: 0 6px; border-radius: 999px; background: rgba(255, 255, 255, .12); border: 1px solid var(--lk-line); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.lk-seg { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 6px; border: 0; border-radius: 999px; background: transparent; color: rgba(255, 255, 255, .85); font-size: 13px; font-weight: 700; letter-spacing: .03em; }
+.lk-seg > span { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: rgba(255, 255, 255, .6); transition: background .15s, color .15s; }
+.lk-seg > span.is-on { background: rgba(255, 255, 255, .22); color: #fff; }
+.lk-seg--lang { padding: 0 10px; gap: 8px; margin-inline-start: 4px; border-inline-start: 1px solid var(--lk-line); border-radius: 0 999px 999px 0; }
+.lk-seg:hover { color: #fff; }
+.lk-seg:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .lk-brand__mark { width: 52px; height: 52px; object-fit: contain; filter: drop-shadow(0 4px 14px rgba(99, 102, 241, .6)); }
 .lk-brand__txt { display: flex; flex-direction: column; line-height: 1.15; }
 .lk-brand__txt b { font-size: 22px; letter-spacing: .02em; }
 .lk-brand__txt small { font-size: 12px; font-weight: 500; color: var(--lk-mute); letter-spacing: .03em; }
 
 /* ltr grid on purpose: brand panel left, card centre, clock right — each block sets its own text direction */
-.lk-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 440px) minmax(0, 1fr); align-items: center; gap: clamp(16px, 3vw, 48px); direction: ltr; padding-block: 18px; }
+.lk-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 440px) minmax(0, 1fr); align-items: center; gap: clamp(16px, 3vw, 48px); direction: ltr; padding-block: 18px; position: relative; }
 
 .lk-hero { display: flex; flex-direction: column; gap: 14px; max-width: 420px; animation: lk-rise .5s .05s ease both; }
 .lk-hero h2 { margin: 0; font-size: clamp(26px, 2.6vw, 38px); font-weight: 800; line-height: 1.25; }
@@ -83,6 +101,14 @@
 .lk-eye { flex: none; width: 34px; height: 34px; margin-inline-end: -8px; border: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; color: rgba(255, 255, 255, .75); }
 .lk-eye:hover { background: rgba(255, 255, 255, .14); color: #fff; }
 
+.lk-row { display: flex; align-items: center; gap: 10px; width: 100%; }
+.lk-row .lk-field { flex: 1; min-width: 0; }
+.lk-row.is-shake { animation: lk-shake .35s; }
+.lk-round { flex: none; width: 50px; height: 50px; border: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; background: linear-gradient(135deg, var(--lk-a), var(--lk-b)); box-shadow: 0 8px 22px rgba(79, 70, 229, .5); transition: transform .12s, opacity .15s; }
+.lk-round:hover:not(:disabled) { transform: scale(1.06); }
+.lk-round:disabled { opacity: .5; cursor: default; box-shadow: none; }
+.lk-round:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.lk-round .mp-spin { width: 20px; height: 20px; border-color: rgba(255, 255, 255, .3); border-top-color: #fff; }
 .lk-go {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 52px; border: 0; border-radius: 999px; font-size: 16px; font-weight: 700; color: #fff;
   background: linear-gradient(90deg, var(--lk-a), var(--lk-b)); box-shadow: 0 12px 28px rgba(79, 70, 229, .5); transition: transform .12s, box-shadow .15s, opacity .15s;
@@ -102,37 +128,42 @@
 .lk-note.is-err { color: #fecdd3; }
 .lk-hint { margin: 0; font-size: 12.5px; color: var(--lk-mute); }
 
-.lk-clock { justify-self: end; text-align: end; animation: lk-rise .5s .2s ease both; }
-.lk-clock .os-clock--big { align-items: flex-end; text-align: end; flex-direction: column-reverse; gap: 4px; }
-.lk-clock .os-clock--big b { font-size: clamp(44px, 5.4vw, 84px); font-weight: 800; letter-spacing: -.02em; color: #fff; font-variant-numeric: tabular-nums; text-shadow: none; }
-.lk-clock .os-clock--big span { font-size: clamp(14px, 1.3vw, 18px); font-weight: 600; color: var(--lk-mute); }
+.lk-clock { justify-self: center; text-align: center; animation: lk-rise .5s .2s ease both; }
+.lk-clock .os-clock--big { align-items: center; text-align: center; flex-direction: column-reverse; gap: 2px; }
+.lk-clock .os-clock--big b { font-size: clamp(30px, 3.2vw, 46px); font-weight: 800; letter-spacing: -.01em; color: #fff; font-variant-numeric: tabular-nums; text-shadow: none; line-height: 1.1; }
+.lk-clock .os-clock--big span { font-size: clamp(12px, 1vw, 15px); font-weight: 600; color: var(--lk-mute); }
+
+/* hand-written signature, bottom-left (decorative) */
+.lk-sign { position: absolute; left: clamp(8px, 1vw, 24px); bottom: clamp(0px, 3vh, 36px); font-family: 'Pacifico', 'Segoe Script', cursive; font-size: clamp(20px, 1.9vw, 28px); color: rgba(255, 255, 255, .6); transform: rotate(-7deg); pointer-events: none; white-space: nowrap; direction: ltr; }
 
 .lk-foot { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; padding-top: 6px; direction: ltr; }
 .lk-pill { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 16px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; color: rgba(255, 255, 255, .9); background: rgba(255, 255, 255, .1); border: 1px solid var(--lk-line); }
 .lk-pill--btn:hover { background: rgba(255, 255, 255, .2); color: #fff; }
 
-/* laptop: drop the clock column, keep brand | card */
+/* laptop: brand | card (photo stays behind, softer) */
 @media (max-width: 1180px) {
   .lk-main { grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); }
-  .lk-clock { display: none; }
+  .lk-bg__photo { opacity: .55 !important; width: 60vw; }
+  .lk-sign { display: none; }
 }
-/* tablet / phone: just the card (with the clock above it) */
+/* tablet / phone: just the card */
 @media (max-width: 880px) {
   .lk-main { grid-template-columns: minmax(0, 440px); justify-content: center; align-content: center; }
   .lk-hero { display: none; }
-  .lk-card { order: 2; }
-  .lk-clock { display: block; order: 1; justify-self: center; text-align: center; }
-  .lk-clock .os-clock--big { align-items: center; text-align: center; }
-  .lk-clock .os-clock--big b { font-size: 52px; }
-  .lk-brand { align-self: center; }
+  .lk-bg__photo { opacity: .3 !important; width: 100vw; }
+  .lk-top { grid-template-columns: auto 1fr; }
+  .lk-clock { grid-column: 1 / -1; grid-row: 2; }
+  .lk-clock .os-clock--big b { font-size: 40px; }
 }
 /* short screens (landscape phone, small windows) */
 @media (max-height: 640px) {
-  .lk-clock, .lk-brand__txt small { display: none; }
+  .lk-clock, .lk-brand__txt small, .lk-sign { display: none; }
+  .lk-top { grid-template-columns: auto 1fr; }
   .lk-avatar { width: 60px; height: 60px; font-size: 24px; margin-bottom: 2px; }
   .lk-card { gap: 6px; padding-block: 16px; }
   .lk-sub { display: none; }
   .lk-field, .lk-input, .lk-go { height: 44px; }
+  .lk-round { width: 44px; height: 44px; }
   .lk-brand__mark { width: 40px; height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) { .lk, .lk * { animation: none !important; transition: none !important; } }
