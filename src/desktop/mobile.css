@@ -235,3 +235,32 @@
 }
 @media (max-width: 360px) { .mos-grid { grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); } .mos-widget .os-clock--big b { font-size: 36px; } }
 @media (prefers-reduced-motion: reduce) { .mos *, .mos { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* ── My PC (Explorer) inside the phone shell: touch-sized toolbar instead of the window chrome ─────────────────────────
+   The desktop styles leave room for the traffic lights (84px) and use 26-30px buttons; neither makes sense in a full-screen phone app. */
+.os--mobile .mos-app .mp[data-size] { height: 100%; }
+.os--mobile .mos-app .mp[data-size] .mp-top { padding: 8px 10px 6px; padding-inline-start: 10px; min-height: 0; gap: 6px 4px; flex-wrap: wrap; align-items: center; }
+.os--mobile .mos-app .mp[data-size] .mp-top .mp-ib { width: 40px; height: 40px; border-radius: 12px; }
+.os--mobile .mos-app .mp[data-size] .mp-nav { gap: 0; flex: 1 1 auto; justify-content: flex-start; }
+.os--mobile .mos-app .mp[data-size] .mp-side-toggle { order: 0; }
+.os--mobile .mos-app .mp[data-size] .mp-nav { order: 1; }
+.os--mobile .mos-app .mp[data-size] .mp-crumbs { order: 2; flex: 1 1 100%; min-width: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; padding-bottom: 2px; }
+.os--mobile .mos-app .mp[data-size] .mp-crumbs::-webkit-scrollbar { display: none; }
+.os--mobile .mos-app .mp[data-size] .mp-crumb { padding: 6px 8px; min-height: 34px; font-size: 14px; }
+.os--mobile .mos-app .mp[data-size] .mp-search { order: 3; flex: 1 1 100%; width: 100%; height: 42px; border-radius: 14px; padding: 0 12px; }
+.os--mobile .mos-app .mp[data-size] .mp-search input { font-size: 16px; } /* 16px: iOS does not zoom the page when the field gets focus */
+
+/* action bar: one swipeable row of 40px targets, with a fade on the side that has more */
+.os--mobile .mos-app .mp[data-size] .mp-bar { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; padding: 6px 10px; gap: 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; scroll-snap-type: x proximity; }
+.os--mobile .mos-app .mp[data-size] .mp-bar::-webkit-scrollbar { display: none; }
+.os--mobile .mos-app .mp[data-size] .mp-bar > *, .os--mobile .mos-app .mp[data-size] .mp-menu-wrap { flex: 0 0 auto; }
+.os--mobile .mos-app .mp[data-size] .mp-bar .mp-ib, .os--mobile .mos-app .mp[data-size] .mp-bar .mp-btn { min-width: 40px; height: 40px; border-radius: 12px; }
+.os--mobile .mos-app .mp[data-size] .mp-bar .mp-btn--primary { padding: 0 14px; }
+.os--mobile .mos-app .mp[data-size] .mp-sep { height: 22px; margin: 0 2px; }
+.os--mobile .mos-app .mp[data-size] .mp-pop { max-width: calc(100vw - 24px); max-height: 60vh; overflow-y: auto; }
+.os--mobile .mos-app .mp[data-size] .mp-pop button { min-height: 44px; }
+
+/* file list: bigger rows, name + size only */
+.os--mobile .mos-app .mp[data-size] .mp-items.is-list .mp-item { min-height: 52px; padding-block: 6px; }
+.os--mobile .mos-app .mp[data-size] .mp-items.is-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
+.os--mobile .mos-app .mp[data-size] .mp-status { padding-bottom: 6px; }
