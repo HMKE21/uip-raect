@@ -324,3 +324,7 @@ body.os-dragging .os-wall { transition: none; }
 .os-clock--bar { gap: 8px; font-size: 15px; }
 .os-clock--bar b { font-weight: 600; }
 .os-tray__cloud { height: 30px; min-width: 30px; }
+
+/* Dock tiles: ".os-dock__g > * { display: block }" was switching the tile's centring grid off, so every glyph sat at the top of its squircle. */
+.os-dock__g > .os-tile { display: grid; place-items: center; }
+.os-dock__g > .os-tile > svg, .os-dock__g > .os-tile > .os-launchdots { display: block; margin: 0; }

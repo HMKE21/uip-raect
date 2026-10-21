@@ -405,3 +405,12 @@ body.os-dragging iframe { pointer-events: none; }
 .os-wp-del { position: absolute; top: 6px; inset-inline-end: 6px; width: 26px; height: 26px; display: grid; place-items: center; border: 0; border-radius: 8px; background: rgba(0, 0, 0, .55); color: #fff; cursor: pointer;
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); opacity: .9; transition: background .15s, transform .15s; }
 .os-wp-del:hover, .os-wp-del:focus-visible { background: #e5484d; transform: scale(1.06); opacity: 1; outline: none; }
+
+/* recent sign-ins: one tidy row — icon | device · place | status + time | chevron */
+.os-hist__item .os-hist__row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 18px; align-items: center; column-gap: 12px; min-height: 44px; padding: 8px 10px; }
+.os-hist__item .os-hist__row > svg { justify-self: center; }
+.os-hist__item .os-hist__row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-hist__item .os-hist__row > small { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; text-align: end; line-height: 1.25; white-space: nowrap; }
+.os-hist__item .os-hist__row > small em { font-style: normal; font-weight: 600; color: var(--g-fg); }
+.os-hist__item .os-hist__row > small i { font-style: normal; font-size: 11px; color: var(--g-mute); }
+@media (max-width: 520px) { .os-hist__item .os-hist__row { column-gap: 8px; padding-inline: 6px; } }

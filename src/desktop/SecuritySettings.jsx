@@ -222,7 +222,7 @@ export default function SecuritySettings({ tt, ar, sec, onSec, lockEnabled, onLo
                 <button type="button" className="os-hist__row" aria-expanded={open} onClick={() => setHistOpen(open ? null : h.id)}>
                   <Icon name={KIND_ICON[h.kind] || 'monitor'} size={15} />
                   <span dir="auto"><b>{h.device_label || tt('Unknown device', 'جهاز غير معروف')}</b>{h.location_label ? ` · ${h.location_label}` : ''}</span>
-                  <small>{state} · {stamp(h.signed_in_at, ar)}</small>
+                  <small><em>{state}</em><i>{stamp(h.signed_in_at, ar)}</i></small>
                   <Icon name="chevron-down" size={14} className="os-hist__chev" />
                 </button>
                 {open && (
