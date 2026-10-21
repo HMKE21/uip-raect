@@ -258,10 +258,14 @@ export default function DesktopOS() {
       case 'lock': setOverlay(null); setLocked(true); break;
       case 'sleep': setOverlay(null); sleepRef.current?.(); break;
       case 'security': openApp('settings', { tab: 'security' }); break;
-      case 'portal': navigate(roleHome(user?.role)); break;
+      case 'portal': // leaving the desktop asks first: Enter (or the Exit button) confirms, Esc / Cancel stays
+        setOverlay(null);
+        ask({ kind: 'confirm', title: tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟'), text: tt('You will leave the desktop and go back to the portal. Your files stay saved.', 'هتخرج من سطح المكتب وترجع للبوابة. ملفاتك فاضلة محفوظة.'), action: tt('Exit', 'خروج') })
+          .then((ok) => { if (ok) navigate(roleHome(user?.role)); });
+        break;
       default: break;
     }
-  }, [navigate, openApp, openExplorer, setLocked, user?.role]);
+  }, [ask, navigate, openApp, openExplorer, setLocked, tt, user?.role]);
 
   // images / PDFs / media / ZIPs open in a Viewer window, text & code in a Code-editor window (one window per file)
   const openFileWin = useCallback((p) => {
@@ -893,6 +897,8 @@ export default function DesktopOS() {
       <Dock
         items={dockItems} tt={tt} mag={prefs.dockMag !== false} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}
         onBin={() => runCommand('bin')} binFull={desk.binFull} binLabel={tt('Recycle Bin', 'سلة المحذوفات')}
+        onPortal={() => runCommand('portal')} portalLabel={tt('UIP Portal', 'بوابة UIP')}
+        onLock={() => runCommand('lock')} lockLabel={tt('Lock screen', 'قفل الشاشة')}
       />
 
       </>
@@ -907,7 +913,7 @@ export default function DesktopOS() {
         /></Suspense>
       )}
       {toast && <div className={`os-toast${toast.tone === 'error' ? ' is-error' : ''}`} role="status">{toast.msg}</div>}
-      {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} hideDetails={sec.hideLockDetails} onUnlock={() => setLocked(false)} onPortal={() => runCommand('portal')} />}
+      {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} hideDetails={sec.hideLockDetails} onUnlock={() => setLocked(false)} onPortal={() => navigate(roleHome(user?.role))} />}
       {idleLeft !== null && !asleep && <IdleWarning tt={tt} left={idleLeft} onStay={stay} onSignOut={logout} />}
       {asleep && <SleepScreen ar={ar} tt={tt} dim={sec.sleepDimOnly} onWake={onWake} />}
       {brightness < 100 && <div className="os-dim" style={{ opacity: ((100 - brightness) / 100) * 0.7 }} aria-hidden="true" />}

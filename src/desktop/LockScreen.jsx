@@ -20,15 +20,16 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
   const [wait, setWait] = useState(0);
   const [show, setShow] = useState(false); const [caps, setCaps] = useState(false); const [shake, setShake] = useState(0);
   const first = useRef(null);
+  const [leaving, setLeaving] = useState(false); // “exit to portal?” confirmation
   const { toggleLocale } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const night = theme === 'dark';
   useEffect(() => {
-    if (needPw) return undefined;
+    if (needPw || leaving) return undefined; // while the exit confirmation is open, Enter / Esc belong to it (not “any key unlocks”)
     const k = (e) => { e.preventDefault(); onUnlock(); };
     const t = setTimeout(() => window.addEventListener('keydown', k, true), 150);
     return () => { clearTimeout(t); window.removeEventListener('keydown', k, true); };
-  }, [onUnlock, needPw]);
+  }, [onUnlock, needPw, leaving]);
   useEffect(() => { if (needPw) first.current?.focus(); }, [needPw, view]);
   useEffect(() => { if (wait <= 0) return undefined; const h = setTimeout(() => setWait((w) => w - 1), 1000); return () => clearTimeout(h); }, [wait]);
 
@@ -108,9 +109,22 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
         <footer className="lk-foot">
           <span className="lk-pill"><Icon name="lock" size={14} />{tt('Locked', 'مقفول')}</span>
           <button type="button" className="lk-pill lk-pill--btn" onClick={toggleTheme}><Icon name={night ? 'sun' : 'moon'} size={14} />{night ? tt('Light mode', 'الوضع النهاري') : tt('Dark mode', 'الوضع الليلي')}</button>
-          {onPortal && <button type="button" className="lk-pill lk-pill--btn" onClick={onPortal}>{tt('Back to portal', 'العودة للبوابة')}</button>}
+          {onPortal && <button type="button" className="lk-pill lk-pill--btn" onClick={() => setLeaving(true)}>{tt('Back to portal', 'العودة للبوابة')}</button>}
         </footer>
       </div>
+      {leaving && (
+        <div className="os-scrim os-scrim--top" style={{ inset: 0 }} onPointerDown={() => setLeaving(false)}>
+          <div className="os-dlg" role="alertdialog" aria-modal="true" aria-label={tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟')} dir={dir}
+            onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') setLeaving(false); }}>
+            <h3>{tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟')}</h3>
+            <p>{tt('You will leave the desktop and go back to the portal. Your files stay saved.', 'هتخرج من سطح المكتب وترجع للبوابة. ملفاتك فاضلة محفوظة.')}</p>
+            <footer>
+              <button type="button" className="os-btn" onClick={() => setLeaving(false)}>{tt('Cancel', 'إلغاء')}</button>
+              <button type="button" className="os-btn os-btn--primary" autoFocus onClick={onPortal}>{tt('Exit', 'خروج')}</button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   );
   const head = (

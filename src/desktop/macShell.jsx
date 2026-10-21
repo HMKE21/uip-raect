@@ -68,7 +68,7 @@ export function MenuBar({ ar, tt, menus, tray }) {
 const MAX_SCALE = 1.62;
 
 /** The Dock. items: [{ key, app, label, running, active, onClick, onContext }]. */
-export function Dock({ items, tt, mag, launchOn, onLaunch, onBin, binFull, binLabel, binOn }) {
+export function Dock({ items, tt, mag, launchOn, onLaunch, onBin, binFull, binLabel, binOn, onPortal, portalLabel, onLock, lockLabel }) {
   const root = useRef(null);
   const rail = useRef(null);
   const centers = useRef([]);
@@ -148,6 +148,20 @@ export function Dock({ items, tt, mag, launchOn, onLaunch, onBin, binFull, binLa
           </button>
         ))}
         <i data-dk className="os-dock__sep" aria-hidden="true" />
+        {onLock && (
+          <button type="button" data-dk className="os-dock__it" style={{ width: base + 8, height: base }} onClick={onLock} aria-label={lockLabel}>
+            <span className="os-dock__g" style={{ width: base, height: base }}><AppGlyph app="lock" size={base} /></span>
+            <i className="os-dock__dot" />
+            <span className="os-dock__tip" dir="auto">{lockLabel}</span>
+          </button>
+        )}
+        {onPortal && (
+          <button type="button" data-dk className="os-dock__it" style={{ width: base + 8, height: base }} onClick={onPortal} aria-label={portalLabel}>
+            <span className="os-dock__g" style={{ width: base, height: base }}><AppGlyph app="portal" size={base} /></span>
+            <i className="os-dock__dot" />
+            <span className="os-dock__tip" dir="auto">{portalLabel}</span>
+          </button>
+        )}
         <button type="button" data-dk className={`os-dock__it${binOn ? ' is-run' : ''}`} style={{ width: base + 8, height: base }} onClick={onBin} aria-label={binLabel}>
           <span className="os-dock__g" style={{ width: base, height: base }}><AppGlyph app="bin" size={base} full={binFull} /></span>
           <i className="os-dock__dot" />
