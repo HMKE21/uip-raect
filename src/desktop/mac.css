@@ -360,3 +360,17 @@ body.os-dragging .os-wall { transition: none; }
 .os-spot__foot span { display: inline-flex; align-items: center; gap: 5px; }
 .os-spot__foot kbd { min-width: 20px; height: 20px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 5px; font: 600 11px/1 inherit; background: var(--g-hover); color: var(--g-mute); }
 @media (max-width: 520px) { .os-spot__foot { display: none; } .os-dlg--run .os-spot__field input { font-size: 18px; } }
+
+/* ── confirmation dialogs (exit to portal / lock screen): icon badge, centred text, two equal buttons with their key ─────────── */
+.os-dlg--confirm { width: min(380px, calc(100vw - 24px)); padding: 26px 24px 20px; gap: 0; align-items: center; text-align: center; border-radius: 22px; box-shadow: 0 30px 80px rgba(0, 0, 0, .5), 0 0 0 .5px var(--g-line); }
+.os-dlg__ico { width: 60px; height: 60px; margin-bottom: 14px; display: grid; place-items: center; border-radius: 18px; color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--os-accent) 72%, #fff), var(--os-accent)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 8px 20px color-mix(in srgb, var(--os-accent) 45%, transparent); }
+.os-dlg__ico.is-danger { background: linear-gradient(180deg, #ff6b62, #e5484d); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .4), 0 8px 20px rgba(229, 72, 77, .4); }
+.os-dlg--confirm h3 { justify-content: center; font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+.os-dlg--confirm p { max-width: 30ch; margin-inline: auto; font-size: 13.5px; line-height: 1.6; }
+.os-dlg--confirm footer { width: 100%; margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.os-dlg--confirm .os-btn { height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.os-dlg--confirm .os-btn kbd { font: 600 10.5px/1 inherit; min-width: 20px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 5px; background: rgba(0, 0, 0, .08); color: var(--g-mute); }
+.os-dlg--confirm .os-btn--primary kbd, .os-dlg--confirm .os-btn--danger kbd { background: rgba(255, 255, 255, .25); color: #fff; }
+.os-dlg--confirm .os-btn--primary { box-shadow: 0 6px 16px color-mix(in srgb, var(--os-accent) 40%, transparent); }
+.os-dlg--confirm .os-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--os-accent) 40%, transparent); }

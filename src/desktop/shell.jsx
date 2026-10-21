@@ -173,8 +173,9 @@ export function OsDialog({ dlg, tt, onDone }) {
   const ok = () => { if (dlg.kind === 'prompt') { if (!v.trim()) return; onDone(v.trim()); } else onDone(true); };
   return (
     <div className="os-scrim" onPointerDown={() => onDone(null)}>
-      <div className="os-dlg" role="dialog" aria-modal="true" onPointerDown={(e) => e.stopPropagation()}
+      <div className={`os-dlg${dlg.icon ? ' os-dlg--confirm' : ''}`} role="dialog" aria-modal="true" aria-label={dlg.title} onPointerDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(null); } if (e.key === 'Enter' && dlg.kind === 'confirm') ok(); }}>
+        {dlg.icon && <span className={`os-dlg__ico${dlg.danger ? ' is-danger' : ''}`} aria-hidden="true"><Icon name={dlg.icon} size={26} /></span>}
         <h3>{dlg.title}</h3>
         {dlg.kind === 'prompt' ? (
           <label><span>{dlg.label}</span>
@@ -182,8 +183,8 @@ export function OsDialog({ dlg, tt, onDone }) {
           </label>
         ) : <p>{dlg.text}</p>}
         <footer>
-          <button type="button" className="os-btn" onClick={() => onDone(null)}>{tt('Cancel', 'إلغاء')}</button>
-          <button type="button" autoFocus={dlg.kind === 'confirm'} className={`os-btn ${dlg.danger ? 'os-btn--danger' : 'os-btn--primary'}`} onClick={ok}>{dlg.action}</button>
+          <button type="button" className="os-btn" onClick={() => onDone(null)}>{tt('Cancel', 'إلغاء')}{dlg.icon && <kbd>Esc</kbd>}</button>
+          <button type="button" autoFocus={dlg.kind === 'confirm'} className={`os-btn ${dlg.danger ? 'os-btn--danger' : 'os-btn--primary'}`} onClick={ok}>{dlg.action}{dlg.icon && <kbd>↵</kbd>}</button>
         </footer>
       </div>
     </div>

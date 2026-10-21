@@ -245,6 +245,13 @@ export default function DesktopOS() {
   }, [openApp]);
 
   const sleepRef = useRef(null);
+  // Lock icon in the Dock: asks first (Enter locks, Esc stays). Menus / shortcuts / auto-lock still lock straight away.
+  const confirmLock = useCallback(() => {
+    setOverlay(null);
+    ask({ kind: 'confirm', title: tt('Lock the screen?', 'قفل الشاشة؟'), text: tt('The desktop will be covered by the lock screen. Your windows and files stay exactly as they are.', 'سطح المكتب هيتغطى بشاشة القفل. نوافذك وملفاتك هتفضل زي ما هي.'), action: tt('Lock', 'قفل'), icon: 'lock' })
+      .then((ok) => { if (ok) setLocked(true); });
+  }, [ask, setLocked, tt]);
+
   const runCommand = useCallback((id) => {
     switch (id) {
       case 'explorer': openExplorer({}); break;
@@ -260,7 +267,7 @@ export default function DesktopOS() {
       case 'security': openApp('settings', { tab: 'security' }); break;
       case 'portal': // leaving the desktop asks first: Enter (or the Exit button) confirms, Esc / Cancel stays
         setOverlay(null);
-        ask({ kind: 'confirm', title: tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟'), text: tt('You will leave the desktop and go back to the portal. Your files stay saved.', 'هتخرج من سطح المكتب وترجع للبوابة. ملفاتك فاضلة محفوظة.'), action: tt('Exit', 'خروج') })
+        ask({ kind: 'confirm', title: tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟'), text: tt('You will leave the desktop and go back to the portal. Your files stay saved.', 'هتخرج من سطح المكتب وترجع للبوابة. ملفاتك فاضلة محفوظة.'), action: tt('Exit', 'خروج'), icon: 'logout' })
           .then((ok) => { if (ok) navigate(roleHome(user?.role)); });
         break;
       default: break;
@@ -898,7 +905,7 @@ export default function DesktopOS() {
         items={dockItems} tt={tt} mag={prefs.dockMag !== false} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}
         onBin={() => runCommand('bin')} binFull={desk.binFull} binLabel={tt('Recycle Bin', 'سلة المحذوفات')}
         onPortal={() => runCommand('portal')} portalLabel={tt('UIP Portal', 'بوابة UIP')}
-        onLock={() => runCommand('lock')} lockLabel={tt('Lock screen', 'قفل الشاشة')}
+        onLock={confirmLock} lockLabel={tt('Lock screen', 'قفل الشاشة')}
       />
 
       </>

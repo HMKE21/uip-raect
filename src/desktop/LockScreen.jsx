@@ -114,13 +114,14 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
       </div>
       {leaving && (
         <div className="os-scrim os-scrim--top" style={{ inset: 0 }} onPointerDown={() => setLeaving(false)}>
-          <div className="os-dlg" role="alertdialog" aria-modal="true" aria-label={tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟')} dir={dir}
+          <div className="os-dlg os-dlg--confirm" role="alertdialog" aria-modal="true" aria-label={tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟')} dir={dir}
             onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') setLeaving(false); }}>
+            <span className="os-dlg__ico" aria-hidden="true"><Icon name="logout" size={26} /></span>
             <h3>{tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟')}</h3>
             <p>{tt('You will leave the desktop and go back to the portal. Your files stay saved.', 'هتخرج من سطح المكتب وترجع للبوابة. ملفاتك فاضلة محفوظة.')}</p>
             <footer>
-              <button type="button" className="os-btn" onClick={() => setLeaving(false)}>{tt('Cancel', 'إلغاء')}</button>
-              <button type="button" className="os-btn os-btn--primary" autoFocus onClick={onPortal}>{tt('Exit', 'خروج')}</button>
+              <button type="button" className="os-btn" onClick={() => setLeaving(false)}>{tt('Cancel', 'إلغاء')}<kbd>Esc</kbd></button>
+              <button type="button" className="os-btn os-btn--primary" autoFocus onClick={onPortal}>{tt('Exit', 'خروج')}<kbd>↵</kbd></button>
             </footer>
           </div>
         </div>
