@@ -155,6 +155,43 @@
   .lk-clock { grid-column: 1 / -1; grid-row: 2; }
   .lk-clock .os-clock--big b { font-size: 40px; }
 }
+/* PHONE (portrait): its own layout — one natural top-to-bottom flow, nothing is absolutely sized, so nothing can overlap.
+   top bar (logo + theme/language) -> clock -> card -> pills; the campus drawing is only a soft strip at the bottom. */
+@media (max-width: 640px) {
+  .lk-scroll { min-height: 100%; padding: calc(12px + env(safe-area-inset-top)) 16px calc(14px + env(safe-area-inset-bottom)); }
+  .lk-top { grid-template-columns: 1fr auto; gap: 6px 10px; }
+  .lk-brand { gap: 9px; }
+  .lk-brand__mark { width: 36px; height: 36px; }
+  .lk-brand__txt b { font-size: 19px; }
+  .lk-brand__txt small { display: none; }
+  .lk-tools { height: 38px; padding: 0 4px; }
+  .lk-seg { height: 30px; }
+  .lk-seg > span { width: 26px; height: 26px; }
+  .lk-clock { grid-column: 1 / -1; grid-row: 2; margin-top: 4px; }
+  .lk-clock .os-clock--big { flex-direction: column-reverse; gap: 0; }
+  .lk-clock .os-clock--big b { font-size: 34px; }
+  .lk-clock .os-clock--big span { font-size: 12.5px; }
+  .lk-main { flex: 1 0 auto; min-height: auto; display: flex; flex-direction: column; justify-content: center; padding-block: 14px; gap: 0; }
+  .lk-card { width: 100%; max-width: 420px; margin-inline: auto; padding: 20px 16px 18px; border-radius: 24px; gap: 8px; }
+  .lk-avatar { width: 66px; height: 66px; font-size: 27px; margin-bottom: 2px; }
+  .lk-title { font-size: 20px; margin-top: 0; }
+  .lk-sub { font-size: 13px; }
+  .lk-id { margin: 2px 0; }
+  .lk-id b { font-size: 15px; }
+  .lk-id small { font-size: 12px; }
+  .lk-field, .lk-input { height: 48px; padding: 0 14px; }
+  .lk-field input, .lk-input { font-size: 15px; }
+  .lk-round { width: 48px; height: 48px; }
+  .lk-go { height: 50px; font-size: 15.5px; }
+  .lk-link { font-size: 13px; }
+  .lk-foot { gap: 8px; padding-top: 6px; }
+  .lk-pill { height: 34px; padding: 0 12px; font-size: 12.5px; }
+  .lk-bg__wave, .lk-sign { display: none; }
+  .lk-bg__photo {
+    inset: auto 0 0 0 !important; width: 100%; height: 44%; opacity: .42 !important; background-size: cover; background-position: 88% bottom;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 55%); mask-image: linear-gradient(to bottom, transparent 0, #000 55%);
+  }
+}
 /* short screens (landscape phone, small windows) */
 @media (max-height: 640px) {
   .lk-clock, .lk-brand__txt small, .lk-sign { display: none; }
