@@ -233,14 +233,19 @@ export function RunDialog({ ar, tt, onRun, onClose }) {
             {items.map((it, i) => (
               <li key={it.cmd}>
                 <button type="button" role="option" aria-selected={i === sel} className={i === sel ? 'is-sel' : ''} onPointerEnter={() => setSel(i)} onClick={() => run(it.cmd)}>
-                  <AppGlyph app={it.glyph} size={28} />
-                  <span>{ar ? it.ar : it.en}</span>
-                  <small>{ar ? it.en : it.ar}</small>
+                  <AppGlyph app={it.glyph} size={34} />
+                  <span className="os-spot__txt"><b>{ar ? it.ar : it.en}</b><small>{ar ? it.en : it.ar}</small></span>
+                  <kbd className="os-spot__enter" aria-hidden="true">↵</kbd>
                 </button>
               </li>
             ))}
           </ul>
         ) : <p className="os-spot__none">{tt('No results', 'مفيش نتايج')}</p>}
+        <footer className="os-spot__foot" aria-hidden="true">
+          <span><kbd>↑</kbd><kbd>↓</kbd>{tt('Navigate', 'تنقّل')}</span>
+          <span><kbd>↵</kbd>{tt('Open', 'فتح')}</span>
+          <span><kbd>Esc</kbd>{tt('Close', 'إغلاق')}</span>
+        </footer>
       </div>
     </div>
   );
