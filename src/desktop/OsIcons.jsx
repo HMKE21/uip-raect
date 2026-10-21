@@ -52,13 +52,37 @@ export function BinGlyph({ size = 48, full = false }) {
   );
 }
 
+/** mix a hex colour toward white (t>0) or black (t<0) */
+function shade(hex, t) {
+  const h = String(hex).replace('#', ''); const n = parseInt(h.length === 3 ? h.replace(/./g, '$&$&') : h.padEnd(6, '0').slice(0, 6), 16);
+  const f = (v) => Math.round(t >= 0 ? v + (255 - v) * t : v * (1 + t));
+  const c = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(f);
+  return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** Modern file icon: a rounded sheet tinted with the file-type colour (soft gradient + glossy fold) and a bold type badge. */
 export function FileGlyph({ size = 48, label = '', color = '#64748b' }) {
+  const a = gid(); const b = gid(); const c = gid(); const d = gid();
+  const text = String(label).slice(0, 4).toUpperCase() || 'FILE';
+  const fs = text.length >= 4 ? 8.6 : text.length === 3 ? 10.5 : 12.5;
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
-      <path d="M14 6h25l13 13v34a5 5 0 0 1-5 5H14a5 5 0 0 1-5-5V11a5 5 0 0 1 5-5Z" fill="#fff" stroke="#cbd5e1" strokeWidth="1.5" />
-      <path d="M39 6v10a3 3 0 0 0 3 3h10Z" fill="#e2e8f0" />
-      <rect x="9" y="36" width="43" height="15" rx="3" fill={color} />
-      <text x="30.5" y="47" textAnchor="middle" fontSize="10" fontWeight="800" fill="#fff" fontFamily="system-ui, sans-serif">{String(label).slice(0, 4).toUpperCase() || 'FILE'}</text>
+      <defs>
+        <linearGradient id={a} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ffffff" /><stop offset="1" stopColor={shade(color, 0.86)} /></linearGradient>
+        <linearGradient id={b} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={shade(color, 0.22)} /><stop offset="1" stopColor={shade(color, -0.18)} /></linearGradient>
+        <linearGradient id={c} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".95" /><stop offset="1" stopColor={shade(color, 0.55)} /></linearGradient>
+        <filter id={d} x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0b1220" floodOpacity=".35" /></filter>
+      </defs>
+      <g filter={`url(#${d})`}>
+        <path d="M17 4h21.5L55 20.5V52a8 8 0 0 1-8 8H17a8 8 0 0 1-8-8V12a8 8 0 0 1 8-8Z" fill={`url(#${a})`} />
+        <path d="M17 4.6h21.2l16.2 16.2V52a7.4 7.4 0 0 1-7.4 7.4H17A7.4 7.4 0 0 1 9.6 52V12A7.4 7.4 0 0 1 17 4.6Z" fill="none" stroke={shade(color, 0.5)} strokeWidth="1" opacity=".7" />
+        <path d="M38.5 4v11a5.5 5.5 0 0 0 5.5 5.5h11Z" fill={`url(#${c})`} />
+        <path d="M38.5 4v11a5.5 5.5 0 0 0 5.5 5.5h11" fill="none" stroke={shade(color, 0.3)} strokeWidth=".8" opacity=".6" />
+        <path d="M16 27h22M16 32h14" stroke={shade(color, 0.55)} strokeWidth="2.6" strokeLinecap="round" opacity=".75" />
+        <rect x="5" y="37" width="40" height="17" rx="5" fill={`url(#${b})`} />
+        <rect x="5" y="37" width="40" height="8" rx="4" fill="#fff" opacity=".16" />
+        <text x="25" y="49.6" textAnchor="middle" fontSize={fs} fontWeight="800" letterSpacing=".3" fill="#fff" fontFamily="system-ui, -apple-system, 'Segoe UI', sans-serif">{text}</text>
+      </g>
     </svg>
   );
 }

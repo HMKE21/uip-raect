@@ -7,7 +7,7 @@ import { winTitle } from './wm';
 import { AppGlyph, FileGlyph, FolderGlyph } from './OsIcons';
 
 export const extOf = (n) => { const s = String(n || ''); const i = s.lastIndexOf('.'); return i > 0 ? s.slice(i + 1).toLowerCase() : ''; };
-const EXT_COLOR = { pdf: '#e5484d', doc: '#3b82f6', docx: '#3b82f6', txt: '#64748b', md: '#64748b', xls: '#16a34a', xlsx: '#16a34a', csv: '#16a34a', ppt: '#f97316', pptx: '#f97316', zip: '#d4a017', png: '#8b5cf6', jpg: '#8b5cf6', jpeg: '#8b5cf6', gif: '#8b5cf6', mp4: '#ec4899', mp3: '#14b8a6', js: '#eab308', py: '#3b82f6', html: '#e34f26', css: '#2965f1', json: '#64748b' };
+const EXT_COLOR = { pdf: '#e5484d', doc: '#2b6cdf', docx: '#2b6cdf', txt: '#64748b', md: '#64748b', xls: '#16a34a', xlsx: '#16a34a', csv: '#0d9488', tsv: '#0d9488', ppt: '#ea580c', pptx: '#ea580c', zip: '#d4a017', rar: '#d4a017', png: '#8b5cf6', jpg: '#8b5cf6', jpeg: '#8b5cf6', gif: '#8b5cf6', webp: '#8b5cf6', svg: '#f59e0b', mp4: '#ec4899', mp3: '#14b8a6', js: '#eab308', ts: '#3b82f6', py: '#3b82f6', html: '#e34c26', css: '#2563eb', json: '#ca8a04', c: '#5b9bd5', cpp: '#00599c', java: '#e76f00', cs: '#8e44ad', go: '#00add8', rs: '#c2410c', php: '#6d78c4', rb: '#cc342d', kt: '#a97bff', dart: '#00b4ab', lua: '#2c2d72', pl: '#39457e', r: '#276dc3', jl: '#9558b2', sh: '#4eaa25', sql: '#e38c00', hs: '#5e5086', f90: '#734f96', pas: '#e3a51f' };
 export function NodeGlyph({ node, size }) {
   if (node.type === 'folder') return <FolderGlyph size={size} project={node.kind === 'project'} />;
   const e = extOf(node.name);
