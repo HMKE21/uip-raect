@@ -60,3 +60,24 @@ code, .mono { font-family: var(--font-mono); }
   margin-inline: auto;
   padding-inline: var(--space-5);
 }
+/* ── Browser autofill ─────────────────────────────────────────────────────────────────────────────────────────
+   Chrome / Edge / Safari paint a flat pale-blue rectangle over a saved or suggested value, which cuts a hard-cornered box out of every
+   rounded or glassy field (login, lock screen, …). Keep the field's own background and text colour instead: the background colour is
+   never allowed to change (the ~forever transition), and the text keeps the colour the field already had. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: currentColor;
+  caret-color: currentColor;
+  border-radius: inherit;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+input:autofill, textarea:autofill, select:autofill {
+  -webkit-text-fill-color: currentColor;
+  caret-color: currentColor;
+  border-radius: inherit;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}

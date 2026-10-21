@@ -259,6 +259,8 @@
 .os--mobile .mos-app .mp[data-size] .mp-sep { height: 22px; margin: 0 2px; }
 .os--mobile .mos-app .mp[data-size] .mp-pop { max-width: calc(100vw - 24px); max-height: 60vh; overflow-y: auto; }
 .os--mobile .mos-app .mp[data-size] .mp-pop button { min-height: 44px; }
+.os--mobile .mp-pop--fixed { min-width: 210px; }
+.os--mobile .mp-pop--fixed button { min-height: 44px; font-size: 15px; }
 
 /* file list: bigger rows, name + size only */
 .os--mobile .mos-app .mp[data-size] .mp-items.is-list .mp-item { min-height: 52px; padding-block: 6px; }

@@ -767,11 +767,11 @@ export default function DesktopOS() {
     <div className="os-tray">
       <button type="button" className="os-tray__lang" title={tt('Language', 'اللغة')} onClick={toggleLocale}><b>{ar ? 'ع' : 'EN'}</b></button>
       <button type="button" className={`os-tray__sys${overlay === 'qs' ? ' is-on' : ''}`} title={tt('Control Center', 'مركز التحكم')} aria-haspopup="dialog" aria-expanded={overlay === 'qs'} onClick={() => setOverlay((o) => (o === 'qs' ? null : 'qs'))}>
-        <WifiGlyph on={online} size={15} />
-        {battery && <BatteryGlyph level={battery.level} charging={battery.charging} size={18} />}
+        <WifiGlyph on={online} size={18} />
+        {battery && <BatteryGlyph level={battery.level} charging={battery.charging} size={23} />}
       </button>
       <CloudTray tt={tt} onOpen={() => openApp('settings', { tab: 'cloud' })} />
-      <button type="button" className="os-tray__srch" title={tt('Spotlight (Alt+R)', 'بحث سريع (Alt+R)')} onClick={() => setOverlay((o) => (o === 'run' ? null : 'run'))}><Icon name="search" size={14} /></button>
+      <button type="button" className="os-tray__srch" title={tt('Spotlight (Alt+R)', 'بحث سريع (Alt+R)')} onClick={() => setOverlay((o) => (o === 'run' ? null : 'run'))}><Icon name="search" size={17} /></button>
       <button type="button" className={`os-tray__clock${overlay === 'cal' ? ' is-on' : ''}`} title={tt('Calendar', 'التقويم')} aria-haspopup="dialog" aria-expanded={overlay === 'cal'} onClick={() => setOverlay((o) => (o === 'cal' ? null : 'cal'))}><Clock ar={ar} bar /></button>
     </div>
   );

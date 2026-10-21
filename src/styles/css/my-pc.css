@@ -52,6 +52,11 @@
 .mp-menu-wrap { position: relative; }
 .mp-pop { position: absolute; top: calc(100% + 6px); inset-inline-start: 0; z-index: 30; min-width: 190px; padding: 4px; background: var(--mp-bg); border: 1px solid var(--mp-line); border-radius: 10px; box-shadow: 0 12px 36px rgba(0, 0, 0, .3), 0 0 0 1px rgba(0, 0, 0, .04); display: flex; flex-direction: column; animation: mp-pop .12s ease both; }
 .mp-pop--end { inset-inline-start: auto; inset-inline-end: 0; }
+/* portal'd version (see Pop): lives outside .mp, so it carries its own tokens and is positioned from JS */
+.mp-pop--fixed { position: fixed; inset: auto; z-index: 3000; max-width: calc(100vw - 16px); overflow-y: auto; overscroll-behavior: contain;
+  --mp-bg: var(--panel, var(--bg-surface)); --mp-fg: var(--g-fg, var(--text-primary)); --mp-line: var(--g-line, var(--border-subtle));
+  --mp-hover: var(--g-hover, var(--bg-muted)); --mp-accent: var(--os-accent, var(--color-primary)); color: var(--mp-fg); font-family: inherit; }
+.mp-pop--fixed button svg { flex-shrink: 0; }
 .mp-pop button { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; background: transparent; color: var(--mp-fg); border-radius: 6px; font-size: 13px; cursor: pointer; text-align: start; }
 .mp-pop button:hover { background: var(--mp-hover); }
 .mp-pop__tick { width: 16px; display: inline-grid; place-items: center; color: var(--mp-accent); }

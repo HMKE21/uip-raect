@@ -75,6 +75,35 @@ function CtxMenu({ x, y, rtl, children }) {
   );
 }
 
+/** Toolbar drop-down (New / Sort). Rendered in a portal with fixed positioning measured from its button, so the toolbar's own
+ *  overflow (it scrolls sideways on phones) can never clip it. Flips above the button when there is no room below. */
+function Pop({ anchor, end, rtl, children }) {
+  const ref = useRef(null);
+  const [pos, setPos] = useState({ left: 8, top: 8, maxHeight: 400, ready: false });
+  useLayoutEffect(() => {
+    const el = ref.current; if (!el || !anchor?.getBoundingClientRect) return;
+    const a = anchor.getBoundingClientRect();
+    const vw = window.innerWidth; const vh = window.innerHeight;
+    const w = el.offsetWidth; const h = el.scrollHeight;
+    const alignRight = rtl ? !end : !!end; // which edge of the button the menu lines up with
+    let left = alignRight ? a.right - w : a.left;
+    left = Math.max(8, Math.min(left, vw - w - 8));
+    const below = vh - a.bottom - 14; const above = a.top - 14;
+    const up = h > below && above > below;
+    const room = Math.max(120, up ? above : below);
+    const top = up ? Math.max(8, a.top - 6 - Math.min(h, room)) : a.bottom + 6;
+    setPos({ left, top, maxHeight: room, ready: true });
+  }, [anchor, end, rtl]);
+  return createPortal(
+    <div ref={ref} className={`mp-pop mp-pop--fixed${end ? ' mp-pop--end' : ''}`} dir={rtl ? 'rtl' : 'ltr'} role="menu"
+      style={{ left: pos.left, top: pos.top, maxHeight: pos.maxHeight, visibility: pos.ready ? 'visible' : 'hidden' }}
+      onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()} onKeyDown={(e) => e.stopPropagation()}>
+      {children}
+    </div>,
+    document.querySelector('.os') || document.body,
+  );
+}
+
 /** Folder tree row (recursive). */
 function TreeNode({ node, byParent, depth, openSet, toggle, activeId, onOpen, onDropIds, rtl }) {
   const kids = byParent.get(node.id) || [];
@@ -663,23 +692,33 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   };
 
+  // Every pop-up closes on: any press outside it (right-clicks included — they never fire "click", which is how two menus used to stay open
+  // together), Escape, resize, or a scroll outside it. Only one of the three (toolbar pop-up / right-click menu) is ever open at a time.
   useEffect(() => {
     if (!newMenu && !sortMenu) return undefined;
     const close = () => { setNewMenu(false); setSortMenu(false); };
-    window.addEventListener('click', close);
-    return () => window.removeEventListener('click', close);
+    const down = (e) => { if (!e.target.closest?.('.mp-pop') && !(newMenu || sortMenu).contains?.(e.target)) close(); };
+    const key = (e) => { if (e.key === 'Escape') close(); };
+    const scroll = (e) => { if (!e.target.closest?.('.mp-pop')) close(); };
+    window.addEventListener('click', close); window.addEventListener('pointerdown', down, true); window.addEventListener('keydown', key, true);
+    window.addEventListener('scroll', scroll, true); window.addEventListener('resize', close);
+    return () => { window.removeEventListener('click', close); window.removeEventListener('pointerdown', down, true); window.removeEventListener('keydown', key, true); window.removeEventListener('scroll', scroll, true); window.removeEventListener('resize', close); };
   }, [newMenu, sortMenu]);
 
   useEffect(() => {
     if (!menu) return undefined;
     const close = () => setMenu(null);
-    window.addEventListener('click', close); window.addEventListener('scroll', close, true); window.addEventListener('resize', close);
-    return () => { window.removeEventListener('click', close); window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
+    const down = (e) => { if (!e.target.closest?.('.mp-ctx')) close(); };
+    const key = (e) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('click', close); window.addEventListener('pointerdown', down, true); window.addEventListener('keydown', key, true);
+    window.addEventListener('scroll', close, true); window.addEventListener('resize', close);
+    return () => { window.removeEventListener('click', close); window.removeEventListener('pointerdown', down, true); window.removeEventListener('keydown', key, true); window.removeEventListener('scroll', close, true); window.removeEventListener('resize', close); };
   }, [menu]);
 
   const showMenu = (e, n) => {
     e.preventDefault(); e.stopPropagation();
     if (n && !sel.has(n.id)) { setSel(new Set([n.id])); setAnchor(n.id); }
+    setNewMenu(false); setSortMenu(false);
     setMenu({ x: e.clientX, y: e.clientY, node: n || null });
   };
 
@@ -772,11 +811,11 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
         {!inTrash ? (
           <>
             <div className="mp-menu-wrap">
-              <button type="button" className="mp-btn mp-btn--primary" onClick={(e) => { e.stopPropagation(); setSortMenu(false); setNewMenu((v) => !v); }} aria-haspopup="menu" aria-expanded={newMenu}>
+              <button type="button" className="mp-btn mp-btn--primary" onClick={(e) => { e.stopPropagation(); const el = e.currentTarget; setSortMenu(false); setMenu(null); setNewMenu((v) => (v ? false : el)); }} aria-haspopup="menu" aria-expanded={!!newMenu}>
                 <Icon name="plus" size={16} /> <span>{tt('New', 'جديد')}</span> <Icon name="chevron-down" size={12} />
               </button>
               {newMenu && (
-                <div className="mp-pop" role="menu" onClick={(e) => e.stopPropagation()}>
+                <Pop anchor={newMenu} rtl={ar}>
                   <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFolder(); }}><Icon name="folder-plus" size={16} />{tt('Folder', 'مجلد')}</button>
                   <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFile(); }}><Icon name="file-plus" size={16} />{tt('Text file', 'ملف نصي')}</button>
                   <div className="mp-ctx__sep" role="separator" />
@@ -786,7 +825,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                   <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newDoc('docx'); }}><Icon name="more-horizontal" size={16} />{tt('More file types…', 'أنواع ملفات أخرى…')}</button>
                   <div className="mp-ctx__sep" role="separator" />
                   <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newProject(); }}><Icon name="terminal" size={16} />{tt('Project', 'مشروع')}</button>
-                </div>
+                </Pop>
               )}
             </div>
             <span className="mp-sep" />
@@ -810,11 +849,11 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
         <span className="mp-grow" />
         {!inTrash && (
           <div className="mp-menu-wrap">
-            <button type="button" className="mp-btn" onClick={(e) => { e.stopPropagation(); setNewMenu(false); setSortMenu((v) => !v); }} aria-haspopup="menu" aria-expanded={sortMenu}>
+            <button type="button" className="mp-btn" onClick={(e) => { e.stopPropagation(); const el = e.currentTarget; setNewMenu(false); setMenu(null); setSortMenu((v) => (v ? false : el)); }} aria-haspopup="menu" aria-expanded={!!sortMenu}>
               <Icon name={sort.dir > 0 ? 'arrow-up' : 'arrow-down'} size={14} /> <span className="mp-lbl">{tt('Sort', 'ترتيب')}: {sortLabels[sort.key]}</span> <Icon name="chevron-down" size={12} />
             </button>
             {sortMenu && (
-              <div className="mp-pop mp-pop--end" role="menu" onClick={(e) => e.stopPropagation()}>
+              <Pop anchor={sortMenu} end rtl={ar}>
                 {Object.entries(sortLabels).map(([k, v]) => (
                   <button key={k} type="button" role="menuitemradio" aria-checked={sort.key === k} className={sort.key === k ? 'is-on' : ''} onClick={() => { setSort((x) => ({ key: k, dir: x.key === k ? x.dir : 1 })); setSortMenu(false); }}>
                     <span className="mp-pop__tick">{sort.key === k && <Icon name="check" size={14} />}</span>{v}
@@ -826,7 +865,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                     <span className="mp-pop__tick">{sort.dir === d && <Icon name="check" size={14} />}</span>{l}
                   </button>
                 ))}
-              </div>
+              </Pop>
             )}
           </div>
         )}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../components/Icon';
 import { parseServerDate } from '../utils/serverDate';
 import { desktopApi, lockError } from './desktopApi';
@@ -43,6 +43,7 @@ const stamp = (s, ar) => { const d = s ? parseServerDate(s) : null; return d && 
 export default function SecuritySettings({ tt, ar, sec, onSec, lockEnabled, onLockNow, onSleepNow, onSelfLogout, onOpenLockTab }) {
   const [data, setData] = useState(null);
   const [loadErr, setLoadErr] = useState('');
+  const [histOpen, setHistOpen] = useState(null); // id of the expanded “recent sign-ins” row
   const [busy, setBusy] = useState('');
   const [note, setNote] = useState('');
   const [err, setErr] = useState('');
@@ -203,13 +204,36 @@ export default function SecuritySettings({ tt, ar, sec, onSec, lockEnabled, onLo
 
       <Section title={tt('Recent sign-ins', 'آخر عمليات الدخول')}>
         <div className="os-hist">
-          {(data?.history || []).map((h) => (
-            <div key={h.id} className="os-hist__row">
-              <Icon name={KIND_ICON[h.kind] || 'monitor'} size={15} />
-              <span dir="auto"><b>{h.device_label || tt('Unknown device', 'جهاز غير معروف')}</b>{h.location_label ? ` · ${h.location_label}` : ''}</span>
-              <small>{h.active ? tt('Active', 'نشط') : (REASON[h.end_reason] || tt('Ended', 'انتهت'))} · {stamp(h.signed_in_at, ar)}</small>
-            </div>
-          ))}
+          {(data?.history || []).map((h) => {
+            const open = histOpen === h.id;
+            const state = h.active ? tt('Active', 'نشط') : (REASON[h.end_reason] || tt('Ended', 'انتهت'));
+            const kind = h.kind === 'mobile' ? tt('Phone', 'موبايل') : h.kind === 'tablet' ? tt('Tablet', 'تابلت') : tt('Computer', 'كمبيوتر');
+            const rows = [
+              [tt('Device', 'الجهاز'), h.device_label || tt('Unknown device', 'جهاز غير معروف')],
+              [tt('Type', 'النوع'), kind],
+              [tt('Location', 'الموقع'), h.location_label || '—'],
+              [tt('IP address', 'عنوان IP'), h.ip_address || '—'],
+              [tt('Signed in', 'وقت الدخول'), stamp(h.signed_in_at, ar)],
+              [tt('Last activity', 'آخر نشاط'), h.last_activity_at ? stamp(h.last_activity_at, ar) : '—'],
+              [tt('Status', 'الحالة'), h.active ? state : `${state}${h.ended_at ? ` · ${stamp(h.ended_at, ar)}` : ''}`],
+            ];
+            return (
+              <div key={h.id} className={`os-hist__item${open ? ' is-open' : ''}`}>
+                <button type="button" className="os-hist__row" aria-expanded={open} onClick={() => setHistOpen(open ? null : h.id)}>
+                  <Icon name={KIND_ICON[h.kind] || 'monitor'} size={15} />
+                  <span dir="auto"><b>{h.device_label || tt('Unknown device', 'جهاز غير معروف')}</b>{h.location_label ? ` · ${h.location_label}` : ''}</span>
+                  <small>{state} · {stamp(h.signed_in_at, ar)}</small>
+                  <Icon name="chevron-down" size={14} className="os-hist__chev" />
+                </button>
+                {open && (
+                  <dl className="os-hist__detail" dir={ar ? 'rtl' : 'ltr'}>
+                    {rows.map(([k, v]) => (<Fragment key={k}><dt>{k}</dt><dd dir="auto">{v}</dd></Fragment>))}
+                    {h.user_agent && (<><dt>{tt('Browser', 'المتصفح')}</dt><dd className="is-ua" dir="ltr">{h.user_agent}</dd></>)}
+                  </dl>
+                )}
+              </div>
+            );
+          })}
           {data && !(data.history || []).length && <p className="os-set__hint">—</p>}
         </div>
         <p className="os-set__hint">{tt('Wrong lock-password attempts are limited: 5 mistakes block further tries for 10 minutes.', 'محاولات باسورد القفل الغلط محدودة: 5 غلطات بتمنع المحاولة 10 دقايق.')}</p>
