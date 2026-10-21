@@ -896,6 +896,13 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     sandbox.resumeSaved();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, draftKey]);
+  // a code file opens with its Run panel already showing (nothing is started until the student presses Run)
+  const autoOpened = useRef(false);
+  useEffect(() => {
+    if (phase !== 'ready' || autoOpened.current || !runApp || runApp.kind === 'unsupported' || !runApp.entry) return;
+    autoOpened.current = true;
+    setRunOpen(true);
+  }, [phase, runApp]);
   const closeRun = () => { runner.stop(); runner.reset(); sandbox.reset(); setRunOpen(false); };
 
   // ---- keyboard (VS Code habits) ------------------------------------------------------------------
