@@ -274,3 +274,7 @@
 .os .mp-pop button { height: 26px; }
 .os .mp[data-size='xs'] .mp-top { padding-inline-start: 84px; }
 .os .mp--embedded[data-size='xs'] .mp-side { padding-top: 52px; }
+
+/* long folders: rows far outside the scroll area are not laid out or painted until they get close */
+.mp-items.is-list .mp-item { content-visibility: auto; contain-intrinsic-size: auto 36px; }
+.mp-items.is-grid .mp-item { content-visibility: auto; contain-intrinsic-size: auto 104px; }

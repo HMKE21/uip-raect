@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { usePrivateParams } from '../lib/privateParams';
@@ -26,11 +26,16 @@ import { readSec, useDesktopSecurity } from './security';
 import { wallpaperById, wallpaperCss } from './wallpapers';
 import { chromeH, initialWm, winTitle, wmReducer } from './wm';
 import { restoreWm, saveWm } from './wmPersist';
-import { EditorWindow, ViewerWindow } from './FileWindows';
 import { opensInEditor } from '../lib/driveFileKinds';
-import NewFileDialog from '../components/NewFileDialog';
 import WindowFrame from './Window';
-import MobileShell, { useIsMobileOS } from './MobileShell';
+import { useIsMobileOS } from './useIsMobileOS';
+
+// Heavy parts load on demand: the file viewer + office editors only when a file is opened, the phone UI only on phones.
+const ViewerWindow = lazy(() => import('./FileWindows').then((m) => ({ default: m.ViewerWindow })));
+const EditorWindow = lazy(() => import('./FileWindows').then((m) => ({ default: m.EditorWindow })));
+const NewFileDialog = lazy(() => import('../components/NewFileDialog'));
+const MobileShell = lazy(() => import('./MobileShell'));
+const WinFallback = <div className="os-app-msg"><span className="mp-spin" /></div>;
 import SnapAssist from './SnapAssist';
 import './desktop.css';
 import './mac.css';
@@ -682,12 +687,23 @@ export default function DesktopOS() {
   ], []);
 
   const wp = prefs.wallpaper === 'custom' ? { dark: true } : wallpaperById(prefs.wallpaper);
+  // A window body is rebuilt only when ITS inputs change. Without this every desktop re-render (toast, icon selection, a focus change, the battery…)
+  // re-rendered every open window — the viewer, the code editor, Settings — which is what made the desktop feel heavy.
+  const bodyCache = useRef(new Map());
+  const cached = (w, deps, make) => {
+    const c = bodyCache.current.get(w.id);
+    if (c && c.deps.length === deps.length && c.deps.every((d, i) => Object.is(d, deps[i]))) return c.el;
+    const el = make();
+    bodyCache.current.set(w.id, { deps, el });
+    return el;
+  };
+  useEffect(() => { const live = new Set(wm.list.map((w) => w.id)); bodyCache.current.forEach((_, id) => { if (!live.has(id)) bodyCache.current.delete(id); }); }, [wm.list]);
   const bodyOf = (w) => {
     switch (w.app) {
       case 'explorer': return <ExplorerApp onOpenWindow={openFileWin} />;
-      case 'viewer': return <ViewerWindow files={w.props.files} startId={w.props.startId} locale={locale} registerGuard={guardFor(w.id)} onClose={() => dispatch({ type: 'close', id: w.id, force: true })}
-        onEditText={(f) => openFileWin({ kind: 'editor', editor: { kind: 'text', node: { id: f.driveId ?? f.id, name: f.original_name } } })} />;
-      case 'editor': return <EditorWindow editor={w.props.editor} locale={locale} registerGuard={guardFor(w.id)} />;
+      case 'viewer': return cached(w, [w.props, locale, openFileWin], () => <Suspense fallback={WinFallback}><ViewerWindow files={w.props.files} startId={w.props.startId} locale={locale} registerGuard={guardFor(w.id)} onClose={() => dispatch({ type: 'close', id: w.id, force: true })}
+        onEditText={(f) => openFileWin({ kind: 'editor', editor: { kind: 'text', node: { id: f.driveId ?? f.id, name: f.original_name } } })} /></Suspense>);
+      case 'editor': return cached(w, [w.props, locale], () => <Suspense fallback={WinFallback}><EditorWindow editor={w.props.editor} locale={locale} registerGuard={guardFor(w.id)} /></Suspense>);
       case 'settings': return <SettingsApp tab={w.props.tab} prefs={prefs} setPrefs={setPrefs} ar={ar} tt={tt} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale} usage={desk.usage} user={user} lockEnabled={lockEnabled} onLockChanged={setLockEnabled}
         sec={sec} onSec={applySec} onLockNow={() => runCommand('lock')} onSleepNow={() => runCommand('sleep')} onSelfLogout={logout} />;
       case 'taskmgr': return <TaskManagerApp list={wm.list} ar={ar} tt={tt} usage={desk.usage} onEnd={(id) => dispatch({ type: 'close', id })} onFocus={(id) => dispatch({ type: 'focus', id })} />;
@@ -797,6 +813,7 @@ export default function DesktopOS() {
       }}
     >
       {mobile ? (
+        <Suspense fallback={null}>
         <MobileShell
           ar={ar} tt={tt} user={user} desk={desk} deskItems={deskItems} wm={wm} dispatch={dispatch} bodyOf={bodyOf}
           openNode={openNode} openExplorer={openExplorer} runCommand={runCommand} flash={flash} reloadDesk={reloadDesk} hideLocal={hideLocal} refreshAll={refreshAll}
@@ -805,6 +822,7 @@ export default function DesktopOS() {
           brightness={brightness} setBrightness={(v) => setPrefs({ brightness: v })} fullscreen={fullscreen} fs={fs}
           wallpaper={wallpaperCss(prefs)} lightWp={wp.dark === false}
         />
+        </Suspense>
       ) : (
       <>
       <div className="os-wall" style={{ background: wallpaperCss(prefs) }} />
@@ -880,10 +898,10 @@ export default function DesktopOS() {
       {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
       {dlg && dlg.kind !== 'newfile' && <OsDialog key={dlg.title} dlg={dlg} tt={tt} onDone={finishDlg} />}
       {dlg?.kind === 'newfile' && desk.id && (
-        <NewFileDialog
+        <Suspense fallback={null}><NewFileDialog
           locale={locale} parentId={desk.id} initialType={dlg.type} onClose={() => setDlg(null)}
           onCreated={(node) => { pendingOpen.current = node.id; flash(tt('File created on the desktop.', 'تم إنشاء الملف على سطح المكتب.')); reloadDesk(); }}
-        />
+        /></Suspense>
       )}
       {toast && <div className={`os-toast${toast.tone === 'error' ? ' is-error' : ''}`} role="status">{toast.msg}</div>}
       {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} hideDetails={sec.hideLockDetails} onUnlock={() => setLocked(false)} onPortal={() => runCommand('portal')} />}

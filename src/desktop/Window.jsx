@@ -39,10 +39,14 @@ function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onA
   const free = !win.max && !win.snap;
   const snapBox = win.snap && !win.max ? snapStyle(win.snap) : null;
 
-  const track = (onMove, onUp, cursor) => {
+  // pointermove fires faster than the screen refreshes (and 2-4x more on high-rate mice): do the work once per frame with the latest event
+  const track = (onMoveRaw, onUp, cursor) => {
     document.body.classList.add('os-dragging');
     if (cursor) document.body.style.cursor = cursor;
+    let raf = 0; let last = null;
+    const onMove = (ev) => { last = ev; if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (last) onMoveRaw(last); }); };
     const up = (ev) => {
+      if (raf) { cancelAnimationFrame(raf); raf = 0; if (last) onMoveRaw(last); }
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
@@ -62,6 +66,7 @@ function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onA
     const box = node.getBoundingClientRect();
     let cur = { x: win.x, y: win.y, w: win.w, h: win.h };
     let offX = sx - win.x; let offY = sy - win.y;
+    let base = { x: win.x, y: win.y }; // where left/top currently are; the move itself is a GPU transform (no layout, no repaint of the content)
     let moved = false; let side = null;
     const wasFree = free;
     const onMove = (ev) => {
@@ -73,17 +78,21 @@ function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onA
           cur = { ...cur, x: Math.round(ev.clientX - cur.w * ratio), y: 0 };
           offX = ev.clientX - cur.x; offY = ev.clientY - cur.y;
           dispatch({ type: 'rect', id: win.id, rect: cur });
+          node.style.left = `${cur.x}px`; node.style.top = `${cur.y}px`; base = { x: cur.x, y: cur.y };
         }
+        node.classList.add('is-moving');
       }
       const { aw, ah } = area();
       cur = { ...cur, x: Math.round(clamp(ev.clientX - offX, -cur.w + 140, aw - 140)), y: Math.round(clamp(ev.clientY - offY, 0, ah - 36)) };
-      node.style.left = `${cur.x}px`; node.style.top = `${cur.y}px`;
+      node.style.transform = `translate3d(${cur.x - base.x}px, ${cur.y - base.y}px, 0)`;
       side = ev.clientY <= MENUBAR_H + 2 ? 'max' : ev.clientX <= 2 ? 'left' : ev.clientX >= aw - 3 ? 'right' : null;
       setPreview((p) => (p === side ? p : side));
     };
     track(onMove, () => {
       setPreview(null);
+      node.classList.remove('is-moving');
       if (!moved) return;
+      node.style.left = `${cur.x}px`; node.style.top = `${cur.y}px`; node.style.transform = ''; // same frame: no jump when React commits the same values
       dispatch({ type: 'rect', id: win.id, rect: cur });
       if (side) {
         dispatch({ type: 'snap', id: win.id, side });
@@ -99,6 +108,7 @@ function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onA
     const sx = e.clientX; const sy = e.clientY;
     const r0 = { x: win.x, y: win.y, w: win.w, h: win.h };
     let cur = r0;
+    node.classList.add('is-moving');
     const onMove = (ev) => {
       const { aw, ah } = area();
       const dx = ev.clientX - sx; const dy = ev.clientY - sy;
@@ -110,7 +120,7 @@ function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onA
       cur = { x, y, w, h: hh };
       Object.assign(node.style, { left: `${x}px`, top: `${y}px`, width: `${w}px`, height: `${hh}px` });
     };
-    track(onMove, () => dispatch({ type: 'rect', id: win.id, rect: cur }), getComputedStyle(e.currentTarget).cursor);
+    track(onMove, () => { node.classList.remove('is-moving'); dispatch({ type: 'rect', id: win.id, rect: cur }); }, getComputedStyle(e.currentTarget).cursor);
   };
 
   return (

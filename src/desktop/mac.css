@@ -276,3 +276,17 @@ body.os-active #root { display: none; }
 @keyframes os-boot-in { from { opacity: 0; transform: translateY(10px) scale(.96); } to { opacity: 1; transform: none; } }
 @keyframes os-boot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
 @keyframes os-boot-slide { from { transform: translateX(-120%); } to { transform: translateX(350%); } }
+
+
+/* ── performance ───────────────────────────────────────────────────────────────────────────────────────────────────
+   backdrop-filter re-blurs everything behind it whenever that changes (a playing video, a window being dragged, scrolling),
+   so the big blurred strips (Dock, menu bar, flyouts) switch to a plain translucent fill while a window is maximized or moving. */
+.os--wmax .os-dock__rail, body.os-dragging .os-dock__rail,
+.os--wmax .os-fly, body.os-dragging .os-fly { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--panel) 86%, transparent); }
+.os--wmax .os-menubar::before, body.os-dragging .os-menubar::before { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--panel) 80%, transparent); }
+.os-dock__rail { -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }           /* saturate() doubles the cost of the blur for no visible gain */
+.os-menubar::before { -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+/* a window being dragged / resized: promoted to its own layer, lighter shadow, content ignores the pointer (no hover / tooltip work per frame) */
+.os-win.is-moving { will-change: transform, left, top; box-shadow: 0 6px 20px rgba(0, 0, 0, .3); transition: none; }
+.os-win.is-moving .os-win__body { pointer-events: none; }
+body.os-dragging .os-wall { transition: none; }

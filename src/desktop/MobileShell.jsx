@@ -10,30 +10,14 @@ import { APPS } from './apps';
 import { winTitle } from './wm';
 import './mobile.css';
 
+export { useIsMobileOS } from './useIsMobileOS';
+
 /* ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
    UIP Mobile — a purpose-built phone interface for My PC (not a squeezed desktop):
    status bar · home screen (widget, search, app + file grid) · dock · full-screen apps with their own app bar ·
    gesture bar (tap / swipe up = home, long swipe = app switcher) · bottom sheets (new, item actions, move, control centre, search) ·
    long-press + multi-select instead of right-click / drag. All data / actions come from <DesktopOS> (same drive API, same windows).
    ────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
-
-const QUERY = '(max-width: 820px), (pointer: coarse) and (max-height: 520px)';
-const readLayout = () => {
-  try { const f = localStorage.getItem('uip.os.layout'); if (f === 'mobile') return true; if (f === 'desktop') return false; } catch { /* storage blocked */ }
-  return !!window.matchMedia?.(QUERY).matches;
-};
-/** Phone-sized screens get <MobileShell>. Force either layout with localStorage 'uip.os.layout' = 'mobile' | 'desktop'. */
-export function useIsMobileOS() {
-  const [m, setM] = useState(readLayout);
-  useEffect(() => {
-    const q = window.matchMedia?.(QUERY);
-    const on = () => setM(readLayout());
-    q?.addEventListener?.('change', on);
-    window.addEventListener('storage', on);
-    return () => { q?.removeEventListener?.('change', on); window.removeEventListener('storage', on); };
-  }, []);
-  return m;
-}
 
 const SYS_GLYPH = 52;
 
