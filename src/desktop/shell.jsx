@@ -5,6 +5,7 @@ import { desktopApi, lockError } from './desktopApi';
 import { APPS } from './apps';
 import { winTitle } from './wm';
 import { AppGlyph, FileGlyph, FolderGlyph } from './OsIcons';
+import './lock.css';
 
 export const extOf = (n) => { const s = String(n || ''); const i = s.lastIndexOf('.'); return i > 0 ? s.slice(i + 1).toLowerCase() : ''; };
 const EXT_COLOR = { pdf: '#e5484d', doc: '#2b6cdf', docx: '#2b6cdf', txt: '#64748b', md: '#64748b', xls: '#16a34a', xlsx: '#16a34a', csv: '#0d9488', tsv: '#0d9488', ppt: '#ea580c', pptx: '#ea580c', zip: '#d4a017', rar: '#d4a017', png: '#8b5cf6', jpg: '#8b5cf6', jpeg: '#8b5cf6', gif: '#8b5cf6', webp: '#8b5cf6', svg: '#f59e0b', mp4: '#ec4899', mp3: '#14b8a6', js: '#eab308', ts: '#3b82f6', py: '#3b82f6', html: '#e34c26', css: '#2563eb', json: '#ca8a04', c: '#5b9bd5', cpp: '#00599c', java: '#e76f00', cs: '#8e44ad', go: '#00add8', rs: '#c2410c', php: '#6d78c4', rb: '#cc342d', kt: '#a97bff', dart: '#00b4ab', lua: '#2c2d72', pl: '#39457e', r: '#276dc3', jl: '#9558b2', sh: '#4eaa25', sql: '#e38c00', hs: '#5e5086', f90: '#734f96', pas: '#e3a51f' };
@@ -368,75 +369,101 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hide
   };
 
   const sub = !hideDetails && user?.email && user.email !== name ? user.email : '';
-  const avatar = <div className="os-lock__user"><i>{hideDetails ? <Icon name="lock" size={15} /> : String(name || '?').trim().charAt(0).toUpperCase()}</i><b dir="auto">{name}</b>{sub && <small dir="ltr">{sub}</small>}</div>;
+  const dir = ar ? 'rtl' : 'ltr';
   const capsKey = (e) => setCaps(!!e.getModifierState?.('CapsLock'));
-  const foot = (
-    <div className="os-lock__foot">
-      <span className="os-lock__badge"><Icon name="lock" size={13} />{tt('Locked', 'مقفول')}</span>
-      {onPortal && <button type="button" className="os-lock__ghost" onClick={onPortal}>{tt('Back to portal', 'العودة للبوابة')}</button>}
+  const initial = hideDetails ? null : String(name || '?').trim().charAt(0).toUpperCase();
+  const features = [
+    { icon: 'briefcase', t: tt('Project management', 'إدارة المشاريع'), s: tt('Track • Evaluate • Collaborate', 'متابعة • تقييم • تعاون') },
+    { icon: 'file', t: tt('Online exams', 'الامتحانات الإلكترونية'), s: tt('Secure • Smart • Accurate', 'بأمان • ذكاء • دقة') },
+    { icon: 'ai-spark', t: tt('AI assistant', 'الذكاء الاصطناعي'), s: tt('Helping you at every step', 'مساعدك في كل خطوة') },
+    { icon: 'shield', t: tt('Safe & trusted', 'بيئة آمنة وموثوقة'), s: tt('Your data and privacy, protected', 'لحماية بياناتك وخصوصيتك') },
+  ];
+  const identity = (
+    <div className="lk-id">
+      <i className="lk-avatar" aria-hidden="true">{initial || <Icon name="lock" size={22} />}</i>
+      <b dir="auto">{name}</b>
+      {sub && <small dir="ltr">{sub}</small>}
     </div>
+  );
+  const shell = (card, extra = {}) => (
+    <div className="lk" dir={dir} {...extra}>
+      <div className="lk-bg" aria-hidden="true"><i className="lk-bg__a" /><i className="lk-bg__b" /><i className="lk-bg__c" /></div>
+      <div className="lk-scroll">
+        <header className="lk-brand">
+          <img className="lk-brand__mark" src="/images/logo/uip-mark.png" srcSet="/images/logo/uip-mark.png 1x, /images/logo/uip-mark@2x.png 2x" alt="" width="52" height="52" decoding="async" />
+          <span className="lk-brand__txt"><b>UIP</b><small>Ultimate<br />Intelligent<br />Platform</small></span>
+        </header>
+        <div className="lk-main">
+          <aside className="lk-hero" dir={dir}>
+            <h2>{tt('From an idea', 'من فكرة')} .. {tt('to', 'إلى')} <em>{tt('achievement', 'إنجاز')}</em></h2>
+            <p>{tt('A smart platform for university projects and online exams, in one place.', 'منصة ذكية تجمع بين إدارة المشاريع الجامعية والامتحانات الإلكترونية، في مكان واحد.')}</p>
+            <ul>{features.map((f) => (
+              <li key={f.icon}><span><Icon name={f.icon} size={20} /></span><div><b>{f.t}</b><small>{f.s}</small></div></li>
+            ))}</ul>
+          </aside>
+          <main className="lk-card" dir={dir}>{card}</main>
+          <div className="lk-clock" dir={dir}><Clock ar={ar} big /></div>
+        </div>
+        <footer className="lk-foot">
+          <span className="lk-pill"><Icon name="lock" size={14} />{tt('Locked', 'مقفول')}</span>
+          {onPortal && <button type="button" className="lk-pill lk-pill--btn" onClick={onPortal}>{tt('Back to portal', 'العودة للبوابة')}</button>}
+        </footer>
+      </div>
+    </div>
+  );
+  const head = (
+    <>
+      <h1 className="lk-title">{tt('Welcome back', 'مرحباً بك مجدداً')}</h1>
+      <p className="lk-sub">{tt('Enter your password to continue', 'اكتب كلمة المرور للمتابعة')}</p>
+      {identity}
+    </>
   );
   if (!needPw) {
-    return (
-      <div className="os-lock" onClick={onUnlock} role="button" tabIndex={0} aria-label={tt('Unlock', 'فتح القفل')}>
-        <Clock ar={ar} big />
-        {avatar}
-        <p className="os-lock__hint"><Icon name="chevron-up" size={18} />{tt('Click or press any key to unlock', 'اضغط أي زر أو اضغط بالماوس للفتح')}</p>
-      </div>
+    return shell(
+      <>
+        <h1 className="lk-title">{tt('Welcome back', 'مرحباً بك مجدداً')}</h1>
+        {identity}
+        <button type="button" className="lk-go" onClick={onUnlock} autoFocus>{tt('Unlock', 'فتح القفل')}<Icon name={ar ? 'arrow-left' : 'arrow-right'} size={18} /></button>
+        <p className="lk-hint">{tt('Or press any key', 'أو اضغط أي زر')}</p>
+      </>,
+      { role: 'dialog', 'aria-modal': true, 'aria-label': tt('Locked', 'مقفول') },
     );
   }
-  return (
-    <div className="os-lock os-lock--pw" role="dialog" aria-modal="true" aria-label={tt('Locked', 'مقفول')}>
-      <Clock ar={ar} big />
-      {avatar}
-      {view === 'pw' ? (
-        <form className="os-lock__form" onSubmit={submit}>
-          <div className="os-lock__row">
-            <div key={shake} className={`os-lock__field${shake ? ' is-shake' : ''}${err ? ' is-err' : ''}`}>
-              <Icon name="lock" size={16} />
-              <input ref={first} type={show ? 'text' : 'password'} value={pw} onChange={(e) => { setPw(e.target.value); if (err) setErr(''); }} onKeyDown={capsKey} onKeyUp={capsKey} onBlur={() => setCaps(false)} placeholder={tt('Enter password', 'اكتب الباسورد')} autoComplete="off" maxLength={72} aria-label={tt('Password', 'الباسورد')} aria-invalid={!!err} dir="auto" />
-              <button type="button" className="os-lock__eye" onClick={() => setShow((v) => !v)} aria-label={show ? tt('Hide password', 'إخفاء الباسورد') : tt('Show password', 'إظهار الباسورد')} aria-pressed={show} tabIndex={-1}><Icon name={show ? 'eye-off' : 'eye'} size={16} /></button>
-            </div>
-            <button type="submit" className="os-lock__go" disabled={busy || !pw} aria-label={tt('Unlock', 'فتح القفل')}>{busy ? <span className="mp-spin" /> : <Icon name="arrow-right" size={18} />}</button>
+  return shell(
+    view === 'pw' ? (
+      <>
+        {head}
+        <form className="lk-form" onSubmit={submit}>
+          <div key={shake} className={`lk-field${shake ? ' is-shake' : ''}${err ? ' is-err' : ''}`}>
+            <Icon name="lock" size={17} />
+            <input ref={first} type={show ? 'text' : 'password'} value={pw} onChange={(e) => { setPw(e.target.value); if (err) setErr(''); }} onKeyDown={capsKey} onKeyUp={capsKey} onBlur={() => setCaps(false)}
+              placeholder={tt('Enter your password', 'اكتب كلمة المرور')} aria-label={tt('Password', 'كلمة المرور')} autoComplete="current-password" maxLength={72} dir="auto" />
+            <button type="button" className="lk-eye" onClick={() => setShow((v) => !v)} aria-label={show ? tt('Hide password', 'إخفاء الباسورد') : tt('Show password', 'إظهار الباسورد')} aria-pressed={show} tabIndex={-1}><Icon name={show ? 'eye-off' : 'eye'} size={17} /></button>
           </div>
-          {caps && <p className="os-lock__caps"><Icon name="alert-triangle" size={13} />{tt('Caps Lock is on', 'زر Caps Lock مفعّل')}</p>}
-          {err && <p className="os-lock__err" role="alert">{err}</p>}
-          <button type="button" className="os-lock__link" onClick={sendCode} disabled={busy}>{tt('Forgot password?', 'نسيت الباسورد؟')}</button>
+          {caps && <p className="lk-note is-warn"><Icon name="alert-triangle" size={13} />{tt('Caps Lock is on', 'زر Caps Lock مفعّل')}</p>}
+          {err && <p className="lk-note is-err" role="alert">{err}</p>}
+          <button type="button" className="lk-link" onClick={sendCode} disabled={busy}>{tt('Forgot password?', 'نسيت كلمة المرور؟')}</button>
+          <button type="submit" className="lk-go" disabled={busy || !pw}>{busy ? <span className="mp-spin" /> : <>{tt('Unlock', 'فتح القفل')}<Icon name={ar ? 'arrow-left' : 'arrow-right'} size={18} /></>}</button>
         </form>
-      ) : (
-        <form className="os-lock__form" onSubmit={reset}>
-          <p className="os-lock__note">{info}</p>
-          <input ref={first} type="text" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder={tt('6-digit code', 'الرمز (6 أرقام)')} aria-label={tt('6-digit code', 'الرمز (6 أرقام)')} />
-          <input type="password" value={np} onChange={(e) => setNp(e.target.value)} placeholder={tt('New password', 'باسورد جديد')} autoComplete="new-password" maxLength={72} aria-label={tt('New password', 'باسورد جديد')} dir="auto" />
-          <input type="password" value={np2} onChange={(e) => setNp2(e.target.value)} placeholder={tt('Repeat new password', 'كرر الباسورد الجديد')} autoComplete="new-password" maxLength={72} aria-label={tt('Repeat new password', 'كرر الباسورد الجديد')} dir="auto" />
-          {err && <p className="os-lock__err" role="alert">{err}</p>}
-          <button type="submit" className="os-lock__btn" disabled={busy || code.length < 6 || !np}>{busy ? <span className="mp-spin" /> : tt('Reset password & unlock', 'غيّر الباسورد وافتح')}</button>
-          <div className="os-lock__links">
-            <button type="button" className="os-lock__link" onClick={sendCode} disabled={busy || wait > 0}>{wait > 0 ? tt(`Resend code (${wait}s)`, `إعادة إرسال الرمز (${wait}ث)`) : tt('Resend code', 'إعادة إرسال الرمز')}</button>
-            <button type="button" className="os-lock__link" onClick={() => { setView('pw'); setErr(''); setCode(''); setNp(''); setNp2(''); }}>{tt('Back', 'رجوع')}</button>
+      </>
+    ) : (
+      <>
+        <h1 className="lk-title">{tt('Reset your password', 'إعادة تعيين كلمة المرور')}</h1>
+        <p className="lk-sub">{info}</p>
+        <form className="lk-form" onSubmit={reset}>
+          <input className="lk-input" ref={first} type="text" inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder={tt('6-digit code', 'الرمز (6 أرقام)')} aria-label={tt('6-digit code', 'الرمز (6 أرقام)')} maxLength={6} dir="ltr" />
+          <input className="lk-input" type="password" value={np} onChange={(e) => setNp(e.target.value)} placeholder={tt('New password', 'كلمة مرور جديدة')} autoComplete="new-password" maxLength={72} aria-label={tt('New password', 'كلمة مرور جديدة')} dir="auto" />
+          <input className="lk-input" type="password" value={np2} onChange={(e) => setNp2(e.target.value)} placeholder={tt('Repeat new password', 'كرر كلمة المرور الجديدة')} autoComplete="new-password" maxLength={72} aria-label={tt('Repeat new password', 'كرر كلمة المرور الجديدة')} dir="auto" />
+          {err && <p className="lk-note is-err" role="alert">{err}</p>}
+          <button type="submit" className="lk-go" disabled={busy || code.length < 6 || !np}>{busy ? <span className="mp-spin" /> : tt('Reset password & unlock', 'غيّر كلمة المرور وافتح')}</button>
+          <div className="lk-links">
+            <button type="button" className="lk-link" onClick={sendCode} disabled={busy || wait > 0}>{wait > 0 ? tt(`Resend code (${wait}s)`, `إعادة إرسال الرمز (${wait}ث)`) : tt('Resend code', 'إعادة إرسال الرمز')}</button>
+            <button type="button" className="lk-link" onClick={() => { setView('pw'); setErr(''); setCode(''); setNp(''); setNp2(''); }}>{tt('Back', 'رجوع')}</button>
           </div>
         </form>
-      )}
-      {foot}
-    </div>
-  );
-}
-
-/** Sleep mode: the screen goes dark; any key, click or touch wakes it (the first moments are ignored so the click that started it does not wake it). */
-export function SleepScreen({ ar, tt, dim, onWake }) {
-  useEffect(() => {
-    let armed = false;
-    const t = setTimeout(() => { armed = true; }, 700);
-    const wake = (e) => { if (!armed) return; if (e.type === 'pointermove' && !(e.movementX || e.movementY)) return; e.preventDefault?.(); onWake(); };
-    const EV = ['keydown', 'pointerdown', 'touchstart', 'wheel', 'pointermove'];
-    EV.forEach((n) => window.addEventListener(n, wake, true));
-    return () => { clearTimeout(t); EV.forEach((n) => window.removeEventListener(n, wake, true)); };
-  }, [onWake]);
-  return (
-    <div className={`os-sleep${dim ? ' is-dim' : ''}`} role="button" tabIndex={0} aria-label={tt('Wake up', 'إيقاظ')}>
-      {dim && <div className="os-sleep__clock"><Clock ar={ar} big /></div>}
-      <p className="os-sleep__hint"><Icon name="moon" size={14} />{tt('Sleeping — press any key or move the mouse', 'وضع السكون — اضغط أي زر أو حرّك الماوس')}</p>
-    </div>
+      </>
+    ),
+    { role: 'dialog', 'aria-modal': true, 'aria-label': tt('Locked', 'مقفول') },
   );
 }
 
