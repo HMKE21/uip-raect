@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../components/Icon';
-import { drive } from '../lib/driveApi';
+import { drive, fetchDriveBlob } from '../lib/driveApi';
 import { desktopApi, lockError } from './desktopApi';
 import { APPS } from './apps';
 import { winTitle } from './wm';
@@ -8,10 +8,100 @@ import { AppGlyph, FileGlyph, FolderGlyph } from './OsIcons';
 
 export const extOf = (n) => { const s = String(n || ''); const i = s.lastIndexOf('.'); return i > 0 ? s.slice(i + 1).toLowerCase() : ''; };
 const EXT_COLOR = { pdf: '#e5484d', doc: '#2b6cdf', docx: '#2b6cdf', txt: '#64748b', md: '#64748b', xls: '#16a34a', xlsx: '#16a34a', csv: '#0d9488', tsv: '#0d9488', ppt: '#ea580c', pptx: '#ea580c', zip: '#d4a017', rar: '#d4a017', png: '#8b5cf6', jpg: '#8b5cf6', jpeg: '#8b5cf6', gif: '#8b5cf6', webp: '#8b5cf6', svg: '#f59e0b', mp4: '#ec4899', mp3: '#14b8a6', js: '#eab308', ts: '#3b82f6', py: '#3b82f6', html: '#e34c26', css: '#2563eb', json: '#ca8a04', c: '#5b9bd5', cpp: '#00599c', java: '#e76f00', cs: '#8e44ad', go: '#00add8', rs: '#c2410c', php: '#6d78c4', rb: '#cc342d', kt: '#a97bff', dart: '#00b4ab', lua: '#2c2d72', pl: '#39457e', r: '#276dc3', jl: '#9558b2', sh: '#4eaa25', sql: '#e38c00', hs: '#5e5086', f90: '#734f96', pas: '#e3a51f' };
+/* ── real previews for pictures and videos, so they are told apart at a glance (every other file keeps its coloured type icon) ── */
+const THUMB_IMG = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif']);
+const THUMB_VID = new Set(['mp4', 'webm', 'mov', 'm4v', 'ogv']);
+const THUMB_MAX = { image: 12 * 1024 * 1024, video: 60 * 1024 * 1024 }; // bigger files keep the type icon (no huge downloads for an icon)
+const THUMBS = new Map(); // key -> data URL ('' = no preview possible)
+const THUMB_JOBS = new Map(); // key -> Promise
+let thumbRunning = 0; const thumbQueue = [];
+const thumbSlot = () => new Promise((res) => { const go = () => { thumbRunning += 1; res(); }; if (thumbRunning < 2) go(); else thumbQueue.push(go); });
+const thumbFree = () => { thumbRunning -= 1; thumbQueue.shift()?.(); };
+const thumbKey = (n) => `${n.id}:${n.size_bytes ?? ''}:${n.updated_at ?? n.version ?? ''}`;
+
+function drawThumb(src, w, h) {
+  const max = 220; const k = Math.min(1, max / Math.max(w, h));
+  const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
+  c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.82);
+}
+function imageThumb(blob) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob); const img = new Image();
+    img.onload = () => { try { resolve(drawThumb(img, img.naturalWidth, img.naturalHeight)); } catch { resolve(''); } URL.revokeObjectURL(url); };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(''); };
+    img.src = url;
+  });
+}
+function videoThumb(blob, ext) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(new Blob([blob], { type: blob.type && blob.type.startsWith('video/') ? blob.type : (ext === 'webm' ? 'video/webm' : 'video/mp4') }));
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto';
+    let done = false;
+    const end = (out) => { if (done) return; done = true; clearTimeout(t); URL.revokeObjectURL(url); v.removeAttribute('src'); v.load(); resolve(out); };
+    const t = setTimeout(() => end(''), 9000);
+    v.onerror = () => end('');
+    v.onloadedmetadata = () => { try { v.currentTime = Math.min(1, (v.duration || 2) / 10); } catch { end(''); } };
+    v.onseeked = () => { try { end(v.videoWidth ? drawThumb(v, v.videoWidth, v.videoHeight) : ''); } catch { end(''); } };
+    v.src = url;
+  });
+}
+function getThumb(node, kind, ext, key) {
+  if (THUMBS.has(key)) return Promise.resolve(THUMBS.get(key));
+  if (!THUMB_JOBS.has(key)) {
+    const job = (async () => {
+      await thumbSlot();
+      try {
+        const blob = await fetchDriveBlob(node.id);
+        const out = kind === 'video' ? await videoThumb(blob, ext) : await imageThumb(blob);
+        THUMBS.set(key, out); return out;
+      } catch { THUMBS.set(key, ''); return ''; } finally { thumbFree(); THUMB_JOBS.delete(key); }
+    })();
+    THUMB_JOBS.set(key, job);
+  }
+  return THUMB_JOBS.get(key);
+}
+
+function MediaThumb({ node, size, kind, ext, color }) {
+  const ref = useRef(null);
+  const key = thumbKey(node);
+  const [src, setSrc] = useState(() => THUMBS.get(key) || '');
+  useEffect(() => {
+    if (THUMBS.has(key)) { setSrc(THUMBS.get(key)); return undefined; }
+    let dead = false; let io = null;
+    const run = () => getThumb(node, kind, ext, key).then((u) => { if (!dead) setSrc(u); });
+    if (typeof IntersectionObserver === 'undefined' || !ref.current) run();
+    else { io = new IntersectionObserver((es) => { if (es[0].isIntersecting) { io.disconnect(); run(); } }); io.observe(ref.current); }
+    return () => { dead = true; io?.disconnect(); };
+  }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  const card = Math.round(size * 0.94);
+  return (
+    <span ref={ref} style={{ display: 'grid', placeItems: 'center', width: size, height: size }}>
+      {!src ? <FileGlyph size={size} label={ext} color={color} /> : (
+        <span style={{ position: 'relative', width: card, height: card, borderRadius: 9, overflow: 'hidden', background: '#111', border: '2.5px solid #fff', boxShadow: '0 2px 8px rgba(0,0,0,.35)' }}>
+          <img src={src} alt="" draggable={false} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          {kind === 'video' && (
+            <span style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'linear-gradient(transparent 55%, rgba(0,0,0,.45))' }}>
+              <span style={{ width: card * 0.38, height: card * 0.38, borderRadius: '50%', background: 'rgba(0,0,0,.55)', border: '1.5px solid rgba(255,255,255,.85)', display: 'grid', placeItems: 'center' }}>
+                <svg width={card * 0.17} height={card * 0.17} viewBox="0 0 10 10" aria-hidden="true"><path d="M2 1l7 4-7 4z" fill="#fff" /></svg>
+              </span>
+            </span>
+          )}
+          <span style={{ position: 'absolute', insetInlineEnd: 3, bottom: 3, padding: '1px 4px', borderRadius: 4, background: color, color: '#fff', fontSize: Math.max(7, card * 0.14), fontWeight: 800, lineHeight: 1.25, letterSpacing: '.3px' }}>{ext.slice(0, 4).toUpperCase()}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function NodeGlyph({ node, size }) {
   if (node.type === 'folder') return <FolderGlyph size={size} project={node.kind === 'project'} />;
   const e = extOf(node.name);
-  return <FileGlyph size={size} label={e} color={EXT_COLOR[e] || '#64748b'} />;
+  const color = EXT_COLOR[e] || '#64748b';
+  const kind = THUMB_IMG.has(e) ? 'image' : THUMB_VID.has(e) ? 'video' : null;
+  const big = Number(node.size_bytes) > THUMB_MAX[kind || 'image'];
+  if (kind && size >= 30 && !big) return <MediaThumb node={node} size={size} kind={kind} ext={e} color={color} />;
+  return <FileGlyph size={size} label={e} color={color} />;
 }
 
 export function Clock({ ar, big, dateToo, bar }) {
