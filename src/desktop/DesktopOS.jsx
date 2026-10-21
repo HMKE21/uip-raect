@@ -27,6 +27,8 @@ import { readSec, useDesktopSecurity } from './security';
 import { wallpaperById, wallpaperCss } from './wallpapers';
 import { chromeH, initialWm, winTitle, wmReducer } from './wm';
 import { restoreWm, saveWm } from './wmPersist';
+import WidgetLayer from './Widgets';
+import { useDesktopWidgets } from './widgetsStore';
 import { opensInEditor } from '../lib/driveFileKinds';
 import WindowFrame from './Window';
 import { useIsMobileOS } from './useIsMobileOS';
@@ -194,6 +196,8 @@ export default function DesktopOS() {
     return guardFns.current.get(id);
   }, []);
   const [desk, reloadDesk, hideLocal] = useDesktopFolder();
+  const widgets = useDesktopWidgets(user?.id); // sticky notes + clock / calendar / to-do widgets (synced to the account)
+  const [newWidgetId, setNewWidgetId] = useState(null);
   const mobile = useIsMobileOS(); // phone-sized screen -> <MobileShell> (a purpose-built phone UI) instead of the windowed desktop
   const [overlay, setOverlay] = useState(null); // 'start' | 'run' | 'taskview' | 'qs' | 'cal'
   const battery = useBattery();
@@ -597,6 +601,21 @@ export default function DesktopOS() {
     setMenu({ x: e.clientX, y: e.clientY - 110, items: [{ label, icon: 'eye', onClick: act }, 'sep', { label: tt('Remove from Dock', 'إزالة من الـ Dock'), icon: 'trash', danger: true, onClick: () => hideDockIcon(key, false) }] });
   };
 
+  const addWidget = (type, e) => {
+    const r = deskRef.current?.getBoundingClientRect();
+    const id = widgets.add(type, r ? { x: e.clientX - r.left - 20, y: e.clientY - r.top - 12 } : undefined);
+    setNewWidgetId(type === 'note' ? id : null);
+  };
+  const removeWidget = async (it) => {
+    const hasContent = (it.type === 'note' && (it.text || '').trim()) || (it.type === 'todo' && ((it.todos || []).length || (it.title || '').trim()));
+    if (hasContent) {
+      const ok = await ask({ kind: 'confirm', danger: true, icon: 'trash', action: tt('Remove', 'إزالة'),
+        title: it.type === 'note' ? tt('Remove this note?', 'إزالة الملاحظة دي؟') : tt('Remove this list?', 'إزالة القائمة دي؟'),
+        text: tt('Its content will be deleted and cannot be brought back.', 'محتواها هيتمسح ومش هتقدر ترجعه.') });
+      if (!ok) return;
+    }
+    widgets.remove(it.id);
+  };
   const deskMenu = (e) => {
     e.preventDefault();
     setOverlay(null);
@@ -605,6 +624,11 @@ export default function DesktopOS() {
         { label: tt('Refresh', 'تحديث'), icon: 'refresh', hint: 'F5', onClick: refreshAll },
         { label: tt('Auto-arrange icons', 'ترتيب الأيقونات تلقائيًا'), icon: 'layers', onClick: () => commitPos({}) },
         ...(removedCount ? [{ label: tt(`Restore removed icons (${removedCount})`, `استرجاع الأيقونات المحذوفة (${removedCount})`), icon: 'refresh', onClick: restoreIcons }] : []),
+        'sep',
+        { label: tt('New sticky note', 'ملاحظة لاصقة جديدة'), icon: 'note', onClick: () => addWidget('note', e) },
+        { label: tt('Add clock', 'إضافة ساعة'), icon: 'clock', onClick: () => addWidget('clock', e) },
+        { label: tt('Add calendar', 'إضافة تقويم'), icon: 'calendar', onClick: () => addWidget('calendar', e) },
+        { label: tt('Add to-do list', 'إضافة قائمة مهام'), icon: 'check', onClick: () => addWidget('todo', e) },
         'sep',
         { label: tt('Paste', 'لصق'), icon: 'file-plus', hint: 'Ctrl+V', onClick: () => pasteInto(desk.id), disabled: !desk.id || !clip },
         'sep',
@@ -714,7 +738,7 @@ export default function DesktopOS() {
       }
       const id = globalActionFor(e);
       // the code workbench / viewer keep their own keys; only the window-level Alt combos pass through
-      if (e.target?.closest?.('.zb, .st-fv, .mp-editor') && !/^(close|next|prev|desktop|taskview|pin\d)$/.test(id || '')) return;
+      if (e.target?.closest?.('.zb, .st-fv, .mp-editor, .os-wgt') && !/^(close|next|prev|desktop|taskview|pin\d)$/.test(id || '')) return;
       if (!id) {
         if (e.key === 'Escape' && s.overlay) { e.preventDefault(); setOverlay(null); }
         return;
@@ -930,6 +954,10 @@ export default function DesktopOS() {
         })}
         {box && <div className="os-marquee" style={box} />}
       </div>
+      <WidgetLayer
+        items={widgets.items} ar={ar} focusId={newWidgetId} bounds={deskSize}
+        onChange={(id, patch) => widgets.update(id, patch)} onRemove={removeWidget} onFront={widgets.front}
+      />
       {desk.error && <button type="button" className="os-warn" onClick={reloadDesk}>{tt('Could not load the desktop folder — tap to retry.', 'مقدرتش أحمّل مجلد سطح المكتب — اضغط للمحاولة.')} <small dir="auto">{desk.error}</small></button>}
 
       <div className="os-wins">
