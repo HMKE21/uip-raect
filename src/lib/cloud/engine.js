@@ -28,14 +28,14 @@ const writeJson = (store, key, v) => { try { if (v == null) store.removeItem(key
 
 const S = {
   uid: null, cfg: null, ready: false,
-  provider: '', auto: true, account: '', lastOk: 0, lastError: '',
+  provider: '', auto: true, account: '', server: false, lastOk: 0, lastError: '', retried: false, forceTok: false,
   status: 'idle', progress: { done: 0, total: 0 },
   db: { rootId: null, folders: {}, files: {} }, // persisted remote ids + per-file signatures
 };
 let snap = null;
 const subs = new Set();
 const emit = () => { snap = null; subs.forEach((f) => f()); };
-const persist = () => writeJson(localStorage, dbKey(S.uid), { provider: S.provider, auto: S.auto, account: S.account, lastOk: S.lastOk, db: S.db });
+const persist = () => writeJson(localStorage, dbKey(S.uid), { provider: S.provider, auto: S.auto, account: S.account, server: S.server, lastOk: S.lastOk, db: S.db });
 const snapshot = () => {
   if (!snap) snap = { ready: S.ready, provider: S.provider, auto: S.auto, account: S.account, lastOk: S.lastOk, lastError: S.lastError, status: S.status, progress: S.progress, cfg: S.cfg };
   return snap;
@@ -48,8 +48,9 @@ function setStatus(status, extra) { S.status = status; Object.assign(S, extra ||
 async function getToken() {
   const P = PROVIDERS[S.provider];
   const sess = readJson(sessionStorage, tokKey(S.uid));
-  if (sess?.tok && sess.tok.expiresAt > Date.now()) return sess.tok;
-  const r = await P.refresh(S.cfg[S.provider], S.provider === 'google' ? S.account : sess?.refreshToken);
+  if (!S.forceTok && sess?.tok && sess.tok.expiresAt > Date.now()) return sess.tok;
+  const force = S.forceTok; S.forceTok = false;
+  const r = await P.refresh(S.cfg[S.provider], S.provider === 'google' ? S.account : sess?.refreshToken, { server: S.server, force });
   const tok = r.tok || r;
   writeJson(sessionStorage, tokKey(S.uid), { tok, refreshToken: r.refreshToken || sess?.refreshToken || null });
   return tok;
@@ -107,9 +108,12 @@ async function run({ manual = false } = {}) {
     persist();
     if (fatal) throw fatal;
     if (failed) setStatus('error', { lastError: firstErr || 'Some files could not be copied. They will be tried again.' });
-    else { S.lastOk = Date.now(); persist(); setStatus('idle', { lastError: '' }); }
+    else { S.lastOk = Date.now(); S.retried = false; persist(); setStatus('idle', { lastError: '' }); }
   } catch (e) {
-    if (e instanceof CloudAuthError) setStatus('needs-auth', { lastError: e.message });
+    if (e instanceof CloudAuthError && e.code === 'expired' && S.server && !S.retried) {
+      S.retried = true; S.forceTok = true; again = true; // Google refused our cached token: ask the server for a brand-new one and go again
+      writeJson(sessionStorage, tokKey(S.uid), null);
+    } else if (e instanceof CloudAuthError) { S.retried = false; setStatus('needs-auth', { lastError: e.message }); }
     else if (e instanceof CloudQuotaError) setStatus('error', { lastError: e.message });
     else if (e instanceof CloudRetryError && e.status === 0) setStatus('offline');
     else setStatus('error', { lastError: e?.message || 'Backup failed.' });
@@ -142,7 +146,7 @@ export const cloud = {
     if (S.uid === uid && S.ready) return;
     S.uid = uid; S.ready = false; emit();
     const saved = readJson(localStorage, dbKey(uid));
-    if (saved) { S.provider = saved.provider || ''; S.auto = saved.auto !== false; S.account = saved.account || ''; S.lastOk = saved.lastOk || 0; S.db = saved.db || S.db; }
+    if (saved) { S.provider = saved.provider || ''; S.auto = saved.auto !== false; S.account = saved.account || ''; S.server = !!saved.server; S.lastOk = saved.lastOk || 0; S.db = saved.db || S.db; }
     const cfg = await driveConfig();
     S.cfg = cfg?.cloud || {};
     S.ready = true;
@@ -159,16 +163,17 @@ export const cloud = {
   async connect(id) {
     const P = PROVIDERS[id];
     if (!P || !this.available(id)) throw new Error('This cloud is not set up on the server yet.');
-    const r = await P.connect(S.cfg[id]);
+    const r = await P.connect(S.cfg[id], id === 'google' ? S.account : undefined);
     const changed = S.provider !== id;
-    S.provider = id; S.auto = true; S.account = r.account || ''; S.lastError = '';
+    S.provider = id; S.server = !!r.server; S.retried = false; S.forceTok = false; S.auto = true; S.account = r.account || ''; S.lastError = '';
     if (changed) S.db = { rootId: null, folders: {}, files: {} };
     writeJson(sessionStorage, tokKey(S.uid), { tok: r.tok, refreshToken: r.refreshToken || null });
     persist(); setStatus('idle');
     schedule(300);
   },
   disconnect() {
-    S.provider = ''; S.account = ''; S.lastError = ''; S.db = { rootId: null, folders: {}, files: {} }; S.status = 'idle';
+    if (S.provider === 'google' && S.server) PROVIDERS.google.disconnectServer();
+    S.server = false; S.provider = ''; S.account = ''; S.lastError = ''; S.db = { rootId: null, folders: {}, files: {} }; S.status = 'idle';
     writeJson(sessionStorage, tokKey(S.uid), null); persist(); emit();
   },
   setAuto(on) { S.auto = !!on; persist(); emit(); if (on) schedule(500); },

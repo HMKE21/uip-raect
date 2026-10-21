@@ -1,9 +1,61 @@
-import { CloudAuthError, cloudFetch, withRetry } from './errors';
+import { api } from '../../api/client';
+import { CloudAuthError, CloudRetryError, cloudFetch, withRetry } from './errors';
 
 /**
  * Google Drive backup provider. Scope = drive.file (only files THIS app creates — no Google security review needed).
- * Token comes from Google Identity Services (token client): the first connect needs a click, renewals try silently.
+ * Two ways to get a token:
+ *  - SERVER FLOW (preferred, cfg.server_flow): OAuth authorization-code flow run by Laravel. Google gives the server a REFRESH token
+ *    (kept encrypted), and the browser asks /api/v1/cloud/google/token for a fresh 1-hour access token whenever it needs one —
+ *    so the link survives closing the tab, restarts and days away. The student clicks "Connect" once.
+ *  - Legacy (no server secret configured): Google Identity Services token client. Access tokens only (1 hour) and the silent
+ *    renewal is often blocked by the browser, so the link keeps asking to sign in again.
  */
+const CB = '/api/v1/cloud/google';
+const unwrap = (r) => (r && r.data !== undefined ? r.data : r);
+const FRIENDLY = {
+  denied: 'Google sign-in was cancelled.',
+  expired_state: 'The sign-in took too long. Try again.',
+  no_refresh_token: 'Google did not allow lasting access. Remove "UIP" from your Google account permissions, then connect again.',
+  scope_missing: 'Tick the Google Drive permission on the consent screen, then connect again.',
+};
+
+async function serverToken(force = false) {
+  try {
+    const d = unwrap(await api.get(`${CB}/token${force ? '?force=1' : ''}`));
+    return { accessToken: d.access_token, expiresAt: Date.now() + (Number(d.expires_in) || 3600) * 1000 - 60000 };
+  } catch (e) {
+    if (e?.status === 409) throw new CloudAuthError('Google access was revoked or expired. Connect again.', 'revoked');
+    throw new CloudRetryError(e?.message || 'Could not reach the server.', e?.status || 0);
+  }
+}
+
+/** Opens Google's consent page in a pop-up (must start from a click) and waits for the server callback page to report back. */
+async function serverConnect(hint) {
+  const popup = window.open('', 'uip-gdrive', 'width=520,height=680');
+  if (!popup) throw new CloudAuthError('The sign-in window was blocked. Allow pop-ups for this site and try again.', 'popup');
+  let url;
+  try {
+    url = unwrap(await api.post(`${CB}/connect`, hint ? { hint } : {}))?.url;
+    if (!url) throw new Error('missing url');
+  } catch (e) {
+    popup.close();
+    throw new CloudAuthError(e?.status === 503 ? 'Google Drive backup is not set up on the server yet.' : (e?.message || 'Could not start Google sign-in.'), 'load');
+  }
+  popup.location.href = url;
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const finish = (fn, v) => { if (done) return; done = true; window.removeEventListener('message', onMsg); clearInterval(watch); fn(v); };
+    const onMsg = (ev) => {
+      const d = ev.data;
+      if (!d || d.source !== 'uip-gdrive') return;
+      if (d.ok) finish(resolve, { email: d.email || '' });
+      else finish(reject, new CloudAuthError(FRIENDLY[d.reason] || 'Google sign-in failed.', d.reason || 'failed'));
+    };
+    window.addEventListener('message', onMsg);
+    const watch = setInterval(() => { if (popup.closed) setTimeout(() => finish(reject, new CloudAuthError('The sign-in window was closed.', 'popup_closed')), 800); }, 600);
+  });
+}
+
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const ROOT_NAME = 'UIP My PC';
 const SMALL = 4 * 1024 * 1024;
@@ -73,16 +125,24 @@ export const google = {
   enabled: (cfg) => !!cfg?.enabled && !!cfg?.client_id,
 
   /** Interactive (from a click). */
-  async connect(cfg) {
+  async connect(cfg, hint) {
+    if (cfg.server_flow) {
+      const { email } = await serverConnect(hint);
+      return { tok: await serverToken(true), account: email, server: true };
+    }
     const tok = await requestToken(cfg.client_id, { prompt: 'consent' });
     let account = '';
     try { const r = await cloudFetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: authed(tok) }); account = (await r.json())?.user?.emailAddress || ''; } catch { /* optional */ }
     return { tok, account };
   },
   /** Silent renewal (no click). Throws CloudAuthError when Google wants the person to act. */
-  async refresh(cfg, account) {
+  async refresh(cfg, account, { server = false, force = false } = {}) {
+    if (server) return serverToken(force);
     return requestToken(cfg.client_id, { prompt: '', hint: account || undefined });
   },
+
+  /** Server-flow link: unlink + revoke on the server. */
+  async disconnectServer() { try { await api.del(`${CB}/connection`); } catch { /* best effort */ } },
 
   /** Make sure the folder chain exists; returns { rootId, folders } where folders maps our node id → Drive folder id. */
   async ensureFolder(tok, state, nodeId, name, parentRemoteId) {
