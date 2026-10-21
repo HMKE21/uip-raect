@@ -550,19 +550,28 @@ export default function DesktopOS() {
 
   // ---- remove / restore the built-in icons (desktop + Dock). Files on the desktop are real files: those go to the Recycle Bin instead. -----
   const removedCount = hiddenIcons.filter((k) => DESK_ICONS.some((d) => d[0] === k)).length + hiddenDock.filter((k) => DOCK_ICONS.some((d) => d[0] === k)).length;
-  const hideIcons = useCallback((keys) => {
+  const nameOfIcon = (k) => { const d = DESK_ICONS.find((x) => x[0] === k) || DOCK_ICONS.find((x) => x[0] === k); return d ? (ar ? d[2] : d[1]) : k; };
+  const hideIcons = useCallback(async (keys) => {
     const add = keys.filter((k) => k.startsWith('sys:'));
     if (!add.length) return;
+    const names = add.map(nameOfIcon).join(ar ? '، ' : ', ');
+    const ok = await ask({ kind: 'confirm', danger: true, icon: 'trash', action: tt('Remove', 'حذف'),
+      title: add.length > 1 ? tt('Remove these main icons?', 'حذف الأيقونات الرئيسية دي؟') : tt('Remove a main icon?', 'حذف أيقونة رئيسية؟'),
+      text: tt(`“${names}” is a main desktop icon. It will disappear from the desktop (your files are not affected). You can bring it back from Settings ▸ Personalization ▸ Icons.`, `«${names}» من أيقونات سطح المكتب الرئيسية. هتختفي من سطح المكتب (ملفاتك مش هتتأثر). تقدر ترجّعها من الإعدادات ▸ التخصيص ▸ الأيقونات.`) });
+    if (!ok) return;
     setPrefs({ hiddenIcons: [...new Set([...hiddenList(live.current.prefs.hiddenIcons), ...add])] });
     setSel(new Set());
     flash(tt('Icon removed — bring it back from Settings ▸ Personalization ▸ Icons.', 'تم حذف الأيقونة — ترجّعها من الإعدادات ▸ التخصيص ▸ الأيقونات.'));
-  }, [flash, setPrefs, tt]);
-  const hideDockIcon = useCallback((key, open) => {
+  }, [ask, ar, flash, setPrefs, tt]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hideDockIcon = useCallback(async (key, open) => {
+    const ok = await ask({ kind: 'confirm', danger: true, icon: 'trash', action: tt('Remove', 'إزالة'), title: tt('Remove from the Dock?', 'إزالة من الـ Dock؟'),
+      text: tt(`“${nameOfIcon(key)}” will disappear from the Dock. You can bring it back from Settings ▸ Personalization ▸ Icons.`, `«${nameOfIcon(key)}» هتختفي من الـ Dock. تقدر ترجّعها من الإعدادات ▸ التخصيص ▸ الأيقونات.`) });
+    if (!ok) return;
     setPrefs({ hiddenDock: [...new Set([...hiddenList(live.current.prefs.hiddenDock), key])] });
     flash(open
       ? tt('Removed from the Dock — it disappears once its window is closed. Restore it from Settings ▸ Personalization ▸ Icons.', 'اتشالت من الـ Dock — هتختفي لما تقفل نافذتها. ترجّعها من الإعدادات ▸ التخصيص ▸ الأيقونات.')
       : tt('Removed from the Dock — bring it back from Settings ▸ Personalization ▸ Icons.', 'اتشالت من الـ Dock — ترجّعها من الإعدادات ▸ التخصيص ▸ الأيقونات.'));
-  }, [flash, setPrefs, tt]);
+  }, [ask, ar, flash, setPrefs, tt]); // eslint-disable-line react-hooks/exhaustive-deps
   const restoreIcons = useCallback(() => {
     setPrefs({ hiddenIcons: [], hiddenDock: [] });
     flash(tt('All icons restored.', 'تم استرجاع كل الأيقونات.'));

@@ -245,3 +245,19 @@
   .lk-brand__mark { width: 40px; height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) { .lk, .lk * { animation: none !important; transition: none !important; } }
+
+/* Password field: the light highlight belongs ONLY to the round pill (.lk-field:focus-within, glowing around the outside).
+   The <input> inside must never draw its own rectangle (background, border, focus ring, autofill fill) — global input / :focus-visible
+   rules were painting a rounded box inside the pill. */
+.lk-field input,
+.lk-field input:hover,
+.lk-field input:focus,
+.lk-field input:focus-visible,
+.lk-field input:active,
+.lk-field input:-webkit-autofill,
+.lk-field input:-webkit-autofill:focus,
+.lk-field input:autofill {
+  background: transparent !important; background-color: transparent !important;
+  border: 0 !important; border-radius: 0 !important; box-shadow: none !important; outline: none !important; outline-offset: 0 !important;
+  -webkit-box-shadow: none !important; appearance: none; -webkit-appearance: none;
+}
