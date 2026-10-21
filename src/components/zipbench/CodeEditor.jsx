@@ -2,12 +2,12 @@ import { useEffect, useRef } from 'react';
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
-import { indentWithTab } from '@codemirror/commands';
+import { indentWithTab, undo, redo, selectAll, undoDepth, redoDepth } from '@codemirror/commands';
 import { search, SearchQuery, setSearchQuery } from '@codemirror/search';
 import { StreamLanguage } from '@codemirror/language';
-import { javascript } from '@codemirror/lang-javascript';
-import { html } from '@codemirror/lang-html';
-import { css } from '@codemirror/lang-css';
+import { javascript, javascriptLanguage } from '@codemirror/lang-javascript';
+import { html, htmlLanguage } from '@codemirror/lang-html';
+import { css, cssLanguage } from '@codemirror/lang-css';
 import { json } from '@codemirror/lang-json';
 import { php } from '@codemirror/lang-php';
 import { python } from '@codemirror/lang-python';
@@ -28,16 +28,22 @@ import { properties } from '@codemirror/legacy-modes/mode/properties';
 import { extOf } from './zipUtils';
 import { buildEditorTheme } from './zipThemes';
 import { ghostComplete, clearGhostEffect } from './ai/ghostComplete';
+import { htmlSnippetSource, cssSnippetSource, jsSnippetSource, wordSource } from './editorComplete';
+
+// a StreamLanguage (no completer of its own) that also suggests the words already in the file
+const withWords = (mode) => { const L = StreamLanguage.define(mode); return [L, L.data.of({ autocomplete: wordSource })]; };
+const withJs = (support) => [support, javascriptLanguage.data.of({ autocomplete: jsSnippetSource })];
 
 function languageFor(path) {
   switch (extOf(path)) {
-    case 'js': case 'mjs': case 'cjs': return javascript();
-    case 'jsx': return javascript({ jsx: true });
-    case 'ts': return javascript({ typescript: true });
-    case 'tsx': return javascript({ typescript: true, jsx: true });
+    case 'js': case 'mjs': case 'cjs': return withJs(javascript());
+    case 'jsx': return withJs(javascript({ jsx: true }));
+    case 'ts': return withJs(javascript({ typescript: true }));
+    case 'tsx': return withJs(javascript({ typescript: true, jsx: true }));
     case 'json': return json();
-    case 'html': case 'htm': case 'vue': return html();
-    case 'css': case 'scss': case 'less': return css();
+    // + Emmet-like snippets and tag-aware attributes (rel / href first for <link …>)
+    case 'html': case 'htm': case 'vue': return [html(), htmlLanguage.data.of({ autocomplete: htmlSnippetSource })];
+    case 'css': case 'scss': case 'less': return [css(), cssLanguage.data.of({ autocomplete: cssSnippetSource })];
     case 'php': return php();
     case 'py': return python();
     case 'java': return java();
@@ -47,17 +53,48 @@ function languageFor(path) {
     case 'xml': case 'svg': return xml();
     case 'yml': case 'yaml': return yaml();
     case 'rs': return rust();
-    case 'cs': return StreamLanguage.define(csharp);
-    case 'kt': return StreamLanguage.define(kotlin);
-    case 'dart': return StreamLanguage.define(dart);
-    case 'sh': case 'bash': return StreamLanguage.define(shell);
-    case 'go': return StreamLanguage.define(go);
-    case 'rb': return StreamLanguage.define(ruby);
-    case 'swift': return StreamLanguage.define(swift);
+    case 'cs': return withWords(csharp);
+    case 'kt': return withWords(kotlin);
+    case 'dart': return withWords(dart);
+    case 'sh': case 'bash': return withWords(shell);
+    case 'go': return withWords(go);
+    case 'rb': return withWords(ruby);
+    case 'swift': return withWords(swift);
     case 'toml': return StreamLanguage.define(toml);
     case 'ini': case 'env': return StreamLanguage.define(properties);
-    default: return [];
+    default: return EditorState.languageData.of(() => [{ autocomplete: wordSource }]);
   }
+}
+
+/** Clipboard + history actions for the editor's own right-click menu (the browser's menu is not used inside the editor). */
+function editActions(v) {
+  const sel = () => { const { main } = v.state.selection; return main.empty ? '' : v.state.sliceDoc(main.from, main.to); };
+  const copy = async () => { const t = sel(); if (!t) return false; try { await navigator.clipboard.writeText(t); return true; } catch { return false; } };
+  return {
+    canUndo: undoDepth(v.state) > 0,
+    canRedo: redoDepth(v.state) > 0,
+    readOnly: v.state.readOnly,
+    undo: () => { v.focus(); undo(v); },
+    redo: () => { v.focus(); redo(v); },
+    selectAll: () => { v.focus(); selectAll(v); },
+    copy: async () => { const ok = await copy(); v.focus(); return ok; },
+    cut: async () => {
+      if (v.state.readOnly) return false;
+      const ok = await copy();
+      if (ok) v.dispatch(v.state.replaceSelection(''), { userEvent: 'delete.cut', scrollIntoView: true });
+      v.focus();
+      return ok;
+    },
+    paste: async () => {
+      if (v.state.readOnly) return false;
+      try {
+        const t = await navigator.clipboard.readText();
+        v.focus();
+        if (t) v.dispatch(v.state.replaceSelection(t), { userEvent: 'input.paste', scrollIntoView: true });
+        return true;
+      } catch { v.focus(); return false; } // clipboard read blocked: the caller tells the user to press Ctrl+V
+    },
+  };
 }
 
 /**
@@ -77,6 +114,15 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
   ghostRef.current = ghost;
   const pathRef = useRef(path);
   pathRef.current = path;
+  // the workbench re-renders on every cursor report, so while a selection is dragged / extended with the keyboard it is reported
+  // only once the selection settles (trailing debounce) — a drag no longer re-renders the whole workbench per mouse move
+  const cursorT = useRef(0);
+  const cursorLast = useRef(null);
+  const reportCursor = (c) => {
+    cursorLast.current = c;
+    clearTimeout(cursorT.current);
+    cursorT.current = setTimeout(() => cb.current.onCursor?.(cursorLast.current), 140);
+  };
   const wrapComp = useRef(new Compartment());
   const roComp = useRef(new Compartment());
   const sizeComp = useRef(new Compartment());
@@ -104,7 +150,7 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
           if (!h) return false;
           const { main } = v.state.selection;
           const doc = v.state.doc;
-          const info = { x: e.clientX, y: e.clientY, empty: main.empty };
+          const info = { x: e.clientX, y: e.clientY, empty: main.empty, edit: editActions(v) };
           if (!main.empty) {
             const endLine = doc.lineAt(main.to);
             info.fromLine = doc.lineAt(main.from).number;
@@ -112,8 +158,9 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
             info.toLine = endLine.from === main.to ? Math.max(info.fromLine, endLine.number - 1) : endLine.number;
             info.text = doc.sliceString(main.from, Math.min(main.to, main.from + 100000));
           }
-          if (h(info) === false) return false;
+          // the workbench always shows its own menu (cut / copy / paste / undo … + the AI actions) — never the browser's
           e.preventDefault();
+          h(info);
           return true;
         },
       }),
@@ -130,9 +177,11 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
             const b = u.state.doc.lineAt(main.to);
             sel = { from: a.number, to: b.from === main.to ? Math.max(a.number, b.number - 1) : b.number };
           }
-          cb.current.onCursor?.({ line: line.number, col: pos - line.from + 1, sel });
+          reportCursor({ line: line.number, col: pos - line.from + 1, sel });
         }
       }),
+      // keep browser extensions (Grammarly, translators, writing helpers…) and spell-check away from the code
+      EditorView.contentAttributes.of({ spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off', 'data-gramm': 'false', 'data-gramm_editor': 'false', 'data-enable-grammarly': 'false' }),
     ],
   });
 
@@ -141,7 +190,7 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
     current.current = docId;
     states.current.set(docId, view.current.state);
     cb.current.onCursor?.({ line: 1, col: 1 });
-    return () => { view.current?.destroy(); view.current = null; };
+    return () => { clearTimeout(cursorT.current); view.current?.destroy(); view.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -167,6 +216,7 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
     requestAnimationFrame(() => { v.scrollDOM.scrollTop = scrolls.current.get(docId) || 0; });
     const pos = next.selection.main.head;
     const line = next.doc.lineAt(pos);
+    clearTimeout(cursorT.current);
     cb.current.onCursor?.({ line: line.number, col: pos - line.from + 1, sel: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [docId]);

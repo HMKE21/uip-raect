@@ -84,6 +84,8 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const [editorDoc, setEditorDoc] = useState(null); // { path, docId, text }
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState({ line: 1, col: 1 });
+  // identical reports must not re-render this big component
+  const onCursorMove = useCallback((c) => setCursor((p) => (p.line === c.line && p.col === c.col && p.sel?.from === c.sel?.from && p.sel?.to === c.sel?.to ? p : c)), []);
   const [wrap, setWrap] = useState(false);
   const [ghostPref, setGhostPref] = useState(() => { try { return window.localStorage.getItem('zb-ghost') !== '0'; } catch { return true; } }); // AI autocomplete on/off (per browser)
   const [ghostDead, setGhostDead] = useState(false); // the server refused (permission / exam lock / unavailable): stay off until reload
@@ -974,28 +976,36 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     if (q?.action) askAssist(q.action, { path: q.path, fromLine: q.selFrom, toLine: q.selTo, target: q.target, mode });
     else explainError(mode);
   };
-  const onEditorContext = ({ x, y, empty, fromLine, toLine, text }) => {
-    if (!ai.available || empty) return false; // no AI / nothing selected: the browser's own menu (copy, paste…)
-    const path = activeRef.current;
-    const cur = languageOf(path);
-    const go = (action, target) => askAssist(action, { path, fromLine, toLine, target });
-    const targets = CONVERT_TARGETS.filter((l) => l !== cur && !(cur === 'React JSX' && l === 'JavaScript')).slice(0, 4);
-    setMenu({
-      x, y, title: tt('AI assistant', 'مساعد الذكاء الاصطناعي'),
-      items: [
-        { label: tt('Ask in chat…', 'اسأل في الشات…'), icon: 'chat', onClick: () => openChat({ selection: true }) },
+  // right-click inside the editor: our own menu (undo / cut / copy / paste / select all, + the AI actions when something is selected)
+  const onEditorContext = ({ x, y, empty, fromLine, toLine, text, edit }) => {
+    const pasteBlocked = () => flash(tt('The browser blocked clipboard access — press Ctrl+V to paste.', 'المتصفح منع الوصول للحافظة — اضغط Ctrl+V للّصق.'));
+    const items = [
+      { label: tt('Undo', 'تراجع'), icon: 'ed-undo', disabled: !edit.canUndo || edit.readOnly, onClick: edit.undo },
+      { label: tt('Redo', 'إعادة'), icon: 'ed-redo', disabled: !edit.canRedo || edit.readOnly, onClick: edit.redo },
+      { sep: true },
+      { label: tt('Cut', 'قص'), icon: 'cut', disabled: empty || edit.readOnly, onClick: () => { edit.cut(); } },
+      { label: tt('Copy', 'نسخ'), icon: 'copy', disabled: empty, onClick: () => { edit.copy(); } },
+      { label: tt('Paste', 'لصق'), icon: 'paste', disabled: edit.readOnly, onClick: () => { edit.paste().then((ok) => { if (!ok) pasteBlocked(); }); } },
+      { sep: true },
+      { label: tt('Select all', 'تحديد الكل'), icon: 'select-all', onClick: edit.selectAll },
+    ];
+    if (ai.available && !empty) {
+      const path = activeRef.current;
+      const cur = languageOf(path);
+      const go = (action, target) => askAssist(action, { path, fromLine, toLine, target });
+      const targets = CONVERT_TARGETS.filter((l) => l !== cur && !(cur === 'React JSX' && l === 'JavaScript')).slice(0, 4);
+      items.push(
         { sep: true },
+        { label: tt('Ask in chat…', 'اسأل في الشات…'), icon: 'chat', onClick: () => openChat({ selection: true }) },
         { label: tt('Explain this code', 'اشرح الكود'), icon: 'sparkles', onClick: () => go('explain') },
         { label: tt('Fix bugs', 'صلّح الأخطاء'), icon: 'wrench', onClick: () => go('fix') },
         { label: tt('Improve', 'حسّن الكود'), icon: 'edit', onClick: () => go('improve') },
         { label: tt('Add comments', 'أضف تعليقات'), icon: 'note', onClick: () => go('comment') },
         { label: tt('Write tests', 'اكتب اختبارات'), icon: 'flask', onClick: () => go('test') },
-        { sep: true },
         ...targets.map((l) => ({ label: tt(`Convert to ${l}`, `حوّل إلى ${l}`), icon: 'refresh', onClick: () => go('convert', l) })),
-        { sep: true },
-        { label: tt('Copy', 'نسخ'), icon: 'copy', onClick: () => { try { navigator.clipboard.writeText(text || ''); } catch { /* clipboard blocked */ } } },
-      ],
-    });
+      );
+    }
+    setMenu({ x, y, items });
     return true;
   };
   // permanent ✨ button in the top bar: the AI features are discoverable without waiting for an error
@@ -1421,7 +1431,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
             {editorDoc && (
               <div className={`zb-cm-wrap${mdOn && mdView === 'split' ? ' zb-cm-wrap--split' : ''}`} style={{ display: cmShown ? 'block' : 'none' }}>
                 <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
-                  <CodeEditor docId={editorDoc.docId} path={editorDoc.path} initialText={editorDoc.text} onChange={onEdit} onCursor={setCursor} onContext={onEditorContext} readOnly={false} wrap={wrap} fontSize={fontSize} reveal={reveal} theme={theme} ghost={ghostOpts} />
+                  <CodeEditor docId={editorDoc.docId} path={editorDoc.path} initialText={editorDoc.text} onChange={onEdit} onCursor={onCursorMove} onContext={onEditorContext} readOnly={false} wrap={wrap} fontSize={fontSize} reveal={reveal} theme={theme} ghost={ghostOpts} />
                 </Suspense>
               </div>
             )}

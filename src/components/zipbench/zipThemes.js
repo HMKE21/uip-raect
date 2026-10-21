@@ -119,7 +119,8 @@ export function buildEditorTheme(id) {
     '&': { color: e.fg, backgroundColor: e.bg },
     '.cm-content': { caretColor: e.cursor },
     '.cm-cursor, .cm-dropCursor': { borderLeftColor: e.cursor },
-    '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': { backgroundColor: e.selection },
+    // one paint only (the drawn selection layer): the native ::selection is hidden by CodeMirror, styling it too just doubles the work
+    '.cm-selectionBackground, &.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground': { backgroundColor: e.selection, borderRadius: '2px' },
     '.cm-activeLine': { backgroundColor: e.line },
     '.cm-gutters': { backgroundColor: e.bg, color: e.gutter, border: 'none' },
     '.cm-activeLineGutter': { backgroundColor: e.line, color: e.fg },
