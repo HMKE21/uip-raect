@@ -1,0 +1,437 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Icon from '../components/Icon';
+import { drive } from '../lib/driveApi';
+import { errorMessage } from '../api/client';
+import { useBackLayer } from '../lib/backStack';
+import { AppGlyph } from './OsIcons';
+import { BatteryGlyph, WifiGlyph } from './flyouts';
+import { Clock, NodeGlyph } from './shell';
+import { APPS } from './apps';
+import { winTitle } from './wm';
+import './mobile.css';
+
+/* ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+   UIP Mobile — a purpose-built phone interface for My PC (not a squeezed desktop):
+   status bar · home screen (widget, search, app + file grid) · dock · full-screen apps with their own app bar ·
+   gesture bar (tap / swipe up = home, long swipe = app switcher) · bottom sheets (new, item actions, move, control centre, search) ·
+   long-press + multi-select instead of right-click / drag. All data / actions come from <DesktopOS> (same drive API, same windows).
+   ────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
+
+const QUERY = '(max-width: 820px), (pointer: coarse) and (max-height: 520px)';
+const readLayout = () => {
+  try { const f = localStorage.getItem('uip.os.layout'); if (f === 'mobile') return true; if (f === 'desktop') return false; } catch { /* storage blocked */ }
+  return !!window.matchMedia?.(QUERY).matches;
+};
+/** Phone-sized screens get <MobileShell>. Force either layout with localStorage 'uip.os.layout' = 'mobile' | 'desktop'. */
+export function useIsMobileOS() {
+  const [m, setM] = useState(readLayout);
+  useEffect(() => {
+    const q = window.matchMedia?.(QUERY);
+    const on = () => setM(readLayout());
+    q?.addEventListener?.('change', on);
+    window.addEventListener('storage', on);
+    return () => { q?.removeEventListener?.('change', on); window.removeEventListener('storage', on); };
+  }, []);
+  return m;
+}
+
+const SYS_GLYPH = 52;
+
+/** Tap + long-press (touch friendly; the native context menu is suppressed). */
+function usePress(onTap, onLong) {
+  const timer = useRef(null); const start = useRef(null); const fired = useRef(false);
+  const clear = () => { clearTimeout(timer.current); timer.current = null; };
+  return {
+    onPointerDown: (e) => {
+      if (e.button) return;
+      fired.current = false; start.current = { x: e.clientX, y: e.clientY }; clear();
+      if (onLong) timer.current = setTimeout(() => { fired.current = true; navigator.vibrate?.(12); onLong(e); }, 430);
+    },
+    onPointerMove: (e) => { if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 9) clear(); },
+    onPointerUp: clear, onPointerCancel: clear, onPointerLeave: clear,
+    onContextMenu: (e) => { e.preventDefault(); },
+    onClick: (e) => { if (fired.current) { fired.current = false; return; } onTap?.(e); },
+  };
+}
+
+function HomeIcon({ label, glyph, onTap, onLong, checked, selecting, cut }) {
+  const press = usePress(onTap, onLong);
+  return (
+    <button type="button" className={`mos-ic${checked ? ' is-sel' : ''}${cut ? ' is-cut' : ''}`} {...press}>
+      <span className="mos-ic__g">{glyph}</span>
+      <span className="mos-ic__l" dir="auto">{label}</span>
+      {selecting && <i className="mos-ic__chk" aria-hidden="true">{checked && <Icon name="check" size={13} />}</i>}
+    </button>
+  );
+}
+
+/** Bottom sheet: dim backdrop, grab handle (drag down to dismiss), Android / browser Back closes it. */
+function Sheet({ title, onClose, tall, children }) {
+  useBackLayer(true, onClose);
+  const [dy, setDy] = useState(0); const drag = useRef(null);
+  const down = (e) => { drag.current = { y: e.clientY }; e.currentTarget.setPointerCapture?.(e.pointerId); };
+  const move = (e) => { if (drag.current) setDy(Math.max(0, e.clientY - drag.current.y)); };
+  const up = () => { const d = dy; drag.current = null; if (d > 90) onClose(); else setDy(0); };
+  return (
+    <div className="mos-sheetwrap">
+      <div className="mos-scrim" onPointerDown={onClose} />
+      <div className={`mos-sheet${tall ? ' is-tall' : ''}`} role="dialog" aria-modal="true" aria-label={title || undefined} style={dy ? { transform: `translateY(${dy}px)`, transition: 'none' } : undefined}>
+        <div className="mos-sheet__grab" onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}><i /></div>
+        {title && <h3 className="mos-sheet__t" dir="auto">{title}</h3>}
+        <div className="mos-sheet__body">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+const Row = ({ icon, label, sub, danger, disabled, onClick, right }) => (
+  <button type="button" className={`mos-row${danger ? ' is-danger' : ''}`} disabled={disabled} onClick={onClick}>
+    <span className="mos-row__ic">{typeof icon === 'string' ? <Icon name={icon} size={19} /> : icon}</span>
+    <span className="mos-row__tx"><b dir="auto">{label}</b>{sub && <small dir="auto">{sub}</small>}</span>
+    {right}
+  </button>
+);
+
+/** App switcher: one card per open app / file; swipe a card up (or tap ✕) to close it. */
+function Switcher({ list, ar, tt, activeId, onPick, onClose, onCloseAll, onDone }) {
+  useBackLayer(true, onDone);
+  const [drag, setDrag] = useState(null);
+  const st = useRef(null);
+  const down = (e, id) => { st.current = { id, y: e.clientY, x: e.clientX, mode: null }; };
+  const move = (e) => {
+    const s = st.current; if (!s) return;
+    const dy = e.clientY - s.y; const dx = e.clientX - s.x;
+    if (!s.mode && (Math.abs(dy) > 10 || Math.abs(dx) > 10)) s.mode = Math.abs(dy) > Math.abs(dx) && dy < 0 ? 'v' : 'h';
+    if (s.mode === 'v') { e.currentTarget.setPointerCapture?.(e.pointerId); setDrag({ id: s.id, dy: Math.min(0, dy) }); }
+  };
+  const up = () => {
+    const s = st.current; st.current = null;
+    if (s?.mode === 'v' && drag && drag.dy < -90) onClose(s.id);
+    setDrag(null);
+    return s;
+  };
+  return (
+    <div className="mos-switch" role="dialog" aria-label={tt('Open apps', 'التطبيقات المفتوحة')}>
+      <div className="mos-switch__top">
+        <strong>{tt('Open apps', 'التطبيقات المفتوحة')}</strong>
+        {list.length > 0 && <button type="button" onClick={onCloseAll}>{tt('Close all', 'إغلاق الكل')}</button>}
+      </div>
+      {list.length === 0 ? <p className="mos-switch__none">{tt('No apps are open.', 'مفيش تطبيقات مفتوحة.')}</p> : (
+        <div className="mos-switch__rail">
+          {list.map((w) => {
+            const d = drag?.id === w.id ? drag.dy : 0;
+            return (
+              <div key={w.id} className={`mos-card${w.id === activeId ? ' is-active' : ''}`} style={d ? { transform: `translateY(${d}px)`, opacity: 1 + d / 260, transition: 'none' } : undefined}
+                onPointerDown={(e) => down(e, w.id)} onPointerMove={move} onPointerUp={() => { const s = up(); if (!s?.mode) onPick(w.id); }} onPointerCancel={up}>
+                <div className="mos-card__bar">
+                  <AppGlyph app={w.app} size={22} />
+                  <span dir="auto">{winTitle(w, APPS, ar)}</span>
+                  <button type="button" aria-label={tt('Close', 'إغلاق')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); onClose(w.id); }}><Icon name="x" size={16} /></button>
+                </div>
+                <div className="mos-card__body"><AppGlyph app={w.app} size={72} /><small dir="auto">{w.app === 'viewer' || w.app === 'editor' ? (ar ? APPS[w.app].ar : APPS[w.app].en) : ''}</small></div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <button type="button" className="mos-switch__home" onClick={onDone}>{tt('Home', 'الرئيسية')}</button>
+    </div>
+  );
+}
+
+export default function MobileShell(p) {
+  const {
+    ar, tt, user, desk, deskItems, wm, dispatch, bodyOf, openNode, openExplorer, runCommand, flash, reloadDesk, hideLocal, refreshAll,
+    clip, copyNodes, pasteInto, trashNodes, renameNode, newFolder, newFile, newDoc, battery, online, theme, toggleTheme, toggleLocale,
+    brightness, setBrightness, fullscreen, fs, wallpaper, lightWp,
+  } = p;
+
+  const [sheet, setSheet] = useState(null); // { type: 'new' | 'item' | 'move' | 'cc' | 'search' | 'desk', node?, nodes? }
+  const [switcher, setSwitcher] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selIds, setSelIds] = useState(() => new Set());
+  const fileRef = useRef(null);
+  const closeSheet = useCallback(() => setSheet(null), []);
+
+  // ---- which app is on screen ------------------------------------------------------------------------------
+  const cur = wm.list.find((w) => w.id === wm.active && !w.min) || null;
+  const goHome = useCallback(() => { setSwitcher(false); wm.list.filter((w) => !w.min).forEach((w) => dispatch({ type: 'minimize', id: w.id })); }, [wm.list, dispatch]);
+  const back = useCallback(() => {
+    if (!cur) return;
+    if (cur.app === 'viewer' || cur.app === 'editor') dispatch({ type: 'close', id: cur.id }); // a file opened from another app: back = return to it
+    else goHome();
+  }, [cur, dispatch, goHome]);
+  useBackLayer(!!cur && !switcher && !sheet, back);
+  useBackLayer(selecting && !cur && !sheet, () => { setSelecting(false); setSelIds(new Set()); });
+  useEffect(() => { if (cur) { setSelecting(false); setSelIds(new Set()); } }, [cur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- home content ---------------------------------------------------------------------------------------
+  const sysApps = useMemo(() => [
+    { key: 'explorer', app: 'explorer', label: tt('This PC', 'جهازي'), run: () => openExplorer({}) },
+    { key: 'bin', app: 'bin', label: tt('Recycle Bin', 'سلة المحذوفات'), run: () => openExplorer({ view: 'trash' }) },
+    { key: 'settings', app: 'settings', label: tt('Settings', 'الإعدادات'), run: () => runCommand('settings') },
+    { key: 'personalize', app: 'personalize', label: tt('Personalize', 'التخصيص'), run: () => runCommand('personalize') },
+    { key: 'taskmgr', app: 'taskmgr', label: tt('Task Manager', 'مدير المهام'), run: () => runCommand('taskmgr') },
+    { key: 'portal', app: 'portal', label: tt('UIP Portal', 'بوابة UIP'), run: () => runCommand('portal') },
+  ], [tt, openExplorer, runCommand]);
+  const files = useMemo(() => [...deskItems].sort((a, b) => (a.type === b.type ? String(a.name).localeCompare(String(b.name), undefined, { numeric: true }) : a.type === 'folder' ? -1 : 1)), [deskItems]);
+  const folders = useMemo(() => files.filter((n) => n.type === 'folder'), [files]);
+  const nodesOf = useCallback((ids) => files.filter((n) => ids.has(n.id)), [files]);
+  const selNodes = useMemo(() => nodesOf(selIds), [nodesOf, selIds]);
+  const usage = desk.usage;
+  const dockApps = sysApps.filter((a) => ['explorer', 'bin', 'settings', 'portal'].includes(a.key));
+
+  const toggleSel = (id) => setSelIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); if (!n.size) setSelecting(false); return n; });
+  const endSelect = () => { setSelecting(false); setSelIds(new Set()); };
+
+  // ---- actions (all optimistic, like the desktop) -----------------------------------------------------------
+  const moveNodes = useCallback(async (nodes, folder) => {
+    if (!nodes.length || !folder) return;
+    hideLocal(nodes.map((n) => n.id));
+    flash(tt(`Moved into “${folder.name}”.`, `تم النقل إلى «${folder.name}».`));
+    try { await drive.move(nodes.map((n) => n.id), folder.id); window.dispatchEvent(new Event('uip-drive-changed')); } catch (e) { flash(errorMessage(e), 'error'); reloadDesk(); }
+  }, [flash, hideLocal, reloadDesk, tt]);
+  const upload = useCallback(async (list) => {
+    const fl = [...(list || [])];
+    if (!fl.length || !desk.id) return;
+    flash(tt(`Uploading ${fl.length} file(s)…`, `جارٍ رفع ${fl.length} ملف…`));
+    let bad = 0;
+    for (const f of fl) { try { await drive.upload(desk.id, f, null); } catch { bad += 1; } } // eslint-disable-line no-await-in-loop
+    flash(bad ? tt(`${bad} file(s) could not be uploaded.`, `${bad} ملف مترفعش.`) : tt('Files added.', 'تمت إضافة الملفات.'), bad ? 'error' : 'ok');
+    window.dispatchEvent(new Event('uip-drive-changed'));
+  }, [desk.id, flash, tt]);
+  const tapNode = (n) => { if (selecting) toggleSel(n.id); else openNode(n); };
+  const longNode = (n) => { if (selecting) { toggleSel(n.id); return; } setSheet({ type: 'item', node: n }); };
+  const after = (fn) => () => { setSheet(null); fn(); };
+
+  // ---- gesture bar: tap / swipe up = home · long swipe up = app switcher -------------------------------------
+  const gest = useRef(null);
+  const gDown = (e) => { gest.current = { y: e.clientY }; e.currentTarget.setPointerCapture?.(e.pointerId); };
+  const gUp = (e) => {
+    const g = gest.current; gest.current = null; if (!g) return;
+    const dy = g.y - e.clientY;
+    if (dy > 150) setSwitcher(true);
+    else if (dy > 36 || Math.abs(dy) < 6) { if (switcher) setSwitcher(false); else if (cur) goHome(); else if (dy > 36 && wm.list.length) setSwitcher(true); }
+  };
+
+  const ccTiles = [
+    { icon: theme === 'dark' ? 'moon' : 'sun', label: tt('Dark mode', 'المظهر الداكن'), on: theme === 'dark', run: toggleTheme },
+    { icon: 'globe', label: ar ? 'English' : 'العربية', on: false, run: toggleLocale },
+    { icon: 'expand', label: tt('Full screen', 'ملء الشاشة'), on: fs, run: fullscreen },
+    { icon: 'refresh', label: tt('Refresh', 'تحديث'), on: false, run: () => { setSheet(null); refreshAll(); } },
+    { icon: 'lock', label: tt('Lock', 'قفل'), on: false, run: () => { setSheet(null); runCommand('lock'); } },
+    { icon: 'moon', label: tt('Sleep', 'سكون'), on: false, run: () => { setSheet(null); runCommand('sleep'); } },
+  ];
+
+  return (
+    <div className={`mos${cur ? ' has-app' : ''}${lightWp ? ' is-lightwp' : ''}`}>
+      <div className="os-wall" style={{ background: wallpaper }} />
+
+      {/* ── status bar ── */}
+      <header className="mos-status" onClick={() => setSheet({ type: 'cc' })} role="button" tabIndex={0} aria-label={tt('Control centre', 'مركز التحكم')}>
+        <Clock ar={ar} />
+        <span className="mos-status__sp" />
+        <b className="mos-status__lang">{ar ? 'ع' : 'EN'}</b>
+        <WifiGlyph on={online} size={15} />
+        {battery && <span className="mos-status__bat"><BatteryGlyph level={battery.level} charging={battery.charging} size={18} /><small>{battery.level}%</small></span>}
+      </header>
+
+      {/* ── home ── */}
+      <main className="mos-home" aria-hidden={!!cur} {...(!cur ? { onContextMenu: (e) => e.preventDefault() } : null)}>
+        {selecting ? (
+          <div className="mos-selbar">
+            <button type="button" onClick={endSelect} aria-label={tt('Cancel', 'إلغاء')}><Icon name="x" size={20} /></button>
+            <strong>{tt(`${selIds.size} selected`, `${selIds.size} محدد`)}</strong>
+            <button type="button" onClick={() => setSelIds(new Set(files.map((n) => n.id)))}>{tt('All', 'الكل')}</button>
+          </div>
+        ) : (
+          <>
+            <section className="mos-widget">
+              <Clock ar={ar} big />
+              <div className="mos-widget__st">
+                <div className="mos-bar"><i style={{ width: `${Math.min(100, usage?.percent || 0)}%` }} /></div>
+                <small dir="auto">{usage ? tt(`${usage.used_human} of ${usage.quota_human} used`, `${usage.used_human} من ${usage.quota_human}`) : tt('Your files', 'ملفاتك')}</small>
+              </div>
+            </section>
+            <button type="button" className="mos-search" onClick={() => setSheet({ type: 'search' })}>
+              <Icon name="search" size={18} /><span>{tt('Search apps and files', 'ابحث في التطبيقات والملفات')}</span>
+            </button>
+          </>
+        )}
+
+        <div className="mos-grid" onPointerDown={() => {}}>
+          {!selecting && sysApps.map((a) => (
+            <HomeIcon key={a.key} label={a.label} glyph={<AppGlyph app={a.app} size={SYS_GLYPH} full={a.key === 'bin' ? desk.binFull : undefined} />} onTap={a.run} />
+          ))}
+          {files.map((n) => (
+            <HomeIcon
+              key={n.id} label={n.name} glyph={<NodeGlyph node={n} size={SYS_GLYPH} />} selecting={selecting} checked={selIds.has(n.id)}
+              cut={clip?.mode === 'cut' && clip.ids.includes(n.id)} onTap={() => tapNode(n)} onLong={() => longNode(n)}
+            />
+          ))}
+        </div>
+        {desk.ready && !files.length && !selecting && (
+          <p className="mos-empty">{tt('Your desktop is empty. Tap + to add a file or folder.', 'سطح المكتب فاضي. اضغط + لإضافة ملف أو مجلد.')}</p>
+        )}
+        {desk.error && <button type="button" className="mos-warn" onClick={reloadDesk}>{tt('Could not load your files — tap to retry.', 'مقدرتش أحمّل ملفاتك — اضغط للمحاولة.')}</button>}
+        <div className="mos-home__pad" />
+      </main>
+
+      {/* ── dock + add button (home only) ── */}
+      {!cur && !selecting && (
+        <>
+          <button type="button" className="mos-fab" aria-label={tt('New', 'جديد')} onClick={() => setSheet({ type: 'new' })} disabled={!desk.id}><Icon name="plus" size={26} /></button>
+          <nav className="mos-dock" aria-label={tt('Dock', 'الدوك')}>
+            {dockApps.map((a) => {
+              const running = wm.list.some((w) => w.app === a.app);
+              return (
+                <button key={a.key} type="button" className="mos-dock__it" onClick={a.run} aria-label={a.label}>
+                  <AppGlyph app={a.app} size={46} full={a.key === 'bin' ? desk.binFull : undefined} />
+                  {running && <i className="mos-dock__dot" />}
+                </button>
+              );
+            })}
+            <button type="button" className="mos-dock__it mos-dock__sw" onClick={() => setSwitcher(true)} aria-label={tt('Open apps', 'التطبيقات المفتوحة')}>
+              <span className="mos-dock__sq"><Icon name="layers" size={22} />{wm.list.length > 0 && <b>{wm.list.length}</b>}</span>
+            </button>
+          </nav>
+        </>
+      )}
+
+      {/* ── selection action bar ── */}
+      {selecting && !cur && (
+        <nav className="mos-actbar" aria-label={tt('Selection actions', 'إجراءات التحديد')}>
+          <button type="button" disabled={!selNodes.length} onClick={() => { copyNodes(selNodes, 'copy'); endSelect(); }}><Icon name="copy" size={20} /><span>{tt('Copy', 'نسخ')}</span></button>
+          <button type="button" disabled={!selNodes.length} onClick={() => { copyNodes(selNodes, 'cut'); endSelect(); }}><Icon name="cut" size={20} /><span>{tt('Cut', 'قص')}</span></button>
+          <button type="button" disabled={!selNodes.length} onClick={() => setSheet({ type: 'move', nodes: selNodes })}><Icon name="folder-up" size={20} /><span>{tt('Move', 'نقل')}</span></button>
+          <button type="button" disabled={selNodes.length !== 1} onClick={() => renameNode(selNodes[0])}><Icon name="edit" size={20} /><span>{tt('Rename', 'تسمية')}</span></button>
+          <button type="button" className="is-danger" disabled={!selNodes.length} onClick={() => { trashNodes(selNodes); endSelect(); }}><Icon name="trash" size={20} /><span>{tt('Delete', 'حذف')}</span></button>
+        </nav>
+      )}
+
+      {/* ── apps: one full-screen layer per open window; only the active one is visible, the others keep their state ── */}
+      {wm.list.map((w) => {
+        const on = !!cur && cur.id === w.id;
+        const media = w.app === 'viewer' || w.app === 'editor';
+        return (
+          <section key={w.id} className={`mos-app${on ? ' is-on' : ''}${media ? ' mos-app--media' : ''}`} hidden={!on} aria-hidden={!on}>
+            <div className="mos-app__bar">
+              <button type="button" className="mos-app__btn" onClick={back} aria-label={tt('Back', 'رجوع')}><Icon name={ar ? 'chevron-right' : 'chevron-left'} size={22} /></button>
+              <span className="mos-app__ic"><AppGlyph app={w.app} size={22} /></span>
+              <strong className="mos-app__t" dir="auto">{winTitle(w, APPS, ar)}</strong>
+              <button type="button" className="mos-app__btn" onClick={() => setSwitcher(true)} aria-label={tt('Open apps', 'التطبيقات المفتوحة')}><Icon name="layers" size={19} /></button>
+              <button type="button" className="mos-app__btn" onClick={() => dispatch({ type: 'close', id: w.id })} aria-label={tt('Close', 'إغلاق')}><Icon name="x" size={20} /></button>
+            </div>
+            <div className="os-win__body mos-app__body">{bodyOf(w)}</div>
+          </section>
+        );
+      })}
+
+      {/* ── gesture bar ── */}
+      <div className="mos-gest" onPointerDown={gDown} onPointerUp={gUp} onPointerCancel={() => { gest.current = null; }} role="button" tabIndex={0} aria-label={tt('Home', 'الرئيسية')}><i /></div>
+
+      {switcher && (
+        <Switcher
+          list={[...wm.list].sort((a, b) => b.z - a.z)} ar={ar} tt={tt} activeId={cur?.id}
+          onPick={(id) => { setSwitcher(false); dispatch({ type: 'focus', id }); }}
+          onClose={(id) => dispatch({ type: 'close', id })}
+          onCloseAll={() => wm.list.forEach((w) => dispatch({ type: 'close', id: w.id }))}
+          onDone={() => { setSwitcher(false); }}
+        />
+      )}
+
+      <input ref={fileRef} type="file" multiple hidden onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
+
+      {/* ── sheets ── */}
+      {sheet?.type === 'new' && (
+        <Sheet title={tt('New', 'جديد')} onClose={closeSheet}>
+          <Row icon="file-up" label={tt('Upload from this device', 'رفع من الجهاز')} sub={tt('Files, photos, videos', 'ملفات، صور، فيديوهات')} onClick={after(() => fileRef.current?.click())} />
+          <Row icon="folder-plus" label={tt('New folder', 'مجلد جديد')} onClick={after(newFolder)} />
+          <Row icon="file-plus" label={tt('Text file', 'ملف نصي')} onClick={after(newFile)} />
+          <Row icon="file-plus" label={tt('Word document', 'مستند Word')} onClick={after(() => newDoc('docx'))} />
+          <Row icon="file-plus" label={tt('Excel workbook', 'جدول Excel')} onClick={after(() => newDoc('xlsx'))} />
+          <Row icon="file-plus" label={tt('PowerPoint presentation', 'عرض PowerPoint')} onClick={after(() => newDoc('pptx'))} />
+          <Row icon="file-plus" label={tt('PDF / other file…', 'ملف PDF / نوع آخر…')} onClick={after(() => newDoc('pdf'))} />
+          {clip && <Row icon="paste" label={tt('Paste here', 'لصق هنا')} onClick={after(() => pasteInto(desk.id))} />}
+        </Sheet>
+      )}
+
+      {sheet?.type === 'item' && (() => {
+        const n = sheet.node; const isFolder = n.type === 'folder';
+        return (
+          <Sheet title={n.name} onClose={closeSheet}>
+            <div className="mos-sheet__head"><NodeGlyph node={n} size={44} /><div><b dir="auto">{n.name}</b><small>{isFolder ? tt('Folder', 'مجلد') : (n.size_human || '')}</small></div></div>
+            <Row icon="eye" label={tt('Open', 'فتح')} onClick={after(() => openNode(n))} />
+            <Row icon="check-circle" label={tt('Select', 'تحديد')} onClick={() => { setSheet(null); setSelecting(true); setSelIds(new Set([n.id])); }} />
+            <Row icon="copy" label={tt('Copy', 'نسخ')} onClick={after(() => copyNodes([n], 'copy'))} />
+            <Row icon="cut" label={tt('Cut', 'قص')} onClick={after(() => copyNodes([n], 'cut'))} />
+            {isFolder && clip && <Row icon="paste" label={tt('Paste into folder', 'لصق داخل المجلد')} onClick={after(() => pasteInto(n.id))} />}
+            <Row icon="folder-up" label={tt('Move to…', 'نقل إلى…')} onClick={() => setSheet({ type: 'move', nodes: [n] })} />
+            <Row icon="edit" label={tt('Rename', 'إعادة تسمية')} onClick={after(() => renameNode(n))} />
+            <Row icon="trash" danger label={tt('Delete', 'حذف')} onClick={after(() => trashNodes([n]))} />
+          </Sheet>
+        );
+      })()}
+
+      {sheet?.type === 'move' && (
+        <Sheet title={tt('Move to…', 'نقل إلى…')} onClose={closeSheet}>
+          {folders.filter((f) => !sheet.nodes.some((n) => n.id === f.id)).map((f) => (
+            <Row key={f.id} icon={<NodeGlyph node={f} size={30} />} label={f.name} onClick={() => { const ns = sheet.nodes; setSheet(null); endSelect(); moveNodes(ns, f); }} />
+          ))}
+          {!folders.filter((f) => !sheet.nodes.some((n) => n.id === f.id)).length && <p className="mos-sheet__none">{tt('There are no folders on the desktop yet. Create one first.', 'مفيش مجلدات على سطح المكتب. اعمل مجلد الأول.')}</p>}
+          <Row icon="folder-plus" label={tt('New folder', 'مجلد جديد')} onClick={after(newFolder)} />
+        </Sheet>
+      )}
+
+      {sheet?.type === 'cc' && (
+        <Sheet title={user?.name ? `${user.name}` : tt('Control centre', 'مركز التحكم')} onClose={closeSheet}>
+          <div className="mos-cc">
+            {ccTiles.map((t) => (
+              <button key={t.label} type="button" className={`mos-cc__t${t.on ? ' is-on' : ''}`} onClick={t.run}><Icon name={t.icon} size={22} /><span>{t.label}</span></button>
+            ))}
+          </div>
+          <label className="mos-cc__br">
+            <Icon name="sun" size={18} />
+            <input type="range" min="40" max="100" value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} aria-label={tt('Brightness', 'السطوع')} />
+          </label>
+          <Row icon="settings" label={tt('Settings', 'الإعدادات')} onClick={after(() => runCommand('settings'))} />
+          <Row icon="logout" label={tt('Back to the portal', 'الرجوع للبوابة')} onClick={after(() => runCommand('portal'))} />
+        </Sheet>
+      )}
+
+      {sheet?.type === 'search' && (
+        <SearchSheet
+          tt={tt} ar={ar} apps={sysApps} files={files} onClose={closeSheet}
+          onApp={(a) => { setSheet(null); a.run(); }} onNode={(n) => { setSheet(null); openNode(n); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function SearchSheet({ tt, ar, apps, files, onClose, onApp, onNode }) {
+  const [q, setQ] = useState(''); const [found, setFound] = useState([]);
+  const t = q.trim().toLowerCase();
+  useEffect(() => {
+    if (t.length < 2) { setFound([]); return undefined; }
+    let dead = false;
+    const h = setTimeout(async () => { try { const r = await drive.search(q.trim()); if (!dead) setFound((r.data || []).slice(0, 20)); } catch { if (!dead) setFound([]); } }, 260);
+    return () => { dead = true; clearTimeout(h); };
+  }, [q, t.length]);
+  const appHits = apps.filter((a) => !t || a.label.toLowerCase().includes(t));
+  const localHits = t ? files.filter((n) => n.name.toLowerCase().includes(t)) : files.slice(0, 8);
+  const seen = new Set(localHits.map((n) => n.id));
+  const deepHits = found.filter((n) => !seen.has(n.id));
+  return (
+    <Sheet tall onClose={onClose}>
+      <div className="mos-sfield"><Icon name="search" size={18} /><input autoFocus value={q} dir="auto" placeholder={tt('Search apps and files', 'ابحث في التطبيقات والملفات')} onChange={(e) => setQ(e.target.value)} spellCheck={false} autoComplete="off" />{q && <button type="button" onClick={() => setQ('')} aria-label={tt('Clear', 'مسح')}><Icon name="x" size={16} /></button>}</div>
+      {appHits.length > 0 && <h4 className="mos-sheet__h">{tt('Apps', 'التطبيقات')}</h4>}
+      {appHits.map((a) => <Row key={a.key} icon={<AppGlyph app={a.app} size={32} />} label={a.label} onClick={() => onApp(a)} />)}
+      {localHits.length > 0 && <h4 className="mos-sheet__h">{t ? tt('On the desktop', 'على سطح المكتب') : tt('Recent on the desktop', 'على سطح المكتب')}</h4>}
+      {localHits.map((n) => <Row key={n.id} icon={<NodeGlyph node={n} size={32} />} label={n.name} onClick={() => onNode(n)} />)}
+      {deepHits.length > 0 && <h4 className="mos-sheet__h">{tt('In My PC', 'في جهازي')}</h4>}
+      {deepHits.map((n) => <Row key={n.id} icon={<NodeGlyph node={n} size={32} />} label={n.name} sub={n.path} onClick={() => onNode(n)} />)}
+      {t && !appHits.length && !localHits.length && !deepHits.length && <p className="mos-sheet__none">{tt('No results', 'مفيش نتايج')}</p>}
+    </Sheet>
+  );
+}

@@ -30,6 +30,7 @@ import { EditorWindow, ViewerWindow } from './FileWindows';
 import { opensInEditor } from '../lib/driveFileKinds';
 import NewFileDialog from '../components/NewFileDialog';
 import WindowFrame from './Window';
+import MobileShell, { useIsMobileOS } from './MobileShell';
 import SnapAssist from './SnapAssist';
 import './desktop.css';
 import './mac.css';
@@ -172,6 +173,7 @@ export default function DesktopOS() {
     return guardFns.current.get(id);
   }, []);
   const [desk, reloadDesk] = useDesktopFolder();
+  const mobile = useIsMobileOS(); // phone-sized screen -> <MobileShell> (a purpose-built phone UI) instead of the windowed desktop
   const [overlay, setOverlay] = useState(null); // 'start' | 'run' | 'taskview' | 'qs' | 'cal'
   const battery = useBattery();
   const online = useOnline();
@@ -346,7 +348,7 @@ export default function DesktopOS() {
     measure();
     const ro = new ResizeObserver(measure); ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [mobile]);
   const rows = Math.max(1, Math.floor((deskSize.h - PAD_Y - BOTTOM_PAD + GAP + ROW_SLACK) / (cell.h + GAP)));
   const cols = Math.max(1, Math.floor((deskSize.w - 2 * PAD_X + GAP) / (cell.w + GAP)));
   const layout = useMemo(() => layoutIcons(icons.map((i) => i.key), saved, rows, cols), [icons, saved, rows, cols]);
@@ -785,7 +787,7 @@ export default function DesktopOS() {
 
   return createPortal(
     <div
-      className={`os os--${theme === 'dark' ? 'dark' : 'light'}${wp.dark === false ? ' os--lightwp' : ''}${wmax ? ' os--wmax' : ''}${wmax && dockPeek ? ' os--dockpeek' : ''}`} dir={dir}
+      className={`os os--${theme === 'dark' ? 'dark' : 'light'}${wp.dark === false ? ' os--lightwp' : ''}${mobile ? ' os--mobile' : ''}${wmax ? ' os--wmax' : ''}${wmax && dockPeek ? ' os--dockpeek' : ''}`} dir={dir}
       style={{ '--os-accent': prefs.accent, '--cell-w': `${cell.w}px`, '--cell-h': `${cell.h}px`, '--glyph': `${cell.g}px` }}
       onPointerDownCapture={(e) => {
         if (!e.target.closest('.os-ctx')) setMenu(null);
@@ -794,6 +796,17 @@ export default function DesktopOS() {
         if (overlay === 'cal' && !e.target.closest('.os-fly, .os-tray__clock')) setOverlay(null);
       }}
     >
+      {mobile ? (
+        <MobileShell
+          ar={ar} tt={tt} user={user} desk={desk} deskItems={deskItems} wm={wm} dispatch={dispatch} bodyOf={bodyOf}
+          openNode={openNode} openExplorer={openExplorer} runCommand={runCommand} flash={flash} reloadDesk={reloadDesk} hideLocal={hideLocal} refreshAll={refreshAll}
+          clip={clip} copyNodes={copyNodes} pasteInto={pasteInto} trashNodes={trashNodes} renameNode={renameNode} newFolder={newFolder} newFile={newFile} newDoc={newDoc}
+          battery={battery} online={online} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale}
+          brightness={brightness} setBrightness={(v) => setPrefs({ brightness: v })} fullscreen={fullscreen} fs={fs}
+          wallpaper={wallpaperCss(prefs)} lightWp={wp.dark === false}
+        />
+      ) : (
+      <>
       <div className="os-wall" style={{ background: wallpaperCss(prefs) }} />
       <div
         ref={deskRef} className={`os-desk${dropping ? ' is-drop' : ''}`} tabIndex={0} onKeyDown={onDeskKey}
@@ -860,6 +873,9 @@ export default function DesktopOS() {
         items={dockItems} tt={tt} mag={prefs.dockMag !== false} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}
         onBin={() => runCommand('bin')} binFull={desk.binFull} binLabel={tt('Recycle Bin', 'سلة المحذوفات')}
       />
+
+      </>
+      )}
 
       {menu && <ContextMenu menu={menu} onClose={() => setMenu(null)} />}
       {dlg && dlg.kind !== 'newfile' && <OsDialog key={dlg.title} dlg={dlg} tt={tt} onDone={finishDlg} />}
