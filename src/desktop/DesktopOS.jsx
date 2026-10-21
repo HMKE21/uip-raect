@@ -37,7 +37,7 @@ import './mac.css';
 const EMPTY_POS = {};
 const CELL = { s: { w: 78, h: 88, g: 34 }, m: { w: 94, h: 104, g: 48 }, l: { w: 114, h: 126, g: 64 } };
 const PAD_X = 10; const PAD_Y = 14; const GAP = 2; // must match the old grid padding / gap
-const BOTTOM_PAD = 4; const ROW_SLACK = 22; // the last row may overhang a little (a cell has empty padding), so a nearly-fitting row is not wasted
+const BOTTOM_PAD = 0; const ROW_SLACK = 36; // the last row may overhang a little (a cell has empty padding), so a nearly-fitting row is not wasted
 const keyId = (c, r) => `${c},${r}`;
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
