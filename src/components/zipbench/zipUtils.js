@@ -28,6 +28,10 @@ export function isBinary(path, bytes) {
 const BADGES = {
   js: ['JS', '#f1c40f'], jsx: ['JSX', '#61dafb'], ts: ['TS', '#3b82f6'], tsx: ['TSX', '#3b82f6'], mjs: ['JS', '#f1c40f'], cjs: ['JS', '#f1c40f'],
   php: ['PHP', '#8892bf'], py: ['PY', '#4b8bbe'], java: ['JV', '#e76f00'], kt: ['KT', '#a97bff'], cs: ['C#', '#8e44ad'], c: ['C', '#5b9bd5'], h: ['H', '#5b9bd5'], cpp: ['C++', '#5b9bd5'], rs: ['RS', '#dea584'], lua: ['LUA', '#000080'], pl: ['PL', '#39457e'], r: ['R', '#276dc3'], jl: ['JL', '#9558b2'], hs: ['HS', '#5e5086'], f90: ['F90', '#734f96'], pas: ['PAS', '#e3a51f'], go: ['GO', '#00add8'], rb: ['RB', '#cc342d'], swift: ['SW', '#f05138'], dart: ['DT', '#00b4ab'],
+  zig: ['ZIG', '#f7a41d'], nim: ['NIM', '#ffe953'], d: ['D', '#b03931'], adb: ['ADA', '#02f88c'], ads: ['ADA', '#02f88c'], cob: ['COB', '#005ca5'], cbl: ['COB', '#005ca5'], asm: ['ASM', '#6e4c13'], s: ['ASM', '#6e4c13'],
+  fs: ['F#', '#378bba'], fsx: ['F#', '#378bba'], vb: ['VB', '#945db7'], scala: ['SC', '#dc322f'], groovy: ['GVY', '#4298b8'], clj: ['CLJ', '#5881d8'], ex: ['EX', '#6e4a7e'], exs: ['EX', '#6e4a7e'], erl: ['ERL', '#b83998'],
+  ml: ['ML', '#ef7a08'], lisp: ['LSP', '#3fb68b'], scm: ['SCM', '#1e4aec'], rkt: ['RKT', '#9f1d20'], pro: ['PRO', '#74283c'], tcl: ['TCL', '#e4cc98'], awk: ['AWK', '#c30e9b'], raku: ['RAKU', '#0000fb'], m: ['M', '#e16737'],
+  ps1: ['PS', '#012456'], v: ['V', '#b2b7f8'], sv: ['SV', '#dae1c2'], vhd: ['VHD', '#adb2cb'], vhdl: ['VHD', '#adb2cb'],
   html: ['<>', '#e34c26'], htm: ['<>', '#e34c26'], vue: ['V', '#42b883'], css: ['#', '#2965f1'], scss: ['S', '#cd6799'], less: ['L', '#1d365d'],
   json: ['{}', '#cbcb41'], xml: ['<>', '#ff9800'], yml: ['Y', '#cb171e'], yaml: ['Y', '#cb171e'], toml: ['T', '#9c4221'], ini: ['⚙', '#9aa4b6'], env: ['⚙', '#9aa4b6'],
   md: ['M↓', '#519aba'], txt: ['TXT', '#9aa4b6'], log: ['LOG', '#9aa4b6'], sql: ['SQL', '#e38c00'], sh: ['SH', '#89e051'], bat: ['BAT', '#89e051'], csv: ['CSV', '#16a34a'],
@@ -39,6 +43,8 @@ export const badgeOf = (path) => BADGES[extOf(path)] || ['•', '#9aa4b6'];
 const LANG_NAMES = {
   js: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript', jsx: 'JavaScript React', ts: 'TypeScript', tsx: 'TypeScript React', json: 'JSON', html: 'HTML', htm: 'HTML', vue: 'Vue', css: 'CSS', scss: 'SCSS', less: 'Less',
   php: 'PHP', py: 'Python', java: 'Java', kt: 'Kotlin', cs: 'C#', c: 'C', h: 'C', cpp: 'C++', hpp: 'C++', cc: 'C++', rs: 'Rust', go: 'Go', rb: 'Ruby', swift: 'Swift', dart: 'Dart', lua: 'Lua', pl: 'Perl', r: 'R', jl: 'Julia', hs: 'Haskell', f90: 'Fortran', pas: 'Pascal', bash: 'Shell',
+  zig: 'Zig', nim: 'Nim', d: 'D', adb: 'Ada', ads: 'Ada', cob: 'COBOL', cbl: 'COBOL', asm: 'Assembly', s: 'Assembly', fs: 'F#', fsx: 'F#', vb: 'VB.NET', scala: 'Scala', groovy: 'Groovy', clj: 'Clojure',
+  ex: 'Elixir', exs: 'Elixir', erl: 'Erlang', ml: 'OCaml', lisp: 'Lisp', scm: 'Scheme', rkt: 'Racket', pro: 'Prolog', tcl: 'Tcl', awk: 'AWK', raku: 'Raku', m: 'MATLAB', ps1: 'PowerShell', v: 'Verilog', sv: 'SystemVerilog', vhd: 'VHDL', vhdl: 'VHDL',
   md: 'Markdown', xml: 'XML', svg: 'SVG', yml: 'YAML', yaml: 'YAML', toml: 'TOML', ini: 'INI', sql: 'SQL', sh: 'Shell', bat: 'Batch', csv: 'CSV', txt: 'Plain Text', log: 'Log',
 };
 export const languageName = (path) => LANG_NAMES[extOf(path)] || 'Plain Text';

@@ -160,3 +160,13 @@ test('the open file leads; an open Python file also gets an interactive-terminal
   const py = detectApps(['t.py'], { activePath: 't.py', sandbox: true, readText: read({ 't.py': 'print(1)' }) });
   assert.deepEqual(py.map((a) => a.kind), ['python', 'sandbox']);
 });
+
+test('single files: the extra languages (Zig, Nim, D, Ada, COBOL, Assembly, F#, Scala, Elixir, OCaml, Lisp, Prolog, Verilog, VHDL, PowerShell…)', () => {
+  const files = ['a.zig', 'a.nim', 'a.d', 'a.adb', 'a.cob', 'a.asm', 'a.s', 'a.fs', 'a.fsx', 'a.vb', 'a.scala', 'a.groovy', 'a.clj', 'a.exs', 'a.erl', 'a.ml', 'a.lisp', 'a.scm', 'a.rkt',
+    'a.pro', 'a.tcl', 'a.awk', 'a.raku', 'a.m', 'a.ps1', 'a.v', 'a.sv', 'a.vhd'];
+  for (const f of files) {
+    const apps = detectApps([f], { activePath: f, sandbox: true, readText: read({}) });
+    assert.deepEqual([apps[0].kind, apps[0].sandbox, apps[0].entry], ['sandbox', 'lang', f], f);
+    assert.equal(detectApps([f], { activePath: f, readText: read({}) })[0].kind, 'unsupported', `${f} without the sandbox`);
+  }
+});
