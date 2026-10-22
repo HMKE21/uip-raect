@@ -21,8 +21,14 @@
 .nf__x:hover:not(:disabled) { background: var(--nf-hover); color: var(--nf-fg); }
 .nf__body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(220px, 1fr); }
 .nf__types { overflow: auto; padding: 12px 14px 16px; border-inline-end: 1px solid var(--nf-line); background: var(--nf-bg2); }
+.nf__search { position: sticky; top: -12px; z-index: 2; display: flex; align-items: center; gap: 8px; margin: -12px -14px 6px; padding: 10px 14px; background: var(--nf-bg2); border-bottom: 1px solid var(--nf-line); color: var(--nf-mute); }
+.nf__search input { flex: 1; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--nf-line); border-radius: 10px; outline: 0; background: var(--nf-bg); color: var(--nf-fg); font-size: 13.5px; -webkit-appearance: none; appearance: none; }
+.nf__search input::-webkit-search-cancel-button { display: none; }
+.nf__search input:focus { border-color: var(--nf-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--nf-accent) 28%, transparent); }
+.nf__clear { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--nf-hover); color: var(--nf-mute); cursor: pointer; }
+.nf__empty { margin: 18px 4px; text-align: center; color: var(--nf-mute); }
 .nf__types h4 { margin: 10px 4px 6px; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; color: var(--nf-mute); }
-.nf__types section:first-child h4 { margin-top: 2px; }
+
 .nf__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
 .nf__grid button {
   display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 10px; text-align: start; cursor: pointer;
@@ -64,6 +70,7 @@
   .nf { max-height: 100%; }
   .nf__body { grid-template-columns: 1fr; overflow: auto; }
   .nf__types { border-inline-end: 0; border-bottom: 1px solid var(--nf-line); overflow: visible; }
+  .nf__search { position: static; }
   .nf__side { overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) { .nf, .nf-scrim { animation: none; } }

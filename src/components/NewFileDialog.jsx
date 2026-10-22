@@ -13,6 +13,10 @@ import '../styles/css/new-file.css';
  *   <NewFileDialog locale="ar" parentId={folderId} onClose={() => …} onCreated={(node) => open(node)} />
  *   `kinds` (optional): only these type ids, e.g. ['docx','xlsx','pptx','pdf']
  */
+/** extra words people type for a language (besides its name / extension / hint) */
+const ALIASES = { go: 'golang', cs: 'csharp c-sharp dotnet', sh: 'shell terminal', ps1: 'powershell pwsh', js: 'node nodejs', ts: 'typescript', py: 'python3', rb: 'rails', rs: 'cargo', kt: 'android', swift: 'ios apple', objc: 'ios apple cocoa', vb: 'vbnet visual basic dotnet', bas: 'vb6 visual basic', dpr: 'delphi pascal', fs: 'fsharp', ml: 'ocaml', ex: 'elixir', pl: 'perl', pro: 'prolog', sol: 'solidity ethereum smart contract', cls: 'apex salesforce', abap: 'sap', plsql: 'oracle', tsql: 'sql server mssql', matlab: 'octave', sb3: 'scratch', asm: 'assembler nasm', lisp: 'common lisp', cob: 'cobol', v: 'vlang' };
+const norm = (x) => String(x || '').toLowerCase().replace(/[\s_-]+/g, ' ').trim();
+
 export default function NewFileDialog({ locale = 'en', parentId = null, kinds, initialType = 'docx', onClose, onCreated }) {
   const ar = locale === 'ar';
   const tt = useCallback((en, a) => (ar ? a : en), [ar]);
@@ -24,17 +28,36 @@ export default function NewFileDialog({ locale = 'en', parentId = null, kinds, i
   const [touched, setTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [q, setQ] = useState('');
+  const searchRef = useRef(null);
   const nameRef = useRef(null);
   const t = typeById(type);
+  const needle = norm(q);
+  const shown = useMemo(() => {
+    if (!needle) return types;
+    const words = needle.split(' ');
+    const rank = (x) => {
+      const names = [x.id, x.ext, x.label.en, x.label.ar].map(norm);
+      if (names.some((v) => v === needle)) return 0;
+      if (names.some((v) => v.startsWith(needle))) return 1;
+      return 2;
+    };
+    return types
+      .filter((x) => {
+        const hay = norm(`${x.id} ${x.ext} .${x.ext} ${x.label.en} ${x.label.ar} ${x.hint.en} ${x.hint.ar} ${ALIASES[x.id] || ''}`);
+        return words.every((w) => hay.includes(w));
+      })
+      .map((x, i) => [rank(x), i, x]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map((r) => r[2]);
+  }, [types, needle]);
 
   const pick = (id) => {
     setType(id); setTemplate(typeById(id).templates[0].id); setError('');
     if (!touched) setName(defaultName(id, locale).replace(/\.[^.]+$/, ''));
   };
 
-  useEffect(() => { const el = nameRef.current; if (el) { el.focus(); el.select(); } }, []);
+  useEffect(() => { const el = searchRef.current || nameRef.current; if (el) el.focus(); }, []);
   useEffect(() => {
-    const onKey = (e) => { if (e.key === 'Escape' && !busy) { e.stopPropagation(); onClose?.(); } };
+    const onKey = (e) => { if (e.key === 'Escape' && !busy) { e.stopPropagation(); if (searchRef.current && document.activeElement === searchRef.current && searchRef.current.value) { setQ(''); return; } onClose?.(); } };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
   }, [busy, onClose]);
@@ -68,8 +91,20 @@ export default function NewFileDialog({ locale = 'en', parentId = null, kinds, i
 
         <div className="nf__body">
           <div className="nf__types" role="listbox" aria-label={tt('File type', 'نوع الملف')}>
+            <div className="nf__search">
+              <Icon name="search" size={15} />
+              <input ref={searchRef} type="search" value={q} dir="auto" autoComplete="off" spellCheck={false} disabled={busy}
+                placeholder={tt('Search a file type or language…', 'ابحث عن نوع ملف أو لغة برمجة…')}
+                aria-label={tt('Search file types', 'بحث في أنواع الملفات')}
+                onChange={(e) => setQ(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && shown[0]) { e.preventDefault(); pick(shown[0].id); nameRef.current?.focus(); }
+                }} />
+              {q && <button type="button" className="nf__clear" onClick={() => { setQ(''); searchRef.current?.focus(); }} aria-label={tt('Clear search', 'مسح البحث')}><Icon name="x" size={13} /></button>}
+            </div>
+            {needle && !shown.length && <p className="nf__empty">{tt('No matching file type.', 'مفيش نوع ملف مطابق.')}</p>}
             {NEW_GROUPS.map((g) => {
-              const items = types.filter((x) => x.group === g.id);
+              const items = shown.filter((x) => x.group === g.id);
               if (!items.length) return null;
               return (
                 <section key={g.id}>
