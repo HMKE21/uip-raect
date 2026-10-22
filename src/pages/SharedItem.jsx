@@ -12,6 +12,7 @@ import { FileGlyph, FolderGlyph } from '../desktop/OsIcons';
 import ProtectedFile, { kindOfName } from '../components/shared/ProtectedFile';
 import '../styles/css/drive-share.css';
 import '../styles/css/drive-share-responsive.css';
+import '../styles/css/drive-share-pro.css'; // professional visual layer — must stay last
 
 const BIG_PREVIEW_BYTES = 80 * 1024 * 1024; // non-media files above this are not previewed in the browser
 
@@ -74,7 +75,7 @@ function GateForm({ gate, token, t, ar, onDone }) {
 
   return (
     <section className="shp__card shp__gate" aria-labelledby="shp-gate-h">
-      <span className="shp__state-ico" style={{ alignSelf: 'center' }}><Icon name={gate.needs_password ? 'lock' : 'user'} size={30} /></span>
+      <span className="shp__state-ico shp__state-ico--gate" style={{ alignSelf: 'center' }}><Icon name={gate.needs_password ? 'lock' : 'user'} size={30} /></span>
       <h1 id="shp-gate-h">{gate.needs_password ? t('This link is protected', 'الرابط ده محمي') : t('Before you open it', 'قبل ما تفتح الرابط')}</h1>
       <p>
         {gate.owner_name ? t(`${gate.owner_name} shared something with you. `, `${gate.owner_name} شارك معاك ملف. `) : ''}
@@ -255,13 +256,19 @@ export default function SharedItem() {
 
   return (
     <div className={`shp${(away || shot) && !canDl ? ' is-away' : ''}`} dir={ar ? 'rtl' : 'ltr'} onContextMenu={(e) => e.preventDefault()}>
-      <div className="shp__bubbles" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</div>
+      <div className="shp__bubbles" aria-hidden="true">{Array.from({ length: 6 }, (_, i) => <i key={i} />)}</div>
       <header className="shp__top">
         <div className="shp__who">
           {data && <SenderAvatar name={owner} src={avatarSrc(share.owner_avatar)} />}
-          {data && owner && <span className="shp__who-name">{owner}</span>}
+          {data && owner && (
+            <span className="shp__who-txt">
+              <span className="shp__who-lbl">{t('Shared with you by', 'تمت المشاركة معك بواسطة')}</span>
+              <span className="shp__who-name">{owner}</span>
+            </span>
+          )}
         </div>
         <div className="shp__tools">
+          <span className="shp__secure" title={t('Protected link', 'رابط محمي')}><Icon name="shield" size={14} /><span>{t('Secure link', 'رابط آمن')}</span></span>
           <button type="button" className="shp__tool" onClick={toggleLocale} title={t('العربية', 'English')} aria-label={t('Switch to Arabic', 'التبديل للإنجليزية')}>
             <Icon name="globe" size={16} /><span>{ar ? 'EN' : 'عربي'}</span>
           </button>
@@ -293,7 +300,10 @@ export default function SharedItem() {
                 <div className="shp__chips">
                   {!isFolder && node.size_human && <span className="shp__chip">{node.size_human}</span>}
                   {share.expires_at && <span className="shp__chip"><Icon name="clock" size={12} />{t('Available until ', 'متاح لحد ')}{fmtDate(share.expires_at)}</span>}
-                  {!canDl && <span className="shp__chip shp__chip--lock"><Icon name="eye" size={12} />{t('View only', 'عرض فقط')}</span>}
+                  {isFolder && <span className="shp__chip">{data.items.length} {t('items', 'عنصر')}</span>}
+                  {canDl
+                    ? <span className="shp__chip shp__chip--ok"><Icon name="download" size={12} />{t('Download allowed', 'التنزيل متاح')}</span>
+                    : <span className="shp__chip shp__chip--lock"><Icon name="eye" size={12} />{t('View only', 'عرض فقط')}</span>}
                 </div>
               </div>
               {canDl && (
@@ -355,6 +365,7 @@ export default function SharedItem() {
           </>
         )}
       </main>
+      <footer className="shp__foot"><Icon name="shield" size={13} /><span>{t('Shared securely · UIP — Ultimate Intelligent Platform', 'مشاركة آمنة · UIP — المنصة الذكية المتكاملة')}</span></footer>
       {(away || shot) && !canDl && data && (
         <div className="shp__veil" role="status"><Icon name="eye-off" size={26} /><p>{t('Content is hidden while the window is not in focus.', 'المحتوى مخفي طول ما النافذة مش في التركيز.')}</p></div>
       )}
