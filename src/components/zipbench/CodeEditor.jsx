@@ -14,11 +14,30 @@ import { python } from '@codemirror/lang-python';
 import { java } from '@codemirror/lang-java';
 import { cpp } from '@codemirror/lang-cpp';
 import { markdown } from '@codemirror/lang-markdown';
-import { sql } from '@codemirror/lang-sql';
+import { sql, MSSQL, PLSQL } from '@codemirror/lang-sql';
 import { xml } from '@codemirror/lang-xml';
 import { yaml } from '@codemirror/lang-yaml';
 import { rust } from '@codemirror/lang-rust';
-import { csharp, kotlin, dart } from '@codemirror/legacy-modes/mode/clike';
+import { csharp, kotlin, dart, scala, objectiveC, c as clikeC } from '@codemirror/legacy-modes/mode/clike';
+import { erlang } from '@codemirror/legacy-modes/mode/erlang';
+import { clojure } from '@codemirror/legacy-modes/mode/clojure';
+import { commonLisp } from '@codemirror/legacy-modes/mode/commonlisp';
+import { scheme } from '@codemirror/legacy-modes/mode/scheme';
+import { cobol } from '@codemirror/legacy-modes/mode/cobol';
+import { groovy } from '@codemirror/legacy-modes/mode/groovy';
+import { powerShell } from '@codemirror/legacy-modes/mode/powershell';
+import { vb } from '@codemirror/legacy-modes/mode/vb';
+import { oCaml, fSharp } from '@codemirror/legacy-modes/mode/mllike';
+import { octave } from '@codemirror/legacy-modes/mode/octave';
+import { sas } from '@codemirror/legacy-modes/mode/sas';
+import { gas } from '@codemirror/legacy-modes/mode/gas';
+import { pascal } from '@codemirror/legacy-modes/mode/pascal';
+import { fortran } from '@codemirror/legacy-modes/mode/fortran';
+import { haskell } from '@codemirror/legacy-modes/mode/haskell';
+import { lua } from '@codemirror/legacy-modes/mode/lua';
+import { perl } from '@codemirror/legacy-modes/mode/perl';
+import { r } from '@codemirror/legacy-modes/mode/r';
+import { julia } from '@codemirror/legacy-modes/mode/julia';
 import { shell } from '@codemirror/legacy-modes/mode/shell';
 import { go } from '@codemirror/legacy-modes/mode/go';
 import { ruby } from '@codemirror/legacy-modes/mode/ruby';
@@ -34,7 +53,7 @@ import { htmlSnippetSource, cssSnippetSource, jsSnippetSource, wordSource } from
 const withWords = (mode) => { const L = StreamLanguage.define(mode); return [L, L.data.of({ autocomplete: wordSource })]; };
 const withJs = (support) => [support, javascriptLanguage.data.of({ autocomplete: jsSnippetSource })];
 
-function languageFor(path) {
+function languageFor(path, text = '') {
   switch (extOf(path)) {
     case 'js': case 'mjs': case 'cjs': return withJs(javascript());
     case 'jsx': return withJs(javascript({ jsx: true }));
@@ -60,6 +79,33 @@ function languageFor(path) {
     case 'go': return withWords(go);
     case 'rb': return withWords(ruby);
     case 'swift': return withWords(swift);
+    case 'm': return withWords(/@(interface|implementation|end|property)\b|#import\b|NS[A-Z]\w+/.test(String(text).slice(0, 4000)) ? objectiveC : octave);
+    case 'mm': return withWords(objectiveC);
+    case 'scala': return withWords(scala);
+    case 'erl': return withWords(erlang);
+    case 'clj': case 'cljc': return withWords(clojure);
+    case 'lisp': case 'lsp': return withWords(commonLisp);
+    case 'scm': case 'ss': case 'rkt': return withWords(scheme);
+    case 'cob': case 'cbl': case 'cobol': return withWords(cobol);
+    case 'groovy': case 'gvy': return withWords(groovy);
+    case 'ps1': return withWords(powerShell);
+    case 'vb': case 'bas': case 'frm': return withWords(vb);
+    case 'ml': return withWords(oCaml);
+    case 'fs': case 'fsx': return withWords(fSharp);
+    case 'sas': return withWords(sas);
+    case 'asm': case 'nasm': case 's': return withWords(gas);
+    case 'pas': case 'dpr': case 'pp': return withWords(pascal);
+    case 'f90': case 'f95': case 'f03': return withWords(fortran);
+    case 'hs': return withWords(haskell);
+    case 'lua': return withWords(lua);
+    case 'pl': return withWords(perl);
+    case 'r': return withWords(r);
+    case 'jl': return withWords(julia);
+    case 'plsql': case 'pls': return sql({ dialect: PLSQL });
+    case 'tsql': return sql({ dialect: MSSQL });
+    case 'sol': case 'cls': return java();
+    case 'zig': return withWords(clikeC);
+    case 'v': return rust();
     case 'toml': return StreamLanguage.define(toml);
     case 'ini': case 'env': return StreamLanguage.define(properties);
     default: return EditorState.languageData.of(() => [{ autocomplete: wordSource }]);
@@ -139,7 +185,7 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
       }),
       keymap.of([indentWithTab]),
       themeComp.current.of(buildEditorTheme(theme)),
-      languageFor(p),
+      languageFor(p, text),
       wrapComp.current.of(wrap ? EditorView.lineWrapping : []),
       roComp.current.of(EditorState.readOnly.of(!!readOnly)),
       sizeComp.current.of(EditorView.theme({ '&': { fontSize: `${fontSize}px` } })),

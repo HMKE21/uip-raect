@@ -32,6 +32,7 @@ const BADGES = {
   fs: ['F#', '#378bba'], fsx: ['F#', '#378bba'], vb: ['VB', '#945db7'], scala: ['SC', '#dc322f'], groovy: ['GVY', '#4298b8'], clj: ['CLJ', '#5881d8'], ex: ['EX', '#6e4a7e'], exs: ['EX', '#6e4a7e'], erl: ['ERL', '#b83998'],
   ml: ['ML', '#ef7a08'], lisp: ['LSP', '#3fb68b'], scm: ['SCM', '#1e4aec'], rkt: ['RKT', '#9f1d20'], pro: ['PRO', '#74283c'], tcl: ['TCL', '#e4cc98'], awk: ['AWK', '#c30e9b'], raku: ['RAKU', '#0000fb'], m: ['M', '#e16737'],
   ps1: ['PS', '#012456'], v: ['V', '#b2b7f8'], sv: ['SV', '#dae1c2'], vhd: ['VHD', '#adb2cb'], vhdl: ['VHD', '#adb2cb'],
+  mm: ['MM', '#438eff'], cls: ['CLS', '#1798c1'], sol: ['SOL', '#6c7a89'], abap: ['ABAP', '#e8274b'], sas: ['SAS', '#0e6cb6'], plsql: ['PLS', '#f80000'], pls: ['PLS', '#f80000'], tsql: ['TSQL', '#cc2927'], bas: ['BAS', '#7a5195'], dpr: ['DPR', '#b22222'], sb3: ['SB3', '#ffab19'], lsp: ['LSP', '#3fb68b'], nasm: ['ASM', '#6e4c13'], gvy: ['GVY', '#4298b8'], kts: ['KT', '#a97bff'], frm: ['FRM', '#7a5195'],
   html: ['<>', '#e34c26'], htm: ['<>', '#e34c26'], vue: ['V', '#42b883'], css: ['#', '#2965f1'], scss: ['S', '#cd6799'], less: ['L', '#1d365d'],
   json: ['{}', '#cbcb41'], xml: ['<>', '#ff9800'], yml: ['Y', '#cb171e'], yaml: ['Y', '#cb171e'], toml: ['T', '#9c4221'], ini: ['⚙', '#9aa4b6'], env: ['⚙', '#9aa4b6'],
   md: ['M↓', '#519aba'], txt: ['TXT', '#9aa4b6'], log: ['LOG', '#9aa4b6'], sql: ['SQL', '#e38c00'], sh: ['SH', '#89e051'], bat: ['BAT', '#89e051'], csv: ['CSV', '#16a34a'],
@@ -45,6 +46,7 @@ const LANG_NAMES = {
   php: 'PHP', py: 'Python', java: 'Java', kt: 'Kotlin', cs: 'C#', c: 'C', h: 'C', cpp: 'C++', hpp: 'C++', cc: 'C++', rs: 'Rust', go: 'Go', rb: 'Ruby', swift: 'Swift', dart: 'Dart', lua: 'Lua', pl: 'Perl', r: 'R', jl: 'Julia', hs: 'Haskell', f90: 'Fortran', pas: 'Pascal', bash: 'Shell',
   zig: 'Zig', nim: 'Nim', d: 'D', adb: 'Ada', ads: 'Ada', cob: 'COBOL', cbl: 'COBOL', asm: 'Assembly', s: 'Assembly', fs: 'F#', fsx: 'F#', vb: 'VB.NET', scala: 'Scala', groovy: 'Groovy', clj: 'Clojure',
   ex: 'Elixir', exs: 'Elixir', erl: 'Erlang', ml: 'OCaml', lisp: 'Lisp', scm: 'Scheme', rkt: 'Racket', pro: 'Prolog', tcl: 'Tcl', awk: 'AWK', raku: 'Raku', m: 'MATLAB', ps1: 'PowerShell', v: 'Verilog', sv: 'SystemVerilog', vhd: 'VHDL', vhdl: 'VHDL',
+  mm: 'Objective-C', cls: 'Apex', sol: 'Solidity', abap: 'ABAP', sas: 'SAS', plsql: 'PL/SQL', pls: 'PL/SQL', tsql: 'T-SQL', bas: 'Visual Basic 6', frm: 'Visual Basic 6', dpr: 'Delphi', sb3: 'Scratch', lsp: 'Lisp', nasm: 'Assembly', gvy: 'Groovy', kts: 'Kotlin',
   md: 'Markdown', xml: 'XML', svg: 'SVG', yml: 'YAML', yaml: 'YAML', toml: 'TOML', ini: 'INI', sql: 'SQL', sh: 'Shell', bat: 'Batch', csv: 'CSV', txt: 'Plain Text', log: 'Log',
 };
 export const languageName = (path) => LANG_NAMES[extOf(path)] || 'Plain Text';

@@ -8,12 +8,13 @@
  */
 import { buildPptx } from './newPptx';
 
+
 const MIME = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   pdf: 'application/pdf', png: 'image/png', csv: 'text/csv', tsv: 'text/tab-separated-values', md: 'text/markdown', txt: 'text/plain',
-  json: 'application/json', html: 'text/html', css: 'text/css', js: 'text/javascript', svg: 'image/svg+xml', xml: 'application/xml',
+  sb3: 'application/x.scratch.sb3', json: 'application/json', html: 'text/html', css: 'text/css', js: 'text/javascript', svg: 'image/svg+xml', xml: 'application/xml',
 };
 
 const L = (en, ar) => ({ en, ar });
@@ -59,6 +60,34 @@ export const NEW_TYPES = [
   { id: 'hs', ext: 'hs', group: 'code', color: '#5e5086', label: L('Haskell', 'Haskell'), hint: L('Haskell program', 'Haskell program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
   { id: 'f90', ext: 'f90', group: 'code', color: '#734f96', label: L('Fortran', 'Fortran'), hint: L('Fortran program', 'Fortran program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
   { id: 'pas', ext: 'pas', group: 'code', color: '#e3a51f', label: L('Pascal', 'Pascal'), hint: L('Pascal program', 'Pascal program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'swift', ext: 'swift', group: 'code', color: '#f05138', label: L('Swift', 'Swift'), hint: L('Swift program', 'Swift program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'matlab', ext: 'm', group: 'code', color: '#e16737', label: L('MATLAB', 'MATLAB'), hint: L('MATLAB / Octave script', 'MATLAB / Octave script'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'vb', ext: 'vb', group: 'code', color: '#945db7', label: L('Visual Basic .NET', 'Visual Basic .NET'), hint: L('VB.NET program', 'VB.NET program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'objc', ext: 'm', group: 'code', color: '#438eff', label: L('Objective-C', 'Objective-C'), hint: L('Objective-C program', 'Objective-C program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'scala', ext: 'scala', group: 'code', color: '#dc322f', label: L('Scala', 'Scala'), hint: L('Scala program', 'Scala program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'ex', ext: 'ex', group: 'code', color: '#6e4a7e', label: L('Elixir', 'Elixir'), hint: L('Elixir script', 'Elixir script'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'erl', ext: 'erl', group: 'code', color: '#b83998', label: L('Erlang', 'Erlang'), hint: L('Erlang escript', 'Erlang escript'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'fs', ext: 'fs', group: 'code', color: '#378bba', label: L('F#', 'F#'), hint: L('F# script', 'F# script'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'ml', ext: 'ml', group: 'code', color: '#ef7a08', label: L('OCaml', 'OCaml'), hint: L('OCaml program', 'OCaml program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'clj', ext: 'clj', group: 'code', color: '#5881d8', label: L('Clojure', 'Clojure'), hint: L('Clojure script', 'Clojure script'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'lisp', ext: 'lisp', group: 'code', color: '#3fb68b', label: L('Lisp', 'Lisp'), hint: L('Common Lisp script', 'Common Lisp script'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'cob', ext: 'cob', group: 'code', color: '#005ca5', label: L('COBOL', 'COBOL'), hint: L('COBOL program', 'COBOL program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'asm', ext: 'asm', group: 'code', color: '#6e4c13', label: L('Assembly', 'Assembly'), hint: L('Assembly (NASM x86-64)', 'Assembly (NASM x86-64)'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'dpr', ext: 'dpr', group: 'code', color: '#b22222', label: L('Delphi (Object Pascal)', 'Delphi (Object Pascal)'), hint: L('Delphi console program', 'Delphi console program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'scratch', ext: 'sb3', group: 'code', color: '#ffab19', label: L('Scratch', 'Scratch'), hint: L('Scratch 3 project', 'Scratch 3 project'), templates: [{ id: 'hello', label: L('Starter project', 'مشروع جاهز') }, { id: 'blank', label: L('Empty project', 'مشروع فارغ') }] },
+  { id: 'bas', ext: 'bas', group: 'code', color: '#7a5195', label: L('Visual Basic 6', 'Visual Basic 6'), hint: L('VB6 module', 'VB6 module'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'ps1', ext: 'ps1', group: 'code', color: '#2b5797', label: L('PowerShell', 'PowerShell'), hint: L('PowerShell script', 'PowerShell script'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'sol', ext: 'sol', group: 'code', color: '#6c7a89', label: L('Solidity', 'Solidity'), hint: L('Smart contract', 'Smart contract'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'cls', ext: 'cls', group: 'code', color: '#1798c1', label: L('Apex', 'Apex'), hint: L('Salesforce Apex class', 'Salesforce Apex class'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'abap', ext: 'abap', group: 'code', color: '#e8274b', label: L('ABAP', 'ABAP'), hint: L('SAP ABAP report', 'SAP ABAP report'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'sas', ext: 'sas', group: 'code', color: '#0e6cb6', label: L('SAS', 'SAS'), hint: L('SAS program', 'SAS program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'plsql', ext: 'plsql', group: 'code', color: '#f80000', label: L('PL/SQL', 'PL/SQL'), hint: L('Oracle PL/SQL block', 'Oracle PL/SQL block'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'tsql', ext: 'tsql', group: 'code', color: '#cc2927', label: L('T-SQL', 'T-SQL'), hint: L('SQL Server T-SQL', 'SQL Server T-SQL'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'pro', ext: 'pro', group: 'code', color: '#74283c', label: L('Prolog', 'Prolog'), hint: L('Prolog program', 'Prolog program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'adb', ext: 'adb', group: 'code', color: '#02a88c', label: L('Ada', 'Ada'), hint: L('Ada program', 'Ada program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'v', ext: 'v', group: 'code', color: '#5d87bf', label: L('V (Vlang)', 'V (Vlang)'), hint: L('V program', 'V program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'zig', ext: 'zig', group: 'code', color: '#f7a41d', label: L('Zig', 'Zig'), hint: L('Zig program', 'Zig program'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
+  { id: 'groovy', ext: 'groovy', group: 'code', color: '#4298b8', label: L('Groovy', 'Groovy'), hint: L('Groovy script', 'Groovy script'), templates: [{ id: 'hello', label: L('Starter program', 'برنامج جاهز') }, { id: 'blank', label: L('Empty', 'فارغ') }] },
 ];
 export const NEW_GROUPS = [
   { id: 'office', label: L('Office & PDF', 'مستندات و PDF') }, { id: 'data', label: L('Data', 'بيانات') }, { id: 'text', label: L('Text', 'نصوص') },
@@ -72,11 +101,11 @@ export const cleanName = (n) => String(n || '').replace(bad, ' ').replace(/\p{Cc
 /** "Report" + docx -> "Report.docx"; an already-correct extension is kept. */
 export function withExt(name, ext) {
   const base = cleanName(name) || 'Untitled';
-  return base.toLowerCase().endsWith(`.${ext}`) ? base : `${base.replace(/\.[a-z0-9]{1,5}$/i, (m) => (typeById(m.slice(1).toLowerCase()) ? '' : m))}.${ext}`;
+  return base.toLowerCase().endsWith(`.${ext}`) ? base : `${base.replace(/\.[a-z0-9]{1,5}$/i, (m) => (NEW_TYPES.some((t) => t.ext === m.slice(1).toLowerCase()) ? '' : m))}.${ext}`;
 }
 export const defaultName = (type, locale) => {
   const t = typeById(type); const ar = locale === 'ar';
-  const base = { docx: ['Document', 'مستند'], xlsx: ['Workbook', 'جدول'], pptx: ['Presentation', 'عرض تقديمي'], pdf: ['Document', 'ملف'], png: ['Image', 'صورة'], csv: ['Table', 'جدول'], tsv: ['Table', 'جدول'], md: ['Note', 'ملاحظة'], txt: ['Untitled', 'بدون عنوان'], json: ['data', 'data'], html: ['index', 'index'], css: ['style', 'style'], js: ['script', 'script'], py: ['main', 'main'], java: ['Main', 'Main'] }[type] || (t?.group === 'code' ? ['main', 'main'] : ['Untitled', 'بدون عنوان']);
+  const base = { docx: ['Document', 'مستند'], xlsx: ['Workbook', 'جدول'], pptx: ['Presentation', 'عرض تقديمي'], pdf: ['Document', 'ملف'], png: ['Image', 'صورة'], csv: ['Table', 'جدول'], tsv: ['Table', 'جدول'], md: ['Note', 'ملاحظة'], txt: ['Untitled', 'بدون عنوان'], json: ['data', 'data'], html: ['index', 'index'], css: ['style', 'style'], js: ['script', 'script'], py: ['main', 'main'], java: ['Main', 'Main'], scratch: ['project', 'project'] }[type] || (t?.group === 'code' ? ['main', 'main'] : ['Untitled', 'بدون عنوان']);
   return `${base[ar ? 1 : 0]}.${t?.ext || type}`;
 };
 
@@ -166,6 +195,33 @@ function makePng(template) {
   return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('Could not create the image.'))), 'image/png'));
 }
 
+
+/* --------------------------------------------------------------- Scratch */
+/** A real Scratch 3 project (.sb3 = a zip with project.json + the costume SVGs) that opens in scratch.mit.edu / the Scratch desktop app. */
+async function makeScratch(template) {
+  const { zipSync, strToU8 } = await import('fflate');
+  const SVG0 = "<svg version=\"1.1\" width=\"2\" height=\"2\" viewBox=\"-1 -1 2 2\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"></svg>";
+  const SVG1 = "<svg version=\"1.1\" width=\"100\" height=\"100\" viewBox=\"0 0 100 100\" xmlns=\"http://www.w3.org/2000/svg\"><circle cx=\"50\" cy=\"50\" r=\"46\" fill=\"#4c97ff\" stroke=\"#3373cc\" stroke-width=\"4\"/></svg>";
+  const blocks = template === 'hello'
+    ? {
+        a: { opcode: 'event_whenflagclicked', next: 'b', parent: null, inputs: {}, fields: {}, shadow: false, topLevel: true, x: 48, y: 48 },
+        b: { opcode: 'looks_say', next: null, parent: 'a', inputs: { MESSAGE: [1, [10, 'Wellcom In UIP NUB']] }, fields: {}, shadow: false, topLevel: false },
+      }
+    : {};
+  const common = { variables: {}, lists: {}, broadcasts: {}, comments: {}, sounds: [], volume: 100 };
+  const project = {
+    targets: [
+      { ...common, isStage: true, name: 'Stage', blocks: {}, currentCostume: 0, layerOrder: 0, tempo: 60, videoTransparency: 50, videoState: 'on', textToSpeechLanguage: null,
+        costumes: [{ assetId: 'fcb8546c50e11d422b78fd55e34d7e7e', name: 'backdrop1', md5ext: 'fcb8546c50e11d422b78fd55e34d7e7e.svg', dataFormat: 'svg', rotationCenterX: 0, rotationCenterY: 0 }] },
+      { ...common, isStage: false, name: 'Sprite1', blocks, currentCostume: 0, layerOrder: 1, visible: true, x: 0, y: 0, size: 100, direction: 90, draggable: false, rotationStyle: 'all around',
+        costumes: [{ assetId: '44d981f19616cce1b5dce34be7d95ac2', name: 'costume1', md5ext: '44d981f19616cce1b5dce34be7d95ac2.svg', dataFormat: 'svg', rotationCenterX: 50, rotationCenterY: 50 }] },
+    ],
+    monitors: [], extensions: [], meta: { semver: '3.0.0', vm: '0.2.0', agent: 'UIP' },
+  };
+  const zip = zipSync({ 'project.json': strToU8(JSON.stringify(project)), 'fcb8546c50e11d422b78fd55e34d7e7e.svg': strToU8(SVG0), '44d981f19616cce1b5dce34be7d95ac2.svg': strToU8(SVG1) }, { level: 6 });
+  return new Blob([zip], { type: MIME.sb3 });
+}
+
 /* ------------------------------------------------------------------ text */
 function makeText(type, template, title) {
   const base = title.replace(/\.[a-z0-9]+$/i, '');
@@ -199,6 +255,33 @@ const HELLO = {
   hs: "main :: IO ()\nmain = putStrLn \"Wellcom In UIP NUB\"\n",
   f90: "program hello\n  print *, \"Wellcom In UIP NUB\"\nend program hello\n",
   pas: "program Hello;\nbegin\n  writeln('Wellcom In UIP NUB');\nend.\n",
+  swift: "print(\"Wellcom In UIP NUB\")\n",
+  matlab: "disp('Wellcom In UIP NUB')\n",
+  vb: "Module Program\n    Sub Main()\n        Console.WriteLine(\"Wellcom In UIP NUB\")\n    End Sub\nEnd Module\n",
+  objc: "#import <Foundation/Foundation.h>\n\nint main(void) {\n    @autoreleasepool {\n        NSLog(@\"Wellcom In UIP NUB\");\n    }\n    return 0;\n}\n",
+  scala: "object Main {\n  def main(args: Array[String]): Unit = {\n    println(\"Wellcom In UIP NUB\")\n  }\n}\n",
+  ex: "IO.puts(\"Wellcom In UIP NUB\")\n",
+  erl: "#!/usr/bin/env escript\n\nmain(_) ->\n    io:format(\"Wellcom In UIP NUB~n\").\n",
+  fs: "printfn \"Wellcom In UIP NUB\"\n",
+  ml: "let () = print_endline \"Wellcom In UIP NUB\"\n",
+  clj: "(println \"Wellcom In UIP NUB\")\n",
+  lisp: "(format t \"Wellcom In UIP NUB~%\")\n",
+  cob: "IDENTIFICATION DIVISION.\nPROGRAM-ID. HELLO.\nPROCEDURE DIVISION.\n    DISPLAY \"Wellcom In UIP NUB\".\n    STOP RUN.\n",
+  asm: "; NASM, x86-64 Linux\nsection .data\n    msg db \"Wellcom In UIP NUB\", 10\n    len equ $ - msg\n\nsection .text\n    global _start\n\n_start:\n    mov rax, 1\n    mov rdi, 1\n    mov rsi, msg\n    mov rdx, len\n    syscall\n\n    mov rax, 60\n    xor rdi, rdi\n    syscall\n",
+  dpr: "program Hello;\n\n{$APPTYPE CONSOLE}\n\nbegin\n  Writeln('Wellcom In UIP NUB');\nend.\n",
+  bas: "Attribute VB_Name = \"Module1\"\nOption Explicit\n\nSub Main()\n    MsgBox \"Wellcom In UIP NUB\"\nEnd Sub\n",
+  ps1: "Write-Host \"Wellcom In UIP NUB\"\n",
+  sol: "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.20;\n\ncontract Hello {\n    string public message = \"Wellcom In UIP NUB\";\n\n    function greet() public view returns (string memory) {\n        return message;\n    }\n}\n",
+  cls: "public class Hello {\n    public static void run() {\n        System.debug('Wellcom In UIP NUB');\n    }\n}\n",
+  abap: "REPORT zhello.\n\nWRITE / 'Wellcom In UIP NUB'.\n",
+  sas: "data _null_;\n    put \"Wellcom In UIP NUB\";\nrun;\n",
+  plsql: "SET SERVEROUTPUT ON;\n\nBEGIN\n    DBMS_OUTPUT.PUT_LINE('Wellcom In UIP NUB');\nEND;\n/\n",
+  tsql: "-- SQL Server (T-SQL)\nPRINT 'Wellcom In UIP NUB';\n",
+  pro: ":- initialization(main).\n\nmain :-\n    write('Wellcom In UIP NUB'), nl,\n    halt.\n",
+  adb: "with Ada.Text_IO;\n\nprocedure Main is\nbegin\n    Ada.Text_IO.Put_Line (\"Wellcom In UIP NUB\");\nend Main;\n",
+  v: "fn main() {\n\tprintln('Wellcom In UIP NUB')\n}\n",
+  zig: "const std = @import(\"std\");\n\npub fn main() void {\n    std.debug.print(\"Wellcom In UIP NUB\\n\", .{});\n}\n",
+  groovy: "println \"Wellcom In UIP NUB\"\n",
 };
 
 /** @returns {Promise<File>} */
@@ -213,6 +296,7 @@ export async function createFile({ type, template, name, locale = 'en' }) {
   else if (type === 'pptx') body = makePptx(tpl, fileName, locale);
   else if (type === 'pdf') body = await makePdf(tpl);
   else if (type === 'png') body = await makePng(tpl);
+  else if (type === 'scratch') body = await makeScratch(tpl);
   else body = new Blob([type === 'csv' || type === 'tsv' ? '' : makeText(type, tpl, fileName)], { type: `${MIME[type] || 'text/plain'};charset=utf-8` });
   return new File([body], fileName, { type: MIME[type] || body.type || 'application/octet-stream' });
 }
