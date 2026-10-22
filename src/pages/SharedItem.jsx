@@ -11,6 +11,7 @@ import Icon from '../components/Icon';
 import { FileGlyph, FolderGlyph } from '../desktop/OsIcons';
 import ProtectedFile, { kindOfName } from '../components/shared/ProtectedFile';
 import '../styles/css/drive-share.css';
+import '../styles/css/drive-share-responsive.css';
 
 const BIG_PREVIEW_BYTES = 80 * 1024 * 1024; // non-media files above this are not previewed in the browser
 
