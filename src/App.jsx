@@ -122,6 +122,10 @@ const StudentGrades = lazy(() => import('./pages/student/StudentGrades'));
 const StudentRegistration = lazy(() => import('./pages/student/StudentRegistration'));
 const StudentAdminRequests = lazy(() => import('./pages/student/StudentAdminRequests'));
 const StudentSummer = lazy(() => import('./pages/student/StudentSummer'));
+const StudentAcademicCalendar = lazy(() => import('./pages/student/StudentAcademicCalendar'));
+const UniversityAcademicCalendar = lazy(() => import('./pages/university/UniversityAcademicCalendar'));
+const FacultyAcademicCalendar = lazy(() => import('./pages/faculty/FacultyAcademicCalendar'));
+const AcademicStaffAcademicCalendar = lazy(() => import('./pages/academic-staff/AcademicStaffAcademicCalendar'));
 const StudentFees = lazy(() => import('./pages/student/StudentFees'));
 const StudentUniversityEmail = lazy(() => import('./pages/student/StudentUniversityEmail'));
 const UniversityGrading = lazy(() => import('./pages/university/UniversityGrading'));
@@ -334,6 +338,7 @@ export default function App() {
                     (exam_attempts). */}
                 <Route path="/student/courses" element={<StudentCourses />} />
                 <Route path="/student/timetable" element={<StudentTimetable />} />
+                <Route path="/student/academic-calendar" element={<StudentAcademicCalendar />} />
                 <Route path="/student/attendance" element={<StudentAttendance />} />
                 <Route path="/student/assignments" element={<StudentAssignments />} />
                 <Route path="/student/grades" element={<StudentGrades />} />
@@ -554,6 +559,7 @@ export default function App() {
                 <Route path="/university/academic-staff" element={<UniversityAcademicStaff />} />
                 <Route path="/university/courses" element={<UniversityCourses />} />
                 <Route path="/university/timetable" element={<UniversityTimetable />} />
+                <Route path="/university/academic-calendar" element={<UniversityAcademicCalendar />} />
                 <Route path="/university/registration" element={<UniversityRegistration />} />
                 <Route path="/university/admin-requests" element={<UniversityAdminRequests />} />
                 <Route path="/university/summer" element={<UniversitySummer />} />
@@ -593,6 +599,7 @@ export default function App() {
                 <Route path="/faculty/academic-staff" element={<FacultyAcademicStaff />} />
                 <Route path="/faculty/courses" element={<FacultyCourses />} />
                 <Route path="/faculty/timetable" element={<FacultyTimetable />} />
+                <Route path="/faculty/academic-calendar" element={<FacultyAcademicCalendar />} />
                 <Route path="/faculty/registration" element={<FacultyRegistration />} />
                 <Route path="/faculty/admin-requests" element={<FacultyAdminRequests />} />
                 <Route path="/faculty/summer" element={<FacultySummer />} />
@@ -626,6 +633,7 @@ export default function App() {
                 <Route path="/academic-staff/question-banks/:id" element={<AcademicStaffQuestionBankDetail />} />
                 <Route path="/academic-staff/courses" element={<AcademicStaffCourses />} />
                 <Route path="/academic-staff/timetable" element={<AcademicStaffTimetable />} />
+                <Route path="/academic-staff/academic-calendar" element={<AcademicStaffAcademicCalendar />} />
                 <Route path="/academic-staff/attendance" element={<AcademicStaffAttendance />} />
                 <Route path="/academic-staff/assignments" element={<AcademicStaffAssignments />} />
                 <Route path="/academic-staff/grading" element={<AcademicStaffGrading />} />
