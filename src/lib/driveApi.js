@@ -1,6 +1,7 @@
 import { api } from '../api/client';
 import { getDraft, pruneCache, putDraft } from './draftStore';
 import { emitDriveFailed, emitDriveSaved } from './driveEvents';
+import { trackDelete } from './deleteProgress';
 
 /**
  * "My PC" (جهازي) client — thin wrappers over /api/v1/drive/* (App\Http\Controllers\Api\DriveApiController).
@@ -84,6 +85,11 @@ export const drive = {
   /** Search inside the text of files: { items: [{ …node, path, matches: [{ line, text, start, len }], match_count }], pending } */
   searchContent: (q) => api.get(`${B}/search-content`, { q }),
   usage: () => api.get(`${B}/usage`),
+  /** Disks: top-level folders marked as drives, with the space each one uses. */
+  disks: () => api.get(`${B}/disks`).then(unwrap),
+  createDisk: (name) => api.post(`${B}/disks`, { name }),
+  /** Turn a top-level folder into a disk (enabled = true) or back into a normal folder. */
+  setDisk: (id, enabled) => api.post(`${B}/nodes/${id}/disk`, { enabled }),
   trashList: () => api.get(`${B}/trash`),
   createFolder: (parentId, name) => api.post(`${B}/folders`, { parent_id: parentId || null, name }),
   /** mkdir -p "a/b/c" under parentId */
@@ -95,10 +101,10 @@ export const drive = {
   copy: (ids, targetId) => api.post(`${B}/copy`, { ids, target_id: targetId || null }),
   zip: (ids, parentId, name) => api.post(`${B}/zip`, { ids, parent_id: parentId || null, name }),
   unzip: (id, parentId) => api.post(`${B}/nodes/${id}/unzip`, { parent_id: parentId || null }),
-  trash: (ids) => api.post(`${B}/trash`, { ids }),
+  trash: (ids) => trackDelete('trash', ids.length, api.post(`${B}/trash`, { ids })),
   restore: (ids) => api.post(`${B}/restore`, { ids }),
-  purge: (ids) => api.post(`${B}/purge`, { ids }),
-  emptyTrash: () => api.del(`${B}/trash`),
+  purge: (ids) => trackDelete('purge', ids.length, api.post(`${B}/purge`, { ids })),
+  emptyTrash: () => trackDelete('empty', 0, api.del(`${B}/trash`)),
   /** Save a file's new bytes (image / PDF / ZIP editors, or a text file from the code editor). opts.silent = no "Saved" toast / backup trigger. */
   replace: async (id, blob, name, opts) => {
     let res = null;

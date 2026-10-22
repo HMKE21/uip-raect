@@ -288,3 +288,42 @@
 
 /* a desktop icon is being dragged over this window: it will receive the file (see lib/driveDnd.js) */
 .mp[data-drop-over] { outline: 3px dashed var(--mp-accent, var(--color-primary, #0a84ff)); outline-offset: -3px; }
+
+/* ── delete progress: ring + live counter, bottom corner, never blocks anything ── */
+.dp { position: fixed; z-index: 9990; bottom: 74px; inset-inline-start: 16px; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.dp-card { pointer-events: auto; display: flex; align-items: center; gap: 11px; min-width: 250px; max-width: min(340px, calc(100vw - 32px)); padding: 10px 12px; border-radius: 14px; background: var(--bg-surface, #fff); color: var(--text-primary, #182033); border: 1px solid var(--border-subtle, rgba(0, 0, 0, .12)); box-shadow: 0 14px 40px rgba(0, 0, 0, .28); animation: dp-in .2s ease both; }
+.dp-ring { position: relative; flex: none; width: 40px; height: 40px; display: inline-grid; place-items: center; font-variant-numeric: tabular-nums; }
+.dp-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); animation: dp-spin 1s linear infinite; }
+.dp-ring__bg { fill: none; stroke: var(--bg-muted, rgba(128, 128, 128, .22)); stroke-width: 3.5; }
+.dp-ring__arc { fill: none; stroke: var(--color-danger, #e5484d); stroke-width: 3.5; stroke-linecap: round; stroke-dasharray: 38 120; }
+.dp-ring b { font-size: 13px; font-weight: 700; }
+.dp-card.is-ok .dp-ring { color: #16a34a; }
+.dp-card.is-err .dp-ring { color: var(--color-danger, #e5484d); }
+.dp-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dp-tx b { font-size: 13px; font-weight: 650; }
+.dp-tx small { font-size: 11.5px; color: var(--text-secondary, #5d6880); line-height: 1.35; }
+.dp-x { flex: none; width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary, #5d6880); display: inline-grid; place-items: center; cursor: pointer; }
+.dp-x:hover { background: var(--bg-muted, rgba(128, 128, 128, .16)); }
+@keyframes dp-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes dp-spin { to { transform: rotate(270deg); } }
+@media (prefers-reduced-motion: reduce) { .dp-ring svg { animation-duration: 2.4s; } .dp-card { animation: none; } }
+
+/* ── disks: main drives at the top of My PC (a storage bar each) ── */
+.mp-ico--disk { display: inline-grid; place-items: center; border-radius: 22%; color: #fff; background: linear-gradient(160deg, color-mix(in srgb, var(--mp-accent, var(--color-primary)) 80%, #fff), var(--mp-accent, var(--color-primary))); }
+.mp-disks { padding: 12px 12px 2px; }
+.mp-disks__h { margin: 0 2px 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--mp-mute, var(--text-secondary)); }
+.mp-disks__h--sub { margin-top: 16px; }
+.mp-disks__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.mp-disk { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--mp-line, var(--border-subtle)); border-radius: 12px; background: var(--mp-bg, var(--bg-surface)); }
+.mp-disk:hover { background: var(--mp-hover, var(--bg-muted)); }
+.mp-disk.is-sel { background: var(--mp-sel); border-color: var(--mp-sel-line); }
+.mp-disk.is-over { outline: 2px solid var(--mp-accent, var(--color-primary)); }
+.mp-disk__ic { flex: none; width: 52px; height: 52px; border-radius: 14px; display: inline-grid; place-items: center; color: #fff; background: linear-gradient(160deg, color-mix(in srgb, var(--mp-accent, var(--color-primary)) 78%, #fff), var(--mp-accent, var(--color-primary))); box-shadow: 0 6px 16px color-mix(in srgb, var(--mp-accent, var(--color-primary)) 38%, transparent); }
+.mp-disk__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.mp-disk__top { display: flex; align-items: center; gap: 6px; }
+.mp-disk__top b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 650; }
+.mp-disk__edit { flex: none; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--mp-mute, var(--text-secondary)); display: inline-grid; place-items: center; opacity: 0; cursor: pointer; }
+.mp-disk:hover .mp-disk__edit, .mp-disk__edit:focus-visible { opacity: 1; }
+.mp-disk__edit:hover { background: var(--mp-hover, var(--bg-muted)); }
+.mp-disk__body .mp-usage__bar { display: block; }
+.mp-disk__body small { color: var(--mp-mute, var(--text-secondary)); font-size: 11.5px; }

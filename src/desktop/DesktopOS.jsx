@@ -6,6 +6,7 @@ import Icon from '../components/Icon';
 import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
 import CloudTray from './CloudTray';
+import DeleteProgressHost from '../components/DeleteProgress';
 import { NotifFlyout, NotifToasts, NotifTray } from './NotificationCenter';
 import { useDesktopNotifications } from './notifications';
 import { lockScroll } from '../lib/scrollLock';
@@ -1131,6 +1132,7 @@ export default function DesktopOS() {
           onCreated={(node) => { pendingOpen.current = node.id; flash(tt('File created on the desktop.', 'تم إنشاء الملف على سطح المكتب.')); reloadDesk(); }}
         /></Suspense>
       )}
+      <DeleteProgressHost />
       {toast && <div className={`os-toast${toast.tone === 'error' ? ' is-error' : ''}`} role="status">{toast.msg}</div>}
       {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} hideDetails={sec.hideLockDetails} onUnlock={() => setLocked(false)} onPortal={() => navigate(roleHome(user?.role))} />}
       {idleLeft !== null && !asleep && <IdleWarning tt={tt} left={idleLeft} onStay={stay} onSignOut={logout} />}

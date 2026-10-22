@@ -8,6 +8,7 @@ import FileViewer from '../../components/FileViewer';
 import NewFileDialog from '../../components/NewFileDialog';
 import ShareDialog from '../../components/ShareDialog';
 import StorageDialog from '../../components/StorageDialog';
+import DeleteProgressHost from '../../components/DeleteProgress';
 import VersionHistoryDialog from '../../components/VersionHistoryDialog';
 import '../../styles/css/drive-share.css';
 import { useLanguage } from '../../context/LanguageContext';
@@ -59,6 +60,7 @@ const DONE_LINGER_MS = 2200;
 const colorOf = (n) => COLORS[extOf(n)] || '#64748b';
 
 function NodeIcon({ node, size = 44 }) {
+  if (node.kind === 'disk') return <span className="mp-ico mp-ico--disk" style={{ width: size, height: size }}><Icon name="hard-drive" size={Math.round(size * 0.78)} /></span>;
   if (node.type === 'folder') return <span className="mp-ico" style={{ width: size, height: size }}><FolderGlyph size={size} project={node.kind === 'project'} /></span>;
   return <span className="mp-ico" style={{ width: size, height: size }}><FileGlyph size={size} label={extOf(node.name)} color={colorOf(node.name)} /></span>;
 }
@@ -134,7 +136,7 @@ function TreeNode({ node, byParent, depth, openSet, toggle, activeId, onOpen, on
         >
           <Icon name={open ? 'chevron-down' : (rtl ? 'chevron-left' : 'chevron-right')} size={13} />
         </button>
-        <Icon name={node.kind === 'project' ? 'terminal' : 'folder'} size={15} />
+        <Icon name={node.kind === 'project' ? 'terminal' : node.kind === 'disk' ? 'hard-drive' : 'folder'} size={15} />
         <span dir="auto">{node.name}</span>
       </div>
       {open && kids.length > 0 && (
@@ -232,6 +234,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
 
   const [data, setData] = useState({ items: [], breadcrumb: [], usage: null });
   const [tree, setTree] = useState([]);
+  const [disks, setDisks] = useState([]); // top-level disks with the space each one uses (only loaded at the top of My PC)
   const [trash, setTrash] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -299,6 +302,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
       } else {
         const r = await drive.list(folderParam);
         setData(r.data);
+        if (!folderParam) drive.disks().then((d) => setDisks(Array.isArray(d) ? d : [])).catch(() => setDisks([]));
       }
       setError('');
     } catch (err) {
@@ -336,8 +340,11 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     return m;
   }, [tree]);
 
+  // disks are shown as drive cards at the top of My PC (not mixed with the folders and files below them)
+  const diskNodes = useMemo(() => (results || folderParam || inTrash ? [] : data.items.filter((n) => n.kind === 'disk' && n.type === 'folder')), [data.items, results, folderParam, inTrash]);
+  const diskCards = useMemo(() => diskNodes.map((n) => ({ ...n, ...(disks.find((d) => d.id === n.id) || {}) })).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })), [diskNodes, disks]);
   const items = useMemo(() => {
-    const list = [...(results ?? data.items)].filter((n) => !isSystemNode(n)); // hidden settings files
+    const list = [...(results ?? data.items)].filter((n) => !isSystemNode(n) && !(diskNodes.length && n.kind === 'disk' && !results)); // hidden settings files + disks (own section)
     const { key, dir } = sort;
     const val = (n) => (key === 'size' ? n.size_bytes : key === 'date' ? Date.parse(n.updated_at || n.created_at || 0) || 0 : key === 'type' ? (n.type === 'folder' ? '' : n.extension) : n.name.toLowerCase());
     list.sort((a, b) => {
@@ -347,9 +354,9 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
       return (c || a.name.localeCompare(b.name)) * dir;
     });
     return list;
-  }, [data.items, results, sort]);
+  }, [data.items, results, sort, diskNodes]);
 
-  const selected = useMemo(() => items.filter((n) => sel.has(n.id)), [items, sel]);
+  const selected = useMemo(() => [...diskCards, ...items].filter((n) => sel.has(n.id)), [diskCards, items, sel]);
 
   // ---- navigation -------------------------------------------------------------------------------------
   // back / forward history (like a real Explorer): one entry per visited location
@@ -521,6 +528,8 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
   const newFolder = () => askName({ title: tt('New folder', 'مجلد جديد'), label: tt('Folder name', 'اسم المجلد'), value: tt('New folder', 'مجلد جديد'), selectAll: true, action: tt('Create', 'إنشاء'), onOk: (v) => run(() => drive.createFolder(folderParam, v), tt('Folder created.', 'تم إنشاء المجلد.')) });
   const newFile = () => askName({ title: tt('New text file', 'ملف نصي جديد'), label: tt('File name', 'اسم الملف'), value: 'untitled.txt', action: tt('Create', 'إنشاء'), onOk: (v) => run(() => drive.createFile(folderParam, v), tt('File created.', 'تم إنشاء الملف.')) });
   const newProject = () => setDlg({ type: 'project', value: '', template: 'web' });
+  const newDisk = () => askName({ title: tt('New disk', 'قرص جديد'), label: tt('Disk name', 'اسم القرص'), value: tt('New disk', 'قرص جديد'), selectAll: true, action: tt('Create', 'إنشاء'), onOk: (v) => run(() => drive.createDisk(v), tt('Disk created.', 'تم إنشاء القرص.')) });
+  const toggleDisk = (n) => run(() => drive.setDisk(n.id, n.kind !== 'disk'), n.kind === 'disk' ? tt('Converted to a normal folder.', 'اتحوّل لمجلد عادي.') : tt('Now a disk — it shows at the top of My PC.', 'بقى قرص — بيظهر فوق في جهازي.'));
   const rename = (n) => askName({ title: tt('Rename', 'إعادة تسمية'), label: tt('New name', 'الاسم الجديد'), value: n.name, selectAll: n.type === 'folder', action: tt('Rename', 'تسمية'), onOk: (v) => run(() => drive.rename(n.id, v), tt('Renamed.', 'تمت إعادة التسمية.')) });
   const zipSelected = (nodes) => askName({
     title: tt('Compress to ZIP', 'ضغط إلى ZIP'), label: tt('Archive name', 'اسم الأرشيف'),
@@ -756,6 +765,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     const one = group.length === 1 ? group[0] : null;
     const out = [];
     if (one) out.push({ icon: one.type === 'folder' ? 'folder' : 'eye', label: tt('Open', 'فتح'), run: () => openNode(one) });
+    if (one && one.type === 'folder' && !one.parent_id && one.kind !== 'project') out.push({ icon: 'hard-drive', label: one.kind === 'disk' ? tt('Convert to a normal folder', 'تحويل لمجلد عادي') : tt('Make it a disk', 'تحويله لقرص'), run: () => toggleDisk(one) });
     if (one && one.type === 'folder') out.push({ icon: 'terminal', label: tt('Open in code editor', 'فتح في محرر الأكواد'), run: () => setEditor({ kind: 'folder', node: one }) });
     if (one && one.type === 'file' && isTextName(one.name)) out.push({ icon: 'edit', label: tt('Edit', 'تعديل'), run: () => setEditor({ kind: 'text', node: one }) });
     if (one && one.type === 'file' && extOf(one.name) === 'zip') out.push({ icon: 'archive', label: tt('Extract here', 'فك الضغط هنا'), run: () => extract(one) });
@@ -777,6 +787,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     }
     if (!n) {
       if (embedded && !inTrash && data.breadcrumb.length) out.push({ icon: 'external-link', label: tt('Create desktop shortcut to this folder', 'إنشاء اختصار لهذا المجلد على سطح المكتب'), run: () => window.dispatchEvent(new CustomEvent('uip-desktop-shortcut', { detail: { ids: [data.breadcrumb[data.breadcrumb.length - 1].id] } })) });
+      if (!folderParam) out.push({ icon: 'hard-drive', label: tt('New disk', 'قرص جديد'), run: newDisk });
       out.push({ icon: 'folder-plus', label: tt('New folder', 'مجلد جديد'), run: newFolder });
       out.push({ icon: 'file-plus', label: tt('New text file', 'ملف نصي جديد'), run: newFile });
       out.push({ icon: 'file-plus', label: tt('New document (Word, Excel, PowerPoint, PDF…)', 'مستند جديد (Word, Excel, PowerPoint, PDF…)'), run: () => newDoc('docx') });
@@ -848,6 +859,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
               </button>
               {newMenu && (
                 <Pop anchor={newMenu} rtl={ar}>
+                  {!folderParam && <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newDisk(); }}><Icon name="hard-drive" size={16} />{tt('Disk', 'قرص')}</button>}
                   <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFolder(); }}><Icon name="folder-plus" size={16} />{tt('Folder', 'مجلد')}</button>
                   <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFile(); }}><Icon name="file-plus" size={16} />{tt('Text file', 'ملف نصي')}</button>
                   <div className="mp-ctx__sep" role="separator" />
@@ -973,9 +985,44 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
               )
           )}
 
+          {!loading && !error && !inTrash && diskCards.length > 0 && (
+            <section className="mp-disks" aria-label={tt('Disks', 'الأقراص')}>
+              <h4 className="mp-disks__h">{tt('Disks', 'الأقراص')}</h4>
+              <div className="mp-disks__grid">
+                {diskCards.map((d) => {
+                  const pct = Math.max(0, Math.min(100, Number(d.percent) || 0));
+                  return (
+                    <div
+                      key={d.id} data-id={d.id} role="option" aria-selected={sel.has(d.id)} tabIndex={0}
+                      className={`mp-item mp-disk${sel.has(d.id) ? ' is-sel' : ''}`} data-node-id={d.id} data-node-type="folder"
+                      onClick={(e) => clickItem(e, d)} onDoubleClick={(e) => { e.stopPropagation(); openFolder(d.id); }} onContextMenu={(e) => showMenu(e, d)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); openFolder(d.id); } }}
+                      draggable onDragStart={(e) => setDragData(e.dataTransfer, [d])}
+                      onDragOver={(e) => { if (e.dataTransfer.types.includes('application/x-drive-ids') || e.dataTransfer.types.includes('Files')) { e.preventDefault(); e.currentTarget.classList.add('is-over'); } }}
+                      onDragLeave={(e) => e.currentTarget.classList.remove('is-over')}
+                      onDrop={(e) => { e.currentTarget.classList.remove('is-over'); if (e.dataTransfer.types.includes('application/x-drive-ids')) dropIds(e, d.id); else onDropFiles(e, d.id); }}
+                    >
+                      <span className="mp-disk__ic"><Icon name="hard-drive" size={30} /></span>
+                      <span className="mp-disk__body">
+                        <span className="mp-disk__top">
+                          <b dir="auto" title={d.name}>{d.name}</b>
+                          <button type="button" className="mp-disk__edit" title={tt('Rename disk', 'تغيير اسم القرص')} aria-label={tt('Rename disk', 'تغيير اسم القرص')} onClick={(e) => { e.stopPropagation(); rename(d); }}><Icon name="edit" size={13} /></button>
+                        </span>
+                        <span className="mp-usage__bar"><i style={{ width: `${d.used_bytes ? Math.max(1.5, pct) : 0}%` }} className={pct > 90 ? 'is-hot' : ''} /></span>
+                        <small>{d.used_human != null
+                          ? tt(`${d.used_human} used · ${d.files_count || 0} files`, `${d.used_human} مستخدمة · ${d.files_count || 0} ملف`)
+                          : tt('Open to see its contents', 'افتحه عشان تشوف محتواه')}</small>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              {items.length > 0 && <h4 className="mp-disks__h mp-disks__h--sub">{tt('Folders and files', 'المجلدات والملفات')}</h4>}
+            </section>
+          )}
           {!loading && !error && !inTrash && (
             items.length === 0
-              ? (
+              ? diskCards.length > 0 ? null : (
                 <div className="mp-pad" hidden={content.items.length > 0 || content.loading}>
                   <EmptyState
                     icon={results ? 'search' : 'folder'}
@@ -1015,7 +1062,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                       {view === 'list' && (
                         <>
                           <span className="mp-item__date">{timeAgo(n.updated_at || n.created_at, locale)}</span>
-                          <span className="mp-item__type">{n.type === 'folder' ? (n.kind === 'project' ? tt('Project', 'مشروع') : tt('Folder', 'مجلد')) : (n.extension || '—').toUpperCase()}</span>
+                          <span className="mp-item__type">{n.type === 'folder' ? (n.kind === 'project' ? tt('Project', 'مشروع') : n.kind === 'disk' ? tt('Disk', 'قرص') : tt('Folder', 'مجلد')) : (n.extension || '—').toUpperCase()}</span>
                           <span className="mp-item__size">{n.type === 'folder' ? '' : n.size_human}</span>
                         </>
                       )}
@@ -1057,6 +1104,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
         </div>
       )}
 
+      {!embedded && <DeleteProgressHost />}
       {toast && <div className={`mp-toast${toast.tone === 'error' ? ' is-error' : ''}`} role="status">{toast.msg}</div>}
 
       {menu && (
