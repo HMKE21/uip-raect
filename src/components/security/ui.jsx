@@ -1,4 +1,5 @@
 import { useEffect, useId } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -102,6 +103,10 @@ export function SearchBox({ value, onChange, placeholder, onSubmit }) {
 /**
  * Centered dialog. Closes on Escape and on backdrop click; locks nothing else,
  * so the page behind stays put. `tone="danger"` is used for destructive confirms.
+ *
+ * Rendered through a portal into `.app-shell` (where the theme tokens live), NOT inside the card that opened it:
+ * cards get `transform: translateY(-3px)` on hover (motion.css), and a transformed ancestor becomes the containing
+ * block of `position: fixed`, which squeezed the overlay into the card and made the page flicker as hover toggled.
  */
 export function Modal({ open, title, eyebrow = 'UIP Security', onClose, children, footer, tone, wide }) {
   const { locale } = useLanguage();
@@ -112,7 +117,7 @@ export function Modal({ open, title, eyebrow = 'UIP Security', onClose, children
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
   if (!open) return null;
-  return (
+  return createPortal(
     <div className="sec-modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}>
       <div className={`sec-modal${wide ? ' sec-modal--wide' : ''}${tone ? ` sec-modal--${tone}` : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <header className="sec-modal__head">
@@ -125,7 +130,8 @@ export function Modal({ open, title, eyebrow = 'UIP Security', onClose, children
         <div className="sec-modal__body">{children}</div>
         {footer && <footer className="sec-modal__foot">{footer}</footer>}
       </div>
-    </div>
+    </div>,
+    document.querySelector('.app-shell') || document.body,
   );
 }
 
