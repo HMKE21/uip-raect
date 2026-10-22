@@ -123,6 +123,7 @@ const StudentRegistration = lazy(() => import('./pages/student/StudentRegistrati
 const StudentAdminRequests = lazy(() => import('./pages/student/StudentAdminRequests'));
 const StudentSummer = lazy(() => import('./pages/student/StudentSummer'));
 const StudentFees = lazy(() => import('./pages/student/StudentFees'));
+const StudentUniversityEmail = lazy(() => import('./pages/student/StudentUniversityEmail'));
 const UniversityGrading = lazy(() => import('./pages/university/UniversityGrading'));
 const UniversityGradingScale = lazy(() => import('./pages/university/UniversityGradingScale'));
 const FacultyGrading = lazy(() => import('./pages/faculty/FacultyGrading'));
@@ -137,6 +138,7 @@ const UniversityRegistration = lazy(() => import('./pages/university/UniversityR
 const UniversityAdminRequests = lazy(() => import('./pages/university/UniversityAdminRequests'));
 const UniversitySummer = lazy(() => import('./pages/university/UniversitySummer'));
 const UniversityFees = lazy(() => import('./pages/university/UniversityFees'));
+const UniversityUniversityEmail = lazy(() => import('./pages/university/UniversityUniversityEmail'));
 const UniversityAttendance = lazy(() => import('./pages/university/UniversityAttendance'));
 const UniversityAssignments = lazy(() => import('./pages/university/UniversityAssignments'));
 const FacultyCourses = lazy(() => import('./pages/faculty/FacultyCourses'));
@@ -145,6 +147,7 @@ const FacultyRegistration = lazy(() => import('./pages/faculty/FacultyRegistrati
 const FacultyAdminRequests = lazy(() => import('./pages/faculty/FacultyAdminRequests'));
 const FacultySummer = lazy(() => import('./pages/faculty/FacultySummer'));
 const FacultyFees = lazy(() => import('./pages/faculty/FacultyFees'));
+const FacultyUniversityEmail = lazy(() => import('./pages/faculty/FacultyUniversityEmail'));
 const FacultyAttendance = lazy(() => import('./pages/faculty/FacultyAttendance'));
 const FacultyAssignments = lazy(() => import('./pages/faculty/FacultyAssignments'));
 const AcademicStaffProjects = lazy(() => import('./pages/academic-staff/AcademicStaffProjects'));
@@ -338,6 +341,7 @@ export default function App() {
                 <Route path="/student/admin-requests" element={<StudentAdminRequests />} />
                 <Route path="/student/summer" element={<StudentSummer />} />
                 <Route path="/student/fees" element={<StudentFees />} />
+                <Route path="/student/university-email" element={<StudentUniversityEmail />} />
                 <Route path="/student/courses/:id/content" element={<CourseContentPage role="student" />} />
                 <Route path="/student/my-exams" element={<StudentMyExams />} />
                 <Route path="/student/my-exams/:id" element={<StudentExamDetail />} />
@@ -554,6 +558,7 @@ export default function App() {
                 <Route path="/university/admin-requests" element={<UniversityAdminRequests />} />
                 <Route path="/university/summer" element={<UniversitySummer />} />
                 <Route path="/university/fees" element={<UniversityFees />} />
+                <Route path="/university/university-email" element={<UniversityUniversityEmail />} />
                 <Route path="/university/attendance" element={<UniversityAttendance />} />
                 <Route path="/university/assignments" element={<UniversityAssignments />} />
                 <Route path="/university/grading" element={<UniversityGrading />} />
@@ -592,6 +597,7 @@ export default function App() {
                 <Route path="/faculty/admin-requests" element={<FacultyAdminRequests />} />
                 <Route path="/faculty/summer" element={<FacultySummer />} />
                 <Route path="/faculty/fees" element={<FacultyFees />} />
+                <Route path="/faculty/university-email" element={<FacultyUniversityEmail />} />
                 <Route path="/faculty/attendance" element={<FacultyAttendance />} />
                 <Route path="/faculty/assignments" element={<FacultyAssignments />} />
                 <Route path="/faculty/grading" element={<FacultyGrading />} />
