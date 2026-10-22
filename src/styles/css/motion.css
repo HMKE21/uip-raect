@@ -125,12 +125,16 @@
   :where(.card-project, .pp-card, .ex-card, .st-pcard, .adm-kpi, .um-stat) {
     transition: transform var(--m-dur) var(--m-ease), box-shadow var(--m-dur) var(--m-ease), border-color var(--m-dur-fast) linear;
   }
-  :where(.card-project, .ex-card, .st-pcard, .adm-kpi, .um-stat, .adm-panel, .st-panel, .card, .glass-panel:not(.sidebar), .sec-card, .prf-card):hover {
+  :where(.card-project, .ex-card, .st-pcard, .adm-kpi, .um-stat, .adm-panel, .st-panel, .card, .glass-panel:not(.sidebar), .sec-card, .prf-card):hover:where(:not(:has(.modal-overlay, .st-modal-overlay, .sec-modal-overlay, .ex-modal-scrim, .gr-modal, .drawer-overlay, .ua-sheet-overlay, .file-preview-overlay, .nf-scrim, .sc-scrim, .att-sheet, .export-menu, .ai-pop, [role="dialog"], [aria-modal="true"]))) {
     transform: translateY(-3px);
     box-shadow: 0 14px 30px -16px rgba(var(--color-primary-rgb, 76, 99, 255), .45);
     border-color: rgba(var(--color-primary-rgb, 76, 99, 255), .4);
   }
   :where(.adm-panel, .st-panel, .card, .glass-panel:not(.sidebar), .sec-card, .prf-card) { transition: transform var(--m-dur) var(--m-ease), box-shadow var(--m-dur) var(--m-ease), border-color var(--m-dur-fast) linear; }
+  /* A transformed ancestor becomes the containing block of `position: fixed`, so a dialog rendered inside a hovered card
+     was squeezed into the card (and flickered as hover toggled). Cards that host an open dialog/popover never lift,
+     and drop their transition so no transform survives while it is open. */
+  :where(.card-project, .pp-card, .ex-card, .st-pcard, .adm-kpi, .um-stat, .adm-panel, .st-panel, .card, .glass-panel:not(.sidebar), .sec-card, .prf-card, .st-kpi, .fc-kpi, .ex-kpi, .pol-card):has(.modal-overlay, .st-modal-overlay, .sec-modal-overlay, .ex-modal-scrim, .gr-modal, .drawer-overlay, .ua-sheet-overlay, .file-preview-overlay, .nf-scrim, .sc-scrim, .att-sheet, .export-menu, .ai-pop, [role="dialog"], [aria-modal="true"]) { transition: none; transform: none; }
   :where(.sidebar__link):hover { transform: translateX(-3px); }
   [dir="ltr"] :where(.sidebar__link):hover { transform: translateX(3px); }
   :where(.sidebar__link) { transition: transform var(--m-dur-fast) var(--m-ease), background-color var(--m-dur-fast) linear, color var(--m-dur-fast) linear; }

@@ -56,7 +56,7 @@
 /* ---- 5. Hover lift: real pointers only ------------------------------------- */
 @media (prefers-reduced-motion: no-preference) and (hover: hover) and (pointer: fine) {
   :where(.app-shell) :where(.st-kpi, .fc-kpi, .ex-kpi, .pol-card) { transition: transform var(--m-dur) var(--m-ease), box-shadow var(--m-dur) var(--m-ease), border-color var(--m-dur-fast) linear; }
-  :where(.app-shell) :where(.st-kpi, .fc-kpi, .ex-kpi, .pol-card):hover {
+  :where(.app-shell) :where(.st-kpi, .fc-kpi, .ex-kpi, .pol-card):hover:where(:not(:has(.modal-overlay, .st-modal-overlay, .sec-modal-overlay, .ex-modal-scrim, .gr-modal, .drawer-overlay, .ua-sheet-overlay, .file-preview-overlay, .nf-scrim, .sc-scrim, .att-sheet, .export-menu, .ai-pop, [role="dialog"], [aria-modal="true"]))) {
     transform: translateY(-3px);
     box-shadow: 0 14px 30px -16px rgba(var(--color-primary-rgb, 76, 99, 255), .45);
     border-color: rgba(var(--color-primary-rgb, 76, 99, 255), .4);
