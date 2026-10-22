@@ -122,6 +122,7 @@ const StudentGrades = lazy(() => import('./pages/student/StudentGrades'));
 const StudentRegistration = lazy(() => import('./pages/student/StudentRegistration'));
 const StudentAdminRequests = lazy(() => import('./pages/student/StudentAdminRequests'));
 const StudentSummer = lazy(() => import('./pages/student/StudentSummer'));
+const StudentFees = lazy(() => import('./pages/student/StudentFees'));
 const UniversityGrading = lazy(() => import('./pages/university/UniversityGrading'));
 const UniversityGradingScale = lazy(() => import('./pages/university/UniversityGradingScale'));
 const FacultyGrading = lazy(() => import('./pages/faculty/FacultyGrading'));
@@ -135,6 +136,7 @@ const UniversityTimetable = lazy(() => import('./pages/university/UniversityTime
 const UniversityRegistration = lazy(() => import('./pages/university/UniversityRegistration'));
 const UniversityAdminRequests = lazy(() => import('./pages/university/UniversityAdminRequests'));
 const UniversitySummer = lazy(() => import('./pages/university/UniversitySummer'));
+const UniversityFees = lazy(() => import('./pages/university/UniversityFees'));
 const UniversityAttendance = lazy(() => import('./pages/university/UniversityAttendance'));
 const UniversityAssignments = lazy(() => import('./pages/university/UniversityAssignments'));
 const FacultyCourses = lazy(() => import('./pages/faculty/FacultyCourses'));
@@ -142,6 +144,7 @@ const FacultyTimetable = lazy(() => import('./pages/faculty/FacultyTimetable'));
 const FacultyRegistration = lazy(() => import('./pages/faculty/FacultyRegistration'));
 const FacultyAdminRequests = lazy(() => import('./pages/faculty/FacultyAdminRequests'));
 const FacultySummer = lazy(() => import('./pages/faculty/FacultySummer'));
+const FacultyFees = lazy(() => import('./pages/faculty/FacultyFees'));
 const FacultyAttendance = lazy(() => import('./pages/faculty/FacultyAttendance'));
 const FacultyAssignments = lazy(() => import('./pages/faculty/FacultyAssignments'));
 const AcademicStaffProjects = lazy(() => import('./pages/academic-staff/AcademicStaffProjects'));
@@ -334,6 +337,7 @@ export default function App() {
                 <Route path="/student/registration" element={<StudentRegistration />} />
                 <Route path="/student/admin-requests" element={<StudentAdminRequests />} />
                 <Route path="/student/summer" element={<StudentSummer />} />
+                <Route path="/student/fees" element={<StudentFees />} />
                 <Route path="/student/courses/:id/content" element={<CourseContentPage role="student" />} />
                 <Route path="/student/my-exams" element={<StudentMyExams />} />
                 <Route path="/student/my-exams/:id" element={<StudentExamDetail />} />
@@ -549,6 +553,7 @@ export default function App() {
                 <Route path="/university/registration" element={<UniversityRegistration />} />
                 <Route path="/university/admin-requests" element={<UniversityAdminRequests />} />
                 <Route path="/university/summer" element={<UniversitySummer />} />
+                <Route path="/university/fees" element={<UniversityFees />} />
                 <Route path="/university/attendance" element={<UniversityAttendance />} />
                 <Route path="/university/assignments" element={<UniversityAssignments />} />
                 <Route path="/university/grading" element={<UniversityGrading />} />
@@ -586,6 +591,7 @@ export default function App() {
                 <Route path="/faculty/registration" element={<FacultyRegistration />} />
                 <Route path="/faculty/admin-requests" element={<FacultyAdminRequests />} />
                 <Route path="/faculty/summer" element={<FacultySummer />} />
+                <Route path="/faculty/fees" element={<FacultyFees />} />
                 <Route path="/faculty/attendance" element={<FacultyAttendance />} />
                 <Route path="/faculty/assignments" element={<FacultyAssignments />} />
                 <Route path="/faculty/grading" element={<FacultyGrading />} />
