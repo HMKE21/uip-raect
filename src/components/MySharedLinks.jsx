@@ -4,6 +4,8 @@ import { StModal, timeAgo } from './student/stUi';
 import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
 import { CustomDuration, EXPIRIES, copyText, customKey, genPassword, shareUrl } from './ShareDialog';
+import '../styles/css/drive-share.css'; // must load before the dialog refinements below
+import '../styles/css/drive-share-dialogs.css';
 
 const STATUS = {
   active: { en: 'Active', ar: 'شغّال', cls: 'is-on' },

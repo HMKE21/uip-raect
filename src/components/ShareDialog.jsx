@@ -4,6 +4,8 @@ import { StModal, timeAgo } from './student/stUi';
 import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
 import { publicOrigin } from '../config/siteUrl';
+import '../styles/css/drive-share.css'; // must load before the dialog refinements below
+import '../styles/css/drive-share-dialogs.css';
 
 export const EXPIRIES = [
   { key: '1d', en: '1 day', ar: 'يوم' },
