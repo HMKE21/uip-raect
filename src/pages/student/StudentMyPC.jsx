@@ -7,6 +7,7 @@ import Icon from '../../components/Icon';
 import FileViewer from '../../components/FileViewer';
 import NewFileDialog from '../../components/NewFileDialog';
 import ShareDialog from '../../components/ShareDialog';
+import StorageDialog from '../../components/StorageDialog';
 import VersionHistoryDialog from '../../components/VersionHistoryDialog';
 import '../../styles/css/drive-share.css';
 import { useLanguage } from '../../context/LanguageContext';
@@ -924,10 +925,12 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
           </ul>
           <button type="button" className={`mp-bin${inTrash ? ' is-on' : ''}`} onClick={openTrashView}><Icon name="trash" size={16} /> {tt('Recycle bin', 'سلة المحذوفات')}</button>
           {usage && (
-            <div className="mp-usage" title={`${usage.percent}%`}>
+            <div className="mp-usage mp-usage--btn" title={tt('What is using my space?', 'إيه اللي واخد المساحة؟')} role="button" tabIndex={0}
+              onClick={() => setDlg({ type: 'storage' })} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDlg({ type: 'storage' }); } }}>
               <div className="mp-usage__top"><Icon name="monitor" size={15} /><strong>{tt('Local storage', 'مساحة التخزين')}</strong></div>
               <div className="mp-usage__bar"><i style={{ width: `${Math.max(1.5, Math.min(100, usage.percent))}%` }} className={usage.percent > 90 ? 'is-hot' : ''} /></div>
               <small>{tt(`${usage.used_human} of ${usage.quota_human} used`, `${usage.used_human} من ${usage.quota_human} مستخدمة`)}</small>
+              <span className="mp-usage__more">{tt('Manage storage', 'إدارة المساحة')} <Icon name={ar ? 'chevron-left' : 'chevron-right'} size={12} /></span>
             </div>
           )}
         </aside>
@@ -1074,6 +1077,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
         <VersionHistoryDialog node={dlg.node} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash}
           onRestored={() => { reload({ quiet: true }); window.dispatchEvent(new Event('uip-drive-changed')); }} />
       )}
+      {dlg?.type === 'storage' && <StorageDialog ar={ar} locale={locale} onClose={() => setDlg(null)} onOpenFolder={openFolder} />}
       {dlg?.type === 'share' && <ShareDialog node={dlg.node} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} />}
       {dlg?.type === 'name' && <NameDialog dlg={dlg} tt={tt} onClose={() => setDlg(null)} />}
       {dlg?.type === 'newfile' && (

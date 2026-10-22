@@ -75,6 +75,10 @@ export const drive = {
   list: (parentId) => api.get(B, parentId ? { parent_id: parentId } : undefined),
   tree: () => api.get(`${B}/tree`),
   search: (q) => api.get(`${B}/search`, { q }),
+  /** Storage monitor: categories, largest files / folders, recycle bin, old versions, duplicates. */
+  storage: () => api.get(`${B}/storage`).then(unwrap),
+  /** Delete every old version (version history) to free space. */
+  clearVersions: () => api.del(`${B}/versions`).then(unwrap),
   /** Live data for items by id (desktop shortcuts): { items, gone } — `gone` = deleted for good. */
   resolve: (ids) => api.get(`${B}/resolve`, { ids: ids.join(',') }),
   /** Search inside the text of files: { items: [{ …node, path, matches: [{ line, text, start, len }], match_count }], pending } */
