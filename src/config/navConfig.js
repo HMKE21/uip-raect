@@ -44,6 +44,7 @@ const RAW_CONFIGS = {
     academics: [
       { key: 'courses', en: 'My Courses', ar: 'موادي', icon: 'layers', route: '/student/courses', built: true },
       { key: 'timetable', en: 'Timetable', ar: 'جدول المحاضرات', icon: 'calendar', route: '/student/timetable', built: true },
+      { key: 'attendance', en: 'Attendance', ar: 'الحضور والغياب', icon: 'check-circle', route: '/student/attendance', built: true },
       { key: 'my-exams', en: 'Exams', ar: 'الامتحانات', icon: 'file', route: '/student/my-exams', built: true },
       { key: 'graduation', en: 'Graduation Requirements', ar: 'متطلبات التخرج', icon: 'check-circle', route: '/student/graduation', built: true },
     ],
@@ -72,6 +73,7 @@ const RAW_CONFIGS = {
       { key: 'faculties', en: 'Faculties', ar: 'الكليات', icon: 'building', route: '/university/faculties', built: true },
       { key: 'courses', en: 'Courses', ar: 'المواد', icon: 'layers', route: '/university/courses', built: true },
       { key: 'timetable', en: 'Timetable', ar: 'جدول المحاضرات', icon: 'calendar', route: '/university/timetable', built: true },
+      { key: 'attendance', en: 'Attendance', ar: 'الحضور والغياب', icon: 'check-circle', route: '/university/attendance', built: true },
     ],
     community: [
       { key: 'feed', en: 'University Feed', ar: 'موجز الجامعة', icon: 'chat', route: '/university/feed', built: true },
@@ -99,6 +101,7 @@ const RAW_CONFIGS = {
     academics: [
       { key: 'courses', en: 'Courses', ar: 'المواد', icon: 'layers', route: '/faculty/courses', built: true },
       { key: 'timetable', en: 'Timetable', ar: 'جدول المحاضرات', icon: 'calendar', route: '/faculty/timetable', built: true },
+      { key: 'attendance', en: 'Attendance', ar: 'الحضور والغياب', icon: 'check-circle', route: '/faculty/attendance', built: true },
     ],
     community: [
       { key: 'chat-reports', en: 'Chat Reports', ar: 'بلاغات الشات', icon: 'flag', route: '/faculty/chat-reports', built: true },
@@ -113,6 +116,7 @@ const RAW_CONFIGS = {
       { key: 'dashboard', en: 'Dashboard', ar: 'لوحة التحكم', icon: 'dashboard', route: '/academic-staff/dashboard', built: true },
       { key: 'courses', en: 'Courses', ar: 'المواد', icon: 'layers', route: '/academic-staff/courses', built: true },
       { key: 'timetable', en: 'Timetable', ar: 'جدول المحاضرات', icon: 'calendar', route: '/academic-staff/timetable', built: true },
+      { key: 'attendance', en: 'Attendance', ar: 'الحضور والغياب', icon: 'check-circle', route: '/academic-staff/attendance', built: true },
       { key: 'projects', en: "Students' Projects", ar: 'مشاريع الطلبة', icon: 'projects', route: '/academic-staff/projects', built: true },
     ],
     exams: [
@@ -137,6 +141,7 @@ const RAW_CONFIGS = {
       { key: 'dashboard', en: 'Dashboard', ar: 'لوحة التحكم', icon: 'dashboard', route: '/supervisor/dashboard', built: true },
       { key: 'courses', en: 'Courses', ar: 'المواد', icon: 'layers', route: '/academic-staff/courses', built: true },
       { key: 'timetable', en: 'Timetable', ar: 'جدول المحاضرات', icon: 'calendar', route: '/academic-staff/timetable', built: true },
+      { key: 'attendance', en: 'Attendance', ar: 'الحضور والغياب', icon: 'check-circle', route: '/academic-staff/attendance', built: true },
       { key: 'students', en: 'My Students', ar: 'طلابي', icon: 'users', route: '/supervisor/students', built: true },
       { key: 'projects', en: 'My Projects', ar: 'مشاريعي', icon: 'projects', route: '/supervisor/projects', built: true },
     ],

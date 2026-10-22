@@ -117,15 +117,19 @@ const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
 const StudentMyExams = lazy(() => import('./pages/student/StudentMyExams'));
 const StudentCourses = lazy(() => import('./pages/student/StudentCourses'));
 const StudentTimetable = lazy(() => import('./pages/student/StudentTimetable'));
+const StudentAttendance = lazy(() => import('./pages/student/StudentAttendance'));
 const UniversityCourses = lazy(() => import('./pages/university/UniversityCourses'));
 const UniversityTimetable = lazy(() => import('./pages/university/UniversityTimetable'));
+const UniversityAttendance = lazy(() => import('./pages/university/UniversityAttendance'));
 const FacultyCourses = lazy(() => import('./pages/faculty/FacultyCourses'));
 const FacultyTimetable = lazy(() => import('./pages/faculty/FacultyTimetable'));
+const FacultyAttendance = lazy(() => import('./pages/faculty/FacultyAttendance'));
 const AcademicStaffProjects = lazy(() => import('./pages/academic-staff/AcademicStaffProjects'));
 const AcademicStaffProjectDetail = lazy(() => import('./pages/academic-staff/AcademicStaffProjectDetail'));
 const CourseContentPage = lazy(() => import('./pages/courses/CourseContentPage'));
 const AcademicStaffCourses = lazy(() => import('./pages/academic-staff/AcademicStaffCourses'));
 const AcademicStaffTimetable = lazy(() => import('./pages/academic-staff/AcademicStaffTimetable'));
+const AcademicStaffAttendance = lazy(() => import('./pages/academic-staff/AcademicStaffAttendance'));
 const StudentExamDetail = lazy(() => import('./pages/student/StudentExamDetail'));
 const StudentExamAttempt = lazy(() => import('./pages/student/StudentExamAttempt'));
 const StudentExamResult = lazy(() => import('./pages/student/StudentExamResult'));
@@ -303,6 +307,7 @@ export default function App() {
                     (exam_attempts). */}
                 <Route path="/student/courses" element={<StudentCourses />} />
                 <Route path="/student/timetable" element={<StudentTimetable />} />
+                <Route path="/student/attendance" element={<StudentAttendance />} />
                 <Route path="/student/courses/:id/content" element={<CourseContentPage role="student" />} />
                 <Route path="/student/my-exams" element={<StudentMyExams />} />
                 <Route path="/student/my-exams/:id" element={<StudentExamDetail />} />
@@ -513,6 +518,7 @@ export default function App() {
                 <Route path="/university/academic-staff" element={<UniversityAcademicStaff />} />
                 <Route path="/university/courses" element={<UniversityCourses />} />
                 <Route path="/university/timetable" element={<UniversityTimetable />} />
+                <Route path="/university/attendance" element={<UniversityAttendance />} />
                 <Route path="/university/courses/:id/content" element={<CourseContentPage role="university" />} />
                 <Route path="/university/reports" element={<UniversityReports />} />
                 <Route path="/university/analytics" element={<UniversityAnalytics />} />
@@ -543,6 +549,7 @@ export default function App() {
                 <Route path="/faculty/academic-staff" element={<FacultyAcademicStaff />} />
                 <Route path="/faculty/courses" element={<FacultyCourses />} />
                 <Route path="/faculty/timetable" element={<FacultyTimetable />} />
+                <Route path="/faculty/attendance" element={<FacultyAttendance />} />
                 <Route path="/faculty/courses/:id/content" element={<CourseContentPage role="faculty" />} />
                 <Route path="/faculty/chat-reports" element={<ChatReports />} />
                 <Route path="/faculty/settings" element={<FacultySettings />} />
@@ -567,6 +574,7 @@ export default function App() {
                 <Route path="/academic-staff/question-banks/:id" element={<AcademicStaffQuestionBankDetail />} />
                 <Route path="/academic-staff/courses" element={<AcademicStaffCourses />} />
                 <Route path="/academic-staff/timetable" element={<AcademicStaffTimetable />} />
+                <Route path="/academic-staff/attendance" element={<AcademicStaffAttendance />} />
                 <Route path="/academic-staff/courses/:id/content" element={<CourseContentPage role="academic_staff" />} />
                 <Route path="/academic-staff/projects" element={<AcademicStaffProjects />} />
                 <Route path="/academic-staff/projects/:id" element={<AcademicStaffProjectDetail />} />

@@ -67,6 +67,7 @@
     "mediabunny": "^1.61.6",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
+    "jsqr": "^1.4.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
