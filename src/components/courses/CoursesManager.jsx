@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { CourseGradebook } from './CourseGradebook';
@@ -24,6 +25,7 @@ const YEARS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 export default function CoursesManager({ role }) {
   const { locale } = useLanguage();
+  const navigate = useNavigate();
   const ar = locale === 'ar';
   const isUni = role === 'university';
   const isStaff = role === 'academic_staff';
@@ -44,7 +46,11 @@ export default function CoursesManager({ role }) {
   const [editing, setEditing] = useState(null); // null | 'new' | course
   const [managing, setManaging] = useState(null); // course
   const [manageTab, setManageTab] = useState('students');
-  const openManage = (c, tab = 'students') => { setManageTab(tab); setManaging(c); };
+  const base = role === 'academic_staff' ? '/academic-staff' : `/${role}`;
+  const openManage = (c, tab = 'students') => {
+    if (tab === 'content') { navigate(`${base}/courses/${c.id}/content`); return; }
+    setManageTab(tab); setManaging(c);
+  };
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(() => {

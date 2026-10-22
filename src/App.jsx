@@ -120,6 +120,7 @@ const UniversityCourses = lazy(() => import('./pages/university/UniversityCourse
 const FacultyCourses = lazy(() => import('./pages/faculty/FacultyCourses'));
 const AcademicStaffProjects = lazy(() => import('./pages/academic-staff/AcademicStaffProjects'));
 const AcademicStaffProjectDetail = lazy(() => import('./pages/academic-staff/AcademicStaffProjectDetail'));
+const CourseContentPage = lazy(() => import('./pages/courses/CourseContentPage'));
 const AcademicStaffCourses = lazy(() => import('./pages/academic-staff/AcademicStaffCourses'));
 const StudentExamDetail = lazy(() => import('./pages/student/StudentExamDetail'));
 const StudentExamAttempt = lazy(() => import('./pages/student/StudentExamAttempt'));
@@ -297,6 +298,7 @@ export default function App() {
                     and no "start attempt" yet — that's Round 3
                     (exam_attempts). */}
                 <Route path="/student/courses" element={<StudentCourses />} />
+                <Route path="/student/courses/:id/content" element={<CourseContentPage role="student" />} />
                 <Route path="/student/my-exams" element={<StudentMyExams />} />
                 <Route path="/student/my-exams/:id" element={<StudentExamDetail />} />
                 {/* Round 3 — attempts + timer + auto-save + submit, and the
@@ -505,6 +507,7 @@ export default function App() {
                 <Route path="/university/departments/:id/portfolio" element={<UniversityDepartmentPortfolio />} />
                 <Route path="/university/academic-staff" element={<UniversityAcademicStaff />} />
                 <Route path="/university/courses" element={<UniversityCourses />} />
+                <Route path="/university/courses/:id/content" element={<CourseContentPage role="university" />} />
                 <Route path="/university/reports" element={<UniversityReports />} />
                 <Route path="/university/analytics" element={<UniversityAnalytics />} />
                 <Route path="/university/announcements" element={<UniversityAnnouncements />} />
@@ -533,6 +536,7 @@ export default function App() {
                 <Route path="/faculty/students" element={<FacultyStudents />} />
                 <Route path="/faculty/academic-staff" element={<FacultyAcademicStaff />} />
                 <Route path="/faculty/courses" element={<FacultyCourses />} />
+                <Route path="/faculty/courses/:id/content" element={<CourseContentPage role="faculty" />} />
                 <Route path="/faculty/chat-reports" element={<ChatReports />} />
                 <Route path="/faculty/settings" element={<FacultySettings />} />
                 <Route path="/faculty/graduation" element={<FacultyGraduation />} />
@@ -555,6 +559,7 @@ export default function App() {
                 <Route path="/academic-staff/question-banks" element={<AcademicStaffQuestionBanks />} />
                 <Route path="/academic-staff/question-banks/:id" element={<AcademicStaffQuestionBankDetail />} />
                 <Route path="/academic-staff/courses" element={<AcademicStaffCourses />} />
+                <Route path="/academic-staff/courses/:id/content" element={<CourseContentPage role="academic_staff" />} />
                 <Route path="/academic-staff/projects" element={<AcademicStaffProjects />} />
                 <Route path="/academic-staff/projects/:id" element={<AcademicStaffProjectDetail />} />
                 <Route path="/academic-staff/search" element={<AcademicStaffSearchResults />} />

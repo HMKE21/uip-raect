@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, errorMessage } from '../../api/client';
 import Icon from '../../components/Icon';
 import { StudentCourseGrade } from '../../components/courses/CourseGradebook';
@@ -6,7 +7,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../../components/student/stUi';
 import { ExKpi } from '../../components/exam/examUi';
 import CourseRequestDialog from '../../components/courses/CourseRequestDialog';
-import CourseMaterials, { CourseMaterialsModal } from '../../components/courses/CourseMaterials';
+import CourseMaterials from '../../components/courses/CourseMaterials';
 import { decidedByText, downloadRequestAttachment, requestStatusLabel } from '../../components/courses/CourseRequestsInbox';
 
 /**
@@ -18,6 +19,7 @@ import { decidedByText, downloadRequestAttachment, requestStatusLabel } from '..
  */
 export default function StudentCourses() {
   const { locale } = useLanguage();
+  const navigate = useNavigate();
   const ar = locale === 'ar';
   const [courses, setCourses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,7 +30,6 @@ export default function StudentCourses() {
   const [busyId, setBusyId] = useState(null);
   const [gradesFor, setGradesFor] = useState(null);
   const [dialog, setDialog] = useState(null); // { course, type }
-  const [contentFor, setContentFor] = useState(null); // course whose content modal is open
   const [requests, setRequests] = useState([]);
 
   const load = useCallback(() => Promise.all([
@@ -150,7 +151,7 @@ export default function StudentCourses() {
                 </p>
                 <p className="cr-card__staff"><Icon name="users" size={14} /> {(c.staff || []).length ? c.staff.map((s) => s.full_name).join('، ') : (ar ? 'لم يُعيَّن مدرّس بعد' : 'No teacher assigned yet')}</p>
                 {c.enrolled && (
-                  <button type="button" className="btn btn-primary btn-sm" onClick={() => setContentFor(c)}>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/student/courses/${c.id}/content`)}>
                     <Icon name="folder" size={14} /> {ar ? 'محتوى المادة' : 'Course content'}
                   </button>
                 )}
@@ -178,8 +179,6 @@ export default function StudentCourses() {
         )}
         </>)}
       </div>
-
-      {contentFor && <CourseMaterialsModal course={contentFor} onClose={() => setContentFor(null)} />}
 
       {dialog && (
         <CourseRequestDialog
