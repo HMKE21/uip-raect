@@ -147,7 +147,7 @@ export const drive = {
     emitDriveSaved({ id: unwrap(res)?.items?.[0]?.id, name: file.name, kind: 'upload', size: file.size });
     return res;
   },
-  /** Share links (GET/POST /drive/nodes/{id}/shares, PATCH/DELETE /drive/shares/{id}). expiry: '1d' | '7d' | '30d' | 'never'. */
+  /** Share links (GET/POST /drive/nodes/{id}/shares, PATCH/DELETE /drive/shares/{id}). expiry: '1d' | '7d' | '30d' | 'never' or a custom '<n>m' | '<n>h' | '<n>d' (e.g. '5m', 2h). */
   shares: (id) => api.get(`${B}/nodes/${id}/shares`).then(unwrap),
   mySharedLinks: () => api.get(`${B}/shares`).then(unwrap),
   createShare: (id, { expiry, canDownload }) => api.post(`${B}/nodes/${id}/shares`, { expiry, can_download: !!canDownload }).then(unwrap),
