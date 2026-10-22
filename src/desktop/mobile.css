@@ -270,3 +270,13 @@
 /* shortcut on the phone home screen */
 .mos-lnk { position: relative; display: inline-grid; }
 .mos-lnk > i { position: absolute; inset-inline-start: -2px; bottom: -2px; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 7px; background: #fff; color: #1d1d1f; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); }
+
+/* notification bell in the phone status bar + the notification sheet */
+.mos-status__bell { position: relative; display: inline-grid; place-items: center; border: 0; background: transparent; color: inherit; padding: 0 2px; }
+.mos-status__bell b { position: absolute; top: -5px; inset-inline-end: -5px; min-width: 14px; height: 14px; padding: 0 3px; border-radius: 99px; background: #ef4444; color: #fff; font-size: 9px; font-weight: 800; line-height: 14px; text-align: center; }
+.mos-nc__head { display: flex; justify-content: flex-end; padding: 0 10px 6px; }
+.mos-nc__head button { border: 0; background: transparent; color: var(--os-accent); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 8px; }
+.mos-nc__head button:disabled { opacity: .4; }
+.mos .os-nc__x { opacity: 1; margin-top: 10px; }
+.mos .os-nc__main { padding: 11px 10px; }
+.mos .os-nc__list { overflow: visible; padding: 0; }

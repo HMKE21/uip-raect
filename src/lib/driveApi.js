@@ -1,6 +1,6 @@
 import { api } from '../api/client';
 import { getDraft, pruneCache, putDraft } from './draftStore';
-import { emitDriveSaved } from './driveEvents';
+import { emitDriveFailed, emitDriveSaved } from './driveEvents';
 
 /**
  * "My PC" (جهازي) client — thin wrappers over /api/v1/drive/* (App\Http\Controllers\Api\DriveApiController).
@@ -123,15 +123,20 @@ export const drive = {
   /** One file per request (clear progress, parallel-safe). rel = "dir/sub/file.txt" when uploading a folder. */
   upload: async (parentId, file, rel, onProgress, signal) => {
     let res = null;
-    if (await directOn()) {
-      try { res = await directUpload(parentId, file, rel, onProgress, signal); } catch (e) { if (e?.name === 'AbortError' || !canFallBack(e)) throw e; }
-    }
-    if (!res) {
-      const fd = new FormData();
-      if (parentId) fd.append('parent_id', String(parentId));
-      fd.append('files[]', file, file.name);
-      if (rel && rel.includes('/')) fd.append('paths[]', rel);
-      res = await api.postFormProgress(`${B}/upload`, fd, onProgress, signal);
+    try {
+      if (await directOn()) {
+        try { res = await directUpload(parentId, file, rel, onProgress, signal); } catch (e) { if (e?.name === 'AbortError' || !canFallBack(e)) throw e; }
+      }
+      if (!res) {
+        const fd = new FormData();
+        if (parentId) fd.append('parent_id', String(parentId));
+        fd.append('files[]', file, file.name);
+        if (rel && rel.includes('/')) fd.append('paths[]', rel);
+        res = await api.postFormProgress(`${B}/upload`, fd, onProgress, signal);
+      }
+    } catch (e) {
+      if (e?.name !== 'AbortError') emitDriveFailed({ name: file.name, kind: 'upload', message: e?.message || '' }); // a cancelled upload is not a failure
+      throw e;
     }
     emitDriveSaved({ id: unwrap(res)?.items?.[0]?.id, name: file.name, kind: 'upload', size: file.size });
     return res;

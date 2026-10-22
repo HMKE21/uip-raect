@@ -5,6 +5,7 @@ import { errorMessage } from '../api/client';
 import { useBackLayer } from '../lib/backStack';
 import { AppGlyph } from './OsIcons';
 import { BatteryGlyph, WifiGlyph } from './flyouts';
+import { NotifList } from './NotificationCenter';
 import { Clock, NodeGlyph } from './shell';
 import { APPS } from './apps';
 import { winTitle } from './wm';
@@ -133,6 +134,7 @@ export default function MobileShell(p) {
     brightness, setBrightness, fullscreen, fs, wallpaper, lightWp,
     shortcuts = [], onShortcutOpen, onShortcutRemove,
     widgets = [], newWidgetId = null, onWidgetAdd, onWidgetChange, onWidgetRemove,
+    nc = null, onOpenNotif, onAllNotif,
   } = p;
 
   const [sheet, setSheet] = useState(null); // { type: 'new' | 'item' | 'move' | 'cc' | 'search' | 'desk', node?, nodes? }
@@ -220,6 +222,11 @@ export default function MobileShell(p) {
       <header className="mos-status" onClick={() => setSheet({ type: 'cc' })} role="button" tabIndex={0} aria-label={tt('Control centre', 'مركز التحكم')}>
         <Clock ar={ar} />
         <span className="mos-status__sp" />
+        {nc && (
+          <button type="button" className="mos-status__bell" aria-label={tt('Notifications', 'الإشعارات')} onClick={(e) => { e.stopPropagation(); setSheet({ type: 'notif' }); }}>
+            <Icon name="bell" size={16} />{nc.unread > 0 && <b>{nc.unread > 99 ? '99+' : nc.unread}</b>}
+          </button>
+        )}
         <b className="mos-status__lang">{ar ? 'ع' : 'EN'}</b>
         <WifiGlyph on={online} size={15} />
         {battery && <span className="mos-status__bat"><BatteryGlyph level={battery.level} charging={battery.charging} size={18} /><small>{battery.level}%</small></span>}
@@ -385,6 +392,14 @@ export default function MobileShell(p) {
           ))}
           {!folders.filter((f) => !sheet.nodes.some((n) => n.id === f.id)).length && <p className="mos-sheet__none">{tt('There are no folders on the desktop yet. Create one first.', 'مفيش مجلدات على سطح المكتب. اعمل مجلد الأول.')}</p>}
           <Row icon="folder-plus" label={tt('New folder', 'مجلد جديد')} onClick={after(newFolder)} />
+        </Sheet>
+      )}
+
+      {sheet?.type === 'notif' && nc && (
+        <Sheet title={tt('Notifications', 'الإشعارات')} tall onClose={closeSheet}>
+          <div className="mos-nc__head"><button type="button" disabled={!nc.unread} onClick={nc.markAllRead}>{tt('Mark all read', 'تعيين الكل كمقروء')}</button></div>
+          <NotifList tt={tt} ar={ar} items={nc.items} unread={nc.unread} loading={nc.loading} onOpen={(it) => { setSheet(null); onOpenNotif?.(it); }} onRemove={nc.removeLocal} />
+          <Row icon="arrow-right" label={tt('Open all notifications', 'فتح كل الإشعارات')} onClick={after(() => onAllNotif?.())} />
         </Sheet>
       )}
 

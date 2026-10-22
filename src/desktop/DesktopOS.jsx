@@ -6,6 +6,8 @@ import Icon from '../components/Icon';
 import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
 import CloudTray from './CloudTray';
+import { NotifFlyout, NotifToasts, NotifTray } from './NotificationCenter';
+import { useDesktopNotifications } from './notifications';
 import { lockScroll } from '../lib/scrollLock';
 import { roleHome } from '../config/roleHome';
 import { useAuth } from '../context/AuthContext';
@@ -202,7 +204,7 @@ export default function DesktopOS() {
   const [newWidgetId, setNewWidgetId] = useState(null);
   const [extOver, setExtOver] = useState(null); // desktop folder icon hovered by a file dragged in from a window
   const mobile = useIsMobileOS(); // phone-sized screen -> <MobileShell> (a purpose-built phone UI) instead of the windowed desktop
-  const [overlay, setOverlay] = useState(null); // 'start' | 'run' | 'taskview' | 'qs' | 'cal'
+  const [overlay, setOverlay] = useState(null); // 'start' | 'run' | 'taskview' | 'qs' | 'cal' | 'notif'
   const battery = useBattery();
   const online = useOnline();
   const [fs, setFs] = useState(() => !!document.fullscreenElement);
@@ -470,6 +472,26 @@ export default function DesktopOS() {
     if (reason === 'remote') flash(tt('This device was locked from another device.', 'الجهاز ده اتقفل من جهاز تاني.'), 'ok');
   }, [setLocked, flash, tt]);
   const { sec, applySec, asleep, sleep, wake, idleLeft, stay } = useDesktopSecurity({ uid: user?.id, locked, onLock: onSecLock });
+  // Notification center: finished uploads + server notifications (a message from a doctor …). Quiet while locked / asleep.
+  const nc = useDesktopNotifications({ uid: user?.id, ar, tt, quiet: locked || asleep });
+  // Opening a notification marks it read, then follows its link. Links go to portal pages, so leaving the desktop asks first (same dialog as "Exit").
+  const openNotif = useCallback((it) => {
+    const link = it.link || null;
+    if (it.serverId != null) nc.markRead({ src: 'server', id: it.serverId, read: false });
+    else if (it.localId) nc.markRead({ src: 'local', id: it.localId, read: false });
+    else nc.markRead(it);
+    setOverlay(null);
+    if (!link) { if (it.src === 'local' || it.localId) openApp('explorer'); return; } // an upload entry → the file explorer
+    if (/^(https?:)?\/\//i.test(link)) { window.open(link, '_blank', 'noopener,noreferrer'); return; }
+    if (link.startsWith('/student/my-pc')) { navigate(link); return; }
+    ask({ kind: 'confirm', title: tt('Open this in the portal?', 'فتح ده في البوابة؟'), text: tt('You will leave the desktop and go to the portal page. Your files stay saved.', 'هتخرج من سطح المكتب وتروح لصفحة في البوابة. ملفاتك فاضلة محفوظة.'), action: tt('Open', 'فتح'), icon: 'logout' })
+      .then((ok) => { if (ok) navigate(link); });
+  }, [ask, navigate, nc, openApp, tt]);
+  const notifAll = useCallback(() => {
+    setOverlay(null);
+    ask({ kind: 'confirm', title: tt('Open all notifications?', 'فتح كل الإشعارات؟'), text: tt('You will leave the desktop and go to the Notifications page. Your files stay saved.', 'هتخرج من سطح المكتب وتروح لصفحة الإشعارات. ملفاتك فاضلة محفوظة.'), action: tt('Open', 'فتح'), icon: 'logout' })
+      .then((ok) => { if (ok) navigate(`/${roleHome(user?.role).split('/')[1]}/notifications`); });
+  }, [ask, navigate, tt, user?.role]);
   sleepRef.current = sleep;
   const secRef = useRef(sec); secRef.current = sec;
   const onWake = useCallback(() => { wake(); if (secRef.current.lockAfterSleep && lockOnRef.current === true) setLocked(true); }, [wake, setLocked]);
@@ -961,6 +983,7 @@ export default function DesktopOS() {
         <WifiGlyph on={online} size={18} />
         {battery && <BatteryGlyph level={battery.level} charging={battery.charging} size={23} />}
       </button>
+      <NotifTray tt={tt} unread={nc.unread} on={overlay === 'notif'} onClick={() => setOverlay((o) => (o === 'notif' ? null : 'notif'))} />
       <CloudTray tt={tt} onOpen={() => openApp('settings', { tab: 'cloud' })} />
       <button type="button" className="os-tray__srch" title={tt('Spotlight (Alt+R)', 'بحث سريع (Alt+R)')} onClick={() => setOverlay((o) => (o === 'run' ? null : 'run'))}><Icon name="search" size={17} /></button>
       <button type="button" className={`os-tray__clock${overlay === 'cal' ? ' is-on' : ''}`} title={tt('Calendar', 'التقويم')} aria-haspopup="dialog" aria-expanded={overlay === 'cal'} onClick={() => setOverlay((o) => (o === 'cal' ? null : 'cal'))}><Clock ar={ar} bar /></button>
@@ -1004,6 +1027,7 @@ export default function DesktopOS() {
         if (overlay === 'start' && !e.target.closest('.os-start, .os-startbtn')) setOverlay(null);
         if (overlay === 'qs' && !e.target.closest('.os-fly, .os-tray__sys')) setOverlay(null);
         if (overlay === 'cal' && !e.target.closest('.os-fly, .os-tray__clock')) setOverlay(null);
+        if (overlay === 'notif' && !e.target.closest('.os-fly, .os-tray__notif')) setOverlay(null);
       }}
     >
       {mobile ? (
@@ -1015,6 +1039,7 @@ export default function DesktopOS() {
           battery={battery} online={online} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale}
           brightness={brightness} setBrightness={(v) => setPrefs({ brightness: v })} fullscreen={fullscreen} fs={fs}
           wallpaper={wallpaperCss(prefs)} lightWp={wp.dark === false}
+          nc={nc} onOpenNotif={openNotif} onAllNotif={notifAll}
           shortcuts={lnkIcons.map((i) => i.lnk)} onShortcutOpen={openShortcut} onShortcutRemove={(n) => removeShortcuts([n.id])}
           widgets={widgets.items} newWidgetId={newWidgetId} onWidgetChange={(id, patch) => widgets.update(id, patch)} onWidgetRemove={removeWidget}
           onWidgetAdd={(type) => { const id = widgets.add(type, { x: 20, y: 20 }); setNewWidgetId(type === 'note' ? id : null); }}
@@ -1082,6 +1107,8 @@ export default function DesktopOS() {
         />
       )}
       {overlay === 'cal' && <CalendarFlyout tt={tt} ar={ar} />}
+      {overlay === 'notif' && !mobile && <NotifFlyout tt={tt} ar={ar} nc={nc} onOpen={openNotif} onAll={notifAll} />}
+      {!mobile && <NotifToasts toasts={nc.toasts} onOpen={openNotif} onClose={nc.dismissToast} tt={tt} />}
 
       <MenuBar ar={ar} tt={tt} menus={menus} tray={tray} onOpen={closeFloating} closeKey={`${overlay || ''}${menu ? 'm' : ''}${dlg ? 'd' : ''}${locked || asleep ? 'l' : ''}`} />
       {wmax && !dockPeek && <div className="os-dockhot" onPointerEnter={() => setDockPeek(true)} aria-hidden="true" />}
