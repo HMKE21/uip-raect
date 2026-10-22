@@ -30,3 +30,11 @@
 .att-tabs { display: flex; gap: 6px; padding: 12px 16px 0; flex-wrap: wrap; }
 .att-tabs button { border: 1px solid var(--border-strong, var(--border-subtle)); background: var(--bg-surface); color: var(--text-primary); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
 .att-tabs button.is-on { background: var(--color-primary); color: #fff; border-color: var(--color-primary); }
+
+/* assignments (as-*) */
+.as-list { display: grid; gap: 12px; padding: 14px 16px 18px; }
+.as-card { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.as-card__head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.as-body { margin: 0; font-size: 13px; color: var(--text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.as-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.as-sub { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--bg-muted, rgba(0,0,0,.04)); border-radius: 10px; padding: 10px 12px; font-size: 13px; max-height: 220px; overflow: auto; }
