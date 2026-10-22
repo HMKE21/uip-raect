@@ -78,11 +78,24 @@ function useText(blob, max) {
   return s;
 }
 
-const systemTheme = () => { try { return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'github-light'; } catch { return 'github-light'; } };
+const siteDark = () => { try { return document.documentElement.getAttribute('data-theme') === 'dark'; } catch { return false; } };
+const systemTheme = () => (siteDark() ? 'dark' : 'github-light');
+/** Re-renders when the page's light / dark switch changes. */
+function useSiteTheme() {
+  const [v, setV] = useState(systemTheme);
+  useEffect(() => {
+    const mo = new MutationObserver(() => setV(systemTheme()));
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => mo.disconnect();
+  }, []);
+  return v;
+}
 
 /** Read-only code view: the platform's CodeMirror (highlighting, folding, line numbers, search) with a theme picker. */
 function ProtectedCode({ name, text, cut, tt }) {
-  const [theme, setTheme] = useState(systemTheme);
+  const site = useSiteTheme();
+  const [theme, setTheme] = useState(site);
+  useEffect(() => { setTheme(site); }, [site]);
   const [wrap, setWrap] = useState(false);
   const [size, setSize] = useState(13.5);
   const lines = useMemo(() => (text.match(/\n/g) || []).length + 1, [text]);
@@ -112,6 +125,7 @@ function ProtectedCode({ name, text, cut, tt }) {
 }
 
 function TextKind({ name, blob, tt, kind, rtl, mark }) {
+  const site = useSiteTheme();
   const limit = kind === 'json' ? MAX_JSON_BYTES : MAX_TEXT_BYTES;
   const { text, cut } = useText(blob, limit);
   const e = extOf(name);
@@ -134,7 +148,7 @@ function TextKind({ name, blob, tt, kind, rtl, mark }) {
     );
   }
   if (kind === 'md') {
-    const th = themeById(systemTheme());
+    const th = themeById(site);
     return (
       <div className="shp-sheet shp-sheet--md">
         <Suspense fallback={<Spin />}><MarkdownView locked text={text} path={name} tt={tt} themeEd={th.ed} rtl={rtl} /></Suspense>
@@ -209,6 +223,7 @@ function TreeRows({ node, depth, open, toggle, sel, pick }) {
 
 /** Browse an archive in memory: file tree + the right viewer for the selected entry. Nothing can be extracted or saved. */
 function ProtectedZip({ name, blob, mark, tt, rtl, depth }) {
+  const siteT = useSiteTheme();
   const [state, setState] = useState({ status: 'loading' });
   const [open, setOpen] = useState(() => new Set());
   const [sel, setSel] = useState(null);
@@ -266,7 +281,7 @@ function ProtectedZip({ name, blob, mark, tt, rtl, depth }) {
   const needle = q.trim().toLowerCase();
   const hits = needle ? state.files.filter((f) => f.name.toLowerCase().includes(needle)).slice(0, 300) : null;
   return (
-    <div className="shp-zip" style={themeVars(systemTheme())} dir="ltr">
+    <div className="shp-zip" style={themeVars(siteT)} dir="ltr">
       <aside className="shp-zip__side">
         <div className="shp-zip__head">
           <span className="shp-zip__title" title={name}><Icon name="folder" size={14} />{name.split('/').pop()}</span>

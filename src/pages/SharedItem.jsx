@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
+import { useTheme } from '../context/ThemeContext';
 import { errorMessage } from '../api/client';
 import { sharedApi } from '../lib/driveApi';
 import { saveBlob } from '../lib/exporter';
@@ -34,7 +35,8 @@ function SenderAvatar({ name, src }) {
  */
 export default function SharedItem() {
   const { token } = useParams();
-  const { locale } = useLanguage();
+  const { locale, toggleLocale } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
   const ar = locale === 'ar';
   const t = useCallback((en, a) => (ar ? a : en), [ar]);
 
@@ -149,14 +151,21 @@ export default function SharedItem() {
 
   return (
     <div className={`shp${(away || shot) && !canDl ? ' is-away' : ''}`} dir={ar ? 'rtl' : 'ltr'} onContextMenu={(e) => e.preventDefault()}>
-      {data && (
-        <header className="shp__top">
-          <div className="shp__who">
-            <SenderAvatar name={owner} src={avatarSrc(share.owner_avatar)} />
-            {owner && <span className="shp__who-name">{owner}</span>}
-          </div>
-        </header>
-      )}
+      <div className="shp__bubbles" aria-hidden="true">{Array.from({ length: 9 }, (_, i) => <i key={i} />)}</div>
+      <header className="shp__top">
+        <div className="shp__who">
+          {data && <SenderAvatar name={owner} src={avatarSrc(share.owner_avatar)} />}
+          {data && owner && <span className="shp__who-name">{owner}</span>}
+        </div>
+        <div className="shp__tools">
+          <button type="button" className="shp__tool" onClick={toggleLocale} title={t('العربية', 'English')} aria-label={t('Switch to Arabic', 'التبديل للإنجليزية')}>
+            <Icon name="globe" size={16} /><span>{ar ? 'EN' : 'عربي'}</span>
+          </button>
+          <button type="button" className="shp__tool shp__tool--icon" onClick={toggleTheme} title={theme === 'dark' ? t('Light mode', 'الوضع الفاتح') : t('Dark mode', 'الوضع الداكن')} aria-label={t('Toggle theme', 'تبديل الثيم')}>
+            <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} />
+          </button>
+        </div>
+      </header>
 
       <main className="shp__main">
         {loading && !data && <div className="shp__state"><span className="lp2-spinner" aria-hidden="true" /><p>{t('Loading…', 'جارِ التحميل…')}</p></div>}
