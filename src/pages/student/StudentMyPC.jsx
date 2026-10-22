@@ -761,6 +761,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     if (group.length) {
       out.push({ icon: 'download', label: tt('Download', 'تنزيل'), run: () => group.forEach(download), disabled: group.length > 1 });
       if (one) out.push({ icon: 'share', label: tt('Share', 'مشاركة'), run: () => setDlg({ type: 'share', node: one }) });
+      if (embedded && !inTrash) out.push({ icon: 'external-link', label: tt('Create desktop shortcut', 'إنشاء اختصار على سطح المكتب'), run: () => window.dispatchEvent(new CustomEvent('uip-desktop-shortcut', { detail: { ids: group.map((x) => x.id) } })) });
       if (one && one.type === 'file') out.push({ icon: 'clock', label: tt('Version history', 'سجل الإصدارات'), run: () => setDlg({ type: 'versions', node: one }) });
       out.push({ sep: true });
       out.push({ icon: 'copy', label: tt('Copy', 'نسخ'), hint: 'Ctrl+C', run: () => setClip({ ids: group.map((x) => x.id), mode: 'copy' }) });
@@ -774,6 +775,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
       out.push({ icon: 'trash', label: tt('Delete', 'حذف'), hint: 'Del', danger: true, run: () => doDelete(group) });
     }
     if (!n) {
+      if (embedded && !inTrash && data.breadcrumb.length) out.push({ icon: 'external-link', label: tt('Create desktop shortcut to this folder', 'إنشاء اختصار لهذا المجلد على سطح المكتب'), run: () => window.dispatchEvent(new CustomEvent('uip-desktop-shortcut', { detail: { ids: [data.breadcrumb[data.breadcrumb.length - 1].id] } })) });
       out.push({ icon: 'folder-plus', label: tt('New folder', 'مجلد جديد'), run: newFolder });
       out.push({ icon: 'file-plus', label: tt('New text file', 'ملف نصي جديد'), run: newFile });
       out.push({ icon: 'file-plus', label: tt('New document (Word, Excel, PowerPoint, PDF…)', 'مستند جديد (Word, Excel, PowerPoint, PDF…)'), run: () => newDoc('docx') });

@@ -433,3 +433,7 @@ body.os-dragging iframe { pointer-events: none; }
 [dir='rtl'] .os-ic-row input:checked::after { transform: translateX(-16px); }
 .os-ic-row input:focus-visible { outline: 2px solid var(--os-accent); outline-offset: 2px; }
 .os-ic-actions { margin-top: 12px; }
+
+/* shortcut icons: a small arrow badge on the corner of the glyph (the original is never touched) */
+.os-icon__g { position: relative; }
+.os-icon__lnk { position: absolute; inset-inline-start: calc(50% - var(--glyph, 48px) / 2); bottom: -2px; width: 1.55em; height: 1.55em; display: grid; place-items: center; border-radius: 6px; background: #fff; color: #1d1d1f; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); font-style: normal; }

@@ -131,6 +131,7 @@ export default function MobileShell(p) {
     ar, tt, user, desk, deskItems, wm, dispatch, bodyOf, openNode, openExplorer, runCommand, flash, reloadDesk, hideLocal, refreshAll,
     clip, copyNodes, pasteInto, trashNodes, renameNode, newFolder, newFile, newDoc, battery, online, theme, toggleTheme, toggleLocale,
     brightness, setBrightness, fullscreen, fs, wallpaper, lightWp,
+    shortcuts = [], onShortcutOpen, onShortcutRemove,
     widgets = [], newWidgetId = null, onWidgetAdd, onWidgetChange, onWidgetRemove,
   } = p;
 
@@ -252,6 +253,9 @@ export default function MobileShell(p) {
           {!selecting && sysApps.map((a) => (
             <HomeIcon key={a.key} label={a.label} glyph={<AppGlyph app={a.app} size={SYS_GLYPH} full={a.key === 'bin' ? desk.binFull : undefined} />} onTap={a.run} />
           ))}
+          {!selecting && shortcuts.map((n) => (
+            <HomeIcon key={`lnk${n.id}`} label={n.name} glyph={<span className="mos-lnk"><NodeGlyph node={n} size={SYS_GLYPH} /><i aria-hidden="true"><Icon name="external-link" size={13} /></i></span>} onTap={() => onShortcutOpen?.(n)} onLong={() => setSheet({ type: 'lnk', node: n })} />
+          ))}
           {files.map((n) => (
             <HomeIcon
               key={n.id} label={n.name} glyph={<NodeGlyph node={n} size={SYS_GLYPH} />} selecting={selecting} checked={selIds.has(n.id)}
@@ -346,6 +350,14 @@ export default function MobileShell(p) {
           <Row icon="file-plus" label={tt('PowerPoint presentation', 'عرض PowerPoint')} onClick={after(() => newDoc('pptx'))} />
           <Row icon="file-plus" label={tt('PDF / other file…', 'ملف PDF / نوع آخر…')} onClick={after(() => newDoc('pdf'))} />
           {clip && <Row icon="paste" label={tt('Paste here', 'لصق هنا')} onClick={after(() => pasteInto(desk.id))} />}
+        </Sheet>
+      )}
+
+      {sheet?.type === 'lnk' && (
+        <Sheet title={sheet.node.name} onClose={closeSheet}>
+          <div className="mos-sheet__head"><NodeGlyph node={sheet.node} size={44} /><div><b dir="auto">{sheet.node.name}</b><small dir="auto">{tt('Shortcut', 'اختصار')}{sheet.node.path ? ` · ${sheet.node.path}` : ''}</small></div></div>
+          <Row icon="eye" label={tt('Open', 'فتح')} onClick={after(() => onShortcutOpen?.(sheet.node))} />
+          <Row icon="trash" danger label={tt('Remove shortcut', 'حذف الاختصار')} sub={tt('The original is not deleted', 'الأصل مش بيتحذف')} onClick={after(() => onShortcutRemove?.(sheet.node))} />
         </Sheet>
       )}
 

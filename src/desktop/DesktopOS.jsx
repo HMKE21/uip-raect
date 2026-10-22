@@ -15,7 +15,7 @@ import { useTheme } from '../context/ThemeContext';
 import { APPS, ExplorerApp, PINNED, SettingsApp, ShortcutsApp, TaskManagerApp } from './apps';
 import { AppGlyph, BinGlyph, PcGlyph, Tile, UipMark } from './OsIcons';
 import { Dock, MenuBar } from './macShell';
-import { DESK_ICONS, DOCK_ICONS, hiddenList, iconPosKey, loadIconPos, loadPrefs, saveIconPos, savePrefs } from './prefs';
+import { DESK_ICONS, DOCK_ICONS, hiddenList, idList, iconPosKey, loadIconPos, loadPrefs, saveIconPos, savePrefs } from './prefs';
 import { useSharedClip } from '../lib/driveClipboard';
 import { globalActionFor, keyOf } from './shortcuts';
 import { isSystemNode, useDesktopSync } from './sync';
@@ -381,6 +381,41 @@ export default function DesktopOS() {
     setOverlay(null);
   }, [winOf, wm.active, openApp, openExplorer, dispatch]);
 
+  // ---- desktop shortcuts: an icon that points at a folder / project / file anywhere in My PC (the item itself never moves) ----------
+  const shortcutIds = idList(prefs.shortcuts);
+  const shortcutsRef = useRef(shortcutIds); shortcutsRef.current = shortcutIds;
+  const [lnkNodes, setLnkNodes] = useState({});
+  useEffect(() => {
+    let dead = false;
+    const run = async () => {
+      const ids = shortcutsRef.current;
+      if (!ids.length) { setLnkNodes((m) => (Object.keys(m).length ? {} : m)); return; }
+      try {
+        const d = (await drive.resolve(ids)).data || {};
+        if (dead) return;
+        const map = {}; (d.items || []).forEach((n) => { map[n.id] = n; });
+        setLnkNodes(map);
+        if (d.gone?.length) setPrefs({ shortcuts: shortcutsRef.current.filter((id) => !d.gone.includes(id)) }); // deleted for good: drop the shortcut
+      } catch { /* offline: keep what is shown */ }
+    };
+    run();
+    window.addEventListener('uip-drive-changed', run);
+    return () => { dead = true; window.removeEventListener('uip-drive-changed', run); };
+  }, [shortcutIds, setPrefs]);
+  const addShortcuts = useCallback((ids) => {
+    const cur = shortcutsRef.current;
+    const next = [...new Set([...cur, ...ids.filter(Number.isInteger)])].slice(0, 100);
+    if (next.length === cur.length) { flash(tt('Already on the desktop.', 'موجود بالفعل على سطح المكتب.')); return; }
+    setPrefs({ shortcuts: next });
+    flash(tt('Shortcut added to the desktop.', 'تمت إضافة اختصار على سطح المكتب.'));
+  }, [flash, setPrefs, tt]);
+  const removeShortcuts = useCallback((ids) => {
+    setPrefs({ shortcuts: shortcutsRef.current.filter((id) => !ids.includes(id)) });
+    setSel(new Set());
+    flash(tt('Shortcut removed — the original was not touched.', 'تم حذف الاختصار — الأصل ما اتأثرش.'));
+  }, [flash, setPrefs, tt]);
+  useEffect(() => { const h = (e) => addShortcuts((e.detail?.ids || []).map(Number)); window.addEventListener('uip-desktop-shortcut', h); return () => window.removeEventListener('uip-desktop-shortcut', h); }, [addShortcuts]);
+
   // ---- desktop icons -----------------------------------------------------------------------------------
   const sysIcons = useMemo(() => [
     { key: 'sys:explorer', sys: true, label: tt('This PC', 'جهازي'), glyph: 'explorer', run: () => openExplorer({}) },
@@ -390,7 +425,13 @@ export default function DesktopOS() {
     { key: 'sys:shortcuts', sys: true, label: tt('Shortcuts', 'الاختصارات'), glyph: 'shortcuts', run: () => runCommand('shortcuts') },
   ], [tt, openExplorer, runCommand]);
   const deskItems = useMemo(() => desk.items.filter((n) => !isSystemNode(n)), [desk.items]); // hide the hidden settings files
-  const icons = useMemo(() => [...sysIcons.filter((i) => !hiddenIcons.includes(i.key)), ...deskItems.map((n) => ({ key: `n:${n.id}`, node: n, label: n.name, run: () => openNode(n) }))], [sysIcons, hiddenIcons, deskItems, openNode]);
+  // shortcut icons carry `lnk` (NOT `node`): copy / cut / delete / drag-to-folder act on real desktop files only, never on the original
+  const openShortcut = useCallback((n) => {
+    if (n.type === 'folder' && n.kind === 'project') openFileWin({ kind: 'editor', editor: { kind: 'folder', node: { id: n.id, name: n.name, type: 'folder' } } });
+    else openNode(n);
+  }, [openFileWin, openNode]);
+  const lnkIcons = useMemo(() => shortcutIds.map((id) => lnkNodes[id]).filter(Boolean).map((n) => ({ key: `lnk:${n.id}`, lnk: n, label: n.name, run: () => openShortcut(n) })), [shortcutIds, lnkNodes, openShortcut]);
+  const icons = useMemo(() => [...sysIcons.filter((i) => !hiddenIcons.includes(i.key)), ...deskItems.map((n) => ({ key: `n:${n.id}`, node: n, label: n.name, run: () => openNode(n) })), ...lnkIcons], [sysIcons, hiddenIcons, deskItems, openNode, lnkIcons]);
   const selNodes = icons.filter((i) => sel.has(i.key) && i.node).map((i) => i.node);
 
   // ---- icon grid + remembered positions ----------------------------------------------------------------
@@ -532,6 +573,7 @@ export default function DesktopOS() {
       const L = live.current;
       const nodes = group.map((k) => L.icons.find((i) => i.key === k)?.node).filter(Boolean);
       const target = over ? L.icons.find((i) => i.key === over) : null;
+      if (target?.key === 'sys:bin' && group.some((k) => k.startsWith('lnk:'))) removeShortcuts(group.filter((k) => k.startsWith('lnk:')).map((k) => Number(k.slice(4)))); // a shortcut dropped on the bin: only the shortcut goes
       if (target?.key === 'sys:bin') { // dropping on the Recycle Bin: files go in it, built-in icons are removed from the desktop (restorable from Settings)
         if (nodes.length) trashNodes(nodes);
         const sysKeys = group.filter((k) => k.startsWith('sys:') && k !== 'sys:bin');
@@ -674,7 +716,12 @@ export default function DesktopOS() {
     setOverlay(null);
     if (!sel.has(ic.key)) setSel(new Set([ic.key]));
     const items = [{ label: tt('Open', 'فتح'), icon: 'eye', hint: 'Enter', onClick: ic.run }];
-    if (ic.sys) {
+    if (ic.lnk) {
+      const n = ic.lnk;
+      items.push('sep',
+        { label: tt('Show in My PC', 'إظهار في جهازي'), icon: 'folder', onClick: () => openExplorer(n.parent_id ? { folder: String(n.parent_id) } : {}) },
+        { label: tt('Remove shortcut', 'حذف الاختصار'), icon: 'trash', danger: true, onClick: () => removeShortcuts([n.id]) });
+    } else if (ic.sys) {
       const group = sel.has(ic.key) ? [...sel].filter((k) => k.startsWith('sys:')) : [ic.key];
       items.push('sep', { label: group.length > 1 ? tt(`Remove ${group.length} icons from the desktop`, `حذف ${group.length} أيقونات من سطح المكتب`) : tt('Remove from the desktop', 'حذف من سطح المكتب'), icon: 'trash', hint: 'Del', danger: true, onClick: () => hideIcons(group) });
     } else {
@@ -712,7 +759,7 @@ export default function DesktopOS() {
     else if (mod && pk === 'V' && clip && desk.id) { e.preventDefault(); pasteInto(desk.id); }
     else if (k === 'Enter' && cur.length) { e.preventDefault(); cur.forEach((i) => i.run()); }
     else if (k === 'F2' && cur.length === 1 && cur[0].node) { e.preventDefault(); renameNode(cur[0].node); }
-    else if (k === 'Delete' && (selNodes.length || cur.some((i) => i.sys))) { e.preventDefault(); if (selNodes.length) trashNodes(selNodes); hideIcons(cur.filter((i) => i.sys).map((i) => i.key)); }
+    else if (k === 'Delete' && (selNodes.length || cur.some((i) => i.sys || i.lnk))) { e.preventDefault(); if (selNodes.length) trashNodes(selNodes); hideIcons(cur.filter((i) => i.sys).map((i) => i.key)); const lk = cur.filter((i) => i.lnk).map((i) => i.lnk.id); if (lk.length) removeShortcuts(lk); }
     else if (k === 'F5') { e.preventDefault(); refreshAll(); }
     else if (k === 'Escape') setSel(new Set());
     else if (k.startsWith('Arrow')) {
@@ -968,6 +1015,7 @@ export default function DesktopOS() {
           battery={battery} online={online} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale}
           brightness={brightness} setBrightness={(v) => setPrefs({ brightness: v })} fullscreen={fullscreen} fs={fs}
           wallpaper={wallpaperCss(prefs)} lightWp={wp.dark === false}
+          shortcuts={lnkIcons.map((i) => i.lnk)} onShortcutOpen={openShortcut} onShortcutRemove={(n) => removeShortcuts([n.id])}
           widgets={widgets.items} newWidgetId={newWidgetId} onWidgetChange={(id, patch) => widgets.update(id, patch)} onWidgetRemove={removeWidget}
           onWidgetAdd={(type) => { const id = widgets.add(type, { x: 20, y: 20 }); setNewWidgetId(type === 'note' ? id : null); }}
         />
@@ -987,13 +1035,13 @@ export default function DesktopOS() {
           return (
             <button
               key={ic.key} type="button" data-ikey={ic.key} ref={(el) => { if (el) iconEls.current[ic.key] = el; else delete iconEls.current[ic.key]; }}
-              className={`os-icon${sel.has(ic.key) ? ' is-sel' : ''}${moving ? ' is-dragging' : ''}${drag?.over === ic.key || extOver === ic.key ? ' is-over' : ''}${cutting ? ' is-cut' : ''}`} title={ic.label}
+              className={`os-icon${sel.has(ic.key) ? ' is-sel' : ''}${moving ? ' is-dragging' : ''}${drag?.over === ic.key || extOver === ic.key ? ' is-over' : ''}${cutting ? ' is-cut' : ''}`} title={ic.lnk ? `${ic.label} — ${tt('Shortcut', 'اختصار')}${ic.lnk.path ? ` (${ic.lnk.path})` : ''}` : ic.label}
               style={{ ...cellStyle(p, cell), ...(moving ? { transform: `translate(${drag.dx}px, ${drag.dy}px)` } : null) }}
               onPointerDown={(e) => onIconPointerDown(e, ic)}
               onClick={(e) => clickIcon(e, ic)} onDoubleClick={(e) => { e.stopPropagation(); ic.run(); }} onContextMenu={(e) => iconMenu(e, ic)}
             >
               <span className="os-icon__g">
-                {ic.node ? <NodeGlyph node={ic.node} size={cell.g} /> : ic.glyph === 'explorer' ? <PcGlyph size={cell.g} /> : ic.glyph === 'bin' ? <BinGlyph size={cell.g} full={desk.binFull} /> : <Tile kind={ic.glyph} size={cell.g} />}
+                {ic.node ? <NodeGlyph node={ic.node} size={cell.g} /> : ic.lnk ? <><NodeGlyph node={ic.lnk} size={cell.g} /><i className="os-icon__lnk" aria-hidden="true"><Icon name="external-link" size={Math.max(10, Math.round(cell.g / 4))} /></i></> : ic.glyph === 'explorer' ? <PcGlyph size={cell.g} /> : ic.glyph === 'bin' ? <BinGlyph size={cell.g} full={desk.binFull} /> : <Tile kind={ic.glyph} size={cell.g} />}
               </span>
               <span className="os-icon__l" dir="auto">{ic.label}</span>
             </button>

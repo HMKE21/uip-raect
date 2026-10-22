@@ -266,3 +266,7 @@
 .os--mobile .mos-app .mp[data-size] .mp-items.is-list .mp-item { min-height: 52px; padding-block: 6px; }
 .os--mobile .mos-app .mp[data-size] .mp-items.is-grid { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); }
 .os--mobile .mos-app .mp[data-size] .mp-status { padding-bottom: 6px; }
+
+/* shortcut on the phone home screen */
+.mos-lnk { position: relative; display: inline-grid; }
+.mos-lnk > i { position: absolute; inset-inline-start: -2px; bottom: -2px; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 7px; background: #fff; color: #1d1d1f; box-shadow: 0 1px 4px rgba(0, 0, 0, .45); }

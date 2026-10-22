@@ -75,6 +75,8 @@ export const drive = {
   list: (parentId) => api.get(B, parentId ? { parent_id: parentId } : undefined),
   tree: () => api.get(`${B}/tree`),
   search: (q) => api.get(`${B}/search`, { q }),
+  /** Live data for items by id (desktop shortcuts): { items, gone } — `gone` = deleted for good. */
+  resolve: (ids) => api.get(`${B}/resolve`, { ids: ids.join(',') }),
   /** Search inside the text of files: { items: [{ …node, path, matches: [{ line, text, start, len }], match_count }], pending } */
   searchContent: (q) => api.get(`${B}/search-content`, { q }),
   usage: () => api.get(`${B}/usage`),
