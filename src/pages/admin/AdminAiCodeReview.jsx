@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, errorMessage, getTokens } from '../../api/client';
+import { safeHref } from '../../lib/safeUrl';
 import Icon from '../../components/Icon';
 import { ActionPreviewButton } from '../../components/FilePreviewButton';
 import { saveBlob } from '../../lib/exporter';
@@ -352,7 +353,7 @@ export default function AdminAiCodeReview() {
                     <td>
                       <strong>{title}</strong><br />
                       {r.repository_url
-                        ? <a href={r.repository_url} target="_blank" rel="noopener noreferrer" className="adm-muted"><Icon name="github" size={12} /> GitHub</a>
+                        ? <a href={safeHref(r.repository_url)} target="_blank" rel="noopener noreferrer" className="adm-muted"><Icon name="github" size={12} /> GitHub</a>
                         : <span className="adm-muted">—</span>}
                       <br /><span className="adm-muted">v{r.version || 1}</span>
                     </td>

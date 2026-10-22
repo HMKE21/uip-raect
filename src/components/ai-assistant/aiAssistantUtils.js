@@ -214,8 +214,10 @@ export function renderMarkdown(src, copyLabel) {
   }
 
   function inline(text) {
+    // Remote images are NOT auto-loaded: a model reply (or an injected prompt) could otherwise leak chat data to any
+    // server through the image URL. Shown as a normal link instead — the user decides whether to open it.
     text = text.replace(/!\[([^\]]*)\]\(([^)\s]+)[^)]*\)/g, (m, alt, url) =>
-      (/^https?:\/\//i.test(url) ? '<img alt="' + alt + '" src="' + url + '" style="max-width:100%;border-radius:8px;">' : m));
+      (/^https?:\/\//i.test(url) ? '<a href="' + url + '" target="_blank" rel="noopener noreferrer nofollow">' + (alt || url) + '</a>' : m));
     text = text.replace(/\[([^\]]+)\]\(([^)\s]+)[^)]*\)/g, (m, label, url) =>
       (/^https?:\/\//i.test(url) ? '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + label + '</a>' : m));
     text = text.replace(/`([^`]+)`/g, '<code>$1</code>');

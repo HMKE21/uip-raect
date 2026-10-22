@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api, errorMessage } from '../../api/client';
+import { safeHref } from '../../lib/safeUrl';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
@@ -266,7 +267,7 @@ function MaterialCard({ m, ar, busy, showCourse, onPreview, onDownload, onSave, 
         )}
         {m.body && <p className="cm-item__body">{m.body}</p>}
         {m.has_file && <p className="cm-item__file"><Icon name="paperclip" size={13} /> <bdi>{m.file_name}</bdi>{m.file_size != null && <small> · {fmtSize(m.file_size)}</small>}</p>}
-        {m.external_url && !m.embed_url && <p className="cm-item__file"><Icon name="link" size={13} /> <a href={m.external_url} target="_blank" rel="noopener noreferrer"><bdi>{m.external_url}</bdi></a></p>}
+        {m.external_url && !m.embed_url && <p className="cm-item__file"><Icon name="link" size={13} /> <a href={safeHref(m.external_url)} target="_blank" rel="noopener noreferrer"><bdi>{m.external_url}</bdi></a></p>}
         <p className="cm-item__meta">
           {[m.author_name ? `${m.author_name}${m.author_role ? ` (${roleLabel(m.author_role, ar)})` : ''}` : null, fmtDate(m.created_at, ar)].filter(Boolean).join(' · ')}
         </p>
@@ -274,7 +275,7 @@ function MaterialCard({ m, ar, busy, showCourse, onPreview, onDownload, onSave, 
       <div className="cm-item__actions">
         {canPreview && <button type="button" className="btn btn-outline btn-sm" onClick={onPreview} disabled={busy}><Icon name="eye" size={14} /> {ar ? 'معاينة' : 'Preview'}</button>}
         {m.external_url && !m.embed_url && !m.has_file && (
-          <a className="btn btn-outline btn-sm" href={m.external_url} target="_blank" rel="noopener noreferrer"><Icon name="external-link" size={14} /> {ar ? 'فتح الرابط' : 'Open link'}</a>
+          <a className="btn btn-outline btn-sm" href={safeHref(m.external_url)} target="_blank" rel="noopener noreferrer"><Icon name="external-link" size={14} /> {ar ? 'فتح الرابط' : 'Open link'}</a>
         )}
         {m.has_file && <button type="button" className="btn btn-outline btn-sm" onClick={onDownload} disabled={busy}><Icon name="download" size={14} /> {ar ? 'تحميل' : 'Download'}</button>}
         {isStudentView && (

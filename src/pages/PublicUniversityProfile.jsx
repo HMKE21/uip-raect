@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { api } from '../api/client';
+import { safeHref } from '../lib/safeUrl';
 import Icon from '../components/Icon';
 import SiteFooter from '../components/SiteFooter';
 import PublicTopbar from '../components/PublicTopbar';
@@ -116,7 +117,7 @@ export default function PublicUniversityProfile() {
                   {copied ? t('Link copied', 'تم نسخ الرابط') : t('Copy profile link', 'نسخ رابط البروفايل')}
                 </button>
                 {website && (
-                  <a href={website} target="_blank" rel="noopener noreferrer" className="prf-btn prf-btn--primary">
+                  <a href={safeHref(website)} target="_blank" rel="noopener noreferrer" className="prf-btn prf-btn--primary">
                     <Icon name="globe" size={16} />
                     {t('Visit website', 'زيارة الموقع')}
                   </a>
@@ -129,7 +130,7 @@ export default function PublicUniversityProfile() {
                 {website && (
                   <li>
                     <Icon name="globe" size={16} />
-                    <a href={website} target="_blank" rel="noopener noreferrer">{websiteLabel}</a>
+                    <a href={safeHref(website)} target="_blank" rel="noopener noreferrer">{websiteLabel}</a>
                   </li>
                 )}
               </ul>

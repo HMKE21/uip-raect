@@ -46,6 +46,8 @@ async function serverConnect(hint) {
     let done = false;
     const finish = (fn, v) => { if (done) return; done = true; window.removeEventListener('message', onMsg); clearInterval(watch); fn(v); };
     const onMsg = (ev) => {
+      // only the pop-up we opened may report the result (any other window/iframe could forge this message)
+      if (ev.source !== popup) return;
       const d = ev.data;
       if (!d || d.source !== 'uip-gdrive') return;
       if (d.ok) finish(resolve, { email: d.email || '' });

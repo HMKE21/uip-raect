@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, errorMessage } from '../api/client';
+import { safeHref } from '../lib/safeUrl';
 import Icon from '../components/Icon';
 import { useLanguage } from '../context/LanguageContext';
 import { useLive } from '../hooks/useLive';
@@ -183,7 +184,7 @@ function NotifRow({ n, checked, onCheck, onAction }) {
           )}
           {n.link_url && (
             isExternal(n.link_url)
-              ? <a href={n.link_url} className="nc-row__view" target="_blank" rel="noreferrer">{tx.view} <Icon name="arrow-right" size={13} className="icon-flip" /></a>
+              ? <a href={safeHref(n.link_url)} className="nc-row__view" target="_blank" rel="noreferrer">{tx.view} <Icon name="arrow-right" size={13} className="icon-flip" /></a>
               : <Link to={n.link_url} className="nc-row__view" onClick={() => { if (!isRead) onAction(n.id, 'read', { silent: true }); }}>{tx.view} <Icon name="arrow-right" size={13} className="icon-flip" /></Link>
           )}
           <div className="nc-row__actions">

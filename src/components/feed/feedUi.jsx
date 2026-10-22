@@ -1,3 +1,4 @@
+import { safeHref } from '../../lib/safeUrl';
 import Icon from '../Icon';
 import { parseServerDate } from '../../utils/serverDate';
 
@@ -64,7 +65,7 @@ export function Attachments({ items = [], t }) {
         <div className="fd-files">
           {rest.map((a, i) => (
             <a key={a.id ?? i} className="fd-file" target="_blank" rel="noopener noreferrer"
-              href={a.kind === 'link' ? a.external_url : `/${a.file_path}`}>
+              href={a.kind === 'link' ? safeHref(a.external_url) : `/${a.file_path}`}>
               <Icon name={KIND_ICON[a.kind] || 'file'} size={14} />
               <span>{a.kind === 'link' ? (a.link_title || a.external_url) : (a.original_name || a.kind)}</span>
             </a>

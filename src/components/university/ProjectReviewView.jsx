@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import CodeReviewReportPanel from '../CodeReviewReportPanel';
 import { api, errorMessage } from '../../api/client';
+import { safeHref } from '../../lib/safeUrl';
 import Icon from '../Icon';
 import { Alert, Mono, Pill, Skeletons } from './umUi';
 import { useLanguage } from '../../context/LanguageContext';
@@ -209,7 +210,7 @@ export default function ProjectReviewView({ scope }) {
               </>
             )}
             {p.repository_url && (
-              <a href={p.repository_url} target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{ marginTop: 16 }}>
+              <a href={safeHref(p.repository_url)} target="_blank" rel="noopener noreferrer" className="btn btn-outline" style={{ marginTop: 16 }}>
                 <Icon name="link" size={16} /> {ar ? 'المستودع' : 'Repository'}
               </a>
             )}
@@ -239,7 +240,7 @@ export default function ProjectReviewView({ scope }) {
             <section className="um-panel">
               <div className="um-panel__head"><h2>{ar ? 'الروابط' : 'Links'}</h2></div>
               {reviewLinks.map((l, i) => (
-                <Row key={i} label={l.label || l.type}><a href={l.url} target="_blank" rel="noopener noreferrer">{l.url}</a></Row>
+                <Row key={i} label={l.label || l.type}><a href={safeHref(l.url)} target="_blank" rel="noopener noreferrer">{l.url}</a></Row>
               ))}
             </section>
           )}
