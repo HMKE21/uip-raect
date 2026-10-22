@@ -43,6 +43,8 @@ export default function CoursesManager({ role }) {
 
   const [editing, setEditing] = useState(null); // null | 'new' | course
   const [managing, setManaging] = useState(null); // course
+  const [manageTab, setManageTab] = useState('students');
+  const openManage = (c, tab = 'students') => { setManageTab(tab); setManaging(c); };
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(() => {
@@ -103,6 +105,7 @@ export default function CoursesManager({ role }) {
         {managing && (
           <CourseManageModal
             course={managing}
+            initialTab={manageTab}
             canAssign={canAssign}
             onClose={() => { setManaging(null); load(); }}
           />
@@ -192,7 +195,8 @@ export default function CoursesManager({ role }) {
                   <div className="st-pcard__actions xc-actions">
                     {c.can_manage ? (
                       <>
-                        <button type="button" className="btn btn-primary btn-sm" onClick={() => setManaging(c)}>{ar ? 'الطلاب' : 'Students'}</button>
+                        <button type="button" className="btn btn-primary btn-sm" onClick={() => openManage(c, 'content')}><Icon name="folder" size={14} /> {ar ? 'المحتوى' : 'Content'}</button>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => openManage(c, 'students')}>{ar ? 'الطلاب' : 'Students'}</button>
                         <span className="xc-tools">
                           <button type="button" className="ex-icon-btn" title={ar ? 'تعديل' : 'Edit'} aria-label={ar ? 'تعديل' : 'Edit'} onClick={() => setEditing(c)}><Icon name="edit" size={15} /></button>
                           <button type="button" className="ex-icon-btn" disabled={busyId === c.id} title={c.status === 'active' ? (ar ? 'أرشفة' : 'Archive') : (ar ? 'استعادة' : 'Restore')} aria-label={c.status === 'active' ? (ar ? 'أرشفة' : 'Archive') : (ar ? 'استعادة' : 'Restore')} onClick={() => toggleArchive(c)}>
@@ -297,7 +301,10 @@ export default function CoursesManager({ role }) {
                 <div className="um-fcard__acts">
                   {c.can_manage ? (
                     <>
-                      <button type="button" className="btn btn-outline" onClick={() => setManaging(c)}>
+                      <button type="button" className="btn btn-primary" onClick={() => openManage(c, 'content')}>
+                        <Icon name="folder" size={15} /> {ar ? 'المحتوى' : 'Content'}
+                      </button>
+                      <button type="button" className="btn btn-outline" onClick={() => openManage(c, 'students')}>
                         <Icon name="users" size={15} /> {ar ? 'الطلاب والمدرّسون' : (canAssign ? 'Students & teachers' : 'Students')}
                       </button>
                       <span className="um-spacer" />
@@ -326,6 +333,7 @@ export default function CoursesManager({ role }) {
       {managing && (
         <CourseManageModal
           course={managing}
+          initialTab={manageTab}
           canAssign={canAssign}
           onClose={() => { setManaging(null); load(); }}
         />
@@ -443,10 +451,10 @@ function CourseFormModal({ role, course, meta, onClose, onDone }) {
 
 /* ------------------------------------------------------------------------------------- */
 
-function CourseManageModal({ course, canAssign, onClose }) {
+function CourseManageModal({ course, canAssign, initialTab = 'students', onClose }) {
   const { locale } = useLanguage();
   const ar = locale === 'ar';
-  const [tab, setTab] = useState('students');
+  const [tab, setTab] = useState(initialTab);
   const [roster, setRoster] = useState([]);
   const [staff, setStaff] = useState(course.staff || []);
   const [allStaff, setAllStaff] = useState([]);
