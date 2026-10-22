@@ -9,6 +9,8 @@ import { Clock, NodeGlyph } from './shell';
 import { APPS } from './apps';
 import { winTitle } from './wm';
 import { MobileWidgets } from './Widgets';
+import ContentMatches from '../components/ContentMatches';
+import { useContentSearch } from '../lib/useContentSearch';
 import './mobile.css';
 
 export { useIsMobileOS } from './useIsMobileOS';
@@ -403,6 +405,7 @@ export default function MobileShell(p) {
 function SearchSheet({ tt, ar, apps, files, onClose, onApp, onNode }) {
   const [q, setQ] = useState(''); const [found, setFound] = useState([]);
   const t = q.trim().toLowerCase();
+  const content = useContentSearch(q);
   useEffect(() => {
     if (t.length < 2) { setFound([]); return undefined; }
     let dead = false;
@@ -422,7 +425,8 @@ function SearchSheet({ tt, ar, apps, files, onClose, onApp, onNode }) {
       {localHits.map((n) => <Row key={n.id} icon={<NodeGlyph node={n} size={32} />} label={n.name} onClick={() => onNode(n)} />)}
       {deepHits.length > 0 && <h4 className="mos-sheet__h">{tt('In My PC', 'في جهازي')}</h4>}
       {deepHits.map((n) => <Row key={n.id} icon={<NodeGlyph node={n} size={32} />} label={n.name} sub={n.path} onClick={() => onNode(n)} />)}
-      {t && !appHits.length && !localHits.length && !deepHits.length && <p className="mos-sheet__none">{tt('No results', 'مفيش نتايج')}</p>}
+      <ContentMatches res={content} tt={tt} compact max={10} onOpen={onNode} />
+      {t && !appHits.length && !localHits.length && !deepHits.length && !content.items.length && !content.loading && <p className="mos-sheet__none">{tt('No results', 'مفيش نتايج')}</p>}
     </Sheet>
   );
 }

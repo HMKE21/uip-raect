@@ -75,6 +75,8 @@ export const drive = {
   list: (parentId) => api.get(B, parentId ? { parent_id: parentId } : undefined),
   tree: () => api.get(`${B}/tree`),
   search: (q) => api.get(`${B}/search`, { q }),
+  /** Search inside the text of files: { items: [{ …node, path, matches: [{ line, text, start, len }], match_count }], pending } */
+  searchContent: (q) => api.get(`${B}/search-content`, { q }),
   usage: () => api.get(`${B}/usage`),
   trashList: () => api.get(`${B}/trash`),
   createFolder: (parentId, name) => api.post(`${B}/folders`, { parent_id: parentId || null, name }),

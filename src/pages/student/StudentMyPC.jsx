@@ -23,6 +23,8 @@ import { FileGlyph, FolderGlyph } from '../../desktop/OsIcons';
 import { extOf, isTextName, opensInEditor } from '../../lib/driveFileKinds';
 import { useSharedClip } from '../../lib/driveClipboard';
 import { DROP_EVENT, readDragIds, setDragData } from '../../lib/driveDnd';
+import ContentMatches from '../../components/ContentMatches';
+import { useContentSearch } from '../../lib/useContentSearch';
 import '../../styles/css/my-pc.css';
 
 const ZipWorkbench = lazy(() => import('../../components/zipbench/ZipWorkbench'));
@@ -245,6 +247,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
   const [busy, setBusy] = useState(false);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState(null);
+  const content = useContentSearch(query, !inTrash); // matches inside file text (code, notes…)
   const [openTree, setOpenTree] = useState(() => new Set());
   const [side, setSide] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -968,7 +971,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
           {!loading && !error && !inTrash && (
             items.length === 0
               ? (
-                <div className="mp-pad">
+                <div className="mp-pad" hidden={content.items.length > 0 || content.loading}>
                   <EmptyState
                     icon={results ? 'search' : 'folder'}
                     title={results ? tt('No matches', 'لا توجد نتائج') : tt('This folder is empty', 'المجلد فاضي')}
@@ -1016,6 +1019,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                 </div>
               )
           )}
+          {!loading && !error && !inTrash && <ContentMatches res={content} tt={tt} onOpen={(n) => openNode(n)} />}
         </main>
       </div>
 

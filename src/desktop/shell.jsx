@@ -7,6 +7,8 @@ import { desktopApi, lockError } from './desktopApi';
 import { APPS } from './apps';
 import { winTitle } from './wm';
 import { AppGlyph, FileGlyph, FolderGlyph } from './OsIcons';
+import ContentMatches from '../components/ContentMatches';
+import { useContentSearch } from '../lib/useContentSearch';
 import './lock.css';
 
 export const extOf = (n) => { const s = String(n || ''); const i = s.lastIndexOf('.'); return i > 0 ? s.slice(i + 1).toLowerCase() : ''; };
@@ -211,12 +213,14 @@ export function RunDialog({ ar, tt, onRun, onClose, recents = [], onOpenRecent, 
   const items = useMemo(() => RUN_ITEMS.filter((i) => !q || `${i.cmd} ${i.en} ${i.ar}`.toLowerCase().includes(q)), [q]);
   // recently opened files / folders come first (filtered by what is typed)
   const recentRows = useMemo(() => recents.filter((r) => !q || r.name.toLowerCase().includes(q)).slice(0, 6), [recents, q]);
-  const rows = useMemo(() => [...recentRows.map((r) => ({ key: `r:${r.id}`, recent: r })), ...items.map((it) => ({ key: it.cmd, cmd: it }))], [recentRows, items]);
+  const content = useContentSearch(v); // matches inside file text (2+ characters)
+  const contentRows = useMemo(() => content.items.slice(0, 6), [content.items]);
+  const rows = useMemo(() => [...recentRows.map((r) => ({ key: `r:${r.id}`, recent: r })), ...items.map((it) => ({ key: it.cmd, cmd: it })), ...contentRows.map((c) => ({ key: `c:${c.id}`, content: c }))], [recentRows, items, contentRows]);
   useEffect(() => { setSel(0); }, [q]);
   useEffect(() => { setSel((i) => Math.min(i, Math.max(0, rows.length - 1))); }, [rows.length]);
   useEffect(() => { listRef.current?.querySelector('.is-sel')?.scrollIntoView({ block: 'nearest' }); }, [sel]);
   const run = (text) => { const r = onRun(text); if (r === false) setErr(tt('Nothing matches that.', 'مش لاقي الأمر ده.')); };
-  const pick = (row) => { if (row.recent) onOpenRecent?.(row.recent); else run(row.cmd.cmd); };
+  const pick = (row) => { if (row.recent) onOpenRecent?.(row.recent); else if (row.content) onOpenRecent?.({ id: row.content.id, name: row.content.name, type: 'file', size_bytes: row.content.size_bytes }); else run(row.cmd.cmd); };
   const go = () => { if (rows[sel]) pick(rows[sel]); else run(v.trim()); };
   const onKey = (e) => {
     if (e.key === 'Enter') { e.preventDefault(); go(); }
@@ -245,7 +249,7 @@ export function RunDialog({ ar, tt, onRun, onClose, recents = [], onOpenRecent, 
         {rows.length > 0 ? (
           <ul className="os-spot__list" ref={listRef} role="listbox">
             {rows.map((row, i) => {
-              const r = row.recent; const it = row.cmd;
+              const r = row.recent; const it = row.cmd; const c = row.content;
               return (
                 <li key={row.key} className={r ? 'os-spot__item os-spot__item--recent' : 'os-spot__item'}>
                   {i === 0 && r && (
@@ -254,12 +258,15 @@ export function RunDialog({ ar, tt, onRun, onClose, recents = [], onOpenRecent, 
                       {!q && onClearRecents && <button type="button" onClick={onClearRecents}>{tt('Clear', 'مسح')}</button>}
                     </div>
                   )}
+                  {c && i === recentRows.length + items.length && <div className="os-spot__head"><span>{tt('Inside your files', 'داخل ملفاتك')}</span></div>}
                   {it && i === recentRows.length && recentRows.length > 0 && <div className="os-spot__head"><span>{tt('Apps & commands', 'التطبيقات والأوامر')}</span></div>}
                   <button type="button" role="option" aria-selected={i === sel} className={i === sel ? 'is-sel' : ''} onPointerEnter={() => setSel(i)} onClick={() => pick(row)}>
-                    {r ? <NodeGlyph node={r} size={34} /> : <AppGlyph app={it.glyph} size={34} />}
+                    {r || c ? <NodeGlyph node={r || c} size={34} /> : <AppGlyph app={it.glyph} size={34} />}
                     {r
                       ? <span className="os-spot__txt"><b dir="auto">{r.name}</b><small>{r.type === 'folder' ? tt('Folder', 'مجلد') : tt('File', 'ملف')} · {when(r.ts)}</small></span>
-                      : <span className="os-spot__txt"><b>{ar ? it.ar : it.en}</b><small>{ar ? it.en : it.ar}</small></span>}
+                      : c
+                        ? <span className="os-spot__txt"><b dir="auto">{c.name}</b><small dir="auto">{c.matches?.[0] ? `${c.matches[0].line}: ${c.matches[0].text.trim()}` : c.path}</small></span>
+                        : <span className="os-spot__txt"><b>{ar ? it.ar : it.en}</b><small>{ar ? it.en : it.ar}</small></span>}
                     <kbd className="os-spot__enter" aria-hidden="true">↵</kbd>
                   </button>
                   {r && onRemoveRecent && <button type="button" className="os-spot__forget" title={tt('Remove from recent (Shift+Del)', 'إزالة من الأخيرة (Shift+Del)')} aria-label={tt('Remove from recent', 'إزالة من الأخيرة')} onClick={() => onRemoveRecent(r.id)}><Icon name="x" size={13} /></button>}
@@ -282,6 +289,7 @@ export function RunDialog({ ar, tt, onRun, onClose, recents = [], onOpenRecent, 
 export function StartMenu({ ar, tt, user, apps, desktopItems, onOpenApp, onOpenNode, onFound, onLock, onPortal, onClose }) {
   const [q, setQ] = useState('');
   const [found, setFound] = useState([]);
+  const content = useContentSearch(q); // text inside your files
   const name = user?.full_name || user?.email || tt('Student', 'طالب');
   const list = useMemo(() => apps.filter((a) => `${a.en} ${a.ar} ${a.id}`.toLowerCase().includes(q.trim().toLowerCase())), [apps, q]);
   useEffect(() => {
@@ -312,8 +320,9 @@ export function StartMenu({ ar, tt, user, apps, desktopItems, onOpenApp, onOpenN
               {found.map((n) => (
                 <button key={n.id} type="button" onClick={() => onFound(n)}><NodeGlyph node={n} size={26} /><span dir="auto">{n.name}</span><small dir="auto">{n.path}</small></button>
               ))}
-              {!found.length && <p className="os-start__empty">{tt('Nothing found.', 'مفيش نتائج.')}</p>}
+              {!found.length && !content.items.length && !content.loading && <p className="os-start__empty">{tt('Nothing found.', 'مفيش نتائج.')}</p>}
             </div>
+            <ContentMatches res={content} tt={tt} compact max={8} onOpen={onFound} />
           </>
         )}
         {!q && desktopItems.length > 0 && (
