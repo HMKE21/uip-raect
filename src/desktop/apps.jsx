@@ -7,6 +7,7 @@ import { AppGlyph } from './OsIcons';
 import { desktopApi, lockError } from './desktopApi';
 import { CloudPanel } from './CloudSettings';
 import SecuritySettings from './SecuritySettings';
+import { wipeLocalData } from '../lib/wipeLocalData';
 
 const StudentMyPC = lazy(() => import('../pages/student/StudentMyPC'));
 
@@ -52,6 +53,61 @@ function IconToggles({ list, hidden, onToggle, ar }) {
         );
       })}
     </div>
+  );
+}
+
+/** Settings > System > Reset this PC: erases every file, setting, widget and the lock password, and starts over like a new PC. */
+const PC_NAME = 'UIP-PC';
+function ResetPc({ tt }) {
+  const [open, setOpen] = useState(false);
+  const [pw, setPw] = useState(''); const [word, setWord] = useState('');
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const ready = word.trim().toLowerCase() === PC_NAME.toLowerCase();
+  const close = () => { setOpen(false); setPw(''); setWord(''); setErr(''); };
+  const run = async (e) => {
+    e.preventDefault();
+    if (!ready || busy) return;
+    setBusy(true); setErr('');
+    try {
+      await desktopApi.resetPc({ confirm: 'RESET', account_password: pw });
+      await wipeLocalData({ keepSession: true }); // this device forgets everything too; the person stays signed in
+      window.location.reload();
+    } catch (x) { setErr(lockError(x)); setBusy(false); }
+  };
+  return (
+    <Section title={tt('Reset this PC', 'إعادة تهيئة الجهاز')}>
+      <p className="os-set__hint os-set__hint--top">{tt('Erase everything and start again like a brand-new PC.', 'امسح كل حاجة وابدأ من جديد زي جهاز جديد.')}</p>
+      {!open && <div className="os-set__btns"><button type="button" className="os-btn os-btn--danger" onClick={() => setOpen(true)}>{tt('Reset this PC…', 'إعادة تهيئة الجهاز…')}</button></div>}
+      {open && (
+        <form className="os-set__form os-reset" onSubmit={run}>
+          <div className="os-reset__warn" role="alert">
+            <Icon name="alert-triangle" size={22} />
+            <div>
+              <b>{tt('This cannot be undone.', 'مفيش رجوع من الخطوة دي.')}</b>
+              <ul>
+                <li>{tt('ALL your files and folders on My PC, the Recycle Bin, old versions and share links are deleted permanently.', 'كل ملفاتك ومجلداتك في «جهازي» والسلة والنسخ القديمة وروابط المشاركة هتتمسح نهائيًا.')}</li>
+                <li>{tt('Wallpaper, icons, Dock, widgets and sticky notes go back to the defaults.', 'الخلفية والأيقونات والـ Dock والويدجت والملاحظات اللاصقة هترجع للوضع الافتراضي.')}</li>
+                <li>{tt('The lock-screen password is removed.', 'باسورد شاشة القفل هيتلغي.')}</li>
+                <li>{tt('Your account and sign-in are not affected.', 'حسابك وتسجيل دخولك مش هيتأثروا.')}</li>
+              </ul>
+            </div>
+          </div>
+          <label>
+            <span>{tt('Your account password (leave empty if you sign in with Google)', 'باسورد حسابك (سيبه فاضي لو بتدخل بجوجل)')}</span>
+            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="current-password" maxLength={72} disabled={busy} />
+          </label>
+          <label>
+            <span>{tt(`Type ${PC_NAME} to confirm`, `اكتب ${PC_NAME} للتأكيد`)}</span>
+            <input value={word} onChange={(e) => setWord(e.target.value)} dir="ltr" autoComplete="off" spellCheck={false} placeholder={PC_NAME} disabled={busy} />
+          </label>
+          {err && <p className="os-set__err" role="alert">{err}</p>}
+          <div className="os-set__btns">
+            <button type="submit" className="os-btn os-btn--danger" disabled={!ready || busy}>{busy ? tt('Erasing…', 'جاري المسح…') : tt('Erase everything and reset', 'امسح كل حاجة وأعد التهيئة')}</button>
+            <button type="button" className="os-btn" onClick={close} disabled={busy}>{tt('Cancel', 'إلغاء')}</button>
+          </div>
+        </form>
+      )}
+    </Section>
   );
 }
 
@@ -227,6 +283,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
                 </>
               ) : <p className="os-set__hint">…</p>}
             </Section>
+            <ResetPc tt={tt} />
           </>
         )}
         {tab === 'about' && (

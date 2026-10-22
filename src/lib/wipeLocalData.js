@@ -1,4 +1,5 @@
 import { nativeClearMediaCache } from '../native';
+import { ACCESS_KEY, REFRESH_KEY, USER_KEY, IDLE_KEY, ACTIVITY_KEY, USER_IDLE_KEY } from '../api/client';
 
 /**
  * "Sign out and erase my data from this device" — for shared computers.
@@ -9,10 +10,12 @@ import { nativeClearMediaCache } from '../native';
  * Browser-managed data (the browser's own saved-password list / autofill) can't be reached from a web page.
  */
 const KEEP = ['uip_locale', 'uip_staff_session'];
+/** "Reset my PC" keeps the person signed in: these hold the session. */
+const SESSION = [ACCESS_KEY, REFRESH_KEY, USER_KEY, IDLE_KEY, ACTIVITY_KEY, USER_IDLE_KEY];
 
-export function wipeStorageSync() {
+export function wipeStorageSync(extraKeep = []) {
   const keep = {};
-  try { KEEP.forEach((k) => { const v = localStorage.getItem(k); if (v !== null) keep[k] = v; }); } catch { /* blocked */ }
+  try { [...KEEP, ...extraKeep].forEach((k) => { const v = localStorage.getItem(k); if (v !== null) keep[k] = v; }); } catch { /* blocked */ }
   try { localStorage.clear(); } catch { /* blocked */ }
   try { sessionStorage.clear(); } catch { /* blocked */ }
   try { Object.entries(keep).forEach(([k, v]) => localStorage.setItem(k, v)); } catch { /* blocked */ }
@@ -35,10 +38,12 @@ async function wipeAsync() {
   await Promise.race([Promise.allSettled(jobs), new Promise((res) => setTimeout(res, 1500))]);
 }
 
-export async function wipeLocalData() {
-  wipeStorageSync();
+export async function wipeLocalData({ keepSession = false } = {}) {
+  const extra = keepSession ? SESSION : [];
+  const wipe = () => wipeStorageSync(extra);
+  wipe();
   // things that write on their way out (desktop sync flush, window layout…) must not bring data back
-  try { window.addEventListener('pagehide', wipeStorageSync); } catch { /* ignore */ }
+  try { window.addEventListener('pagehide', wipe); } catch { /* ignore */ }
   await wipeAsync();
-  wipeStorageSync();
+  wipe();
 }

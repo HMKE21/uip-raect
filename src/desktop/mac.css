@@ -417,3 +417,9 @@ body.os-dragging .os-wall { transition: none; }
 .os-dlg .os-dlg__note { max-width: none; margin-top: 12px; font-size: 12px; color: var(--g-mute); }
 .os-dlg--confirm footer.os-dlg__foot1 { grid-template-columns: 1fr; margin-top: 14px; }
 .os-start__foot button.is-danger { color: #ff6b6b; }
+
+/* Settings > System > Reset this PC */
+.os-reset__warn { display: flex; gap: 12px; padding: 14px; border-radius: 14px; background: color-mix(in srgb, #ff453a 12%, transparent); border: .5px solid color-mix(in srgb, #ff453a 50%, transparent); color: var(--g-fg); }
+.os-reset__warn > svg { flex: none; color: #ff453a; margin-top: 2px; }
+.os-reset__warn b { display: block; margin-bottom: 4px; color: #ff453a; font-size: 14px; }
+.os-reset__warn ul { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; line-height: 1.55; }
