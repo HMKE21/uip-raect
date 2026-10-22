@@ -7,6 +7,7 @@ import Icon from '../../components/Icon';
 import FileViewer from '../../components/FileViewer';
 import NewFileDialog from '../../components/NewFileDialog';
 import ShareDialog from '../../components/ShareDialog';
+import MySharedLinks from '../../components/MySharedLinks';
 import StorageDialog from '../../components/StorageDialog';
 import DeleteProgressHost from '../../components/DeleteProgress';
 import VersionHistoryDialog from '../../components/VersionHistoryDialog';
@@ -1047,6 +1048,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
           <ul className="mp-quick" aria-label={tt('Quick access', 'وصول سريع')}>
             <li><button type="button" className={special?.type === 'fav' ? 'is-on' : ''} onClick={() => showSpecial({ type: 'fav' })}><Icon name="star" size={16} /><span>{tt('Favorites', 'المفضلة')}</span>{marks.favs.length > 0 && <em>{marks.favs.length}</em>}</button></li>
             <li><button type="button" className={special?.type === 'shared' ? 'is-on' : ''} onClick={() => showSpecial({ type: 'shared' })}><Icon name="users" size={16} /><span>{tt('Shared with me', 'مشاركة معي')}</span>{marks.shared.length > 0 && <em>{marks.shared.length}</em>}</button></li>
+            <li><button type="button" onClick={() => setDlg({ type: 'mylinks' })}><Icon name="link" size={16} /><span>{tt('My shared links', 'روابطي المشاركة')}</span></button></li>
             {marks.allTags.map((t) => (
               <li key={t.name}><button type="button" className={special?.type === 'tag' && special.tag === t.name ? 'is-on' : ''} onClick={() => showSpecial({ type: 'tag', tag: t.name })}><i className="mp-quick__dot" style={{ background: tagColor(t.name) }} /><span dir="auto">{t.name}</span><em>{t.count}</em></button></li>
             ))}
@@ -1250,7 +1252,8 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
           onRestored={() => { reload({ quiet: true }); window.dispatchEvent(new Event('uip-drive-changed')); }} />
       )}
       {dlg?.type === 'storage' && <StorageDialog ar={ar} locale={locale} onClose={() => setDlg(null)} onOpenFolder={openFolder} />}
-      {dlg?.type === 'share' && <ShareDialog node={dlg.node} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} />}
+      {dlg?.type === 'share' && <ShareDialog node={dlg.node} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} onManage={() => setDlg({ type: 'mylinks' })} />}
+      {dlg?.type === 'mylinks' && <MySharedLinks ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} />}
       {dlg?.type === 'name' && <NameDialog dlg={dlg} tt={tt} onClose={() => setDlg(null)} />}
       {dlg?.type === 'tags' && <TagsDialog node={dlg.node} marks={marks} tt={tt} onClose={() => setDlg(null)} />}
       {dlg?.type === 'newfile' && (

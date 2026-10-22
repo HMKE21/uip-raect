@@ -772,10 +772,10 @@ function setupMediaPermissions() {
 // ---- Exam mode: block screenshots and screen recording -----------------------------
 // Android's FLAG_SECURE (through the privacy-screen plugin) turns screenshots into a blocked/black capture,
 // stops screen recording and Cast, and hides the app preview in the recent-apps list. It is switched on only
-// while an exam attempt is open (not on the result page) and off everywhere else.
+// while an exam attempt is open (not on the result page) or a My PC share page (/s/<token>) is open, and off everywhere else.
 let screenSecure = null;
 function applyScreenSecurity(path) {
-  const want = /^\/student\/exam-attempt\/[^/]+\/?$/.test(path);
+  const want = /^\/student\/exam-attempt\/[^/]+\/?$/.test(path) || /^\/s\/[A-Za-z0-9]+\/?$/.test(path);
   if (want === screenSecure) return;
   screenSecure = want;
   import('@capacitor-community/privacy-screen')

@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { errorMessage } from '../api/client';
-import { sharedApi } from '../lib/driveApi';
+import { sharedApi, shareSession } from '../lib/driveApi';
 import { saveBlob } from '../lib/exporter';
 import { startSharedGuard } from '../lib/sharedGuard';
 import { avatarSrc } from '../components/insight/AvatarUploader';
@@ -28,6 +28,93 @@ function SenderAvatar({ name, src }) {
   );
 }
 
+/** Gate shown before the content when the owner asked for the visitor's details and/or a password. */
+function GateForm({ gate, token, t, ar, onDone }) {
+  const [f, setF] = useState({ name: '', email: '', phone: '', password: '' });
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [fields, setFields] = useState({});
+  const [msg, setMsg] = useState('');
+  const set = (k) => (e) => { setF((v) => ({ ...v, [k]: e.target.value })); setFields((x) => ({ ...x, [k]: undefined })); };
+
+  const check = () => {
+    const bad = {};
+    if (gate.needs_info) {
+      if (f.name.trim().length < 2) bad.name = t('Enter your full name.', 'اكتب اسمك بالكامل.');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(f.email.trim())) bad.email = t('Enter a valid email address.', 'اكتب إيميل صحيح.');
+      const digits = f.phone.replace(/\D/g, '');
+      if (digits.length < 7 || digits.length > 15) bad.phone = t('Enter a valid mobile number.', 'اكتب رقم موبايل صحيح.');
+    }
+    if (gate.needs_password && !f.password) bad.password = t('Enter the password.', 'اكتب الباسورد.');
+    return bad;
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const bad = check();
+    setFields(bad);
+    setMsg('');
+    if (Object.keys(bad).length) return;
+    setBusy(true);
+    try {
+      const res = await sharedApi.enter(token, {
+        ...(gate.needs_info ? { name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim() } : {}),
+        ...(gate.needs_password ? { password: f.password } : {}),
+      });
+      if (res?.session) shareSession.set(token, res.session);
+      onDone();
+    } catch (er) {
+      const errs = er?.payload?.errors;
+      if (errs?.fields) setFields(errs.fields);
+      setMsg(errs?.fields ? '' : errorMessage(er));
+      if (errs?.code === 'bad_password') setF((v) => ({ ...v, password: '' }));
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <section className="shp__card shp__gate" aria-labelledby="shp-gate-h">
+      <span className="shp__state-ico" style={{ alignSelf: 'center' }}><Icon name={gate.needs_password ? 'lock' : 'user'} size={30} /></span>
+      <h1 id="shp-gate-h">{gate.needs_password ? t('This link is protected', 'الرابط ده محمي') : t('Before you open it', 'قبل ما تفتح الرابط')}</h1>
+      <p>
+        {gate.owner_name ? t(`${gate.owner_name} shared something with you. `, `${gate.owner_name} شارك معاك ملف. `) : ''}
+        {gate.needs_info && gate.needs_password ? t('Enter your details and the password to continue.', 'اكتب بياناتك والباسورد عشان تكمّل.')
+          : gate.needs_info ? t('Enter your details to continue.', 'اكتب بياناتك عشان تكمّل.')
+            : t('Enter the password to continue.', 'اكتب الباسورد عشان تكمّل.')}
+      </p>
+      <form onSubmit={submit} noValidate>
+        {gate.needs_info && (
+          <>
+            <label className="shp__field"><span>{t('Full name', 'الاسم بالكامل')}</span>
+              <input type="text" autoComplete="name" value={f.name} onChange={set('name')} maxLength={80} aria-invalid={!!fields.name} disabled={busy} />
+              {fields.name && <small role="alert">{fields.name}</small>}
+            </label>
+            <label className="shp__field"><span>{t('Email', 'الإيميل')}</span>
+              <input type="email" dir="ltr" autoComplete="email" inputMode="email" value={f.email} onChange={set('email')} maxLength={190} aria-invalid={!!fields.email} disabled={busy} />
+              {fields.email && <small role="alert">{fields.email}</small>}
+            </label>
+            <label className="shp__field"><span>{t('Mobile number', 'رقم الموبايل')}</span>
+              <input type="tel" dir="ltr" autoComplete="tel" inputMode="tel" placeholder="+20 100 000 0000" value={f.phone} onChange={set('phone')} maxLength={24} aria-invalid={!!fields.phone} disabled={busy} />
+              {fields.phone && <small role="alert">{fields.phone}</small>}
+            </label>
+          </>
+        )}
+        {gate.needs_password && (
+          <label className="shp__field"><span>{t('Password', 'الباسورد')}</span>
+            <span style={{ display: 'flex', gap: 6 }}>
+              <input style={{ flex: 1, minWidth: 0 }} type={show ? 'text' : 'password'} dir="ltr" autoComplete="off" value={f.password} onChange={set('password')} maxLength={64} aria-invalid={!!fields.password} disabled={busy} />
+              <button type="button" className="shp__tool shp__tool--icon" onClick={() => setShow((v) => !v)} aria-label={show ? t('Hide password', 'إخفاء الباسورد') : t('Show password', 'إظهار الباسورد')}><Icon name={show ? 'eye-off' : 'eye'} size={16} /></button>
+            </span>
+            {fields.password && <small role="alert">{fields.password}</small>}
+          </label>
+        )}
+        {msg && <div className="mp-share__err" role="alert">{msg}</div>}
+        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? t('Checking…', 'جارِ التحقق…') : t('Continue', 'متابعة')}</button>
+      </form>
+      {gate.needs_info && <p className="shp__gate-note">{t('Your details are shared with the owner of this link only.', 'بياناتك بتتبعت لصاحب الرابط ده بس.')}</p>}
+    </section>
+  );
+}
+
 /**
  * Public page for a My PC share link (/s/:token) — no sign-in, protected: no context menu / selection / copy / print /
  * view-source / devtools shortcuts, devtools detection that wipes the content, images and PDFs drawn to canvas with a
@@ -47,12 +134,15 @@ export default function SharedItem() {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState(null); // { id, name, kind, blob?, url?, text?, loading?, failed? }
   const [locked, setLocked] = useState(false);
+  const [gate, setGate] = useState(null); // { needs_password, needs_info, owner_name } while the owner's gate is not passed
+  const [reload, setReload] = useState(0);
   const [away, setAway] = useState(() => typeof document !== 'undefined' && !document.hasFocus());
   const [shot, setShot] = useState(false);
   const shotT = useRef(0);
   const viewId = useMemo(() => Math.random().toString(36).slice(2, 8).toUpperCase(), []);
   const stamp = useMemo(() => new Date().toLocaleString(ar ? 'ar-EG' : undefined, { dateStyle: 'medium', timeStyle: 'short' }), [ar]);
-  const mark = `${t('Protected', 'محتوى محمي')} · ${stamp} · #${viewId}`;
+  const who = [data?.share?.visitor_name, data?.share?.visitor_email].filter(Boolean).join(' · ');
+  const mark = `${who ? `${who} · ` : ''}${t('Protected', 'محتوى محمي')} · ${stamp} · #${viewId}`;
 
   const clearPreview = useCallback(() => {
     setPreview(null);
@@ -86,11 +176,24 @@ export default function SharedItem() {
     if (locked) return undefined;
     let live = true;
     setLoading(true);
-    sharedApi.view(token, nodeId).then((d) => { if (live) { setData(d); setErr(null); } })
-      .catch((e) => { if (live) setErr({ status: e?.status || 0, message: errorMessage(e) }); })
+    sharedApi.view(token, nodeId).then((d) => { if (live) { setData(d); setErr(null); setGate(null); } })
+      .catch((e) => {
+        if (!live) return;
+        const g = e?.status === 423 && e?.payload?.errors?.code === 'share_gate' ? e.payload.errors : null;
+        if (g) { shareSession.clear(token); setData(null); setErr(null); setGate(g); return; }
+        setErr({ status: e?.status || 0, message: errorMessage(e) });
+      })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [token, nodeId, locked]);
+  }, [token, nodeId, locked, reload]);
+
+  // the owner changed the password / settings while the page was open -> the next call answers 423: show the gate again
+  const regate = useCallback((e) => {
+    if (e?.status === 423 && e?.payload?.errors?.code === 'share_gate') {
+      shareSession.clear(token); setData(null); clearPreview(); setGate(e.payload.errors); return true;
+    }
+    return false;
+  }, [token, clearPreview]);
 
   const node = data?.node;
   const share = data?.share;
@@ -107,8 +210,8 @@ export default function SharedItem() {
     try {
       const blob = await sharedApi.file(token, file.id === share?.root?.id ? null : file.id);
       setPreview({ id: file.id, name: file.name, blob });
-    } catch { setPreview({ id: file.id, name: file.name, failed: true }); }
-  }, [token, share, clearPreview]);
+    } catch (e) { if (!regate(e)) setPreview({ id: file.id, name: file.name, failed: true }); }
+  }, [token, share, clearPreview, regate]);
 
   useEffect(() => {
     if (node && node.type === 'file' && nodeId === null) openPreview(node);
@@ -121,14 +224,14 @@ export default function SharedItem() {
     try {
       const blob = await sharedApi.file(token, file.id === share?.root?.id ? null : file.id, { download: true });
       saveBlob(blob, file.name);
-    } catch (e) { setErr({ status: e?.status || 0, message: errorMessage(e), soft: true }); } finally { setBusy(false); }
+    } catch (e) { if (!regate(e)) setErr({ status: e?.status || 0, message: errorMessage(e), soft: true }); } finally { setBusy(false); }
   };
   const downloadZip = async () => {
     setBusy(true);
     try {
       const blob = await sharedApi.zip(token, node.id === share?.root?.id ? null : node.id);
       saveBlob(blob, `${node.name}.zip`);
-    } catch (e) { setErr({ status: e?.status || 0, message: errorMessage(e), soft: true }); } finally { setBusy(false); }
+    } catch (e) { if (!regate(e)) setErr({ status: e?.status || 0, message: errorMessage(e), soft: true }); } finally { setBusy(false); }
   };
 
   const dead = err && !err.soft && !data;
@@ -168,7 +271,9 @@ export default function SharedItem() {
       </header>
 
       <main className="shp__main">
-        {loading && !data && <div className="shp__state"><span className="lp2-spinner" aria-hidden="true" /><p>{t('Loading…', 'جارِ التحميل…')}</p></div>}
+        {gate && !data && <GateForm gate={gate} token={token} t={t} ar={ar} onDone={() => { setGate(null); setLoading(true); setReload((n) => n + 1); }} />}
+
+        {loading && !data && !gate && <div className="shp__state"><span className="lp2-spinner" aria-hidden="true" /><p>{t('Loading…', 'جارِ التحميل…')}</p></div>}
 
         {dead && (
           <div className="shp__state" role="alert">

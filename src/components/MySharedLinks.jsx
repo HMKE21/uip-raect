@@ -1,0 +1,347 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Icon from './Icon';
+import { StModal, timeAgo } from './student/stUi';
+import { errorMessage } from '../api/client';
+import { drive } from '../lib/driveApi';
+import { CustomDuration, EXPIRIES, copyText, customKey, genPassword, shareUrl } from './ShareDialog';
+
+const STATUS = {
+  active: { en: 'Active', ar: 'شغّال', cls: 'is-on' },
+  paused: { en: 'Paused', ar: 'موقوف مؤقتًا', cls: 'is-warn' },
+  expired: { en: 'Expired', ar: 'منتهي', cls: 'is-off' },
+  revoked: { en: 'Turned off', ar: 'متوقف نهائيًا', cls: 'is-off' },
+};
+const EVENT = {
+  open: { en: 'Opened the link', ar: 'فتح الرابط', icon: 'eye' },
+  enter: { en: 'Passed the gate', ar: 'عدّى البوابة', icon: 'check-circle' },
+  preview: { en: 'Viewed', ar: 'شاف', icon: 'file' },
+  download: { en: 'Downloaded', ar: 'نزّل', icon: 'download' },
+  zip: { en: 'Downloaded ZIP', ar: 'نزّل ZIP', icon: 'archive' },
+  password_failed: { en: 'Wrong password', ar: 'باسورد غلط', icon: 'alert' },
+};
+
+const fmtDT = (v, ar) => {
+  if (!v) return '—';
+  const d = new Date(String(v).replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return String(v);
+  return d.toLocaleString(ar ? 'ar-EG' : undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+};
+
+/** Who opened one link: summary + the people (name / email / mobile / device) + the latest events. */
+function Activity({ share, ar, locale, tt, onBack, onToast, onChanged }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirm, setConfirm] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setData(await drive.shareActivity(share.id)); setError(''); } catch (e) { setError(errorMessage(e)); }
+  }, [share.id]);
+  useEffect(() => { load(); }, [load]);
+
+  const sm = data?.summary;
+  const people = data?.visitors || [];
+  return (
+    <div className="mp-sl">
+      <div className="mp-sl__bar">
+        <button type="button" className="btn btn-ghost" onClick={onBack}><Icon name={ar ? 'chevron-right' : 'chevron-left'} size={15} /><span>{tt('Back', 'رجوع')}</span></button>
+        <strong title={share.node?.name}>{share.node?.name || tt('Deleted item', 'عنصر محذوف')}</strong>
+      </div>
+      {error && <div className="mp-share__err" role="alert">{error}</div>}
+      {!data && !error && <div className="mp-share__empty">{tt('Loading…', 'جارِ التحميل…')}</div>}
+      {data && (
+        <>
+          <div className="mp-sl__stats">
+            <div><b>{sm.opens}</b><span>{tt('Opens', 'مرات الفتح')}</span></div>
+            <div><b>{sm.identified}</b><span>{tt('Identified people', 'أشخاص معروفين')}</span></div>
+            <div><b>{sm.anonymous}</b><span>{tt('Anonymous devices', 'أجهزة مجهولة')}</span></div>
+            <div><b>{sm.downloads}</b><span>{tt('Downloads', 'التنزيلات')}</span></div>
+            {data.share.has_password && <div><b>{sm.failed_passwords}</b><span>{tt('Wrong passwords', 'باسورد غلط')}</span></div>}
+          </div>
+          {sm.opens === 0 && people.length === 0 && (
+            <div className="mp-share__empty"><Icon name="eye-off" size={20} /><span>{tt('Nobody has opened this link yet.', 'محدش فتح الرابط ده لسه.')}</span></div>
+          )}
+
+          {people.length > 0 && (
+            <>
+              <div className="mp-share__head"><span>{tt('People who entered their details', 'اللي دخّلوا بياناتهم')}</span><b>{people.length}</b></div>
+              <div className="mp-sl__people">
+                {people.map((p) => (
+                  <article key={p.key} className="mp-sl__person">
+                    <div className="mp-sl__pname">
+                      <span className="mp-sl__avatar" aria-hidden="true">{(p.name || '?').trim().charAt(0).toUpperCase()}</span>
+                      <div>
+                        <strong>{p.name || tt('Anonymous (password only)', 'مجهول (باسورد فقط)')}</strong>
+                        {p.account && <span className="mp-badge mp-badge--soft"><Icon name="shield" size={11} />{tt('UIP account', 'حساب UIP')}{p.account.name ? `: ${p.account.name}` : ''}</span>}
+                      </div>
+                    </div>
+                    <div className="mp-sl__pinfo">
+                      {p.email && <a href={`mailto:${p.email}`} dir="ltr"><Icon name="mail" size={12} />{p.email}</a>}
+                      {p.phone && <a href={`tel:${p.phone}`} dir="ltr"><Icon name="smartphone" size={12} />{p.phone}</a>}
+                      {p.devices.length > 0 && <span><Icon name="monitor" size={12} />{p.devices.join(' • ')}</span>}
+                      {p.ips.length > 0 && <span dir="ltr" title={tt('Last part of the IP is hidden', 'آخر جزء من الـ IP مخفي')}>IP {p.ips.join(', ')}</span>}
+                    </div>
+                    <div className="mp-share__meta">
+                      <span><Icon name="eye" size={12} /> {p.opens}</span>
+                      <span><Icon name="download" size={12} /> {p.downloads}</span>
+                      <span>{tt('First ', 'أول مرة ')}{fmtDT(p.first_seen_at, ar)}</span>
+                      <span>{tt('Last ', 'آخر مرة ')}{fmtDT(p.last_seen_at, ar)}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
+
+          {data.events.length > 0 && (
+            <>
+              <div className="mp-share__head"><span>{tt('Latest activity', 'آخر النشاط')}</span><b>{data.events.length}</b></div>
+              <ul className="mp-sl__events">
+                {data.events.map((e) => {
+                  const t = EVENT[e.type] || { en: e.type, ar: e.type, icon: 'eye' };
+                  const who = e.visitor_name || e.visitor_email || tt('Anonymous', 'مجهول');
+                  return (
+                    <li key={e.id} className={e.type === 'password_failed' ? 'is-bad' : ''}>
+                      <Icon name={t.icon} size={14} />
+                      <span className="mp-sl__ev-main"><b>{who}</b> · {ar ? t.ar : t.en}{e.node_name ? <em> — {e.node_name}</em> : null}</span>
+                      <span className="mp-sl__ev-meta">{e.device || ''}{e.ip ? ` · ${e.ip}` : ''}</span>
+                      <time>{timeAgo(e.at, locale)} · {fmtDT(e.at, ar)}</time>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+
+          {(sm.opens > 0 || people.length > 0 || data.events.length > 0) && (
+            <div className="mp-sl__foot">
+              {!confirm ? (
+                <button type="button" className="btn btn-ghost mp-sl__danger" onClick={() => setConfirm(true)}><Icon name="trash" size={14} /><span>{tt('Clear this log', 'مسح السجل')}</span></button>
+              ) : (
+                <span className="mp-sl__confirm">
+                  {tt('Clear the whole log and reset the counters?', 'تمسح السجل كله وتصفّر العدّادات؟')}
+                  <button type="button" className="btn btn-primary mp-sl__dangerfill" disabled={busy} onClick={async () => {
+                    setBusy(true);
+                    try { await drive.clearShareActivity(share.id); onToast?.(tt('Log cleared.', 'تم مسح السجل.')); setConfirm(false); await load(); onChanged?.(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+                  }}>{tt('Clear', 'مسح')}</button>
+                  <button type="button" className="btn btn-ghost" onClick={() => setConfirm(false)}>{tt('Cancel', 'إلغاء')}</button>
+                </span>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Edit the gate + permission + expiry of one existing link. */
+function Settings({ l, ar, tt, busy, act }) {
+  const [pw, setPw] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [custom, setCustom] = useState(false);
+  const [n, setN] = useState('5');
+  const [u, setU] = useState('m');
+  const pwBad = pw !== '' && (pw.length < 4 || pw.length > 64);
+  const perm = l.can_download ? 'dl' : 'view';
+  return (
+    <div className="mp-sl__settings">
+      <div className="mp-share__group">
+        <span className="mp-share__lbl">{tt('Permission', 'الصلاحية')}</span>
+        <div className="mp-seg mp-seg--sm" role="radiogroup">
+          {[{ k: 'dl', icon: 'download', en: 'View & download', ar: 'عرض وتنزيل' }, { k: 'view', icon: 'eye', en: 'View only', ar: 'عرض فقط' }].map((x) => (
+            <button key={x.k} type="button" role="radio" aria-checked={perm === x.k} className={perm === x.k ? 'is-on' : ''} disabled={busy}
+              onClick={() => { if (perm !== x.k) act(() => drive.updateShare(l.id, { can_download: x.k === 'dl' })); }}>
+              <Icon name={x.icon} size={13} />{ar ? x.ar : x.en}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mp-share__group">
+        <span className="mp-share__lbl">{tt('Expiry (from now)', 'مدة الصلاحية (من الآن)')}</span>
+        <div className="mp-sl__row">
+          <select className="mp-share__sel" value="" disabled={busy} onChange={(e) => {
+            if (e.target.value === 'custom') { setCustom(true); return; }
+            setCustom(false);
+            if (e.target.value) act(() => drive.updateShare(l.id, { expiry: e.target.value }), tt('Expiry updated.', 'تم تحديث المدة.'));
+          }}>
+            <option value="">{tt('Change expiry…', 'تغيير المدة…')}</option>
+            {EXPIRIES.map((x) => <option key={x.key} value={x.key}>{ar ? x.ar : x.en}</option>)}
+          </select>
+          {custom && (
+            <>
+              <CustomDuration ar={ar} n={n} unit={u} onN={setN} onUnit={setU} disabled={busy} />
+              <button type="button" className="btn btn-primary" disabled={busy || !customKey(n, u)}
+                onClick={() => act(async () => { await drive.updateShare(l.id, { expiry: customKey(n, u) }); setCustom(false); }, tt('Expiry updated.', 'تم تحديث المدة.'))}>{tt('Apply', 'تطبيق')}</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mp-share__group mp-share__group--full">
+        <span className="mp-share__lbl">{tt('Before opening the link', 'قبل ما يفتح الرابط')}</span>
+        <label className="mp-gate-opt">
+          <input type="checkbox" checked={!!l.require_visitor_info} disabled={busy}
+            onChange={(e) => act(() => drive.updateShare(l.id, { require_visitor_info: e.target.checked }), e.target.checked ? tt('Visitors must now enter their details (earlier visitors will be asked again).', 'الزوار لازم يدخّلوا بياناتهم دلوقتي (اللي فتحوا قبل كده هيتسألوا تاني).') : tt('Visitor details are no longer required.', 'مبقاش مطلوب بيانات الزائر.'))} />
+          <span className="mp-gate-opt__txt"><b><Icon name="users" size={14} /> {tt('Ask for name, email and mobile', 'اطلب الاسم والإيميل والموبايل')}</b></span>
+        </label>
+        <div className="mp-gate-opt mp-gate-opt--pw">
+          <span className="mp-gate-opt__txt">
+            <b><Icon name="lock" size={14} /> {l.has_password ? tt('Password is set', 'الباسورد مفعّل') : tt('No password', 'من غير باسورد')}</b>
+            <small>{l.has_password ? tt('Setting a new password signs out everyone who entered the old one.', 'تغيير الباسورد بيطلّع كل اللي دخلوا بالباسورد القديم.') : tt('Anyone with the link can open it (after the details, if required).', 'أي حد معاه الرابط يقدر يفتح (بعد البيانات لو مطلوبة).')}</small>
+          </span>
+          <div className="mp-pw">
+            <input type={showPw ? 'text' : 'password'} dir="ltr" autoComplete="new-password" value={pw} maxLength={64} disabled={busy}
+              placeholder={l.has_password ? tt('New password', 'باسورد جديد') : tt('Set a password (4–64)', 'حدد باسورد (4–64)')} aria-invalid={pwBad} onChange={(e) => setPw(e.target.value)} />
+            <button type="button" className="mp-pw__btn" onClick={() => setShowPw((v) => !v)} aria-label={tt('Show / hide', 'إظهار / إخفاء')}><Icon name={showPw ? 'eye-off' : 'eye'} size={15} /></button>
+            <button type="button" className="mp-pw__btn" disabled={busy} onClick={() => { setPw(genPassword()); setShowPw(true); }}><Icon name="refresh" size={14} /><span>{tt('Generate', 'توليد')}</span></button>
+            <button type="button" className="btn btn-primary" disabled={busy || !pw || pwBad}
+              onClick={() => act(async () => { await drive.updateShare(l.id, { password: pw }); setPw(''); setShowPw(false); }, tt('Password saved — it can’t be shown again.', 'تم حفظ الباسورد — مش هيتعرض تاني.'))}>{tt('Save', 'حفظ')}</button>
+            {l.has_password && <button type="button" className="btn btn-ghost mp-sl__danger" disabled={busy}
+              onClick={() => act(() => drive.updateShare(l.id, { remove_password: true }), tt('Password removed.', 'تم إزالة الباسورد.'))}>{tt('Remove', 'إزالة')}</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** "My shared links": every link I shared — pause / resume / delete, edit the gate, and see who opened it. */
+export default function MySharedLinks({ ar, locale, onClose, onToast }) {
+  const tt = useCallback((en, a) => (ar ? a : en), [ar]);
+  const [items, setItems] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState('all');
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState(null); // link id whose settings are open
+  const [del, setDel] = useState(null);   // link id waiting for delete confirmation
+  const [detail, setDetail] = useState(null);
+
+  const load = useCallback(async () => {
+    try { setItems((await drive.manageShares())?.items || []); setError(''); } catch (e) { setError(errorMessage(e)); setItems([]); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const act = async (fn, okMsg) => {
+    setBusy(true); setError('');
+    try { await fn(); if (okMsg) onToast?.(okMsg); await load(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+  };
+
+  const counts = useMemo(() => {
+    const c = { all: 0, active: 0, paused: 0, ended: 0 };
+    (items || []).forEach((l) => { c.all += 1; if (l.status === 'active') c.active += 1; else if (l.status === 'paused') c.paused += 1; else c.ended += 1; });
+    return c;
+  }, [items]);
+
+  const shown = useMemo(() => (items || []).filter((l) => {
+    if (tab === 'active' && l.status !== 'active') return false;
+    if (tab === 'paused' && l.status !== 'paused') return false;
+    if (tab === 'ended' && (l.status === 'active' || l.status === 'paused')) return false;
+    if (q.trim() && !(l.node?.name || '').toLowerCase().includes(q.trim().toLowerCase())) return false;
+    return true;
+  }), [items, tab, q]);
+
+  const copy = async (token) => {
+    const ok = await copyText(shareUrl(token));
+    onToast?.(ok ? tt('Link copied.', 'تم نسخ الرابط.') : tt('Could not copy — select the link and copy it.', 'تعذّر النسخ — حدد الرابط وانسخه يدويًا.'), ok ? undefined : 'error');
+  };
+
+  const expiryText = (l) => {
+    if (!l.expires_at) return tt('No expiry', 'بدون انتهاء');
+    const d = new Date(String(l.expires_at).replace(' ', 'T'));
+    if (Number.isNaN(d.getTime())) return '';
+    return (l.expired ? tt('Expired ', 'انتهى ') : tt('Expires ', 'ينتهي ')) + fmtDT(l.expires_at, ar);
+  };
+
+  const TABS = [
+    { k: 'all', en: 'All', ar: 'الكل' }, { k: 'active', en: 'Active', ar: 'شغّالة' },
+    { k: 'paused', en: 'Paused', ar: 'موقوفة' }, { k: 'ended', en: 'Ended', ar: 'منتهية' },
+  ];
+
+  if (detail) {
+    return (
+      <StModal wide title={tt('Who opened this link', 'مين فتح الرابط ده')} onClose={onClose} actions={<button type="button" className="btn btn-primary" onClick={onClose}>{tt('Done', 'تم')}</button>}>
+        <Activity share={detail} ar={ar} locale={locale} tt={tt} onBack={() => setDetail(null)} onToast={onToast} onChanged={load} />
+      </StModal>
+    );
+  }
+
+  return (
+    <StModal wide title={tt('My shared links', 'روابطي المشاركة')} onClose={onClose} actions={<button type="button" className="btn btn-primary" onClick={onClose}>{tt('Done', 'تم')}</button>}>
+      <div className="mp-sl">
+        <div className="mp-sl__tools">
+          <div className="mp-seg mp-seg--wrap" role="tablist">
+            {TABS.map((x) => (
+              <button key={x.k} type="button" role="tab" aria-selected={tab === x.k} className={tab === x.k ? 'is-on' : ''} onClick={() => setTab(x.k)}>
+                {ar ? x.ar : x.en}<b className="mp-sl__count">{counts[x.k]}</b>
+              </button>
+            ))}
+          </div>
+          <input className="mp-sl__search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tt('Search by file name…', 'ابحث باسم الملف…')} aria-label={tt('Search', 'بحث')} />
+        </div>
+        {error && <div className="mp-share__err" role="alert">{error}</div>}
+
+        <div className="mp-sl__list">
+          {items === null && <div className="mp-share__empty">{tt('Loading…', 'جارِ التحميل…')}</div>}
+          {items && items.length === 0 && <div className="mp-share__empty"><Icon name="link" size={20} /><span>{tt('You haven’t shared anything yet. Select a file and press Share.', 'لسه ما شاركتش حاجة. اختار ملف واضغط مشاركة.')}</span></div>}
+          {items && items.length > 0 && shown.length === 0 && <div className="mp-share__empty"><span>{tt('No links match.', 'مفيش روابط مطابقة.')}</span></div>}
+          {shown.map((l) => {
+            const st = STATUS[l.status] || STATUS.active;
+            const live = l.status === 'active' || l.status === 'paused';
+            return (
+              <article key={l.id} className={`mp-share__row mp-sl__card${live ? '' : ' is-expired'}`}>
+                <div className="mp-sl__head">
+                  <span className="mp-share__file-ico"><Icon name={l.node?.type === 'folder' ? 'folder' : 'file'} size={18} /></span>
+                  <div className="mp-sl__title">
+                    <strong title={l.node?.name}>{l.node_deleted ? tt('Deleted item', 'عنصر محذوف') : l.node?.name}</strong>
+                    <div className="mp-share__top">
+                      <span className={`mp-badge ${st.cls}`}>{ar ? st.ar : st.en}</span>
+                      {l.node_deleted && <span className="mp-badge is-off">{tt('Item deleted — link is dead', 'العنصر اتحذف — الرابط مات')}</span>}
+                      <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
+                      {l.has_password && <span className="mp-badge mp-badge--soft"><Icon name="lock" size={11} />{tt('Password', 'باسورد')}</span>}
+                      {l.require_visitor_info && <span className="mp-badge mp-badge--soft"><Icon name="users" size={11} />{tt('Visitor details', 'بيانات الزائر')}</span>}
+                    </div>
+                  </div>
+                </div>
+
+                {live && (
+                  <div className="mp-share__url">
+                    <input readOnly dir="ltr" value={shareUrl(l.token)} onFocus={(e) => e.target.select()} aria-label={tt('Share link', 'رابط المشاركة')} />
+                    <button type="button" className="mp-share__copy" onClick={() => copy(l.token)} disabled={l.expired}><Icon name="copy" size={14} /><span>{tt('Copy', 'نسخ')}</span></button>
+                  </div>
+                )}
+
+                <div className="mp-share__meta">
+                  <span><Icon name="clock" size={12} /> {expiryText(l)}</span>
+                  <span title={tt('Opens', 'مرات الفتح')}><Icon name="eye" size={12} /> {l.views}</span>
+                  <span title={tt('Different visitors', 'زوار مختلفين')}><Icon name="users" size={12} /> {l.unique_visitors}</span>
+                  <span title={tt('Downloads', 'التنزيلات')}><Icon name="download" size={12} /> {l.downloads}</span>
+                  <span>{l.last_used_at ? tt('Last opened ', 'آخر فتح ') + timeAgo(l.last_used_at, locale) : tt('Never opened', 'لسه محدش فتحه')}</span>
+                </div>
+
+                <div className="mp-sl__actions">
+                  <button type="button" className="btn btn-ghost" onClick={() => setDetail(l)}><Icon name="users" size={14} /><span>{tt('Who opened it', 'مين فتحه')}</span></button>
+                  {l.status === 'active' && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act(() => drive.pauseShare(l.id), tt('Link paused.', 'تم إيقاف الرابط مؤقتًا.'))}><Icon name="stop" size={14} /><span>{tt('Pause', 'إيقاف')}</span></button>}
+                  {l.status === 'paused' && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act(() => drive.resumeShare(l.id), tt('Link resumed.', 'تم استئناف الرابط.'))}><Icon name="play" size={14} /><span>{tt('Resume', 'استئناف')}</span></button>}
+                  {live && <button type="button" className={`btn btn-ghost${open === l.id ? ' is-on' : ''}`} onClick={() => setOpen(open === l.id ? null : l.id)}><Icon name="settings" size={14} /><span>{tt('Settings', 'الإعدادات')}</span></button>}
+                  {del === l.id ? (
+                    <span className="mp-sl__confirm">
+                      {tt('Delete the link and its log for good?', 'تمسح الرابط وسجله نهائيًا؟')}
+                      <button type="button" className="btn btn-primary mp-sl__dangerfill" disabled={busy} onClick={() => act(async () => { await drive.deleteShare(l.id); setDel(null); }, tt('Link deleted.', 'تم حذف الرابط.'))}>{tt('Delete', 'حذف')}</button>
+                      <button type="button" className="btn btn-ghost" onClick={() => setDel(null)}>{tt('Cancel', 'إلغاء')}</button>
+                    </span>
+                  ) : (
+                    <button type="button" className="btn btn-ghost mp-sl__danger" disabled={busy} onClick={() => setDel(l.id)}><Icon name="trash" size={14} /><span>{tt('Delete', 'حذف')}</span></button>
+                  )}
+                </div>
+                {open === l.id && live && <Settings l={l} ar={ar} tt={tt} busy={busy} act={act} />}
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </StModal>
+  );
+}

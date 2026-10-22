@@ -5,14 +5,14 @@ import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
 import { publicOrigin } from '../config/siteUrl';
 
-const EXPIRIES = [
+export const EXPIRIES = [
   { key: '1d', en: '1 day', ar: 'يوم' },
   { key: '7d', en: '1 week', ar: 'أسبوع' },
   { key: '30d', en: '1 month', ar: 'شهر' },
   { key: 'custom', en: 'Custom…', ar: 'مدة مخصصة…' },
   { key: 'never', en: 'No expiry', ar: 'بدون انتهاء' },
 ];
-const UNITS = [
+export const UNITS = [
   { key: 'm', en: 'minutes', ar: 'دقائق', mins: 1 },
   { key: 'h', en: 'hours', ar: 'ساعات', mins: 60 },
   { key: 'd', en: 'days', ar: 'أيام', mins: 1440 },
@@ -20,7 +20,7 @@ const UNITS = [
 const MAX_MINUTES = 365 * 24 * 60;
 
 /** '5' + 'm' -> '5m'; null when it is not a whole number between 1 minute and 365 days */
-function customKey(n, unit) {
+export function customKey(n, unit) {
   const v = Number(n);
   const u = UNITS.find((x) => x.key === unit);
   if (!u || !Number.isInteger(v) || v < 1 || v * u.mins > MAX_MINUTES) return null;
@@ -28,7 +28,7 @@ function customKey(n, unit) {
 }
 
 /** number + unit inputs for a custom duration */
-function CustomDuration({ ar, n, unit, onN, onUnit, disabled }) {
+export function CustomDuration({ ar, n, unit, onN, onUnit, disabled }) {
   const bad = customKey(n, unit) === null;
   return (
     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
@@ -44,9 +44,17 @@ function CustomDuration({ ar, n, unit, onN, onUnit, disabled }) {
   );
 }
 
+/** 12 readable random characters (no 0/O/1/l look-alikes). */
+export function genPassword() {
+  const abc = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const buf = new Uint32Array(12);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, (n) => abc[n % abc.length]).join('');
+}
+
 export const shareUrl = (token) => `${publicOrigin()}/s/${token}`;
 
-async function copyText(text) {
+export async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch { /* fall through */ }
   try {
     const ta = document.createElement('textarea');
@@ -59,7 +67,7 @@ async function copyText(text) {
 }
 
 /** "Share" dialog for a My PC file / folder: create, copy, edit and turn off public links. */
-export default function ShareDialog({ node, ar, locale, onClose, onToast }) {
+export default function ShareDialog({ node, ar, locale, onClose, onToast, onManage }) {
   const tt = useCallback((en, a) => (ar ? a : en), [ar]);
   const [links, setLinks] = useState(null);
   const [expiry, setExpiry] = useState('7d');
@@ -70,6 +78,11 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast }) {
   const [editU, setEditU] = useState('m');
   const newExpiry = expiry === 'custom' ? customKey(customN, customU) : expiry;
   const [canDownload, setCanDownload] = useState(true);
+  const [requireInfo, setRequireInfo] = useState(false); // the visitor must type name + email + mobile first
+  const [usePw, setUsePw] = useState(false);
+  const [pw, setPw] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const pwBad = usePw && (pw.length < 4 || pw.length > 64);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
@@ -110,7 +123,12 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast }) {
   return (
     <StModal
       wide title={tt('Share', 'مشاركة')} onClose={onClose}
-      actions={<button type="button" className="btn btn-primary" onClick={onClose}>{tt('Done', 'تم')}</button>}
+      actions={(
+        <>
+          {onManage && <button type="button" className="btn btn-ghost" onClick={onManage}><Icon name="link" size={15} /><span>{tt('All my shared links', 'كل روابطي المشاركة')}</span></button>}
+          <button type="button" className="btn btn-primary" onClick={onClose}>{tt('Done', 'تم')}</button>
+        </>
+      )}
     >
       <div className="mp-share">
         <div className="mp-share__file">
@@ -141,13 +159,42 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast }) {
               ))}
             </div>
           </div>
+          <div className="mp-share__group mp-share__group--full">
+            <span className="mp-share__lbl">{tt('Before opening the link', 'قبل ما يفتح الرابط')}</span>
+            <label className="mp-gate-opt">
+              <input type="checkbox" checked={requireInfo} disabled={busy} onChange={(e) => setRequireInfo(e.target.checked)} />
+              <span className="mp-gate-opt__txt">
+                <b><Icon name="users" size={14} /> {tt('Ask for the visitor’s details', 'اطلب بيانات الزائر')}</b>
+                <small>{tt('Name, email and mobile number are required — you will see them in “My shared links”.', 'الاسم والإيميل ورقم الموبايل إجباريين — وهتشوفهم في "روابطي المشاركة".')}</small>
+              </span>
+            </label>
+            <label className="mp-gate-opt">
+              <input type="checkbox" checked={usePw} disabled={busy} onChange={(e) => { setUsePw(e.target.checked); if (!e.target.checked) setPw(''); }} />
+              <span className="mp-gate-opt__txt">
+                <b><Icon name="lock" size={14} /> {tt('Protect with a password', 'حماية بباسورد')}</b>
+                <small>{tt('Even someone who has the link must enter the password.', 'حتى اللي معاه الرابط لازم يكتب الباسورد.')}</small>
+              </span>
+            </label>
+            {usePw && (
+              <div className="mp-pw">
+                <input
+                  type={showPw ? 'text' : 'password'} dir="ltr" autoComplete="new-password" value={pw} disabled={busy} maxLength={64}
+                  placeholder={tt('Password (4–64 characters)', 'الباسورد (من 4 لـ 64 حرف)')} aria-invalid={pwBad}
+                  onChange={(e) => setPw(e.target.value)}
+                />
+                <button type="button" className="mp-pw__btn" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? tt('Hide', 'إخفاء') : tt('Show', 'إظهار')}><Icon name={showPw ? 'eye-off' : 'eye'} size={15} /></button>
+                <button type="button" className="mp-pw__btn" disabled={busy} onClick={() => { setPw(genPassword()); setShowPw(true); }}><Icon name="refresh" size={14} /><span>{tt('Generate', 'توليد')}</span></button>
+              </div>
+            )}
+          </div>
           <button
-            type="button" className="btn btn-primary mp-share__create" disabled={busy || !newExpiry}
+            type="button" className="btn btn-primary mp-share__create" disabled={busy || !newExpiry || pwBad || (usePw && !pw)}
             title={newExpiry ? undefined : tt('Enter a whole number: 1 minute to 365 days', 'اكتب رقم صحيح: من دقيقة لـ 365 يوم')}
             onClick={() => act(async () => {
-              const l = await drive.createShare(node.id, { expiry: newExpiry, canDownload });
+              const l = await drive.createShare(node.id, { expiry: newExpiry, canDownload, requireInfo, password: usePw ? pw : '' });
               if (l?.token) await copyText(shareUrl(l.token));
-            }, tt('Link created and copied.', 'تم إنشاء الرابط ونسخه.'))}
+              setPw(''); setUsePw(false); setShowPw(false);
+            }, usePw ? tt('Link created and copied — remember the password, it can’t be shown again.', 'تم إنشاء الرابط ونسخه — افتكر الباسورد، مش هيتعرض تاني.') : tt('Link created and copied.', 'تم إنشاء الرابط ونسخه.'))}
           ><Icon name="link" size={16} /><span>{tt('Create & copy link', 'إنشاء الرابط ونسخه')}</span></button>
         </section>
 
@@ -164,8 +211,10 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast }) {
           {links && links.map((l) => (
             <article key={l.id} className={`mp-share__row${l.expired ? ' is-expired' : ''}`}>
               <div className="mp-share__top">
-                <span className={`mp-badge ${l.expired ? 'is-off' : 'is-on'}`}>{l.expired ? tt('Expired', 'منتهي') : tt('Active', 'شغّال')}</span>
+                <span className={`mp-badge ${l.paused ? 'is-warn' : l.expired ? 'is-off' : 'is-on'}`}>{l.paused ? tt('Paused', 'موقوف مؤقتًا') : l.expired ? tt('Expired', 'منتهي') : tt('Active', 'شغّال')}</span>
                 <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
+                {l.has_password && <span className="mp-badge mp-badge--soft"><Icon name="lock" size={11} />{tt('Password', 'باسورد')}</span>}
+                {l.require_visitor_info && <span className="mp-badge mp-badge--soft"><Icon name="users" size={11} />{tt('Visitor details', 'بيانات الزائر')}</span>}
                 <button type="button" className="mp-share__off" disabled={busy} onClick={() => act(() => drive.revokeShare(l.id), tt('Link turned off.', 'تم إيقاف الرابط.'))}>
                   <Icon name="x" size={13} /><span>{tt('Turn off', 'إيقاف')}</span>
                 </button>

@@ -150,9 +150,22 @@ export const drive = {
   /** Share links (GET/POST /drive/nodes/{id}/shares, PATCH/DELETE /drive/shares/{id}). expiry: '1d' | '7d' | '30d' | 'never' or a custom '<n>m' | '<n>h' | '<n>d' (e.g. '5m', 2h). */
   shares: (id) => api.get(`${B}/nodes/${id}/shares`).then(unwrap),
   mySharedLinks: () => api.get(`${B}/shares`).then(unwrap),
-  createShare: (id, { expiry, canDownload }) => api.post(`${B}/nodes/${id}/shares`, { expiry, can_download: !!canDownload }).then(unwrap),
+  /** requireInfo = the visitor must type name + email + mobile before opening; password = optional link password. */
+  createShare: (id, { expiry, canDownload, requireInfo, password }) => api.post(`${B}/nodes/${id}/shares`, {
+    expiry, can_download: !!canDownload, require_visitor_info: !!requireInfo, ...(password ? { password } : {}),
+  }).then(unwrap),
+  /** patch: { expiry?, can_download?, require_visitor_info?, password?, remove_password? } */
   updateShare: (shareId, patch) => api.patch(`${B}/shares/${shareId}`, patch).then(unwrap),
   revokeShare: (shareId) => api.del(`${B}/shares/${shareId}`),
+  /** "My shared links" page: every link (active / paused / expired / turned off) with visitor counts. */
+  manageShares: () => api.get(`${B}/shares/manage`).then(unwrap),
+  /** Who opened one link: { share, summary, visitors, events }. */
+  shareActivity: (shareId) => api.get(`${B}/shares/${shareId}/activity`).then(unwrap),
+  clearShareActivity: (shareId) => api.del(`${B}/shares/${shareId}/activity`),
+  pauseShare: (shareId) => api.post(`${B}/shares/${shareId}/pause`, {}).then(unwrap),
+  resumeShare: (shareId) => api.post(`${B}/shares/${shareId}/resume`, {}).then(unwrap),
+  /** Delete the link and its whole log for good. */
+  deleteShare: (shareId) => api.del(`${B}/shares/${shareId}/forever`),
   /** Version history of a file: the old copies kept before every save (newest first) — GET /nodes/{id}/versions → { node, items, limit }. */
   versions: (id) => api.get(`${B}/nodes/${id}/versions`).then(unwrap),
   /** Bytes of one old version (private, authenticated). */
@@ -243,14 +256,27 @@ export async function fetchDownload(node, opts) {
 
 /** Public share page (no login): /api/v1/public/drive-share/{token}. */
 const P = (token) => `/api/v1/public/drive-share/${encodeURIComponent(token)}`;
+
+// The gate session (after the visitor typed name/email/phone and/or the password) lives in sessionStorage per link and is
+// sent on every request in X-Share-Session. The server drops it when the owner changes the password / settings.
+const SK = (token) => `shp:${token}`;
+export const shareSession = {
+  get: (token) => { try { return sessionStorage.getItem(SK(token)) || ''; } catch { return ''; } },
+  set: (token, v) => { try { sessionStorage.setItem(SK(token), v); } catch { /* private mode */ } },
+  clear: (token) => { try { sessionStorage.removeItem(SK(token)); } catch { /* ignore */ } },
+};
+const gateHeaders = (token) => { const v = shareSession.get(token); return v ? { 'X-Share-Session': v } : undefined; };
+
 export const sharedApi = {
-  view: (token, nodeId) => api.get(P(token), nodeId ? { node: nodeId } : undefined).then(unwrap),
+  view: (token, nodeId) => api.get(P(token), nodeId ? { node: nodeId } : undefined, gateHeaders(token)).then(unwrap),
+  /** Gate: { name, email, phone, password } → { session, visitor_name }. Throws with err.data (errors.code / fields) on a wrong password etc. */
+  enter: (token, body) => api.post(`${P(token)}/enter`, body).then(unwrap),
   file: async (token, nodeId, { download = false } = {}) => {
-    const res = await api.blob(`${P(token)}/file`, { ...(nodeId ? { node: nodeId } : {}), ...(download ? { download: 1 } : {}) });
+    const res = await api.blob(`${P(token)}/file`, { ...(nodeId ? { node: nodeId } : {}), ...(download ? { download: 1 } : {}) }, gateHeaders(token));
     return res.blob();
   },
   zip: async (token, nodeId) => {
-    const res = await api.blob(`${P(token)}/zip`, nodeId ? { node: nodeId } : undefined);
+    const res = await api.blob(`${P(token)}/zip`, nodeId ? { node: nodeId } : undefined, gateHeaders(token));
     return res.blob();
   },
 };
