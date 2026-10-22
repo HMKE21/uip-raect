@@ -48,6 +48,7 @@ const WinFallback = <div className="os-app-msg"><span className="mp-spin" /></di
 import SnapAssist from './SnapAssist';
 import { CalendarApp, NotesApp } from './miniApps';
 import SciCalc from './SciCalc';
+const TerminalApp = lazy(() => import('./TerminalApp'));
 import './desktop.css';
 import './mac.css';
 import './extras.css';
@@ -133,6 +134,7 @@ const RUN_ALIASES = {
   taskmgr: 'taskmgr', 'task manager': 'taskmgr', 'مدير المهام': 'taskmgr',
   bin: 'bin', recycle: 'bin', trash: 'bin', 'سلة المحذوفات': 'bin',
   notes: 'notes', note: 'notes', 'الملاحظات': 'notes', calendar: 'calendar', 'التقويم': 'calendar', calc: 'calculator', calculator: 'calculator', 'الآلة الحاسبة': 'calculator',
+  terminal: 'terminal', term: 'terminal', cmd: 'terminal', shell: 'terminal', bash: 'terminal', 'الترمينال': 'terminal', 'ترمينال': 'terminal',
   shortcuts: 'shortcuts', help: 'shortcuts', 'الاختصارات': 'shortcuts',
   cloud: 'cloud', backup: 'cloud', storage: 'cloud', 'النسخ الاحتياطي': 'cloud', 'التخزين': 'cloud',
   lock: 'lock', 'قفل': 'lock', portal: 'portal', exit: 'portal', 'البوابة': 'portal',
@@ -290,7 +292,7 @@ export default function DesktopOS() {
       case 'personalize': openApp('settings', { tab: 'personalize' }); break;
       case 'taskmgr': openApp('taskmgr'); break;
       case 'shortcuts': openApp('shortcuts'); break;
-      case 'notes': case 'calendar': case 'calculator': openApp(id); break;
+      case 'notes': case 'calendar': case 'calculator': case 'terminal': openApp(id); break;
       case 'run': setOverlay('run'); break;
       case 'lock': setOverlay(null); setLocked(true); break;
       case 'sleep': setOverlay(null); sleepRef.current?.(); break;
@@ -753,6 +755,7 @@ export default function DesktopOS() {
         { label: tt('New PDF / other file…', 'ملف PDF / نوع آخر…'), icon: 'file-plus', onClick: () => newDoc('pdf'), disabled: !desk.id },
         'sep',
         { label: tt('Open This PC', 'فتح جهازي'), icon: 'monitor', hint: 'Alt+E', onClick: () => runCommand('explorer') },
+        { label: tt('Open Terminal', 'فتح الترمينال'), icon: 'terminal', hint: 'Alt+T', onClick: () => runCommand('terminal') },
         { label: tt('Personalize', 'تخصيص'), icon: 'palette', hint: 'Alt+P', onClick: () => runCommand('personalize') },
         { label: tt('Keyboard shortcuts', 'اختصارات الكيبورد'), icon: 'key', hint: 'F1', onClick: () => runCommand('shortcuts') },
       ],
@@ -870,14 +873,15 @@ export default function DesktopOS() {
       if (e.defaultPrevented || s.locked || s.asleep || s.dlg) return;
       // F5 / Ctrl+R: "refresh" belongs to the desktop. Without this, any focus outside the icons (a window, the dock, the menu bar)
       // let the browser reload the whole page, losing the session state. Editors keep their unsaved-edit drafts, but we do not gamble on it.
-      if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && keyOf(e) === 'R')) {
+      const inTerm = !!e.target?.closest?.('.os-term');
+      if (!inTerm && (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && keyOf(e) === 'R'))) {
         e.preventDefault();
         s.refreshAll();
         return;
       }
       const id = globalActionFor(e);
       // the code workbench / viewer keep their own keys; only the window-level Alt combos pass through
-      if (e.target?.closest?.('.zb, .st-fv, .mp-editor, .os-wgt') && !/^(close|next|prev|desktop|taskview|desk\w+|pin\d)$/.test(id || '')) return;
+      if (e.target?.closest?.('.zb, .st-fv, .mp-editor, .os-wgt, .os-term') && !/^(close|next|prev|desktop|taskview|desk\w+|pin\d)$/.test(id || '')) return;
       if (!id) {
         if (e.key === 'Escape' && s.overlay) { e.preventDefault(); setOverlay(null); }
         return;
@@ -889,7 +893,7 @@ export default function DesktopOS() {
         case 'start': setOverlay((o) => (o === 'start' ? null : 'start')); break;
         case 'run': setOverlay((o) => (o === 'run' ? null : 'run')); break;
         case 'taskview': setOverlay((o) => (o === 'taskview' ? null : 'taskview')); break;
-        case 'lock': case 'sleep': case 'settings': case 'personalize': case 'explorer': case 'bin': case 'taskmgr': case 'notes': case 'calendar': case 'calculator': s.runCommand(id); break;
+        case 'lock': case 'sleep': case 'settings': case 'personalize': case 'explorer': case 'bin': case 'taskmgr': case 'notes': case 'calendar': case 'calculator': case 'terminal': s.runCommand(id); break;
         case 'help': s.runCommand('shortcuts'); break;
         case 'deskNext': dispatch({ type: 'deskStep', dir: 1 }); break;
         case 'deskPrev': dispatch({ type: 'deskStep', dir: -1 }); break;
@@ -925,6 +929,7 @@ export default function DesktopOS() {
     { id: 'notes', en: 'Notes', ar: 'الملاحظات', glyph: 'notes' },
     { id: 'calendar', en: 'Calendar', ar: 'التقويم', glyph: 'calendar' },
     { id: 'calculator', en: 'Calculator', ar: 'الآلة الحاسبة', glyph: 'calculator' },
+    { id: 'terminal', en: 'Terminal', ar: 'الترمينال', glyph: 'terminal' },
     { id: 'taskmgr', en: 'Task Manager', ar: 'مدير المهام', glyph: 'taskmgr' },
     { id: 'shortcuts', en: 'Keyboard shortcuts', ar: 'اختصارات الكيبورد', glyph: 'shortcuts' },
     { id: 'run', en: 'Run', ar: 'تشغيل', glyph: 'run' },
@@ -958,6 +963,7 @@ export default function DesktopOS() {
       case 'notes': return <NotesApp uid={user?.id} tt={tt} ar={ar} />;
       case 'calendar': return <CalendarApp uid={user?.id} tt={tt} ar={ar} onGo={(p) => navigate(p)} />;
       case 'calculator': return <SciCalc tt={tt} />;
+      case 'terminal': return <Suspense fallback={WinFallback}><TerminalApp tt={tt} /></Suspense>;
       default: return null;
     }
   };

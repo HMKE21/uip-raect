@@ -484,3 +484,15 @@ body.os-dragging iframe { pointer-events: none; }
 [dir="rtl"] .os-nt__main { padding: 11px 12px 11px 6px; }
 @keyframes os-nt-in { from { opacity: 0; transform: translateY(-8px) scale(.98); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .os-nt__card { animation: none; } }
+
+/* Terminal app */
+.os-term { display: flex; flex-direction: column; height: 100%; min-height: 0; background: #0d1117; color: #e6edf3; }
+.os-term__bar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: #161b22; border-bottom: 1px solid #30363d; font-size: 12px; flex-wrap: wrap; }
+.os-term__st { display: inline-flex; align-items: center; gap: 7px; color: #b1bac4; }
+.os-term__st i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.os-term__sp { flex: 1; }
+.os-term__bar button { display: inline-flex; align-items: center; gap: 5px; background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 3px 9px; font-size: 12px; cursor: pointer; }
+.os-term__bar button:hover { background: #30363d; }
+.os-term__err { padding: 8px 12px; background: #3d1418; color: #ffa198; font-size: 12.5px; }
+.os-term__host { flex: 1; min-height: 0; padding: 6px 8px; overflow: hidden; }
+.os-term__host .xterm, .os-term__host .xterm-viewport { height: 100%; }

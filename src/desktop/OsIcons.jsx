@@ -97,6 +97,7 @@ const TILES = {
   portal: ['#818cf8', '#4f46e5', 'home'],
   personalize: ['#f472b6', '#a855f7', 'palette'],
   run: ['#5ac8fa', '#2563eb', 'terminal'],
+  terminal: ['#3b4252', '#0d1117', 'terminal'],
   lock: ['#6b7280', '#1f2937', 'lock'],
   logout: ['#fb7185', '#e11d48', 'logout'],
   search: ['#5ac8fa', '#6366f1', 'search'],

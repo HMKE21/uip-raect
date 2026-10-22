@@ -16,7 +16,7 @@ export const DESK_ICONS = [
 ];
 export const DOCK_ICONS = [
   ['launchpad', 'Launchpad', 'لوحة التطبيقات', 'launchpad'], ['explorer', 'This PC', 'جهازي', 'explorer'], ['settings', 'Settings', 'الإعدادات', 'settings'],
-  ['shortcuts', 'Keyboard shortcuts', 'اختصارات الكيبورد', 'shortcuts'], ['notes', 'Notes', 'الملاحظات', 'notes'], ['calendar', 'Calendar', 'التقويم', 'calendar'], ['calculator', 'Calculator', 'الآلة الحاسبة', 'calculator'], ['lock', 'Lock screen', 'قفل الشاشة', 'lock'], ['portal', 'UIP Portal', 'بوابة UIP', 'portal'], ['logout', 'Sign out', 'تسجيل الخروج', 'logout'], ['bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'],
+  ['shortcuts', 'Keyboard shortcuts', 'اختصارات الكيبورد', 'shortcuts'], ['notes', 'Notes', 'الملاحظات', 'notes'], ['calendar', 'Calendar', 'التقويم', 'calendar'], ['calculator', 'Calculator', 'الآلة الحاسبة', 'calculator'], ['terminal', 'Terminal', 'الترمينال', 'terminal'], ['lock', 'Lock screen', 'قفل الشاشة', 'lock'], ['portal', 'UIP Portal', 'بوابة UIP', 'portal'], ['logout', 'Sign out', 'تسجيل الخروج', 'logout'], ['bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'],
 ];
 export const NO_ICONS = []; // one shared empty list, so memo dependencies do not change on every render
 /** ids of My PC items the person put on the desktop as shortcuts (the items themselves stay where they are). */

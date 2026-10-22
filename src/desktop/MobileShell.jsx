@@ -165,6 +165,7 @@ export default function MobileShell(p) {
     { key: 'notes', app: 'notes', label: tt('Notes', 'الملاحظات'), run: () => runCommand('notes') },
     { key: 'calendar', app: 'calendar', label: tt('Calendar', 'التقويم'), run: () => runCommand('calendar') },
     { key: 'calculator', app: 'calculator', label: tt('Calculator', 'الآلة الحاسبة'), run: () => runCommand('calculator') },
+    { key: 'terminal', app: 'terminal', label: tt('Terminal', 'الترمينال'), run: () => runCommand('terminal') },
     { key: 'taskmgr', app: 'taskmgr', label: tt('Task Manager', 'مدير المهام'), run: () => runCommand('taskmgr') },
     { key: 'portal', app: 'portal', label: tt('UIP Portal', 'بوابة UIP'), run: () => runCommand('portal') },
   ], [tt, openExplorer, runCommand]);
