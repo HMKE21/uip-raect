@@ -44,6 +44,7 @@ const RAW_CONFIGS = {
     academics: [
       { key: 'courses', en: 'My Courses', ar: 'موادي', icon: 'layers', route: '/student/courses', built: true },
       { key: 'registration', en: 'Registration', ar: 'التسجيل الأكاديمي', icon: 'file', route: '/student/registration', built: true },
+      { key: 'admin-requests', en: 'Admin Requests', ar: 'الطلبات الإدارية', icon: 'inbox', route: '/student/admin-requests', built: true },
       { key: 'timetable', en: 'Timetable', ar: 'جدول المحاضرات', icon: 'calendar', route: '/student/timetable', built: true },
       { key: 'attendance', en: 'Attendance', ar: 'الحضور والغياب', icon: 'check-circle', route: '/student/attendance', built: true },
       { key: 'assignments', en: 'Assignments', ar: 'التكليفات', icon: 'file', route: '/student/assignments', built: true },
@@ -76,6 +77,7 @@ const RAW_CONFIGS = {
       { key: 'faculties', en: 'Faculties', ar: 'الكليات', icon: 'building', route: '/university/faculties', built: true },
       { key: 'courses', en: 'Courses', ar: 'المواد', icon: 'layers', route: '/university/courses', built: true },
       { key: 'registration', en: 'Registration', ar: 'التسجيل الأكاديمي', icon: 'file', route: '/university/registration', built: true },
+      { key: 'admin-requests', en: 'Admin Requests', ar: 'الطلبات الإدارية', icon: 'inbox', route: '/university/admin-requests', built: true },
       { key: 'timetable', en: 'Timetable', ar: 'جدول المحاضرات', icon: 'calendar', route: '/university/timetable', built: true },
       { key: 'attendance', en: 'Attendance', ar: 'الحضور والغياب', icon: 'check-circle', route: '/university/attendance', built: true },
       { key: 'assignments', en: 'Assignments', ar: 'التكليفات', icon: 'file', route: '/university/assignments', built: true },
@@ -108,6 +110,7 @@ const RAW_CONFIGS = {
     academics: [
       { key: 'courses', en: 'Courses', ar: 'المواد', icon: 'layers', route: '/faculty/courses', built: true },
       { key: 'registration', en: 'Registration', ar: 'التسجيل الأكاديمي', icon: 'file', route: '/faculty/registration', built: true },
+      { key: 'admin-requests', en: 'Admin Requests', ar: 'الطلبات الإدارية', icon: 'inbox', route: '/faculty/admin-requests', built: true },
       { key: 'timetable', en: 'Timetable', ar: 'جدول المحاضرات', icon: 'calendar', route: '/faculty/timetable', built: true },
       { key: 'attendance', en: 'Attendance', ar: 'الحضور والغياب', icon: 'check-circle', route: '/faculty/attendance', built: true },
       { key: 'assignments', en: 'Assignments', ar: 'التكليفات', icon: 'file', route: '/faculty/assignments', built: true },
