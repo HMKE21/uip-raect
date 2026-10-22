@@ -22,7 +22,7 @@ import { DESK_ICONS, DOCK_ICONS, hiddenList, idList, iconPosKey, loadIconPos, lo
 import { useSharedClip } from '../lib/driveClipboard';
 import { globalActionFor, keyOf } from './shortcuts';
 import { isSystemNode, useDesktopSync } from './sync';
-import { readLockCache, readLockedFlag, writeLockedFlag, readUnlockedFlag, writeUnlockedFlag } from './desktopApi';
+import { desktopApi, readLockCache, readLockedFlag, writeLockedFlag, readUnlockedFlag, writeUnlockedFlag } from './desktopApi';
 import { BatteryGlyph, CalendarFlyout, QuickSettings, WifiGlyph, useBattery, useOnline } from './flyouts';
 import { addRecent, clearRecents, loadRecents, removeRecent, RECENTS_EVENT } from './recents';
 import ResetUndoBar from './ResetUndoBar';
