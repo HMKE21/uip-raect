@@ -56,7 +56,7 @@ export default function CourseContentPage({ role }) {
   ].filter(Boolean).join(' · ');
 
   return (
-    <div className="ex-page animate-rise-in">
+    <div className="ex-page">
       <div>
         <button type="button" className="ex-back" style={{ background: 'none', border: 0, cursor: 'pointer', padding: 0 }} onClick={() => navigate(backTo)}>
           <Icon name={ar ? 'arrow-right' : 'arrow-left'} size={14} /> {ar ? 'رجوع للمواد' : 'Back to courses'}

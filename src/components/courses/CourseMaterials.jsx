@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
@@ -226,16 +227,15 @@ export default function CourseMaterials({ courseId, saved = false, canManage = f
         </ul>
       )}
 
-      {form && (
+      {form && createPortal(
         <MaterialForm
           courseId={courseId}
           material={form.id ? form : null}
           initialKind={form.kind}
           onClose={() => setForm(null)}
           onDone={(msg) => { setForm(null); flash(msg); load().catch((e) => setError(errorMessage(e))); }}
-        />
-      )}
-      {preview && <PreviewModal m={preview} onClose={() => setPreview(null)} onDownload={() => download(preview)} />}
+        />, document.body)}
+      {preview && createPortal(<PreviewModal m={preview} onClose={() => setPreview(null)} onDownload={() => download(preview)} />, document.body)}
     </div>
   );
 }
