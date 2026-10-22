@@ -67,6 +67,7 @@ const DataAnalysisQueryBuilder = lazy(() => import('./pages/data-analysis/DataAn
 const DataAnalysisKpis = lazy(() => import('./pages/data-analysis/DataAnalysisKpis'));
 const DataAnalysisExports = lazy(() => import('./pages/data-analysis/DataAnalysisExports'));
 const AdminSettings = lazy(() => import('./pages/admin/AdminSettings'));
+const AdminAttendanceSettings = lazy(() => import('./pages/admin/AdminAttendanceSettings'));
 const AdminFeaturedProjects = lazy(() => import('./pages/admin/AdminFeaturedProjects'));
 const AdminAnalyticsDashboard = lazy(() => import('./pages/admin/AdminAnalyticsDashboard'));
 const AdminStatistics = lazy(() => import('./pages/admin/AdminStatistics'));
@@ -453,6 +454,7 @@ export default function App() {
                 <Route path="/admin/mobile" element={<AdminMobile />} />
                 <Route path="/admin/mobile/:id" element={<AdminMobileTokenDetail />} />
                 <Route path="/admin/platform-policy" element={<AdminPlatformPolicy />} />
+                <Route path="/admin/attendance-settings" element={<AdminAttendanceSettings />} />
                 <Route path="/admin/notifications/settings" element={<AdminNotificationSettings />} />
                 <Route path="/admin/chat-reports" element={<ChatReports />} />
                 <Route path="/admin/messaging/oversight" element={<AdminMessagingOversight />} />

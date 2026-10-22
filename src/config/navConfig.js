@@ -237,6 +237,7 @@ const RAW_CONFIGS = {
     platform: [
       { key: 'mobile', en: 'Mobile App Management', ar: 'إدارة تطبيق الجوال', icon: 'smartphone', route: '/admin/mobile', built: true },
       { key: 'platform-policy', en: 'Platform Policy', ar: 'سياسة المنصة', icon: 'x-circle', route: '/admin/platform-policy', built: true },
+      { key: 'attendance-settings', en: 'Attendance Settings', ar: 'إعدادات الحضور', icon: 'check-circle', route: '/admin/attendance-settings', built: true },
     ],
     account: [PUBLIC_PROFILE('admin')],
   },
