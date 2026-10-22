@@ -214,7 +214,7 @@ const RUN_ITEMS = [
   { cmd: 'notes', en: 'Notes', ar: 'الملاحظات', glyph: 'notes' },
   { cmd: 'calendar', en: 'Calendar', ar: 'التقويم', glyph: 'calendar' },
   { cmd: 'calculator', en: 'Calculator', ar: 'الآلة الحاسبة', glyph: 'calculator' },
-  { cmd: 'terminal', en: 'Terminal', ar: 'الترمينال', glyph: 'terminal' },
+  { cmd: 'terminal', en: 'UIP Terminal', ar: 'ترمينال UIP', glyph: 'terminal' },
   { cmd: 'lock', en: 'Lock screen', ar: 'قفل الشاشة', glyph: 'lock' },
   { cmd: 'portal', en: 'Back to portal', ar: 'الرجوع للموقع', glyph: 'portal' },
   { cmd: 'logout', en: 'Sign out', ar: 'تسجيل الخروج', glyph: 'logout' },

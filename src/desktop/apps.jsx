@@ -21,7 +21,7 @@ export const APPS = {
   shortcuts: { en: 'Keyboard shortcuts', ar: 'اختصارات الكيبورد', size: { w: 760, h: 600 }, singleton: true, pin: true },
   notes: { en: 'Notes', ar: 'الملاحظات', size: { w: 820, h: 560 }, singleton: true, pin: true },
   calendar: { en: 'Calendar', ar: 'التقويم', size: { w: 920, h: 600 }, singleton: true, pin: true },
-  terminal: { en: 'Terminal', ar: 'الترمينال', size: { w: 860, h: 540 }, singleton: true, pin: true },
+  terminal: { en: 'UIP Terminal', ar: 'ترمينال UIP', size: { w: 860, h: 540 }, singleton: true, pin: true },
   calculator: { en: 'Calculator', ar: 'الآلة الحاسبة', size: { w: 430, h: 800 }, singleton: true, pin: true },
   // one window per file (title = the file name): images / PDFs / media / ZIPs, and the code editor
   viewer: { en: 'Viewer', ar: 'العارض', size: { w: 1000, h: 660 }, singleton: false, pin: false },

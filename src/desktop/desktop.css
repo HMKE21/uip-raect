@@ -496,3 +496,4 @@ body.os-dragging iframe { pointer-events: none; }
 .os-term__err { padding: 8px 12px; background: #3d1418; color: #ffa198; font-size: 12.5px; }
 .os-term__host { flex: 1; min-height: 0; padding: 6px 8px; overflow: hidden; }
 .os-term__host .xterm, .os-term__host .xterm-viewport { height: 100%; }
+.os-term__brand { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: #e6edf3; margin-inline-end: 6px; }

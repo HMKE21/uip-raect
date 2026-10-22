@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { zipSync, strToU8 } from 'fflate';
 import Icon from '../components/Icon';
+import { UipMark } from './OsIcons';
 import { useSandbox } from '../components/zipbench/runner/useSandbox';
 
 /** One real shell per student, in an isolated container on the uip-sandbox gateway (same gateway the code editor uses). */
@@ -31,7 +32,7 @@ export default function TerminalApp({ tt }) {
   // an empty workspace: the gateway wants a ZIP for every session, a shell just starts in it
   const begin = useCallback(() => {
     const { cols, rows } = size();
-    const zip = zipSync({ 'README.txt': strToU8('UIP terminal workspace.\nFiles here live only as long as this session.\n') });
+    const zip = zipSync({ 'README.txt': strToU8('UIP Terminal workspace.\nFiles here live only as long as this session.\n') });
     sbxRef.current.start({ kind: 'shell', entry: '', zip, cols, rows });
   }, [size]);
 
@@ -64,6 +65,7 @@ export default function TerminalApp({ tt }) {
   return (
     <div className="os-term" onMouseDown={() => termRef.current?.focus()}>
       <div className="os-term__bar">
+        <span className="os-term__brand"><UipMark size={15} />UIP Terminal</span>
         <span className="os-term__st"><i style={{ background: dot }} />{tt(label[0], label[1])}{statusText ? ` — ${statusText}` : ''}</span>
         <span className="os-term__sp" />
         {phase === 'disconnected' && <button type="button" onClick={() => sbx.reconnect(size().cols, size().rows)}><Icon name="refresh" size={14} />{tt('Reconnect', 'إعادة الاتصال')}</button>}
