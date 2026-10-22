@@ -101,66 +101,96 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast }) {
       : d.toLocaleDateString(lng, { day: 'numeric', month: 'short', year: 'numeric' }));
   };
 
+  const PERMS = [
+    { key: 'dl', icon: 'download', en: 'View & download', ar: 'عرض وتنزيل' },
+    { key: 'view', icon: 'eye', en: 'View only', ar: 'عرض فقط' },
+  ];
+  const isFolder = node.type === 'folder';
+
   return (
     <StModal
-      wide title={tt('Share', 'مشاركة') + ` — ${node.name}`} onClose={onClose}
+      wide title={tt('Share', 'مشاركة')} onClose={onClose}
       actions={<button type="button" className="btn btn-primary" onClick={onClose}>{tt('Done', 'تم')}</button>}
     >
       <div className="mp-share">
-        <p className="mp-share__hint">
-          {tt('Anyone with the link can open this ', 'أي شخص معه الرابط يقدر يفتح ')}{node.type === 'folder' ? tt('folder', 'المجلد') : tt('file', 'الملف')}
-          {tt(' — no sign-in needed. Turn the link off any time.', ' — من غير تسجيل دخول. وتقدر توقف الرابط في أي وقت.')}
-        </p>
+        <div className="mp-share__file">
+          <span className="mp-share__file-ico"><Icon name={isFolder ? 'folder' : 'file'} size={20} /></span>
+          <div>
+            <strong title={node.name}>{node.name}</strong>
+            <small>{tt('Anyone with the link can open it — no sign-in. Turn it off any time.', 'أي شخص معه الرابط يقدر يفتحه — من غير تسجيل دخول. وتقدر توقفه في أي وقت.')}</small>
+          </div>
+        </div>
 
-        <div className="mp-share__new">
-          <label className="mp-field"><span>{tt('Link expires after', 'مدة صلاحية الرابط')}</span>
-            <select value={expiry} onChange={(e) => setExpiry(e.target.value)} disabled={busy}>
-              {EXPIRIES.map((x) => <option key={x.key} value={x.key}>{ar ? x.ar : x.en}</option>)}
-            </select>
+        <section className="mp-share__new">
+          <div className="mp-share__group">
+            <span className="mp-share__lbl">{tt('Link expires after', 'مدة صلاحية الرابط')}</span>
+            <div className="mp-seg mp-seg--wrap" role="radiogroup" aria-label={tt('Link expires after', 'مدة صلاحية الرابط')}>
+              {EXPIRIES.map((x) => (
+                <button key={x.key} type="button" role="radio" aria-checked={expiry === x.key} className={expiry === x.key ? 'is-on' : ''} disabled={busy} onClick={() => setExpiry(x.key)}>{ar ? x.ar : x.en}</button>
+              ))}
+            </div>
             {expiry === 'custom' && <CustomDuration ar={ar} n={customN} unit={customU} onN={setCustomN} onUnit={setCustomU} disabled={busy} />}
-          </label>
-          <label className="mp-field"><span>{tt('Permission', 'الصلاحية')}</span>
-            <select value={canDownload ? 'dl' : 'view'} onChange={(e) => setCanDownload(e.target.value === 'dl')} disabled={busy}>
-              <option value="dl">{tt('View and download', 'عرض وتنزيل')}</option>
-              <option value="view">{tt('View only', 'عرض فقط')}</option>
-            </select></label>
+          </div>
+          <div className="mp-share__group">
+            <span className="mp-share__lbl">{tt('Permission', 'الصلاحية')}</span>
+            <div className="mp-seg" role="radiogroup" aria-label={tt('Permission', 'الصلاحية')}>
+              {PERMS.map((x) => (
+                <button key={x.key} type="button" role="radio" aria-checked={(canDownload ? 'dl' : 'view') === x.key} className={(canDownload ? 'dl' : 'view') === x.key ? 'is-on' : ''} disabled={busy} onClick={() => setCanDownload(x.key === 'dl')}>
+                  <Icon name={x.icon} size={14} />{ar ? x.ar : x.en}
+                </button>
+              ))}
+            </div>
+          </div>
           <button
-            type="button" className="btn btn-primary" disabled={busy || !newExpiry}
+            type="button" className="btn btn-primary mp-share__create" disabled={busy || !newExpiry}
             title={newExpiry ? undefined : tt('Enter a whole number: 1 minute to 365 days', 'اكتب رقم صحيح: من دقيقة لـ 365 يوم')}
             onClick={() => act(async () => {
               const l = await drive.createShare(node.id, { expiry: newExpiry, canDownload });
               if (l?.token) await copyText(shareUrl(l.token));
             }, tt('Link created and copied.', 'تم إنشاء الرابط ونسخه.'))}
-          ><Icon name="link" size={15} /><span>{tt('Create link', 'إنشاء رابط')}</span></button>
-        </div>
+          ><Icon name="link" size={16} /><span>{tt('Create & copy link', 'إنشاء الرابط ونسخه')}</span></button>
+        </section>
 
         {error && <div className="mp-share__err" role="alert">{error}</div>}
 
+        <div className="mp-share__head">
+          <span>{tt('Your links', 'روابطك')}</span>
+          {links && links.length > 0 && <b>{links.length}</b>}
+        </div>
+
         <div className="mp-share__list">
           {links === null && <div className="mp-share__empty">{tt('Loading…', 'جارِ التحميل…')}</div>}
-          {links && links.length === 0 && <div className="mp-share__empty">{tt('No active links yet.', 'مفيش روابط شغّالة لسه.')}</div>}
+          {links && links.length === 0 && <div className="mp-share__empty"><Icon name="link" size={20} /><span>{tt('No links yet — create one above.', 'مفيش روابط لسه — اعمل واحد من فوق.')}</span></div>}
           {links && links.map((l) => (
-            <div key={l.id} className={`mp-share__row${l.expired ? ' is-expired' : ''}`}>
+            <article key={l.id} className={`mp-share__row${l.expired ? ' is-expired' : ''}`}>
+              <div className="mp-share__top">
+                <span className={`mp-badge ${l.expired ? 'is-off' : 'is-on'}`}>{l.expired ? tt('Expired', 'منتهي') : tt('Active', 'شغّال')}</span>
+                <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
+                <button type="button" className="mp-share__off" disabled={busy} onClick={() => act(() => drive.revokeShare(l.id), tt('Link turned off.', 'تم إيقاف الرابط.'))}>
+                  <Icon name="x" size={13} /><span>{tt('Turn off', 'إيقاف')}</span>
+                </button>
+              </div>
               <div className="mp-share__url">
                 <input readOnly dir="ltr" value={shareUrl(l.token)} onFocus={(e) => e.target.select()} aria-label={tt('Share link', 'رابط المشاركة')} />
-                <button type="button" className="btn btn-ghost" onClick={() => copy(l.token)} disabled={l.expired}><Icon name="copy" size={14} /><span>{tt('Copy', 'نسخ')}</span></button>
+                <button type="button" className="mp-share__copy" onClick={() => copy(l.token)} disabled={l.expired}><Icon name="copy" size={14} /><span>{tt('Copy', 'نسخ')}</span></button>
               </div>
               <div className="mp-share__meta">
                 <span><Icon name="clock" size={12} /> {expiryText(l)}</span>
-                <span><Icon name="eye" size={12} /> {l.views}</span>
-                <span><Icon name="download" size={12} /> {l.downloads}</span>
+                <span title={tt('Views', 'المشاهدات')}><Icon name="eye" size={12} /> {l.views}</span>
+                <span title={tt('Downloads', 'التنزيلات')}><Icon name="download" size={12} /> {l.downloads}</span>
                 {l.last_used_at && <span>{tt('Last opened ', 'آخر فتح ')}{timeAgo(l.last_used_at, locale)}</span>}
               </div>
               <div className="mp-share__ctl">
+                <div className="mp-seg mp-seg--sm" role="radiogroup" aria-label={tt('Permission', 'الصلاحية')}>
+                  {PERMS.map((x) => (
+                    <button key={x.key} type="button" role="radio" aria-checked={(l.can_download ? 'dl' : 'view') === x.key} className={(l.can_download ? 'dl' : 'view') === x.key ? 'is-on' : ''} disabled={busy}
+                      onClick={() => { if ((l.can_download ? 'dl' : 'view') !== x.key) act(() => drive.updateShare(l.id, { can_download: x.key === 'dl' })); }}>
+                      {ar ? x.ar : x.en}
+                    </button>
+                  ))}
+                </div>
                 <select
-                  value={l.can_download ? 'dl' : 'view'} disabled={busy} aria-label={tt('Permission', 'الصلاحية')}
-                  onChange={(e) => act(() => drive.updateShare(l.id, { can_download: e.target.value === 'dl' }))}
-                >
-                  <option value="dl">{tt('View and download', 'عرض وتنزيل')}</option>
-                  <option value="view">{tt('View only', 'عرض فقط')}</option>
-                </select>
-                <select
-                  value="" disabled={busy} aria-label={tt('Change expiry', 'تغيير المدة')}
+                  className="mp-share__sel" value="" disabled={busy} aria-label={tt('Change expiry', 'تغيير المدة')}
                   onChange={(e) => {
                     if (e.target.value === 'custom') { setEditId(l.id); return; }
                     setEditId(null);
@@ -170,20 +200,17 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast }) {
                   <option value="">{tt('Change expiry…', 'تغيير المدة…')}</option>
                   {EXPIRIES.map((x) => <option key={x.key} value={x.key}>{tt('From now: ', 'من الآن: ')}{ar ? x.ar : x.en}</option>)}
                 </select>
-                {editId === l.id && (
-                  <>
-                    <CustomDuration ar={ar} n={editN} unit={editU} onN={setEditN} onUnit={setEditU} disabled={busy} />
-                    <button
-                      type="button" className="btn btn-primary" disabled={busy || !customKey(editN, editU)}
-                      onClick={() => act(async () => { await drive.updateShare(l.id, { expiry: customKey(editN, editU) }); setEditId(null); }, tt('Expiry updated.', 'تم تحديث المدة.'))}
-                    >{tt('Apply', 'تطبيق')}</button>
-                  </>
-                )}
-                <button type="button" className="btn btn-ghost mp-share__off" disabled={busy} onClick={() => act(() => drive.revokeShare(l.id), tt('Link turned off.', 'تم إيقاف الرابط.'))}>
-                  <Icon name="x" size={14} /><span>{tt('Turn off', 'إيقاف')}</span>
-                </button>
               </div>
-            </div>
+              {editId === l.id && (
+                <div className="mp-share__edit">
+                  <CustomDuration ar={ar} n={editN} unit={editU} onN={setEditN} onUnit={setEditU} disabled={busy} />
+                  <button
+                    type="button" className="btn btn-primary" disabled={busy || !customKey(editN, editU)}
+                    onClick={() => act(async () => { await drive.updateShare(l.id, { expiry: customKey(editN, editU) }); setEditId(null); }, tt('Expiry updated.', 'تم تحديث المدة.'))}
+                  >{tt('Apply', 'تطبيق')}</button>
+                </div>
+              )}
+            </article>
           ))}
         </div>
       </div>
