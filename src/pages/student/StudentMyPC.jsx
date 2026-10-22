@@ -7,6 +7,7 @@ import Icon from '../../components/Icon';
 import FileViewer from '../../components/FileViewer';
 import NewFileDialog from '../../components/NewFileDialog';
 import ShareDialog from '../../components/ShareDialog';
+import VersionHistoryDialog from '../../components/VersionHistoryDialog';
 import '../../styles/css/drive-share.css';
 import { useLanguage } from '../../context/LanguageContext';
 import { usePageMeta } from '../../context/PageMetaContext';
@@ -757,6 +758,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     if (group.length) {
       out.push({ icon: 'download', label: tt('Download', 'تنزيل'), run: () => group.forEach(download), disabled: group.length > 1 });
       if (one) out.push({ icon: 'share', label: tt('Share', 'مشاركة'), run: () => setDlg({ type: 'share', node: one }) });
+      if (one && one.type === 'file') out.push({ icon: 'clock', label: tt('Version history', 'سجل الإصدارات'), run: () => setDlg({ type: 'versions', node: one }) });
       out.push({ sep: true });
       out.push({ icon: 'copy', label: tt('Copy', 'نسخ'), hint: 'Ctrl+C', run: () => setClip({ ids: group.map((x) => x.id), mode: 'copy' }) });
       out.push({ icon: 'ed-crop', label: tt('Cut', 'قص'), hint: 'Ctrl+X', run: () => setClip({ ids: group.map((x) => x.id), mode: 'cut' }) });
@@ -1062,6 +1064,10 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
         </CtxMenu>
       )}
 
+      {dlg?.type === 'versions' && (
+        <VersionHistoryDialog node={dlg.node} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash}
+          onRestored={() => { reload({ quiet: true }); window.dispatchEvent(new Event('uip-drive-changed')); }} />
+      )}
       {dlg?.type === 'share' && <ShareDialog node={dlg.node} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} />}
       {dlg?.type === 'name' && <NameDialog dlg={dlg} tt={tt} onClose={() => setDlg(null)} />}
       {dlg?.type === 'newfile' && (

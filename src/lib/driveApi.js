@@ -134,6 +134,13 @@ export const drive = {
   createShare: (id, { expiry, canDownload }) => api.post(`${B}/nodes/${id}/shares`, { expiry, can_download: !!canDownload }).then(unwrap),
   updateShare: (shareId, patch) => api.patch(`${B}/shares/${shareId}`, patch).then(unwrap),
   revokeShare: (shareId) => api.del(`${B}/shares/${shareId}`),
+  /** Version history of a file: the old copies kept before every save (newest first) — GET /nodes/{id}/versions → { node, items, limit }. */
+  versions: (id) => api.get(`${B}/nodes/${id}/versions`).then(unwrap),
+  /** Bytes of one old version (private, authenticated). */
+  versionBlob: async (id, versionId) => (await api.blob(`${B}/nodes/${id}/versions/${versionId}/content`)).blob(),
+  /** Put the file back to an old version (the current content is kept as a new version, so it can be undone). */
+  restoreVersion: (id, versionId) => api.post(`${B}/nodes/${id}/versions/${versionId}/restore`, {}).then(unwrap),
+  deleteVersion: (id, versionId) => api.del(`${B}/nodes/${id}/versions/${versionId}`),
   /** Whole-tree listing (metadata only) for the cloud backup engine. */
   manifest: () => api.get(`${B}/manifest`).then(unwrap),
   sandboxTokenPath: (folderId) => `${B}/nodes/${folderId}/sandbox-token`,
