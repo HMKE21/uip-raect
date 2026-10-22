@@ -202,22 +202,35 @@ const RUN_ITEMS = [
   { cmd: 'portal', en: 'Back to portal', ar: 'الرجوع للموقع', glyph: 'portal' },
 ];
 
-export function RunDialog({ ar, tt, onRun, onClose }) {
+export function RunDialog({ ar, tt, onRun, onClose, recents = [], onOpenRecent, onRemoveRecent, onClearRecents }) {
   const [v, setV] = useState('');
   const [err, setErr] = useState('');
   const [sel, setSel] = useState(0);
   const listRef = useRef(null);
   const q = v.trim().toLowerCase();
   const items = useMemo(() => RUN_ITEMS.filter((i) => !q || `${i.cmd} ${i.en} ${i.ar}`.toLowerCase().includes(q)), [q]);
+  // recently opened files / folders come first (filtered by what is typed)
+  const recentRows = useMemo(() => recents.filter((r) => !q || r.name.toLowerCase().includes(q)).slice(0, 6), [recents, q]);
+  const rows = useMemo(() => [...recentRows.map((r) => ({ key: `r:${r.id}`, recent: r })), ...items.map((it) => ({ key: it.cmd, cmd: it }))], [recentRows, items]);
   useEffect(() => { setSel(0); }, [q]);
+  useEffect(() => { setSel((i) => Math.min(i, Math.max(0, rows.length - 1))); }, [rows.length]);
   useEffect(() => { listRef.current?.querySelector('.is-sel')?.scrollIntoView({ block: 'nearest' }); }, [sel]);
   const run = (text) => { const r = onRun(text); if (r === false) setErr(tt('Nothing matches that.', 'مش لاقي الأمر ده.')); };
-  const go = () => { if (items[sel]) run(items[sel].cmd); else run(v.trim()); };
+  const pick = (row) => { if (row.recent) onOpenRecent?.(row.recent); else run(row.cmd.cmd); };
+  const go = () => { if (rows[sel]) pick(rows[sel]); else run(v.trim()); };
   const onKey = (e) => {
     if (e.key === 'Enter') { e.preventDefault(); go(); }
     else if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
-    else if (e.key === 'ArrowDown') { e.preventDefault(); setSel((i) => Math.min(items.length - 1, i + 1)); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); setSel((i) => Math.min(rows.length - 1, i + 1)); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); setSel((i) => Math.max(0, i - 1)); }
+    else if (e.key === 'Delete' && e.shiftKey && rows[sel]?.recent) { e.preventDefault(); onRemoveRecent?.(rows[sel].recent.id); } // Shift+Del forgets a recent item
+  };
+  const when = (ts) => { // "5m" / "2h" / date
+    const m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+    if (m < 1) return tt('now', 'الآن');
+    if (m < 60) return tt(`${m}m ago`, `من ${m} د`);
+    if (m < 1440) return tt(`${Math.round(m / 60)}h ago`, `من ${Math.round(m / 60)} س`);
+    return new Date(ts).toLocaleDateString(ar ? 'ar-EG' : undefined, { month: 'short', day: 'numeric' });
   };
   return (
     <div className="os-scrim os-scrim--run" onPointerDown={onClose}>
@@ -229,17 +242,30 @@ export function RunDialog({ ar, tt, onRun, onClose }) {
           <kbd>Esc</kbd>
         </div>
         {err && <p className="os-set__err">{err}</p>}
-        {items.length > 0 ? (
+        {rows.length > 0 ? (
           <ul className="os-spot__list" ref={listRef} role="listbox">
-            {items.map((it, i) => (
-              <li key={it.cmd}>
-                <button type="button" role="option" aria-selected={i === sel} className={i === sel ? 'is-sel' : ''} onPointerEnter={() => setSel(i)} onClick={() => run(it.cmd)}>
-                  <AppGlyph app={it.glyph} size={34} />
-                  <span className="os-spot__txt"><b>{ar ? it.ar : it.en}</b><small>{ar ? it.en : it.ar}</small></span>
-                  <kbd className="os-spot__enter" aria-hidden="true">↵</kbd>
-                </button>
-              </li>
-            ))}
+            {rows.map((row, i) => {
+              const r = row.recent; const it = row.cmd;
+              return (
+                <li key={row.key} className={r ? 'os-spot__item os-spot__item--recent' : 'os-spot__item'}>
+                  {i === 0 && r && (
+                    <div className="os-spot__head">
+                      <span>{tt('Recent', 'آخر ما فتحته')}</span>
+                      {!q && onClearRecents && <button type="button" onClick={onClearRecents}>{tt('Clear', 'مسح')}</button>}
+                    </div>
+                  )}
+                  {it && i === recentRows.length && recentRows.length > 0 && <div className="os-spot__head"><span>{tt('Apps & commands', 'التطبيقات والأوامر')}</span></div>}
+                  <button type="button" role="option" aria-selected={i === sel} className={i === sel ? 'is-sel' : ''} onPointerEnter={() => setSel(i)} onClick={() => pick(row)}>
+                    {r ? <NodeGlyph node={r} size={34} /> : <AppGlyph app={it.glyph} size={34} />}
+                    {r
+                      ? <span className="os-spot__txt"><b dir="auto">{r.name}</b><small>{r.type === 'folder' ? tt('Folder', 'مجلد') : tt('File', 'ملف')} · {when(r.ts)}</small></span>
+                      : <span className="os-spot__txt"><b>{ar ? it.ar : it.en}</b><small>{ar ? it.en : it.ar}</small></span>}
+                    <kbd className="os-spot__enter" aria-hidden="true">↵</kbd>
+                  </button>
+                  {r && onRemoveRecent && <button type="button" className="os-spot__forget" title={tt('Remove from recent (Shift+Del)', 'إزالة من الأخيرة (Shift+Del)')} aria-label={tt('Remove from recent', 'إزالة من الأخيرة')} onClick={() => onRemoveRecent(r.id)}><Icon name="x" size={13} /></button>}
+                </li>
+              );
+            })}
           </ul>
         ) : <p className="os-spot__none">{tt('No results', 'مفيش نتايج')}</p>}
         <footer className="os-spot__foot" aria-hidden="true">

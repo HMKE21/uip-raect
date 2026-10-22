@@ -21,6 +21,7 @@ import { globalActionFor, keyOf } from './shortcuts';
 import { isSystemNode, useDesktopSync } from './sync';
 import { readLockCache, readLockedFlag, writeLockedFlag, readUnlockedFlag, writeUnlockedFlag } from './desktopApi';
 import { BatteryGlyph, CalendarFlyout, QuickSettings, WifiGlyph, useBattery, useOnline } from './flyouts';
+import { addRecent, clearRecents, loadRecents, removeRecent, RECENTS_EVENT } from './recents';
 import { Clock, ContextMenu, IdleWarning, NodeGlyph, OsDialog, RunDialog, StartMenu, TaskView } from './shell';
 import LockScreen, { SleepScreen } from './LockScreen';
 import { readSec, useDesktopSecurity } from './security';
@@ -297,18 +298,35 @@ export default function DesktopOS() {
   const openFileWin = useCallback((p) => {
     if (p.kind === 'viewer') {
       const f = p.files.find((x) => x.id === p.startId);
+      if (f) addRecent(uidRef.current, { id: f.driveId ?? f.id, name: f.original_name, type: 'file', size_bytes: f.size_bytes });
       openApp('viewer', { files: p.files, startId: p.startId }, { title: f?.original_name, key: `v:${p.startId}`, maximized: prefs.openMax !== false });
     } else {
+      const en = p.editor.node;
+      addRecent(uidRef.current, { id: en.id, name: en.name, type: p.editor.kind === 'folder' ? 'folder' : 'file', how: p.editor.kind === 'folder' ? 'editor-folder' : undefined, size_bytes: en.size_bytes });
       openApp('editor', { editor: p.editor }, { title: p.editor.node.name, key: `e:${p.editor.node.id}`, maximized: prefs.openMax !== false });
     }
   }, [openApp, prefs.openMax]);
   const openNode = useCallback((n) => {
-    if (n.type === 'folder') { openExplorer({ folder: String(n.id) }); return; }
+    if (n.type === 'folder') { addRecent(uidRef.current, { id: n.id, name: n.name, type: 'folder' }); openExplorer({ folder: String(n.id) }); return; }
     if (opensInEditor(n.name)) { openFileWin({ kind: 'editor', editor: { kind: 'text', node: n } }); return; }
     const toFile = (x) => ({ id: x.id, original_name: x.name, url: `drive:${x.id}`, size_bytes: x.size_bytes, size_human: x.size_human, version: 1, driveId: x.id });
     const sibs = desk.items.filter((x) => x.type === 'file' && !isSystemNode(x) && !opensInEditor(x.name));
     openFileWin({ kind: 'viewer', startId: n.id, files: (sibs.some((x) => x.id === n.id) ? sibs : [n]).map(toFile) });
   }, [desk.items, openExplorer, openFileWin]);
+
+  // "Recent" in Spotlight: the last files / folders opened (kept per account, refreshed whenever one is opened)
+  const [recents, setRecents] = useState(() => loadRecents(user?.id));
+  useEffect(() => {
+    const h = () => setRecents(loadRecents(uidRef.current));
+    h();
+    window.addEventListener(RECENTS_EVENT, h);
+    return () => window.removeEventListener(RECENTS_EVENT, h);
+  }, [user?.id]);
+  const openRecent = useCallback((r) => {
+    setOverlay(null);
+    if (r.how === 'editor-folder') openFileWin({ kind: 'editor', editor: { kind: 'folder', node: { id: r.id, name: r.name, type: 'folder' } } });
+    else openNode({ id: r.id, name: r.name, type: r.type, size_bytes: r.size_bytes });
+  }, [openFileWin, openNode]);
 
   // a viewer / editor window saved something in My PC -> refresh the desktop icons
   useEffect(() => { const h = () => reloadDesk(); window.addEventListener('uip-drive-changed', h); return () => window.removeEventListener('uip-drive-changed', h); }, [reloadDesk]);
@@ -1007,7 +1025,7 @@ export default function DesktopOS() {
           onLock={() => runCommand('lock')} onPortal={() => runCommand('portal')}
         />
       )}
-      {overlay === 'run' && <RunDialog ar={ar} tt={tt} onRun={runText} onClose={() => setOverlay(null)} />}
+      {overlay === 'run' && <RunDialog ar={ar} tt={tt} onRun={runText} onClose={() => setOverlay(null)} recents={recents} onOpenRecent={openRecent} onRemoveRecent={(id) => removeRecent(uidRef.current, id)} onClearRecents={() => clearRecents(uidRef.current)} />}
 
       {overlay === 'qs' && (
         <QuickSettings

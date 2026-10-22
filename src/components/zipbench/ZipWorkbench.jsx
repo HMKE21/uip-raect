@@ -1478,7 +1478,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
             {jsonOn && (
               <div className="zb-cm-wrap" key={`${active}#${gens.current.get(active) || 0}`}>
                 <Suspense fallback={<div className="zb--center"><span className="st-fv-spinner" /></div>}>
-                  <JsonEdit path={active} text={jsonText} onText={(t) => setTextFor(active, t)} tt={tt} />
+                  <JsonEdit path={active} text={jsonText} onText={(t) => setTextFor(active, t)} tt={tt} theme={theme} onTheme={pickTheme} onCode={() => switchView(active, true)} />
                 </Suspense>
               </div>
             )}

@@ -391,3 +391,14 @@ body.os-dragging .os-wall { transition: none; }
 .os-dlg--run .os-spot__list button:hover .os-spot__txt b { color: #fff; }
 .os-dlg--run .os-spot__list button:hover .os-spot__txt small { color: rgba(255, 255, 255, .82); }
 .os-dlg--run .os-spot__list button:hover .os-spot__enter { display: grid; }
+
+/* Spotlight: "Recent" section (last opened files / folders) */
+.os-spot__item { position: relative; }
+.os-spot__head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 4px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--g-mute); }
+.os-spot__head button { width: auto !important; height: auto !important; padding: 2px 8px !important; border-radius: 6px !important; font-size: 11px !important; font-weight: 600 !important; color: var(--g-mute) !important; background: transparent; }
+.os-spot__head button:hover { background: var(--g-hover) !important; color: var(--g-fg) !important; }
+.os-dlg--run .os-spot__list .os-spot__forget { position: absolute; inset-inline-end: 44px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; padding: 0; display: none; place-items: center; border-radius: 6px; color: var(--g-mute); background: transparent; }
+.os-spot__item--recent:hover .os-spot__forget, .os-spot__item--recent:focus-within .os-spot__forget { display: grid; }
+.os-spot__item--recent:hover .os-spot__head + .os-spot__forget { top: calc(50% + 12px); }
+.os-dlg--run .os-spot__list .os-spot__forget:hover { background: var(--g-hover); color: var(--g-fg); }
+

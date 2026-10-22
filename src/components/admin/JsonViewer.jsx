@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from '../Icon';
+import { THEMES } from '../zipbench/themePalettes';
 import '../../styles/css/json-viewer.css';
 
 /**
@@ -9,17 +10,25 @@ import '../../styles/css/json-viewer.css';
  *   <JsonViewer value={object} text={optionalRawText} filename="response.json" labels={{…}} />
  */
 
+// One theme list for the whole app: the same palettes the ZIP workbench / code editor use (zipbench/themePalettes.js).
 // `bg`/`line` paint the preview swatch, `dots` = key · string · number · boolean · null colours of the theme.
-export const JV_THEMES = [
-  { id: 'dark-plus', name: 'Dark+', dark: true, bg: '#1e1e1e', line: '#3c3c3c', dots: ['#9cdcfe', '#ce9178', '#b5cea8', '#569cd6', '#c586c0'] },
-  { id: 'monokai', name: 'Monokai', dark: true, bg: '#272822', line: '#3e3d32', dots: ['#a6e22e', '#e6db74', '#ae81ff', '#66d9ef', '#f92672'] },
-  { id: 'dracula', name: 'Dracula', dark: true, bg: '#282a36', line: '#44475a', dots: ['#8be9fd', '#f1fa8c', '#bd93f9', '#ff79c6', '#50fa7b'] },
-  { id: 'solarized-dark', name: 'Solarized Dark', dark: true, bg: '#002b36', line: '#0f4655', dots: ['#268bd2', '#2aa198', '#d33682', '#b58900', '#cb4b16'] },
-  { id: 'github-light', name: 'GitHub Light', dark: false, bg: '#ffffff', line: '#d0d7de', dots: ['#0550ae', '#0a3069', '#116329', '#cf222e', '#8250df'] },
-  { id: 'solarized-light', name: 'Solarized Light', dark: false, bg: '#fdf6e3', line: '#e0d9bf', dots: ['#268bd2', '#2aa198', '#d33682', '#b58900', '#cb4b16'] },
-];
+export const JV_THEMES = THEMES.map((th) => ({ id: th.id, name: th.name, dark: th.dark, bg: th.ed.bg, line: th.ui.line, dots: [th.ed.prop, th.ed.string, th.ed.number, th.ed.keyword, th.ed.control] }));
+const JV_ALIAS = { 'dark-plus': 'dark' }; // id the viewer stored before the lists were merged
+const jvTheme = (id) => JV_THEMES.find((t) => t.id === (JV_ALIAS[id] || id)) || JV_THEMES[0];
+/** CSS variables of the viewer for a theme id (derived from the shared palette, so it always matches the editor). */
+function jvVars(id) {
+  const th = THEMES.find((t) => t.id === jvTheme(id).id) || THEMES[0];
+  const { ui: u, ed: e } = th;
+  return {
+    colorScheme: th.dark ? 'dark' : 'light',
+    '--jv-bg': e.bg, '--jv-bar': u.side, '--jv-fg': e.fg, '--jv-dim': u.muted, '--jv-border': u.line, '--jv-hover': u.hover, '--jv-sel': u.sel,
+    '--jv-key': e.prop, '--jv-str': e.string, '--jv-num': e.number, '--jv-bool': e.keyword, '--jv-null': e.control, '--jv-punct': u.muted, '--jv-idx': e.type,
+    '--jv-match': u.mark, '--jv-accent': u.accent, '--jv-status': u.status, '--jv-status-fg': u.statusFg, '--jv-on-accent': u.onPrimary,
+  };
+}
 
 const LS_THEME = 'uip_jv_theme';
+const JV_DEFAULT = 'dark';
 const LS_SIZE = 'uip_jv_size';
 const readLS = (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } };
 const writeLS = (k, v) => { try { localStorage.setItem(k, String(v)); } catch { /* storage blocked */ } };
@@ -505,12 +514,12 @@ function Swatch({ th }) {
   );
 }
 
-function ThemePicker({ value, onChange, onPreview, themeAttr, labels }) {
+function ThemePicker({ value, onChange, onPreview, popStyle, labels }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   const btnRef = useRef(null);
   const popRef = useRef(null);
-  const current = JV_THEMES.find((t) => t.id === value) || JV_THEMES[0];
+  const current = jvTheme(value);
 
   const close = useCallback((refocus) => { setOpen(false); onPreview(null); if (refocus) btnRef.current?.focus(); }, [onPreview]);
 
@@ -518,7 +527,7 @@ function ThemePicker({ value, onChange, onPreview, themeAttr, labels }) {
     if (!open || !btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
     const w = 264;
-    const est = JV_THEMES.length * 46 + 70;
+    const est = Math.min(JV_THEMES.length * 46 + 70, window.innerHeight - 16);
     const left = Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8));
     const below = window.innerHeight - r.bottom;
     setPos(below >= est || below >= r.top ? { left, top: r.bottom + 6, width: w } : { left, bottom: window.innerHeight - r.top + 6, width: w });
@@ -562,18 +571,18 @@ function ThemePicker({ value, onChange, onPreview, themeAttr, labels }) {
         <Icon name="chevron-down" size={12} />
       </button>
       {open && pos && createPortal(
-        <div ref={popRef} className="jv-pop" data-jv-theme={themeAttr} dir="ltr" role="listbox" aria-label={labels.theme} style={pos} onKeyDown={onListKey} onMouseLeave={() => onPreview(null)}>
+        <div ref={popRef} className="jv-pop" dir="ltr" role="listbox" aria-label={labels.theme} style={{ ...popStyle, ...pos }} onKeyDown={onListKey} onMouseLeave={() => onPreview(null)}>
           {groups.map((g) => g.list.length > 0 && (
             <div key={g.label} className="jv-pop-group">
               <div className="jv-pop-title">{g.label}</div>
               {g.list.map((th) => (
-                <button key={th.id} type="button" role="option" aria-selected={th.id === value} className={`jv-opt${th.id === value ? ' is-on' : ''}`}
+                <button key={th.id} type="button" role="option" aria-selected={th.id === current.id} className={`jv-opt${th.id === current.id ? ' is-on' : ''}`}
                   onMouseEnter={() => onPreview(th.id)} onFocus={() => onPreview(th.id)}
                   onClick={() => { onChange(th.id); close(true); }}>
                   <Swatch th={th} />
                   <span className="jv-opt-name">{th.name}</span>
                   <span className="jv-dots" aria-hidden="true">{th.dots.map((c, i) => <span key={i} style={{ background: c }} />)}</span>
-                  <span className="jv-opt-check">{th.id === value && <Icon name="check" size={14} />}</span>
+                  <span className="jv-opt-check">{th.id === current.id && <Icon name="check" size={14} />}</span>
                 </button>
               ))}
             </div>
@@ -624,10 +633,13 @@ function CodeView({ lines, q, wrap, fontSize }) {
 }
 
 // ------------------------------------------------------------------ viewer
-export default function JsonViewer({ value, text, filename = 'response.json', meta, labels = {}, onChange }) {
+export default function JsonViewer({ value, text, filename = 'response.json', meta, labels = {}, onChange, theme: themeProp, onTheme, onCode }) {
   const L = { tree: 'Tree', outline: 'Outline', code: 'Code', search: 'Search keys & values…', expand: 'Expand all', collapse: 'Collapse all', copy: 'Copy', copied: 'Copied', download: 'Download', full: 'Full screen', exit: 'Exit full screen', nodes: 'nodes', lines: 'lines', path: 'Click a node to see its path', matches: 'matches', wrap: 'Wrap', zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomHint: 'Ctrl + mouse wheel to zoom', fit: 'Fit to screen', resetLayout: 'Reset layout', dragHint: 'drag to move', resize: 'Drag to resize', theme: 'Theme', dark: 'Dark', light: 'Light', ...labels };
   const [view, setView] = useState('tree');
-  const [theme, setTheme] = useState(() => readLS(LS_THEME, 'dark-plus'));
+  const controlled = themeProp !== undefined; // inside the ZIP workbench the editor's own theme drives the viewer
+  const [ownTheme, setOwnTheme] = useState(() => jvTheme(readLS(LS_THEME, JV_DEFAULT)).id);
+  const theme = controlled ? themeProp : ownTheme;
+  const setTheme = useCallback((id) => { if (controlled) onTheme?.(id); else setOwnTheme(id); }, [controlled, onTheme]);
   const [preview, setPreview] = useState(null);
   const [fontSize, setFontSize] = useState(() => Number(readLS(LS_SIZE, 13)) || 13);
   const [wrap, setWrap] = useState(false);
@@ -653,7 +665,7 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
   }, [parsed, value]);
   const codeMatches = useMemo(() => (q.trim() ? lines.filter((l) => norm(l).includes(norm(q.trim()))).length : 0), [lines, q]);
 
-  useEffect(() => { writeLS(LS_THEME, theme); }, [theme]);
+  useEffect(() => { if (!controlled) writeLS(LS_THEME, ownTheme); }, [controlled, ownTheme]);
   useEffect(() => { writeLS(LS_SIZE, fontSize); }, [fontSize]);
   useEffect(() => { if (editable) return; setSelected(null); setCmd((c) => ({ tick: 0, level: c.level })); }, [pretty]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -697,17 +709,19 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
     setTimeout(() => URL.revokeObjectURL(url), 500);
   };
 
+  const vars = useMemo(() => jvVars(preview || theme), [preview, theme]);
+  const popVars = useMemo(() => jvVars(theme), [theme]);
   const shownView = parsed ? view : 'code';
   const matchCount = shownView === 'code' ? codeMatches : search.count;
   const structured = shownView === 'tree' || shownView === 'outline';
 
   return (
-    <div ref={rootRef} className={`jv${full ? ' is-full' : ''}`} data-jv-theme={preview || theme} dir="ltr">
+    <div ref={rootRef} className={`jv${full ? ' is-full' : ''}`} style={vars} dir="ltr">
       <div className="jv-bar">
         <div className="jv-tabs" role="tablist">
           {parsed && <button type="button" role="tab" aria-selected={shownView === 'tree'} className={shownView === 'tree' ? 'is-on' : ''} onClick={() => setView('tree')}><Icon name="share" size={13} /> {L.tree}</button>}
           {parsed && <button type="button" role="tab" aria-selected={shownView === 'outline'} className={shownView === 'outline' ? 'is-on' : ''} onClick={() => setView('outline')}><Icon name="menu" size={13} /> {L.outline}</button>}
-          <button type="button" role="tab" aria-selected={shownView === 'code'} className={shownView === 'code' ? 'is-on' : ''} onClick={() => setView('code')}><Icon name="terminal" size={13} /> {L.code}</button>
+          <button type="button" role="tab" aria-selected={shownView === 'code'} className={shownView === 'code' ? 'is-on' : ''} onClick={() => (onCode ? onCode() : setView('code'))}><Icon name="terminal" size={13} /> {L.code}</button>
         </div>
         <label className="jv-search">
           <Icon name="search" size={14} />
@@ -726,7 +740,7 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
           {shownView === 'code' && <button type="button" className={wrap ? 'is-on' : ''} onClick={() => setWrap((w) => !w)}>{L.wrap}</button>}
           <button type="button" className="jv-lv" title="Smaller" onClick={() => setFontSize((s) => Math.max(10, s - 1))}>A−</button>
           <button type="button" className="jv-lv" title="Larger" onClick={() => setFontSize((s) => Math.min(20, s + 1))}>A+</button>
-          <ThemePicker value={theme} onChange={setTheme} onPreview={setPreview} themeAttr={theme} labels={L} />
+          <ThemePicker value={theme} onChange={setTheme} onPreview={setPreview} popStyle={popVars} labels={L} />
           <button type="button" onClick={() => copyText(pretty).then(() => say(L.copied))}><Icon name="copy" size={14} /> {L.copy}</button>
           <button type="button" onClick={download}><Icon name="download" size={14} /> {L.download}</button>
           <button type="button" className="jv-lv" title={full ? L.exit : L.full} aria-label={full ? L.exit : L.full} onClick={() => setFull((f) => !f)}><Icon name={full ? 'collapse' : 'maximize'} size={14} /></button>

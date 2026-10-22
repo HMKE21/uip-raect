@@ -1,18 +1,15 @@
-/* Code-editor style JSON viewer (components/admin/JsonViewer.jsx). Independent of the site theme: pick one in the toolbar. */
+/* Code-editor style JSON viewer (components/admin/JsonViewer.jsx). Independent of the site theme: pick one in the toolbar.
+   Per-theme colours are no longer listed here: JsonViewer sets these --jv-* variables inline from zipbench/themePalettes.js
+   (the same palettes as the code editor), so the values below are only the Dark+ fallback. */
 .jv, .jv-pop {
   --jv-bg: #1e1e1e; --jv-bar: #252526; --jv-fg: #d4d4d4; --jv-dim: #858585; --jv-border: #3c3c3c; --jv-hover: #2a2d2e; --jv-sel: #094771;
   --jv-key: #9cdcfe; --jv-str: #ce9178; --jv-num: #b5cea8; --jv-bool: #569cd6; --jv-null: #c586c0; --jv-punct: #808080; --jv-idx: #4ec9b0;
-  --jv-match: rgba(234, 179, 8, .45); --jv-accent: #3794ff; --jv-guide: color-mix(in srgb, var(--jv-dim) 45%, transparent);
+  --jv-match: rgba(234, 179, 8, .45); --jv-accent: #3794ff; --jv-status: #0a64b0; --jv-status-fg: #fff; --jv-on-accent: #fff; --jv-guide: color-mix(in srgb, var(--jv-dim) 45%, transparent);
 }
 .jv {
   display: flex; flex-direction: column; margin-top: var(--space-3, 12px); border: 1px solid var(--jv-border); border-radius: 12px; overflow: hidden;
   background: var(--jv-bg); color: var(--jv-fg); font-family: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Menlo, Consolas, monospace; text-align: left;
 }
-.jv[data-jv-theme="monokai"],        .jv-pop[data-jv-theme="monokai"] { --jv-bg:#272822; --jv-bar:#1e1f1c; --jv-fg:#f8f8f2; --jv-dim:#90908a; --jv-border:#3e3d32; --jv-hover:#32332c; --jv-sel:#49483e; --jv-key:#a6e22e; --jv-str:#e6db74; --jv-num:#ae81ff; --jv-bool:#66d9ef; --jv-null:#f92672; --jv-punct:#a59f85; --jv-idx:#fd971f; --jv-accent:#a6e22e; }
-.jv[data-jv-theme="dracula"],        .jv-pop[data-jv-theme="dracula"] { --jv-bg:#282a36; --jv-bar:#21222c; --jv-fg:#f8f8f2; --jv-dim:#7b86b6; --jv-border:#44475a; --jv-hover:#313342; --jv-sel:#44475a; --jv-key:#8be9fd; --jv-str:#f1fa8c; --jv-num:#bd93f9; --jv-bool:#ff79c6; --jv-null:#ff79c6; --jv-punct:#8892bd; --jv-idx:#50fa7b; --jv-accent:#bd93f9; }
-.jv[data-jv-theme="solarized-dark"], .jv-pop[data-jv-theme="solarized-dark"] { --jv-bg:#002b36; --jv-bar:#073642; --jv-fg:#93a1a1; --jv-dim:#657b83; --jv-border:#0f4655; --jv-hover:#06404d; --jv-sel:#0b5566; --jv-key:#268bd2; --jv-str:#2aa198; --jv-num:#d33682; --jv-bool:#b58900; --jv-null:#cb4b16; --jv-punct:#586e75; --jv-idx:#859900; --jv-accent:#268bd2; }
-.jv[data-jv-theme="github-light"],   .jv-pop[data-jv-theme="github-light"] { --jv-bg:#ffffff; --jv-bar:#f6f8fa; --jv-fg:#24292f; --jv-dim:#8c959f; --jv-border:#d0d7de; --jv-hover:#f3f6fa; --jv-sel:#ddf4ff; --jv-key:#0550ae; --jv-str:#0a3069; --jv-num:#0550ae; --jv-bool:#cf222e; --jv-null:#8250df; --jv-punct:#6e7781; --jv-idx:#116329; --jv-match:rgba(255, 211, 61, .55); --jv-accent:#0969da; }
-.jv[data-jv-theme="solarized-light"],.jv-pop[data-jv-theme="solarized-light"] { --jv-bg:#fdf6e3; --jv-bar:#eee8d5; --jv-fg:#586e75; --jv-dim:#93a1a1; --jv-border:#e0d9bf; --jv-hover:#f5eed8; --jv-sel:#e6dfc3; --jv-key:#268bd2; --jv-str:#2aa198; --jv-num:#d33682; --jv-bool:#b58900; --jv-null:#cb4b16; --jv-punct:#93a1a1; --jv-idx:#859900; --jv-match:rgba(181, 137, 0, .35); --jv-accent:#268bd2; }
 
 .jv.is-full { position: fixed; inset: 0; z-index: 3000; margin: 0; border-radius: 0; border: 0; }
 
@@ -27,7 +24,7 @@
 .jv-bar .jv-lv { min-width: 28px; padding: 0 6px; justify-content: center; }
 .jv-tabs { display: inline-flex; padding: 2px; border: 1px solid var(--jv-border); border-radius: 9px; gap: 2px; }
 .jv-tabs button { border: 0; height: 24px; }
-.jv-tabs button.is-on { background: var(--jv-accent); color: #fff; }
+.jv-tabs button.is-on { background: var(--jv-accent); color: var(--jv-on-accent); }
 .jv-search { flex: 1 1 180px; min-width: 150px; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 1px solid var(--jv-border); border-radius: 7px; color: var(--jv-dim); }
 .jv-search:focus-within { border-color: var(--jv-accent); }
 .jv-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--jv-fg); font: 12.5px system-ui, 'Cairo', sans-serif; }
@@ -125,12 +122,12 @@
 .jv-code.is-wrap .jv-src { white-space: pre-wrap; word-break: break-word; }
 
 /* status bar */
-.jv-status { display: flex; align-items: center; gap: 14px; padding: 5px 12px; background: var(--jv-accent); color: #fff; font: 600 11.5px system-ui, 'Cairo', sans-serif; }
+.jv-status { display: flex; align-items: center; gap: 14px; padding: 5px 12px; background: var(--jv-status); color: var(--jv-status-fg); font: 600 11.5px system-ui, 'Cairo', sans-serif; }
 .jv-path { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 500; }
 .jv-sp { flex: 1; }
-.jv-flash { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 9px; background: rgba(255, 255, 255, .22); }
-.jv-status button { padding: 1px 8px; border: 1px solid rgba(255, 255, 255, .55); border-radius: 6px; background: transparent; color: #fff; font: inherit; cursor: pointer; }
-.jv-status button:hover { background: rgba(255, 255, 255, .18); }
+.jv-flash { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 9px; background: color-mix(in srgb, var(--jv-status-fg) 22%, transparent); }
+.jv-status button { padding: 1px 8px; border: 1px solid color-mix(in srgb, var(--jv-status-fg) 55%, transparent); border-radius: 6px; background: transparent; color: var(--jv-status-fg); font: inherit; cursor: pointer; }
+.jv-status button:hover { background: color-mix(in srgb, var(--jv-status-fg) 18%, transparent); }
 @media (max-width: 640px) { .jv-path { max-width: 40%; } .jv-status { flex-wrap: wrap; } }
 
 /* graph: zoom toolbar, scrollable rows, resize handles */
@@ -150,7 +147,7 @@
 /* in-place editing */
 .jv-editable { cursor: text; border-radius: 4px; }
 .jv-editable:hover { outline: 1px dashed currentColor; outline-offset: 2px; }
-.jv-edit { font: inherit; color: inherit; background: rgba(127,127,127,.18); border: 1px solid #3b82f6; border-radius: 5px; padding: 1px 6px; min-width: 90px; max-width: 100%; outline: none; }
+.jv-edit { font: inherit; color: var(--jv-fg); background: color-mix(in srgb, var(--jv-fg) 10%, var(--jv-bg)); border: 1px solid var(--jv-accent); border-radius: 5px; padding: 1px 6px; min-width: 90px; max-width: 100%; outline: none; }
 .jv-grow .jv-edit { height: 100%; padding-block: 0; flex: 1; min-width: 0; }
 .jv-editbar { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-top: 1px solid rgba(127,127,127,.25); flex-wrap: wrap; font-size: 12px; }
 .jv-editbar button { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border-radius: 7px; border: 1px solid rgba(127,127,127,.35); background: rgba(127,127,127,.12); color: inherit; font: inherit; cursor: pointer; }
@@ -163,3 +160,11 @@
 .zb-json { position: absolute; inset: 0; display: flex; }
 .zb-json > .jv { flex: 1; min-width: 0; border-radius: 0; border: 0; }
 .zb-json > .jv { margin: 0 !important; }
+/* inside the ZIP workbench the viewer fills the pane: the body grows (no 560px cap, which left an unthemed band below the status bar) */
+.zb-json > .jv { height: 100%; background: var(--jv-bg); }
+.zb-json .jv-body { max-height: none; min-height: 0; }
+.zb-json .jv-status { flex: none; }
+.zb-json .jv-editbar { flex: none; background: var(--jv-bar); color: var(--jv-fg); border-top-color: var(--jv-border); }
+.zb-json .jv-editbar button { border-color: var(--jv-border); background: var(--jv-hover); }
+.zb-json .jv-editbar button:hover:not(:disabled) { background: var(--jv-sel); }
+.zb-json .jv-edithint { color: var(--jv-dim); opacity: 1; }
