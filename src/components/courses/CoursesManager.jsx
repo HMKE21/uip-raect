@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { CourseGradebook } from './CourseGradebook';
+import CourseMaterials from './CourseMaterials';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
 import { PersonAvatar, StaffHead } from '../staff/stfUi';
@@ -507,6 +508,7 @@ function CourseManageModal({ course, canAssign, onClose }) {
 
         <div className="ex-tabs" role="tablist" style={{ padding: '0 16px' }}>
           <button type="button" role="tab" aria-selected={tab === 'students'} className={`ex-tab${tab === 'students' ? ' is-active' : ''}`} onClick={() => setTab('students')}>{ar ? 'الطلاب' : 'Students'}<small>({roster.length})</small></button>
+          <button type="button" role="tab" aria-selected={tab === 'content'} className={`ex-tab${tab === 'content' ? ' is-active' : ''}`} onClick={() => setTab('content')}>{ar ? 'المحتوى' : 'Content'}</button>
           <button type="button" role="tab" aria-selected={tab === 'grades'} className={`ex-tab${tab === 'grades' ? ' is-active' : ''}`} onClick={() => setTab('grades')}>{ar ? 'الدرجات' : 'Grades'}</button>
           {canAssign && <button type="button" role="tab" aria-selected={tab === 'teachers'} className={`ex-tab${tab === 'teachers' ? ' is-active' : ''}`} onClick={() => setTab('teachers')}>{ar ? 'المدرّسون' : 'Teachers'}<small>({staff.length})</small></button>}
         </div>
@@ -543,6 +545,8 @@ function CourseManageModal({ course, canAssign, onClose }) {
               )}
             </>
           )}
+
+          {tab === 'content' && <CourseMaterials courseId={course.id} canManage />}
 
           {tab === 'grades' && <CourseGradebook courseId={course.id} />}
 

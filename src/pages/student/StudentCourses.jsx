@@ -6,6 +6,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../../components/student/stUi';
 import { ExKpi } from '../../components/exam/examUi';
 import CourseRequestDialog from '../../components/courses/CourseRequestDialog';
+import CourseMaterials, { CourseMaterialsModal } from '../../components/courses/CourseMaterials';
 import { decidedByText, downloadRequestAttachment, requestStatusLabel } from '../../components/courses/CourseRequestsInbox';
 
 /**
@@ -27,6 +28,7 @@ export default function StudentCourses() {
   const [busyId, setBusyId] = useState(null);
   const [gradesFor, setGradesFor] = useState(null);
   const [dialog, setDialog] = useState(null); // { course, type }
+  const [contentFor, setContentFor] = useState(null); // course whose content modal is open
   const [requests, setRequests] = useState([]);
 
   const load = useCallback(() => Promise.all([
@@ -84,9 +86,12 @@ export default function StudentCourses() {
         <div className="ex-tabs" role="tablist">
           <button type="button" role="tab" aria-selected={tab === 'mine'} className={`ex-tab${tab === 'mine' ? ' is-active' : ''}`} onClick={() => setTab('mine')}>{ar ? 'موادي' : 'My courses'}<small>({mine.length})</small></button>
           <button type="button" role="tab" aria-selected={tab === 'browse'} className={`ex-tab${tab === 'browse' ? ' is-active' : ''}`} onClick={() => setTab('browse')}>{ar ? 'تصفّح وسجّل' : 'Browse & enrol'}<small>({courses.length - mine.length})</small></button>
+          <button type="button" role="tab" aria-selected={tab === 'saved'} className={`ex-tab${tab === 'saved' ? ' is-active' : ''}`} onClick={() => setTab('saved')}><Icon name="bookmark" size={14} /> {ar ? 'المحفوظات' : 'Saved'}</button>
           <button type="button" role="tab" aria-selected={tab === 'requests'} className={`ex-tab${tab === 'requests' ? ' is-active' : ''}`} onClick={() => setTab('requests')}>{ar ? 'طلباتي' : 'My requests'}<small>({requests.length})</small>{pendingCount > 0 && <i className="cr-dot" aria-hidden="true" />}</button>
         </div>
-        {tab === 'requests' ? (
+        {tab === 'saved' ? (
+          <div style={{ padding: '4px 20px 22px' }}><CourseMaterials saved /></div>
+        ) : tab === 'requests' ? (
           <div style={{ padding: '4px 20px 22px' }}>
             {requests.length === 0 ? (
               <EmptyState icon="file" title={ar ? 'لا توجد طلبات بعد' : 'No requests yet'} text={ar ? 'طلبات التسجيل والإلغاء التي ترسلها تظهر هنا مع حالتها.' : 'Enrol and leave requests you send appear here with their status.'} />
@@ -145,6 +150,11 @@ export default function StudentCourses() {
                 </p>
                 <p className="cr-card__staff"><Icon name="users" size={14} /> {(c.staff || []).length ? c.staff.map((s) => s.full_name).join('، ') : (ar ? 'لم يُعيَّن مدرّس بعد' : 'No teacher assigned yet')}</p>
                 {c.enrolled && (
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => setContentFor(c)}>
+                    <Icon name="folder" size={14} /> {ar ? 'محتوى المادة' : 'Course content'}
+                  </button>
+                )}
+                {c.enrolled && (
                   <>
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => setGradesFor(gradesFor === c.id ? null : c.id)}>
                       {ar ? 'درجتي' : 'My grade'} {gradesFor === c.id ? '▴' : '▾'}
@@ -168,6 +178,8 @@ export default function StudentCourses() {
         )}
         </>)}
       </div>
+
+      {contentFor && <CourseMaterialsModal course={contentFor} onClose={() => setContentFor(null)} />}
 
       {dialog && (
         <CourseRequestDialog
