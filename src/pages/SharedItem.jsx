@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { errorMessage } from '../api/client';
@@ -45,7 +45,9 @@ export default function SharedItem() {
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState(null); // { id, name, kind, blob?, url?, text?, loading?, failed? }
   const [locked, setLocked] = useState(false);
-  const [away, setAway] = useState(false);
+  const [away, setAway] = useState(() => typeof document !== 'undefined' && !document.hasFocus());
+  const [shot, setShot] = useState(false);
+  const shotT = useRef(0);
   const viewId = useMemo(() => Math.random().toString(36).slice(2, 8).toUpperCase(), []);
   const stamp = useMemo(() => new Date().toLocaleString(ar ? 'ar-EG' : undefined, { dateStyle: 'medium', timeStyle: 'short' }), [ar]);
   const mark = `${t('Protected', 'محتوى محمي')} · ${stamp} · #${viewId}`;
@@ -56,7 +58,13 @@ export default function SharedItem() {
 
   // protection: shortcuts / menus / devtools. Once devtools are seen, every file is dropped and the page stays locked.
   useEffect(() => {
-    const stopGuard = startSharedGuard({ onLock: (on) => { if (on) { setLocked(true); setData(null); clearPreview(); } } });
+    const stopGuard = startSharedGuard({
+      onLock: (on) => { if (on) { setLocked(true); setData(null); clearPreview(); } },
+      // a screenshot shortcut hides the content for a few seconds (view-only links)
+      onCapture: () => { setShot(true); clearTimeout(shotT.current); shotT.current = setTimeout(() => setShot(false), 3500); },
+    });
+    const onVis = () => setAway(document.hidden || !document.hasFocus());
+    document.addEventListener('visibilitychange', onVis);
     const onBlur = () => setAway(true);
     const onFocus = () => setAway(false);
     window.addEventListener('blur', onBlur);
@@ -64,6 +72,8 @@ export default function SharedItem() {
     document.documentElement.classList.add('shp-lock');
     return () => {
       stopGuard();
+      clearTimeout(shotT.current);
+      document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('blur', onBlur);
       window.removeEventListener('focus', onFocus);
       document.documentElement.classList.remove('shp-lock');
@@ -138,7 +148,7 @@ export default function SharedItem() {
   }
 
   return (
-    <div className={`shp${away ? ' is-away' : ''}`} dir={ar ? 'rtl' : 'ltr'} onContextMenu={(e) => e.preventDefault()}>
+    <div className={`shp${(away || shot) && !canDl ? ' is-away' : ''}`} dir={ar ? 'rtl' : 'ltr'} onContextMenu={(e) => e.preventDefault()}>
       {data && (
         <header className="shp__top">
           <div className="shp__who">
@@ -230,6 +240,9 @@ export default function SharedItem() {
           </>
         )}
       </main>
+      {(away || shot) && !canDl && data && (
+        <div className="shp__veil" role="status"><Icon name="eye-off" size={26} /><p>{t('Content is hidden while the window is not in focus.', 'المحتوى مخفي طول ما النافذة مش في التركيز.')}</p></div>
+      )}
     </div>
   );
 }

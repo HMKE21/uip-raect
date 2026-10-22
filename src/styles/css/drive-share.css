@@ -23,7 +23,9 @@
 html.shp-lock, html.shp-lock body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .shp { min-height: 100vh; background: radial-gradient(1200px 500px at 50% -120px, rgba(var(--color-primary-rgb), .09), transparent 70%), var(--bg-canvas); color: var(--text-primary); display: flex; flex-direction: column; -webkit-user-select: none; user-select: none; transition: filter .2s; }
 .shp img, .shp canvas, .shp video { -webkit-user-drag: none; }
-.shp.is-away .shp__main { filter: blur(22px); pointer-events: none; }
+.shp.is-away .shp__main { filter: blur(34px) brightness(.85); opacity: .55; pointer-events: none; }
+.shp__veil { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; pointer-events: none; color: var(--text-primary); text-align: center; padding: 24px; }
+.shp__veil p { margin: 0; font-weight: 700; font-size: 14px; max-width: 300px; }
 .shp--center { align-items: center; justify-content: center; }
 .shp__top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; padding: 12px clamp(16px, 4vw, 28px); border-bottom: 1px solid var(--border-subtle); background: color-mix(in srgb, var(--bg-surface) 88%, transparent); backdrop-filter: blur(10px); }
 .shp__who { display: inline-flex; align-items: center; gap: 12px; min-width: 0; }

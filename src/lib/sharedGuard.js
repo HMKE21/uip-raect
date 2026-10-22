@@ -41,21 +41,30 @@ function consoleProbe() {
 }
 
 /** Starts the guard; returns a cleanup function. `onLock(true|false)` fires only on transitions. */
-export function startSharedGuard({ onLock, intervalMs = 800 } = {}) {
+export function startSharedGuard({ onLock, onCapture, intervalMs = 800 } = {}) {
   const stop = (e) => {
     // search boxes inside the viewers still need to select their own text
     if (e.type === 'selectstart' && /^(INPUT|TEXTAREA)$/.test(e.target?.tagName || e.target?.parentElement?.tagName || '')) return;
     e.preventDefault(); e.stopPropagation();
   };
+  // screenshot shortcuts: PrintScreen, Win+Shift+S (Snipping Tool), Cmd+Shift+3/4/5 (macOS), Ctrl+Shift+S (Firefox)
+  const isCapture = (e) => {
+    const code = e.code || '';
+    if (code === 'PrintScreen' || e.key === 'PrintScreen') return true;
+    if (e.shiftKey && (e.metaKey || e.ctrlKey) && ['Digit3', 'Digit4', 'Digit5', 'KeyS'].includes(code)) return true;
+    return false;
+  };
   const onKey = (e) => {
     const code = e.code || '';
     const ctrl = e.ctrlKey || e.metaKey;
+    if (isCapture(e)) onCapture?.();
     if (isDevtoolsShortcut(e) || (ctrl && BLOCKED_CTRL.has(code)) || code === 'PrintScreen' || code === 'F12') {
       stop(e);
       if (code === 'PrintScreen') { try { navigator.clipboard?.writeText(' '); } catch { /* ignore */ } }
     }
   };
   const onKeyUp = (e) => {
+    if (isCapture(e)) onCapture?.(); // on Windows the PrintScreen key often only reports keyup
     if (e.code === 'PrintScreen') { try { navigator.clipboard?.writeText(' '); } catch { /* ignore */ } }
   };
 
