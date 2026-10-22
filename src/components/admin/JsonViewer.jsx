@@ -39,7 +39,7 @@ const SAFE_KEY = /^[A-Za-z_$][\w$]*$/;
 const childPath = (p, k, parentIsArray) => (parentIsArray ? `${p}[${k}]` : SAFE_KEY.test(k) ? `${p}.${k}` : `${p}[${JSON.stringify(k)}]`);
 const norm = (s) => String(s).toLowerCase();
 
-function copyText(text) {
+function copyTextFn(text) {
   if (navigator.clipboard?.writeText) return navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
   fallbackCopy(text);
   return Promise.resolve();
@@ -633,7 +633,9 @@ function CodeView({ lines, q, wrap, fontSize }) {
 }
 
 // ------------------------------------------------------------------ viewer
-export default function JsonViewer({ value, text, filename = 'response.json', meta, labels = {}, onChange, theme: themeProp, onTheme, onCode }) {
+export default function JsonViewer({ value, text, filename = 'response.json', meta, labels = {}, onChange, theme: themeProp, onTheme, onCode, locked = false }) {
+  // `locked` (public share page): nothing can be copied or downloaded out of the viewer
+  const copyText = locked ? () => Promise.resolve() : copyTextFn;
   const L = { tree: 'Tree', outline: 'Outline', code: 'Code', search: 'Search keys & values…', expand: 'Expand all', collapse: 'Collapse all', copy: 'Copy', copied: 'Copied', download: 'Download', full: 'Full screen', exit: 'Exit full screen', nodes: 'nodes', lines: 'lines', path: 'Click a node to see its path', matches: 'matches', wrap: 'Wrap', zoomIn: 'Zoom in', zoomOut: 'Zoom out', zoomHint: 'Ctrl + mouse wheel to zoom', fit: 'Fit to screen', resetLayout: 'Reset layout', dragHint: 'drag to move', resize: 'Drag to resize', theme: 'Theme', dark: 'Dark', light: 'Light', ...labels };
   const [view, setView] = useState('tree');
   const controlled = themeProp !== undefined; // inside the ZIP workbench the editor's own theme drives the viewer
@@ -741,8 +743,8 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
           <button type="button" className="jv-lv" title="Smaller" onClick={() => setFontSize((s) => Math.max(10, s - 1))}>A−</button>
           <button type="button" className="jv-lv" title="Larger" onClick={() => setFontSize((s) => Math.min(20, s + 1))}>A+</button>
           <ThemePicker value={theme} onChange={setTheme} onPreview={setPreview} popStyle={popVars} labels={L} />
-          <button type="button" onClick={() => copyText(pretty).then(() => say(L.copied))}><Icon name="copy" size={14} /> {L.copy}</button>
-          <button type="button" onClick={download}><Icon name="download" size={14} /> {L.download}</button>
+          {!locked && <button type="button" onClick={() => copyText(pretty).then(() => say(L.copied))}><Icon name="copy" size={14} /> {L.copy}</button>}
+          {!locked && <button type="button" onClick={download}><Icon name="download" size={14} /> {L.download}</button>}
           <button type="button" className="jv-lv" title={full ? L.exit : L.full} aria-label={full ? L.exit : L.full} onClick={() => setFull((f) => !f)}><Icon name={full ? 'collapse' : 'maximize'} size={14} /></button>
         </div>
       </div>
@@ -779,7 +781,7 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
         <span className="jv-sp" />
         {meta && <span>{meta}</span>}
         <span>{parsed ? `${nodeCount.toLocaleString()} ${L.nodes} · ` : ''}{lines.length.toLocaleString()} {L.lines} · {(new Blob([pretty]).size / 1024).toFixed(1)} KB</span>
-        {selected && <button type="button" onClick={() => copyText(selected).then(() => say(L.copied))}>{L.copy} path</button>}
+        {selected && !locked && <button type="button" onClick={() => copyText(selected).then(() => say(L.copied))}>{L.copy} path</button>}
       </div>
     </div>
   );

@@ -1,38 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { errorMessage } from '../api/client';
 import { sharedApi } from '../lib/driveApi';
 import { saveBlob } from '../lib/exporter';
-import { extOf, isTextName } from '../lib/driveFileKinds';
 import { startSharedGuard } from '../lib/sharedGuard';
 import { avatarSrc } from '../components/insight/AvatarUploader';
 import Icon from '../components/Icon';
 import { FileGlyph, FolderGlyph } from '../desktop/OsIcons';
-import { ProtectedImage, ProtectedPdf } from '../components/shared/ProtectedViewers';
+import ProtectedFile, { kindOfName } from '../components/shared/ProtectedFile';
 import '../styles/css/drive-share.css';
 
-const IMG = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'avif']);
-const VID = new Set(['mp4', 'webm', 'mov', 'm4v', 'ogv']);
-const AUD = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac']);
-const TEXT_PREVIEW_MAX = 1024 * 1024;
-
-const kindOf = (name) => {
-  const e = extOf(name);
-  if (IMG.has(e)) return 'image';
-  if (VID.has(e)) return 'video';
-  if (AUD.has(e)) return 'audio';
-  if (e === 'pdf') return 'pdf';
-  if (isTextName(name) || e === 'json') return 'text';
-  return 'none';
-};
-
-/** Blob with a type we choose (the server sends the file's own MIME, which we never trust). */
-const typed = (blob, kind, name) => {
-  if (kind === 'pdf') return new Blob([blob], { type: 'application/pdf' });
-  if (kind === 'image' && extOf(name) === 'svg') return new Blob([blob], { type: 'image/svg+xml' });
-  return blob;
-};
+const BIG_PREVIEW_BYTES = 80 * 1024 * 1024; // non-media files above this are not previewed in the browser
 
 /** Sender's avatar: photo when allowed and loadable, otherwise the first letter of the name on a colour taken from the name. */
 function SenderAvatar({ name, src }) {
@@ -67,13 +46,11 @@ export default function SharedItem() {
   const [preview, setPreview] = useState(null); // { id, name, kind, blob?, url?, text?, loading?, failed? }
   const [locked, setLocked] = useState(false);
   const [away, setAway] = useState(false);
-  const urlRef = useRef(null);
   const viewId = useMemo(() => Math.random().toString(36).slice(2, 8).toUpperCase(), []);
   const stamp = useMemo(() => new Date().toLocaleString(ar ? 'ar-EG' : undefined, { dateStyle: 'medium', timeStyle: 'short' }), [ar]);
   const mark = `${t('Protected', 'محتوى محمي')} · ${stamp} · #${viewId}`;
 
   const clearPreview = useCallback(() => {
-    if (urlRef.current) { URL.revokeObjectURL(urlRef.current); urlRef.current = null; }
     setPreview(null);
   }, []);
 
@@ -103,8 +80,6 @@ export default function SharedItem() {
     return () => { live = false; };
   }, [token, nodeId, locked]);
 
-  useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
-
   const node = data?.node;
   const share = data?.share;
   const canDl = !!share?.can_download;
@@ -112,22 +87,15 @@ export default function SharedItem() {
 
   const openPreview = useCallback(async (file) => {
     clearPreview();
-    const kind = kindOf(file.name);
-    setPreview({ id: file.id, name: file.name, kind, loading: kind !== 'none' });
-    if (kind === 'none') return;
+    const kind = kindOfName(file.name);
+    const media = kind === 'video' || kind === 'audio';
+    if (kind === 'none') { setPreview({ id: file.id, name: file.name, none: true }); return; }
+    if (!media && Number(file.size_bytes) > BIG_PREVIEW_BYTES) { setPreview({ id: file.id, name: file.name, big: true }); return; }
+    setPreview({ id: file.id, name: file.name, loading: true });
     try {
-      const raw = await sharedApi.file(token, file.id === share?.root?.id ? null : file.id);
-      if (kind === 'text') {
-        const text = await raw.slice(0, TEXT_PREVIEW_MAX).text();
-        setPreview({ id: file.id, name: file.name, kind, text: raw.size > TEXT_PREVIEW_MAX ? `${text}\n…` : text });
-      } else if (kind === 'video' || kind === 'audio') {
-        const url = URL.createObjectURL(raw);
-        urlRef.current = url;
-        setPreview({ id: file.id, name: file.name, kind, url });
-      } else {
-        setPreview({ id: file.id, name: file.name, kind, blob: typed(raw, kind, file.name) });
-      }
-    } catch { setPreview({ id: file.id, name: file.name, kind, failed: true }); }
+      const blob = await sharedApi.file(token, file.id === share?.root?.id ? null : file.id);
+      setPreview({ id: file.id, name: file.name, blob });
+    } catch { setPreview({ id: file.id, name: file.name, failed: true }); }
   }, [token, share, clearPreview]);
 
   useEffect(() => {
@@ -250,20 +218,12 @@ export default function SharedItem() {
                     </div>
                   </div>
                 )}
-                <div className="shp__preview" style={wmStyle}>
+                <div className={`shp__preview${preview.blob ? " has-file" : ""}`} style={wmStyle}>
                   {preview.loading && <span className="lp2-spinner" aria-hidden="true" />}
                   {preview.failed && <p className="shp__note">{t('Could not load the preview.', 'تعذّر تحميل المعاينة.')}</p>}
-                  {preview.kind === 'none' && <p className="shp__note">{canDl ? t('No preview for this file type — download it to open it.', 'مفيش معاينة لنوع الملف ده — نزّله عشان تفتحه.') : t('No preview is available for this file type.', 'مفيش معاينة متاحة لنوع الملف ده.')}</p>}
-                  {preview.blob && preview.kind === 'image' && <ProtectedImage blob={preview.blob} mark={mark} onFail={() => setPreview((p) => p && { ...p, blob: null, failed: true })} />}
-                  {preview.blob && preview.kind === 'pdf' && <ProtectedPdf blob={preview.blob} mark={mark} onFail={() => setPreview((p) => p && { ...p, blob: null, failed: true })} />}
-                  {preview.url && preview.kind === 'video' && (
-                    <div className="shp__media">
-                      <video src={preview.url} controls playsInline controlsList="nodownload noplaybackrate" disablePictureInPicture disableRemotePlayback onContextMenu={(e) => e.preventDefault()} />
-                      <span className="shp__mark" aria-hidden="true" />
-                    </div>
-                  )}
-                  {preview.url && preview.kind === 'audio' && <audio src={preview.url} controls controlsList="nodownload noplaybackrate" onContextMenu={(e) => e.preventDefault()} />}
-                  {preview.kind === 'text' && preview.text !== undefined && <pre dir="auto">{preview.text}</pre>}
+                  {preview.big && <p className="shp__note">{canDl ? t('This file is too large to preview — download it to open it.', 'الملف كبير على المعاينة — نزّله عشان تفتحه.') : t('This file is too large to preview.', 'الملف كبير على المعاينة.')}</p>}
+                  {preview.none && <p className="shp__note">{canDl ? t('No preview for this file type — download it to open it.', 'مفيش معاينة لنوع الملف ده — نزّله عشان تفتحه.') : t('No preview is available for this file type.', 'مفيش معاينة متاحة لنوع الملف ده.')}</p>}
+                  {preview.blob && <ProtectedFile key={preview.id} name={preview.name} blob={preview.blob} mark={mark} tt={t} rtl={ar} onFail={() => setPreview((p) => p && { ...p, blob: null, failed: true })} />}
                 </div>
               </section>
             )}

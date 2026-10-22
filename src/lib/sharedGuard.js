@@ -42,7 +42,11 @@ function consoleProbe() {
 
 /** Starts the guard; returns a cleanup function. `onLock(true|false)` fires only on transitions. */
 export function startSharedGuard({ onLock, intervalMs = 800 } = {}) {
-  const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
+  const stop = (e) => {
+    // search boxes inside the viewers still need to select their own text
+    if (e.type === 'selectstart' && /^(INPUT|TEXTAREA)$/.test(e.target?.tagName || e.target?.parentElement?.tagName || '')) return;
+    e.preventDefault(); e.stopPropagation();
+  };
   const onKey = (e) => {
     const code = e.code || '';
     const ctrl = e.ctrlKey || e.metaKey;

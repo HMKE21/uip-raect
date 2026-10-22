@@ -98,7 +98,7 @@ function CodeBlock({ n, env }) {
     <figure className="mdv__code" dir="ltr">
       <figcaption>
         <span>{languageLabel(n.lang)}</span>
-        <button type="button" onClick={copy}>{done ? env.tt('Copied', 'تم النسخ') : env.tt('Copy', 'نسخ')}</button>
+        {!env.locked && <button type="button" onClick={copy}>{done ? env.tt('Copied', 'تم النسخ') : env.tt('Copy', 'نسخ')}</button>}
       </figcaption>
       <pre><code>{toks.map((t, i) => (t.c ? <span key={i} className={`mdv-t-${t.c}`}>{t.v}</span> : t.v))}</code></pre>
     </figure>
@@ -180,7 +180,7 @@ function Block({ n, env }) {
  * Props: text, path, tt(en, ar), themeEd (code colours), resolveAsset(src) -> blob url | null (images inside the archive),
  * openPath(href) (links to other files of the archive), onToggleTask(lineNo) (click a task checkbox -> edits the source), rtl.
  */
-export default function MarkdownView({ text, path, tt, themeEd, resolveAsset, openPath, onToggleTask, rtl }) {
+export default function MarkdownView({ text, path, tt, themeEd, resolveAsset, openPath, onToggleTask, rtl, locked = false }) {
   const doc = useMemo(() => parseMarkdown(text), [text]);
   const scroller = useRef(null);
   const [toc, setToc] = useState(() => (typeof window === 'undefined' ? true : window.innerWidth > 1100));
@@ -200,10 +200,11 @@ export default function MarkdownView({ text, path, tt, themeEd, resolveAsset, op
 
   const env = useMemo(() => ({
     tt, jump, zoom: setZoom,
+    locked,
     resolveAsset: resolveAsset ? (src) => resolveAsset(src) : null,
     openPath: (href) => { if (openPath) openPath(href); },
     toggleTask: onToggleTask || null,
-  }), [tt, jump, resolveAsset, openPath, onToggleTask]);
+  }), [tt, jump, resolveAsset, openPath, onToggleTask, locked]);
 
   const heads = useMemo(() => doc.headings.filter((h) => h.level <= 3), [doc]);
   const minLevel = useMemo(() => heads.reduce((m, h) => Math.min(m, h.level), 6), [heads]);
@@ -248,7 +249,7 @@ export default function MarkdownView({ text, path, tt, themeEd, resolveAsset, op
         <strong title={path}>{title}</strong>
         <span className="mdv__stat">{doc.words.toLocaleString()} {tt('words', 'كلمة')} · {minutes} {tt('min read', 'د قراءة')}</span>
         <span className="mdv__sp" />
-        <button type="button" onClick={copyAll}>{copied ? tt('Copied', 'تم النسخ') : tt('Copy Markdown', 'نسخ Markdown')}</button>
+        {!locked && <button type="button" onClick={copyAll}>{copied ? tt('Copied', 'تم النسخ') : tt('Copy Markdown', 'نسخ Markdown')}</button>}
         {heads.length > 0 && <button type="button" className={toc ? 'is-on' : ''} onClick={() => setToc((v) => !v)}>{tt('Contents', 'المحتويات')}</button>}
       </div>
       <div className="mdv__main">
