@@ -41,6 +41,7 @@ export default function StudentUniversityEmail() {
                 <button type="button" className="btn btn-outline btn-sm" onClick={copy}><Icon name={copied ? 'check' : 'copy'} size={14} /> {copied ? (ar ? 'تم النسخ' : 'Copied') : (ar ? 'نسخ' : 'Copy')}</button>
               </div>
               <div className="att-nums"><span>{ar ? 'يتحوّل إلى' : 'Forwards to'} <b dir="ltr">{data.forwards_to}</b></span></div>
+              <div className="is-muted" style={{ fontSize: 12 }}>{ar ? 'تقدر كمان تسجّل الدخول للمنصة بالعنوان ده وبنفس كلمة السر.' : 'You can also sign in to the platform with this address and your usual password.'}</div>
               <div className="is-muted" style={{ fontSize: 12 }}>{ar ? 'لتغيير الإيميل الشخصي اللي بيتحوّل له، حدّثه من إعدادات حسابك.' : 'To change where it forwards, update your personal email in account settings.'}</div>
             </div>
           )}
