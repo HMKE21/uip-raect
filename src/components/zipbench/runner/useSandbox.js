@@ -15,7 +15,7 @@ const clearMark = (id) => { try { localStorage.removeItem(markKey(id)); } catch 
  * Client for the uip-sandbox gateway (real terminal + Laravel / Node / Python servers in an isolated container).
  *
  *   1. POST tokenPath (default /api/v1/projects/{id}/sandbox-token; My PC folders pass their own)  ->  { url, token }   (Full-API checks the user may open this project)
- *   2. open  wss://<gateway>/ws?token=…  and talk the small JSON protocol (see uip-sandbox/src/server.js)
+ *   2. open  wss://<gateway>/ws, send {t:'auth', token} as the first frame, and talk the small JSON protocol (see uip-sandbox/src/server.js)
  *   3. the project zip is sent as ONE binary frame when the gateway asks for it ("send-files")
  *
  * phase: idle | connecting | starting | running | exited | error | closed | disconnected
@@ -71,10 +71,11 @@ export function useSandbox(projectId, tokenPath) {
       const res = await api.post(tokenPath || `/api/v1/projects/${projectId}/sandbox-token`);
       const { url, token } = res?.data ?? res;
       if (run !== runRef.current) return;
-      const wsUrl = `${String(url).replace(/^http/i, 'ws').replace(/\/+$/, '')}/ws?token=${encodeURIComponent(token)}`;
+      // The token goes in the first WebSocket message, never in the URL (URLs end up in proxy / access logs, history, Referer).
+      const wsUrl = `${String(url).replace(/^http/i, 'ws').replace(/\/+$/, '')}/ws`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
-      ws.onopen = () => ws.send(JSON.stringify({ t: 'init', kind, entry, cols, rows, resume }));
+      ws.onopen = () => { ws.send(JSON.stringify({ t: 'auth', token })); ws.send(JSON.stringify({ t: 'init', kind, entry, cols, rows, resume })); };
       ws.onerror = () => { if (run === runRef.current) { if (resume) setPhase('disconnected'); else { setError('Could not reach the sandbox server.'); setPhase('error'); } } };
       ws.onclose = () => {
         if (run !== runRef.current || wsRef.current !== ws) return;
