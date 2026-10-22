@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MULTI, fmt, natural, ratV, run, solve, varsIn } from './sciCalcEngine';
 import './sciCalc.css';
 
-/* Casio fx-991 style scientific calculator: SHIFT / ALPHA layers, natural (fraction / surd / π) results, S⇔D,
+/* UIP Scientific Calculator (modern):  SHIFT / ALPHA layers, natural (fraction / surd / π) results, S⇔D,
  * Ans, A–F X Y M variables, STO, CALC, SOLVE, ∫ d/dx Σ, nPr nCr, hyp, DRG, history with ▲ ▼. */
 
 const S = (l, ins, extra) => ({ l, ins: ins ?? l, ...extra });
@@ -60,6 +60,12 @@ const ROWS = [
 const CONT = /^([+−×÷^!%→]|nPr|nCr)/;
 const pretty = (t) => t.replace(/\^\(−1\)/g, '⁻¹').replace(/\^2(?!\d)/g, '²').replace(/\^3(?!\d)/g, '³');
 const ANG = { D: 'DEG', R: 'RAD', G: 'GRA' };
+const ANG_LONG = { D: 'Degrees', R: 'Radians', G: 'Gradians' };
+/** show unclosed brackets as closed, the way the engine evaluates them: cos(90 -> cos(90) */
+const balance = (s) => { let o = 0; for (const c of s) { if (c === '(') o += 1; else if (c === ')') o -= 1; } return o > 0 ? s + ')'.repeat(o) : s; };
+const Logo = () => (
+  <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path d="M5 4v9a7 7 0 0 0 14 0V4" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round" /></svg>
+);
 
 function Dec({ s }) {
   const [m, e] = s.split('×10^');
@@ -94,7 +100,7 @@ export default function SciCalc({ tt }) {
   const [shift, setShift] = useState(false); const [alpha, setAlpha] = useState(false); const [hyp, setHyp] = useState(false);
   const [ang, setAng] = useState('D'); const [vars, setVars] = useState({}); const [ans, setAns] = useState(null);
   const [hist, setHist] = useState([]); const [hidx, setHidx] = useState(-1); const [dec, setDec] = useState(false);
-  const [pm, setPm] = useState(null);
+  const [pm, setPm] = useState(null); const [showHist, setShowHist] = useState(false);
   const root = useRef(null); const caret = useRef(null);
 
   useEffect(() => { caret.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }, [text, pos]);
@@ -124,6 +130,8 @@ export default function SciCalc({ tt }) {
     setText(t.slice(0, p - n) + t.slice(p)); setPos(p - n);
   };
   const ac = () => { setText(''); setPos(0); setRes(null); setDone(false); setPm(null); setHidx(-1); };
+
+  const recall = (e) => { setText(e); setPos(e.length); setDone(false); setRes(null); setPm(null); setHidx(-1); setShowHist(false); root.current?.focus(); };
 
   const startPrompt = (kind) => {
     const src = text;
@@ -217,15 +225,24 @@ export default function SciCalc({ tt }) {
 
   const prev = !done && !pm && hist[0] && !text ? hist[0] : null;
   return (
-    <div className={`sc ${shift ? 'on-s' : ''} ${alpha ? 'on-a' : ''}`} ref={root} tabIndex={0} onKeyDown={onKey} dir="ltr">
+    <div className={`sc ${shift ? 'on-s' : ''} ${alpha ? 'on-a' : ''}`} ref={root} tabIndex={0} onKeyDown={onKey} dir="ltr" aria-label="UIP Scientific Calculator">
+      <header className="sc-head">
+        <span className="sc-logo"><Logo /></span>
+        <span className="sc-brand">UIP</span>
+        <span className="sc-model"><b>Scientific</b><small>Natural Display</small></span>
+        <button type="button" className={`sc-hbtn ${showHist ? 'on' : ''}`} onClick={() => setShowHist((v) => !v)} title={tt('History', 'السجل')} aria-label={tt('History', 'السجل')}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></svg>
+        </button>
+      </header>
+
       <div className="sc-lcd" aria-live="polite">
         <div className="sc-status">
-          <span className={shift ? 'on' : ''}>S</span><span className={alpha ? 'on' : ''}>A</span><span className={hyp ? 'on' : ''}>hyp</span>
-          <button type="button" onClick={() => setAng((a) => ({ D: 'R', R: 'G', G: 'D' }[a]))} title="DRG">{ANG[ang]}</button>
+          <span className={shift ? 'on s' : 's'}>SHIFT</span><span className={alpha ? 'on a' : 'a'}>ALPHA</span><span className={hyp ? 'on' : ''}>hyp</span>
+          <button type="button" onClick={() => setAng((a) => ({ D: 'R', R: 'G', G: 'D' }[a]))} title={`DRG · ${ANG_LONG[ang]}`}>{ANG[ang]}</button>
           <span className={vars.M && vars.M.f !== 0 ? 'on' : ''}>M</span>
-          <span className="on">{pm ? (pm.kind === 'calc' ? 'CALC' : 'SOLVE') : 'Math'}</span>
+          <span className="on sc-mode">{pm ? (pm.kind === 'calc' ? 'CALC' : 'SOLVE') : dec ? 'Decimal' : 'Math'}</span>
         </div>
-        <div className="sc-prev">{prev ? <>{pretty(prev.e)} = <Value v={prev.v} dec={false} /></> : ''}</div>
+        <div className="sc-prev">{prev ? <>{pretty(balance(prev.e))} = <Value v={prev.v} dec={false} /></> : ''}</div>
         <div className="sc-in" aria-label={tt('Expression', 'العملية')}>
           {pm && <b className="sc-ask">{pm.vars[pm.i]} =</b>}
           <span>{pretty(text.slice(0, pos))}</span><i className="sc-caret" ref={caret} /><span>{pretty(text.slice(pos))}</span>
@@ -234,10 +251,29 @@ export default function SciCalc({ tt }) {
           {res?.err ? <b className="sc-err">{res.err}</b> : res?.v ? <>{res.label && <em>{res.label}</em>}<Value v={res.v} dec={dec} /></> : <span className="sc-zero">{text ? '' : '0'}</span>}
         </div>
         {res?.note && <div className="sc-note">{res.note}</div>}
+
+        {showHist && (
+          <div className="sc-hist" role="dialog" aria-label={tt('History', 'السجل')}>
+            <div className="sc-hist-top">
+              <b>{tt('History', 'السجل')}</b>
+              {hist.length > 0 && <button type="button" onClick={() => setHist([])}>{tt('Clear', 'مسح')}</button>}
+            </div>
+            {hist.length === 0 ? <p className="sc-hist-empty">{tt('No calculations yet', 'مفيش عمليات لسه')}</p> : (
+              <ul>
+                {hist.map((h, i) => (
+                  <li key={i}><button type="button" onClick={() => recall(h.e)} title={tt('Edit this expression', 'عدّل العملية دي')}>
+                    <span>{pretty(balance(h.e))}</span><em>= <Value v={h.v} dec={false} /></em>
+                  </button></li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
+
       <div className="sc-keys">
         {ROWS.map((row, ri) => row.keys.map((k, ki) => (
-          <button key={`${ri}-${ki}`} type="button" className={`sc-k h-${row.h} ${k.cls}`} style={{ gridColumn: `span ${row.w || 5}` }}
+          <button key={`${ri}-${ki}`} type="button" className={`sc-k h-${row.h} ${k.cls}${k.m.act === 'hyp' && hyp ? ' lit' : ''}`} style={{ gridColumn: `span ${row.w || 5}` }}
             onClick={() => { press(k); root.current?.focus(); }} aria-label={k.l}>
             {k.s?.l && <i className="s">{k.s.l}</i>}{k.a?.l && <i className="a">{k.a.l}</i>}
             <span>{k.l}</span>
