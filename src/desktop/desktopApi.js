@@ -17,7 +17,9 @@ export const desktopApi = {
   lockVerify: async (password) => unwrap(await api.post(`${B}/lock/verify`, { password })),
   lockDisable: async (password) => unwrap(await api.post(`${B}/lock/disable`, { password })),
   lockOtp: async () => unwrap(await api.post(`${B}/lock/otp`, {})),
+  resetStatus: async () => unwrap(await api.get(`${B}/reset`)),
   resetPc: async (body) => unwrap(await api.post(`${B}/reset`, body)),
+  resetUndo: async () => unwrap(await api.post(`${B}/reset/undo`, {})),
   lockReset: async (code, password) => unwrap(await api.post(`${B}/lock/reset`, { code, password })),
   // Security & devices — DesktopSecurityApiController
   security: async () => unwrap(await api.get(`${B}/security`)),

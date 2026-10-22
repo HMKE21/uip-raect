@@ -25,6 +25,7 @@ import { isSystemNode, useDesktopSync } from './sync';
 import { readLockCache, readLockedFlag, writeLockedFlag, readUnlockedFlag, writeUnlockedFlag } from './desktopApi';
 import { BatteryGlyph, CalendarFlyout, QuickSettings, WifiGlyph, useBattery, useOnline } from './flyouts';
 import { addRecent, clearRecents, loadRecents, removeRecent, RECENTS_EVENT } from './recents';
+import ResetUndoBar from './ResetUndoBar';
 import { Clock, ContextMenu, IdleWarning, NodeGlyph, OsDialog, RunDialog, StartMenu, TaskView } from './shell';
 import LockScreen, { SleepScreen } from './LockScreen';
 import { readSec, useDesktopSecurity } from './security';
@@ -296,16 +297,19 @@ export default function DesktopOS() {
         break;
       case 'logout': // sign out of the ACCOUNT (not just the desktop): keep the data on this device, or erase it first (shared computers)
         setOverlay(null);
-        ask({
-          kind: 'choice', icon: 'logout', danger: true, focus: 1,
+        // an exam in progress keeps its answers in this browser until they are sent: erasing the device's data is locked meanwhile
+        desktopApi.resetStatus().catch(() => null).then((st) => ask({
+          kind: 'choice', icon: 'logout', danger: true, focus: st?.exam_active ? 0 : 1,
           title: tt('Sign out of your account?', 'تسجيل الخروج من حسابك؟'),
-          text: tt('If someone else may use this device after you, erase your data from it so they cannot find your saved settings, drafts or cached files.', 'لو حد ممكن يستخدم الجهاز بعدك، امسح بياناتك منه عشان ميلاقيش إعداداتك ولا مسوداتك ولا ملفاتك المخزّنة.'),
+          text: st?.exam_active
+            ? tt('An exam is in progress, so erasing this device\'s data is locked (your answers are still being saved here). Submit the exam first.', 'فيه امتحان شغّال، فمسح بيانات الجهاز مقفول (إجاباتك لسه بتتحفظ هنا). سلّم الامتحان الأول.')
+            : tt('If someone else may use this device after you, erase your data from it so they cannot find your saved settings, drafts or cached files.', 'لو حد ممكن يستخدم الجهاز بعدك، امسح بياناتك منه عشان ميلاقيش إعداداتك ولا مسوداتك ولا ملفاتك المخزّنة.'),
           choices: [
-            { id: 'wipe', danger: true, icon: 'trash', label: tt('Sign out and erase my data', 'خروج ومسح بياناتي من الجهاز'), hint: tt('Clears drafts, cached files, settings and recent items saved on this device. Your files in your account stay safe.', 'بيمسح المسودات والملفات المؤقتة والإعدادات والمفتوحات الأخيرة المحفوظة على الجهاز ده. ملفاتك في حسابك فاضلة سليمة.') },
+            ...(st?.exam_active ? [] : [{ id: 'wipe', danger: true, icon: 'trash', label: tt('Sign out and erase my data', 'خروج ومسح بياناتي من الجهاز'), hint: tt('Clears drafts, cached files, settings and recent items saved on this device. Your files in your account stay safe.', 'بيمسح المسودات والملفات المؤقتة والإعدادات والمفتوحات الأخيرة المحفوظة على الجهاز ده. ملفاتك في حسابك فاضلة سليمة.') }]),
             { id: 'keep', icon: 'logout', label: tt('Sign out only', 'خروج فقط'), hint: tt('Leaves the data on this device as it is — fine for your own device.', 'بيسيب بيانات الجهاز زي ما هي — مناسب لجهازك الشخصي.') },
           ],
           note: tt('Passwords saved by the browser itself can only be removed from the browser settings.', 'الباسوردات اللي المتصفح نفسه حافظها بتتمسح من إعدادات المتصفح بس.'),
-        }).then((v) => { if (v === 'wipe') logout({ wipe: true }); else if (v === 'keep') logout(); });
+        })).then((v) => { if (v === 'wipe') logout({ wipe: true }); else if (v === 'keep') logout(); });
         break;
       default: break;
     }
@@ -1153,6 +1157,7 @@ export default function DesktopOS() {
       <DeleteProgressHost />
       {toast && <div className={`os-toast${toast.tone === 'error' ? ' is-error' : ''}`} role="status">{toast.msg}</div>}
       {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} hideDetails={sec.hideLockDetails} onUnlock={() => setLocked(false)} onPortal={() => navigate(roleHome(user?.role))} />}
+      {!locked && !asleep && <ResetUndoBar tt={tt} uid={user?.id} />}
       {idleLeft !== null && !asleep && <IdleWarning tt={tt} left={idleLeft} onStay={stay} onSignOut={logout} />}
       {asleep && <SleepScreen ar={ar} tt={tt} dim={sec.sleepDimOnly} onWake={onWake} />}
       {brightness < 100 && <div className="os-dim" style={{ opacity: ((100 - brightness) / 100) * 0.7 }} aria-hidden="true" />}

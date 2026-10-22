@@ -423,3 +423,14 @@ body.os-dragging .os-wall { transition: none; }
 .os-reset__warn > svg { flex: none; color: #ff453a; margin-top: 2px; }
 .os-reset__warn b { display: block; margin-bottom: 4px; color: #ff453a; font-size: 14px; }
 .os-reset__warn ul { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; line-height: 1.55; }
+
+.os-reset__bk { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.os-reset__bk .os-btn { display: inline-flex; align-items: center; gap: 6px; }
+.os-reset__bk small { font-size: 12px; color: var(--g-mute); }
+.os-reset__bk small.is-err { color: #ff453a; }
+.os-reset__undo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, #30d158 14%, transparent); border: .5px solid color-mix(in srgb, #30d158 50%, transparent); }
+.os-reset__undo > div { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 2px; }
+.os-reset__undo span { font-size: 12.5px; color: var(--g-mute); }
+.os-undobar { position: fixed; inset-inline: 0; margin-inline: auto; width: max-content; max-width: calc(100vw - 24px); bottom: 104px; z-index: 60; display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 16px; border-radius: 999px; background: var(--menu-bg); -webkit-backdrop-filter: blur(30px) saturate(180%); backdrop-filter: blur(30px) saturate(180%); border: .5px solid var(--g-line); box-shadow: 0 12px 34px rgba(0, 0, 0, .35); color: var(--g-fg); font-size: 13px; }
+.os-undobar button { height: 28px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--os-accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+.os-undobar button.os-undobar__x { width: 28px; padding: 0; background: transparent; color: var(--g-mute); }

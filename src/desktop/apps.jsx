@@ -8,6 +8,8 @@ import { desktopApi, lockError } from './desktopApi';
 import { CloudPanel } from './CloudSettings';
 import SecuritySettings from './SecuritySettings';
 import { wipeLocalData } from '../lib/wipeLocalData';
+import { fetchBackupAll } from '../lib/driveApi';
+import { saveBlob } from '../lib/exporter';
 
 const StudentMyPC = lazy(() => import('../pages/student/StudentMyPC'));
 
@@ -56,14 +58,33 @@ function IconToggles({ list, hidden, onToggle, ar }) {
   );
 }
 
-/** Settings > System > Reset this PC: erases every file, setting, widget and the lock password, and starts over like a new PC. */
+/** "in 5 h 20 min" for the undo window. */
+export const leftText = (secs, tt) => {
+  const m = Math.max(1, Math.ceil(secs / 60));
+  const h = Math.floor(m / 60);
+  return h > 0 ? tt(`${h} h ${m % 60} min`, `${h} س ${m % 60} د`) : tt(`${m} min`, `${m} د`);
+};
+
+/**
+ * Settings > System > Reset this PC.
+ *  - files go to the Recycle Bin and are deleted for good after 24 h (Undo until then); settings / widgets / lock password are reset
+ *  - blocked while an exam is in progress; asks for the account password + typing the PC name; offers a ZIP backup first
+ */
 const PC_NAME = 'UIP-PC';
 function ResetPc({ tt }) {
+  const [st, setSt] = useState(null); // { pending, seconds_left, exam_active }
   const [open, setOpen] = useState(false);
   const [pw, setPw] = useState(''); const [word, setWord] = useState('');
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const [bk, setBk] = useState(''); // '' | 'busy' | 'done' | error text
   const ready = word.trim().toLowerCase() === PC_NAME.toLowerCase();
-  const close = () => { setOpen(false); setPw(''); setWord(''); setErr(''); };
+  const load = () => desktopApi.resetStatus().then(setSt).catch(() => setSt((o) => o || {}));
+  useEffect(() => { load(); }, []);
+  const close = () => { setOpen(false); setPw(''); setWord(''); setErr(''); setBk(''); };
+  const backup = async () => {
+    setBk('busy');
+    try { const blob = await fetchBackupAll(); saveBlob(blob, 'UIP-PC-backup.zip'); setBk('done'); } catch (x) { setBk(lockError(x) || tt('Could not create the backup.', 'معرفتش أعمل النسخة الاحتياطية.')); }
+  };
   const run = async (e) => {
     e.preventDefault();
     if (!ready || busy) return;
@@ -72,24 +93,46 @@ function ResetPc({ tt }) {
       await desktopApi.resetPc({ confirm: 'RESET', account_password: pw });
       await wipeLocalData({ keepSession: true }); // this device forgets everything too; the person stays signed in
       window.location.reload();
-    } catch (x) { setErr(lockError(x)); setBusy(false); }
+    } catch (x) { setErr(lockError(x)); setBusy(false); load(); }
+  };
+  const undo = async () => {
+    setBusy(true); setErr('');
+    try { await desktopApi.resetUndo(); await wipeLocalData({ keepSession: true }); window.location.reload(); } catch (x) { setErr(lockError(x)); setBusy(false); load(); }
   };
   return (
     <Section title={tt('Reset this PC', 'إعادة تهيئة الجهاز')}>
       <p className="os-set__hint os-set__hint--top">{tt('Erase everything and start again like a brand-new PC.', 'امسح كل حاجة وابدأ من جديد زي جهاز جديد.')}</p>
-      {!open && <div className="os-set__btns"><button type="button" className="os-btn os-btn--danger" onClick={() => setOpen(true)}>{tt('Reset this PC…', 'إعادة تهيئة الجهاز…')}</button></div>}
+      {st?.pending && (
+        <div className="os-reset__undo" role="status">
+          <Icon name="clock" size={20} />
+          <div>
+            <b>{tt('Your PC was reset — you can still undo it.', 'الجهاز اتعمله إعادة تهيئة — لسه تقدر تتراجع.')}</b>
+            <span>{tt(`Your files are in the Recycle Bin and are deleted for good in ${leftText(st.seconds_left, tt)}.`, `ملفاتك في سلة المحذوفات وهتتمسح نهائيًا بعد ${leftText(st.seconds_left, tt)}.`)}</span>
+          </div>
+          <button type="button" className="os-btn os-btn--primary" onClick={undo} disabled={busy}>{busy ? '…' : tt('Undo and restore everything', 'تراجع واسترجاع كل حاجة')}</button>
+        </div>
+      )}
+      {st?.exam_active && (
+        <p className="os-set__err" role="alert">{tt('An exam is in progress, so resetting is locked. Submit the exam first.', 'فيه امتحان شغّال، فإعادة التهيئة مقفولة. سلّم الامتحان الأول.')}</p>
+      )}
+      {!open && <div className="os-set__btns"><button type="button" className="os-btn os-btn--danger" disabled={!!st?.exam_active || busy} onClick={() => setOpen(true)}>{tt('Reset this PC…', 'إعادة تهيئة الجهاز…')}</button></div>}
+      {err && !open && <p className="os-set__err" role="alert">{err}</p>}
       {open && (
         <form className="os-set__form os-reset" onSubmit={run}>
           <div className="os-reset__warn" role="alert">
             <Icon name="alert-triangle" size={22} />
             <div>
-              <b>{tt('This cannot be undone.', 'مفيش رجوع من الخطوة دي.')}</b>
+              <b>{tt('Everything on this PC will be erased.', 'كل حاجة على الجهاز ده هتتمسح.')}</b>
               <ul>
-                <li>{tt('ALL your files and folders on My PC, the Recycle Bin, old versions and share links are deleted permanently.', 'كل ملفاتك ومجلداتك في «جهازي» والسلة والنسخ القديمة وروابط المشاركة هتتمسح نهائيًا.')}</li>
-                <li>{tt('Wallpaper, icons, Dock, widgets and sticky notes go back to the defaults.', 'الخلفية والأيقونات والـ Dock والويدجت والملاحظات اللاصقة هترجع للوضع الافتراضي.')}</li>
-                <li>{tt('The lock-screen password is removed.', 'باسورد شاشة القفل هيتلغي.')}</li>
+                <li>{tt('ALL your files and folders on My PC move to the Recycle Bin and are deleted permanently after 24 hours. Until then you can undo from this page.', 'كل ملفاتك ومجلداتك في «جهازي» هتروح سلة المحذوفات وتتمسح نهائيًا بعد 24 ساعة. لحد وقتها تقدر تتراجع من الصفحة دي.')}</li>
+                <li>{tt('Wallpaper, icons, Dock, widgets and sticky notes go back to the defaults, and the lock-screen password is removed.', 'الخلفية والأيقونات والـ Dock والويدجت والملاحظات اللاصقة هترجع للافتراضي، وباسورد شاشة القفل هيتلغي.')}</li>
                 <li>{tt('Your account and sign-in are not affected.', 'حسابك وتسجيل دخولك مش هيتأثروا.')}</li>
               </ul>
+              <div className="os-reset__bk">
+                <button type="button" className="os-btn" onClick={backup} disabled={bk === 'busy' || busy}><Icon name="download" size={15} />{bk === 'busy' ? tt('Preparing the ZIP…', 'بجهّز الـ ZIP…') : tt('Download a ZIP of all my files first', 'نزّل نسخة ZIP من كل ملفاتي الأول')}</button>
+                {bk === 'done' && <small>{tt('Downloaded.', 'اتنزّلت.')}</small>}
+                {bk && bk !== 'busy' && bk !== 'done' && <small className="is-err">{bk}</small>}
+              </div>
             </div>
           </div>
           <label>
@@ -102,7 +145,7 @@ function ResetPc({ tt }) {
           </label>
           {err && <p className="os-set__err" role="alert">{err}</p>}
           <div className="os-set__btns">
-            <button type="submit" className="os-btn os-btn--danger" disabled={!ready || busy}>{busy ? tt('Erasing…', 'جاري المسح…') : tt('Erase everything and reset', 'امسح كل حاجة وأعد التهيئة')}</button>
+            <button type="submit" className="os-btn os-btn--danger" disabled={!ready || busy}>{busy ? tt('Resetting…', 'جاري إعادة التهيئة…') : tt('Erase everything and reset', 'امسح كل حاجة وأعد التهيئة')}</button>
             <button type="button" className="os-btn" onClick={close} disabled={busy}>{tt('Cancel', 'إلغاء')}</button>
           </div>
         </form>

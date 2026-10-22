@@ -226,6 +226,12 @@ export async function fetchFolderZip(id, { onProgress } = {}) {
   return readWithProgress(res, onProgress);
 }
 
+/** Everything on My PC as one ZIP (backup before "Reset this PC"). */
+export async function fetchBackupAll({ onProgress } = {}) {
+  const res = await api.blob(`${B}/archive-all`);
+  return readWithProgress(res, onProgress);
+}
+
 /** Download a file / folder (folders as ZIP) through the blob so the login token is sent. */
 export async function fetchDownload(node, opts) {
   if (node.type === 'folder') {
