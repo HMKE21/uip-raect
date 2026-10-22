@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { registerPush, unregisterPush } from '../native'; // [ANDROID]
 import { getGateToken } from '../config/staffGate';
 import { clearCache } from '../lib/draftStore';
+import { wipeLocalData } from '../lib/wipeLocalData';
 import { api, ApiError, getTokens, setTokens, clearTokens, restoreSession, markActivity, getLastActivity, getIdleMs, getStoredUser, setStoredUser, ACCESS_KEY, PERMISSION_DENIED_EVENT } from '../api/client';
 
 const AuthContext = createContext(null);
@@ -248,7 +249,8 @@ export function AuthProvider({ children }) {
     await api.post('/api/v1/auth/two-factor/cancel', { challenge_token: challengeToken });
   }, []);
 
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (opts) => {
+    const wipe = !!opts && opts.wipe === true; // "sign out and erase my data from this device" (called from the desktop's sign-out dialog)
     // The button used to wait for the push-token cleanup (up to 4 s) and THEN the server call (up to 25 s on a bad connection),
     // so the app looked frozen. Both start together and run in the background; the screen switches after at most ~1 s, and a
     // request that is still in flight keeps going (it already carries its own auth headers).
@@ -265,6 +267,10 @@ export function AuthProvider({ children }) {
     clearTokens();
     setUser(null);
     setStatus('guest');
+    if (wipe) {
+      await wipeLocalData();
+      window.location.replace('/'); // a fresh page: nothing of the previous person stays in memory either
+    }
   }, []);
 
   const loadPermissions = useCallback(async () => {

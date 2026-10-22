@@ -131,6 +131,7 @@ const RUN_ALIASES = {
   shortcuts: 'shortcuts', help: 'shortcuts', 'الاختصارات': 'shortcuts',
   cloud: 'cloud', backup: 'cloud', storage: 'cloud', 'النسخ الاحتياطي': 'cloud', 'التخزين': 'cloud',
   lock: 'lock', 'قفل': 'lock', portal: 'portal', exit: 'portal', 'البوابة': 'portal',
+  logout: 'logout', signout: 'logout', 'sign out': 'logout', 'log out': 'logout', 'تسجيل الخروج': 'logout', 'خروج من الحساب': 'logout',
   sleep: 'sleep', 'سكون': 'sleep', security: 'security', devices: 'security', 'الأمان': 'security', 'الأجهزة': 'security',
 };
 
@@ -293,9 +294,22 @@ export default function DesktopOS() {
         ask({ kind: 'confirm', title: tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟'), text: tt('You will leave the desktop and go back to the portal. Your files stay saved.', 'هتخرج من سطح المكتب وترجع للبوابة. ملفاتك فاضلة محفوظة.'), action: tt('Exit', 'خروج'), icon: 'logout' })
           .then((ok) => { if (ok) navigate(roleHome(user?.role)); });
         break;
+      case 'logout': // sign out of the ACCOUNT (not just the desktop): keep the data on this device, or erase it first (shared computers)
+        setOverlay(null);
+        ask({
+          kind: 'choice', icon: 'logout', danger: true, focus: 1,
+          title: tt('Sign out of your account?', 'تسجيل الخروج من حسابك؟'),
+          text: tt('If someone else may use this device after you, erase your data from it so they cannot find your saved settings, drafts or cached files.', 'لو حد ممكن يستخدم الجهاز بعدك، امسح بياناتك منه عشان ميلاقيش إعداداتك ولا مسوداتك ولا ملفاتك المخزّنة.'),
+          choices: [
+            { id: 'wipe', danger: true, icon: 'trash', label: tt('Sign out and erase my data', 'خروج ومسح بياناتي من الجهاز'), hint: tt('Clears drafts, cached files, settings and recent items saved on this device. Your files in your account stay safe.', 'بيمسح المسودات والملفات المؤقتة والإعدادات والمفتوحات الأخيرة المحفوظة على الجهاز ده. ملفاتك في حسابك فاضلة سليمة.') },
+            { id: 'keep', icon: 'logout', label: tt('Sign out only', 'خروج فقط'), hint: tt('Leaves the data on this device as it is — fine for your own device.', 'بيسيب بيانات الجهاز زي ما هي — مناسب لجهازك الشخصي.') },
+          ],
+          note: tt('Passwords saved by the browser itself can only be removed from the browser settings.', 'الباسوردات اللي المتصفح نفسه حافظها بتتمسح من إعدادات المتصفح بس.'),
+        }).then((v) => { if (v === 'wipe') logout({ wipe: true }); else if (v === 'keep') logout(); });
+        break;
       default: break;
     }
-  }, [ask, navigate, openApp, openExplorer, setLocked, tt, user?.role]);
+  }, [ask, logout, navigate, openApp, openExplorer, setLocked, tt, user?.role]);
 
   // images / PDFs / media / ZIPs open in a Viewer window, text & code in a Code-editor window (one window per file)
   const openFileWin = useCallback((p) => {
@@ -424,6 +438,7 @@ export default function DesktopOS() {
     { key: 'sys:explorer', sys: true, label: tt('This PC', 'جهازي'), glyph: 'explorer', run: () => openExplorer({}) },
     { key: 'sys:bin', sys: true, label: tt('Recycle Bin', 'سلة المحذوفات'), glyph: 'bin', run: () => openExplorer({ view: 'trash' }) },
     { key: 'sys:portal', sys: true, label: tt('UIP Portal', 'بوابة UIP'), glyph: 'portal', run: () => runCommand('portal') },
+    { key: 'sys:logout', sys: true, label: tt('Sign out', 'تسجيل الخروج'), glyph: 'logout', run: () => runCommand('logout') },
     { key: 'sys:settings', sys: true, label: tt('Settings', 'الإعدادات'), glyph: 'settings', run: () => runCommand('settings') },
     { key: 'sys:shortcuts', sys: true, label: tt('Shortcuts', 'الاختصارات'), glyph: 'shortcuts', run: () => runCommand('shortcuts') },
   ], [tt, openExplorer, runCommand]);
@@ -685,8 +700,8 @@ export default function DesktopOS() {
   const dockSpecialMenu = (key, e) => {
     e.preventDefault(); e.stopPropagation();
     setOverlay(null);
-    const label = { launchpad: tt('Launchpad', 'لوحة التطبيقات'), lock: tt('Lock screen', 'قفل الشاشة'), portal: tt('UIP Portal', 'بوابة UIP'), bin: tt('Recycle Bin', 'سلة المحذوفات') }[key];
-    const act = { launchpad: () => setOverlay('start'), lock: confirmLock, portal: () => runCommand('portal'), bin: () => runCommand('bin') }[key];
+    const label = { launchpad: tt('Launchpad', 'لوحة التطبيقات'), lock: tt('Lock screen', 'قفل الشاشة'), portal: tt('UIP Portal', 'بوابة UIP'), logout: tt('Sign out', 'تسجيل الخروج'), bin: tt('Recycle Bin', 'سلة المحذوفات') }[key];
+    const act = { launchpad: () => setOverlay('start'), lock: confirmLock, portal: () => runCommand('portal'), logout: () => runCommand('logout'), bin: () => runCommand('bin') }[key];
     setMenu({ x: e.clientX, y: e.clientY - 110, items: [{ label, icon: 'eye', onClick: act }, 'sep', { label: tt('Remove from Dock', 'إزالة من الـ Dock'), icon: 'trash', danger: true, onClick: () => hideDockIcon(key, false) }] });
   };
 
@@ -899,6 +914,7 @@ export default function DesktopOS() {
     { id: 'run', en: 'Run', ar: 'تشغيل', glyph: 'run' },
     { id: 'lock', en: 'Lock', ar: 'قفل', glyph: 'lock' },
     { id: 'portal', en: 'UIP Portal', ar: 'بوابة UIP', glyph: 'portal' },
+    { id: 'logout', en: 'Sign out', ar: 'تسجيل الخروج', glyph: 'logout' },
   ], []);
 
   const wp = prefs.wallpaper === 'custom' ? { dark: true } : wallpaperById(prefs.wallpaper);
@@ -944,6 +960,7 @@ export default function DesktopOS() {
       { label: tt('Sleep', 'وضع السكون'), hint: 'Alt+Shift+S', onClick: () => runCommand('sleep') },
       { label: tt('Security & devices…', 'الأمان والأجهزة…'), onClick: () => runCommand('security') },
       { label: tt('Back to the portal…', 'الرجوع للبوابة…'), onClick: () => runCommand('portal') },
+      { label: tt('Sign out…', 'تسجيل الخروج…'), onClick: () => runCommand('logout') },
     ] },
     { id: 'app', bold: true, label: appName, items: [
       { label: tt('Settings…', 'الإعدادات…'), onClick: () => runCommand('settings') },
@@ -1096,7 +1113,7 @@ export default function DesktopOS() {
           ar={ar} tt={tt} user={user} apps={startApps} desktopItems={deskItems} onClose={() => setOverlay(null)}
           onOpenApp={(a) => { setOverlay(null); runCommand(a.id); }} onOpenNode={(n) => { setOverlay(null); openNode(n); }}
           onFound={(n) => { setOverlay(null); if (n.type === 'folder') openExplorer({ folder: String(n.id) }); else openNode(n); }}
-          onLock={() => runCommand('lock')} onPortal={() => runCommand('portal')}
+          onLock={() => runCommand('lock')} onPortal={() => runCommand('portal')} onLogout={() => runCommand('logout')}
         />
       )}
       {overlay === 'run' && <RunDialog ar={ar} tt={tt} onRun={runText} onClose={() => setOverlay(null)} recents={recents} onOpenRecent={openRecent} onRemoveRecent={(id) => removeRecent(uidRef.current, id)} onClearRecents={() => clearRecents(uidRef.current)} />}
@@ -1117,6 +1134,7 @@ export default function DesktopOS() {
         items={dockItems} tt={tt} mag={prefs.dockMag !== false} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}
         onBin={() => runCommand('bin')} binFull={desk.binFull} binLabel={tt('Recycle Bin', 'سلة المحذوفات')}
         onPortal={() => runCommand('portal')} portalLabel={tt('UIP Portal', 'بوابة UIP')}
+        onLogout={() => runCommand('logout')} logoutLabel={tt('Sign out', 'تسجيل الخروج')}
         onLock={confirmLock} lockLabel={tt('Lock screen', 'قفل الشاشة')}
         hidden={hiddenDock} onSpecialMenu={dockSpecialMenu}
       />

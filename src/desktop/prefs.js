@@ -11,11 +11,12 @@ export function migratePrefs(p) {
 /** Icons the person can remove from the desktop / the Dock and bring back from Settings ▸ Personalization ▸ Icons. */
 export const DESK_ICONS = [
   ['sys:explorer', 'This PC', 'جهازي', 'explorer'], ['sys:bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'], ['sys:portal', 'UIP Portal', 'بوابة UIP', 'portal'],
+  ['sys:logout', 'Sign out', 'تسجيل الخروج', 'logout'],
   ['sys:settings', 'Settings', 'الإعدادات', 'settings'], ['sys:shortcuts', 'Shortcuts', 'الاختصارات', 'shortcuts'],
 ];
 export const DOCK_ICONS = [
   ['launchpad', 'Launchpad', 'لوحة التطبيقات', 'launchpad'], ['explorer', 'This PC', 'جهازي', 'explorer'], ['settings', 'Settings', 'الإعدادات', 'settings'],
-  ['shortcuts', 'Keyboard shortcuts', 'اختصارات الكيبورد', 'shortcuts'], ['lock', 'Lock screen', 'قفل الشاشة', 'lock'], ['portal', 'UIP Portal', 'بوابة UIP', 'portal'], ['bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'],
+  ['shortcuts', 'Keyboard shortcuts', 'اختصارات الكيبورد', 'shortcuts'], ['lock', 'Lock screen', 'قفل الشاشة', 'lock'], ['portal', 'UIP Portal', 'بوابة UIP', 'portal'], ['logout', 'Sign out', 'تسجيل الخروج', 'logout'], ['bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'],
 ];
 export const NO_ICONS = []; // one shared empty list, so memo dependencies do not change on every render
 /** ids of My PC items the person put on the desktop as shortcuts (the items themselves stay where they are). */

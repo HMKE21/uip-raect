@@ -415,7 +415,8 @@ export default function MobileShell(p) {
             <input type="range" min="40" max="100" value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} aria-label={tt('Brightness', 'السطوع')} />
           </label>
           <Row icon="settings" label={tt('Settings', 'الإعدادات')} onClick={after(() => runCommand('settings'))} />
-          <Row icon="logout" label={tt('Back to the portal', 'الرجوع للبوابة')} onClick={after(() => runCommand('portal'))} />
+          <Row icon="home" label={tt('Back to the portal', 'الرجوع للبوابة')} onClick={after(() => runCommand('portal'))} />
+          <Row icon="logout" label={tt('Sign out', 'تسجيل الخروج')} onClick={after(() => runCommand('logout'))} />
         </Sheet>
       )}
 

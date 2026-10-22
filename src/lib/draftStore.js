@@ -15,7 +15,7 @@ function open() {
       if (typeof indexedDB === 'undefined') { resolve(null); return; }
       const rq = indexedDB.open(DB, 1);
       rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains(STORE)) rq.result.createObjectStore(STORE, { keyPath: 'key' }); };
-      rq.onsuccess = () => resolve(rq.result);
+      rq.onsuccess = () => { const d = rq.result; d.onversionchange = () => { try { d.close(); } catch { /* ignore */ } dbp = null; }; resolve(d); }; // lets "erase my data" delete the database
       rq.onerror = () => resolve(null);
       rq.onblocked = () => resolve(null);
     } catch { resolve(null); }

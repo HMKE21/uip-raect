@@ -184,9 +184,20 @@ export function OsDialog({ dlg, tt, onDone }) {
             <input ref={ref} value={v} maxLength={200} dir="auto" onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') ok(); }} />
           </label>
         ) : <p>{dlg.text}</p>}
-        <footer>
+        {dlg.kind === 'choice' && (
+          <div className="os-choices">
+            {dlg.choices.map((c, i) => (
+              <button key={c.id} type="button" autoFocus={i === dlg.focus} className={`os-choice${c.danger ? ' is-danger' : ''}`} onClick={() => onDone(c.id)}>
+                <Icon name={c.icon || 'logout'} size={20} />
+                <span><b dir="auto">{c.label}</b><small dir="auto">{c.hint}</small></span>
+              </button>
+            ))}
+          </div>
+        )}
+        {dlg.kind === 'choice' && dlg.note && <p className="os-dlg__note" dir="auto">{dlg.note}</p>}
+        <footer className={dlg.kind === 'choice' ? 'os-dlg__foot1' : undefined}>
           <button type="button" className="os-btn" onClick={() => onDone(null)}>{tt('Cancel', 'إلغاء')}{dlg.icon && <kbd>Esc</kbd>}</button>
-          <button type="button" autoFocus={dlg.kind === 'confirm'} className={`os-btn ${dlg.danger ? 'os-btn--danger' : 'os-btn--primary'}`} onClick={ok}>{dlg.action}{dlg.icon && <kbd>↵</kbd>}</button>
+          {dlg.kind !== 'choice' && <button type="button" autoFocus={dlg.kind === 'confirm'} className={`os-btn ${dlg.danger ? 'os-btn--danger' : 'os-btn--primary'}`} onClick={ok}>{dlg.action}{dlg.icon && <kbd>↵</kbd>}</button>}
         </footer>
       </div>
     </div>
@@ -202,6 +213,7 @@ const RUN_ITEMS = [
   { cmd: 'shortcuts', en: 'Keyboard shortcuts', ar: 'اختصارات الكيبورد', glyph: 'shortcuts' },
   { cmd: 'lock', en: 'Lock screen', ar: 'قفل الشاشة', glyph: 'lock' },
   { cmd: 'portal', en: 'Back to portal', ar: 'الرجوع للموقع', glyph: 'portal' },
+  { cmd: 'logout', en: 'Sign out', ar: 'تسجيل الخروج', glyph: 'logout' },
 ];
 
 export function RunDialog({ ar, tt, onRun, onClose, recents = [], onOpenRecent, onRemoveRecent, onClearRecents }) {
@@ -286,7 +298,7 @@ export function RunDialog({ ar, tt, onRun, onClose, recents = [], onOpenRecent, 
 }
 
 /** Launchpad: every app, search across apps + your files, user, lock / exit. */
-export function StartMenu({ ar, tt, user, apps, desktopItems, onOpenApp, onOpenNode, onFound, onLock, onPortal, onClose }) {
+export function StartMenu({ ar, tt, user, apps, desktopItems, onOpenApp, onOpenNode, onFound, onLock, onPortal, onLogout, onClose }) {
   const [q, setQ] = useState('');
   const [found, setFound] = useState([]);
   const content = useContentSearch(q); // text inside your files
@@ -338,7 +350,8 @@ export function StartMenu({ ar, tt, user, apps, desktopItems, onOpenApp, onOpenN
         <span className="os-start__user"><i>{String(name).trim().charAt(0).toUpperCase()}</i><span dir="auto">{name}</span></span>
         <span>
           <button type="button" title={tt('Lock (Alt+L)', 'قفل (Alt+L)')} onClick={onLock}><Icon name="lock" size={17} /></button>
-          <button type="button" title={tt('Back to the portal', 'الرجوع للبوابة')} onClick={onPortal}><Icon name="logout" size={17} /></button>
+          <button type="button" title={tt('Back to the portal', 'الرجوع للبوابة')} onClick={onPortal}><Icon name="home" size={17} /></button>
+          {onLogout && <button type="button" className="is-danger" title={tt('Sign out', 'تسجيل الخروج')} onClick={onLogout}><Icon name="logout" size={17} /></button>}
         </span>
       </footer>
     </div>

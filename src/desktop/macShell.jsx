@@ -78,7 +78,7 @@ export function MenuBar({ ar, tt, menus, tray, onOpen, closeKey }) {
 const MAX_SCALE = 1.62;
 
 /** The Dock. items: [{ key, app, label, running, active, onClick, onContext }]. */
-export function Dock({ items, tt, mag, launchOn, onLaunch, onBin, binFull, binLabel, binOn, onPortal, portalLabel, onLock, lockLabel, hidden = [], onSpecialMenu }) {
+export function Dock({ items, tt, mag, launchOn, onLaunch, onBin, binFull, binLabel, binOn, onPortal, portalLabel, onLogout, logoutLabel, onLock, lockLabel, hidden = [], onSpecialMenu }) {
   const root = useRef(null);
   const rail = useRef(null);
   const centers = useRef([]);
@@ -162,7 +162,7 @@ export function Dock({ items, tt, mag, launchOn, onLaunch, onBin, binFull, binLa
             <span className="os-dock__tip" dir="auto">{it.label}{i < 9 ? <small>⌥{i + 1}</small> : null}</span>
           </button>
         ))}
-        {(items.length > 0 || !hidden.includes('launchpad')) && (!hidden.includes('lock') || !hidden.includes('portal') || !hidden.includes('bin')) && <i data-dk className="os-dock__sep" aria-hidden="true" />}
+        {(items.length > 0 || !hidden.includes('launchpad')) && (!hidden.includes('lock') || !hidden.includes('portal') || !hidden.includes('bin') || (onLogout && !hidden.includes('logout'))) && <i data-dk className="os-dock__sep" aria-hidden="true" />}
         {onLock && !hidden.includes('lock') && (
           <button type="button" data-dk className="os-dock__it" style={{ width: base + 8, height: base }} onClick={onLock} onContextMenu={(e) => onSpecialMenu?.('lock', e)} aria-label={lockLabel}>
             <span className="os-dock__g" style={{ width: base, height: base }}><AppGlyph app="lock" size={base} /></span>
@@ -175,6 +175,13 @@ export function Dock({ items, tt, mag, launchOn, onLaunch, onBin, binFull, binLa
             <span className="os-dock__g" style={{ width: base, height: base }}><AppGlyph app="portal" size={base} /></span>
             <i className="os-dock__dot" />
             <span className="os-dock__tip" dir="auto">{portalLabel}</span>
+          </button>
+        )}
+        {onLogout && !hidden.includes('logout') && (
+          <button type="button" data-dk className="os-dock__it" style={{ width: base + 8, height: base }} onClick={onLogout} onContextMenu={(e) => onSpecialMenu?.('logout', e)} aria-label={logoutLabel}>
+            <span className="os-dock__g" style={{ width: base, height: base }}><AppGlyph app="logout" size={base} /></span>
+            <i className="os-dock__dot" />
+            <span className="os-dock__tip" dir="auto">{logoutLabel}</span>
           </button>
         )}
         {!hidden.includes('bin') && (
