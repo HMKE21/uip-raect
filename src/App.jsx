@@ -118,6 +118,13 @@ const StudentDashboard = lazy(() => import('./pages/student/StudentDashboard'));
 const StudentMyExams = lazy(() => import('./pages/student/StudentMyExams'));
 const StudentCourses = lazy(() => import('./pages/student/StudentCourses'));
 const StudentTimetable = lazy(() => import('./pages/student/StudentTimetable'));
+const StudentGrades = lazy(() => import('./pages/student/StudentGrades'));
+const UniversityGrading = lazy(() => import('./pages/university/UniversityGrading'));
+const UniversityGradingScale = lazy(() => import('./pages/university/UniversityGradingScale'));
+const FacultyGrading = lazy(() => import('./pages/faculty/FacultyGrading'));
+const FacultyGradingScale = lazy(() => import('./pages/faculty/FacultyGradingScale'));
+const AcademicStaffGrading = lazy(() => import('./pages/academic-staff/AcademicStaffGrading'));
+const AdminGradingScale = lazy(() => import('./pages/admin/AdminGradingScale'));
 const StudentAttendance = lazy(() => import('./pages/student/StudentAttendance'));
 const StudentAssignments = lazy(() => import('./pages/student/StudentAssignments'));
 const UniversityCourses = lazy(() => import('./pages/university/UniversityCourses'));
@@ -314,6 +321,7 @@ export default function App() {
                 <Route path="/student/timetable" element={<StudentTimetable />} />
                 <Route path="/student/attendance" element={<StudentAttendance />} />
                 <Route path="/student/assignments" element={<StudentAssignments />} />
+                <Route path="/student/grades" element={<StudentGrades />} />
                 <Route path="/student/courses/:id/content" element={<CourseContentPage role="student" />} />
                 <Route path="/student/my-exams" element={<StudentMyExams />} />
                 <Route path="/student/my-exams/:id" element={<StudentExamDetail />} />
@@ -460,6 +468,7 @@ export default function App() {
                 <Route path="/admin/mobile/:id" element={<AdminMobileTokenDetail />} />
                 <Route path="/admin/platform-policy" element={<AdminPlatformPolicy />} />
                 <Route path="/admin/attendance-settings" element={<AdminAttendanceSettings />} />
+                <Route path="/admin/grading-scale" element={<AdminGradingScale />} />
                 <Route path="/admin/notifications/settings" element={<AdminNotificationSettings />} />
                 <Route path="/admin/chat-reports" element={<ChatReports />} />
                 <Route path="/admin/messaging/oversight" element={<AdminMessagingOversight />} />
@@ -527,6 +536,8 @@ export default function App() {
                 <Route path="/university/timetable" element={<UniversityTimetable />} />
                 <Route path="/university/attendance" element={<UniversityAttendance />} />
                 <Route path="/university/assignments" element={<UniversityAssignments />} />
+                <Route path="/university/grading" element={<UniversityGrading />} />
+                <Route path="/university/grading-scale" element={<UniversityGradingScale />} />
                 <Route path="/university/courses/:id/content" element={<CourseContentPage role="university" />} />
                 <Route path="/university/reports" element={<UniversityReports />} />
                 <Route path="/university/analytics" element={<UniversityAnalytics />} />
@@ -559,6 +570,8 @@ export default function App() {
                 <Route path="/faculty/timetable" element={<FacultyTimetable />} />
                 <Route path="/faculty/attendance" element={<FacultyAttendance />} />
                 <Route path="/faculty/assignments" element={<FacultyAssignments />} />
+                <Route path="/faculty/grading" element={<FacultyGrading />} />
+                <Route path="/faculty/grading-scale" element={<FacultyGradingScale />} />
                 <Route path="/faculty/courses/:id/content" element={<CourseContentPage role="faculty" />} />
                 <Route path="/faculty/chat-reports" element={<ChatReports />} />
                 <Route path="/faculty/settings" element={<FacultySettings />} />
@@ -585,6 +598,7 @@ export default function App() {
                 <Route path="/academic-staff/timetable" element={<AcademicStaffTimetable />} />
                 <Route path="/academic-staff/attendance" element={<AcademicStaffAttendance />} />
                 <Route path="/academic-staff/assignments" element={<AcademicStaffAssignments />} />
+                <Route path="/academic-staff/grading" element={<AcademicStaffGrading />} />
                 <Route path="/academic-staff/courses/:id/content" element={<CourseContentPage role="academic_staff" />} />
                 <Route path="/academic-staff/projects" element={<AcademicStaffProjects />} />
                 <Route path="/academic-staff/projects/:id" element={<AcademicStaffProjectDetail />} />
