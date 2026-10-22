@@ -1,0 +1,50 @@
+/* Scientific calculator (fx-991 style). Dark "hardware" body + LCD, independent of the OS theme. */
+.sc { --k-bg: #3b3f4a; --k-fg: #f2f4f8; --k-sh: #0c0d11; --amber: #f6b93b; --red: #ff7b7b;
+  display: flex; flex-direction: column; gap: 10px; height: 100%; padding: 12px; box-sizing: border-box; overflow: auto; outline: none; user-select: none;
+  background: linear-gradient(180deg, #262932, #14161b); color: var(--k-fg); font-family: inherit; }
+.sc-lcd { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 6px 12px 10px; border-radius: 14px; min-height: 150px;
+  background: linear-gradient(160deg, #e6eee3, #cdd9c9); color: #16241b; box-shadow: inset 0 2px 8px rgba(0,0,0,.35), 0 0 0 2px #0b0c10; }
+.sc-status { display: flex; gap: 10px; align-items: center; font-size: 10px; font-weight: 700; letter-spacing: .04em; }
+.sc-status span, .sc-status button { opacity: .22; }
+.sc-status .on { opacity: 1; }
+.sc-status button { opacity: 1; margin-inline-start: auto; border: 0; background: rgba(0,0,0,.08); border-radius: 4px; padding: 1px 6px; font: inherit; color: inherit; cursor: pointer; }
+.sc-status span:last-child { margin-inline-start: auto; }
+.sc-prev { min-height: 16px; font-size: 12px; opacity: .6; text-align: end; white-space: nowrap; overflow: hidden; }
+.sc-in { display: block; min-height: 30px; font-size: 21px; font-weight: 500; white-space: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.sc-in::-webkit-scrollbar { display: none; }
+.sc-ask { margin-inline-end: 8px; color: #0b6b3a; }
+.sc-caret { display: inline-block; width: 2px; height: 1.1em; margin: 0 1px; vertical-align: -.18em; background: currentColor; animation: sc-blink 1s steps(1) infinite; }
+@keyframes sc-blink { 50% { opacity: 0; } }
+.sc-out { margin-top: auto; text-align: end; font-size: 32px; font-weight: 600; min-height: 48px; display: flex; justify-content: flex-end; align-items: center; gap: 8px; white-space: nowrap; overflow-x: auto; scrollbar-width: none; }
+.sc-out em { font-style: normal; font-size: 16px; opacity: .6; }
+.sc-err { color: #a3261a; font-size: 22px; }
+.sc-zero { opacity: .85; }
+.sc-note { text-align: end; font-size: 11px; opacity: .55; }
+.sc sup { font-size: .6em; line-height: 0; }
+.sc-frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; font-size: .8em; line-height: 1.15; }
+.sc-frac > span:first-child { border-bottom: 2px solid currentColor; padding: 0 6px 1px; }
+.sc-rad { display: inline-flex; align-items: flex-end; }
+.sc-rad i { font-style: normal; }
+.sc-rad b { font-weight: inherit; border-top: 1.5px solid currentColor; padding: 0 1px; line-height: 1.05; }
+
+.sc-keys { flex: 1; display: grid; grid-template-columns: repeat(30, 1fr); gap: 7px 6px; align-content: start; }
+.sc-k { position: relative; display: flex; align-items: center; justify-content: center; padding: 8px 0 0; border: 0; border-radius: 10px; cursor: pointer;
+  background: var(--k-bg); color: var(--k-fg); font: inherit; font-size: 14px; font-weight: 600;
+  box-shadow: 0 2px 0 var(--k-sh), inset 0 1px 0 rgba(255,255,255,.09); transition: transform .06s, filter .12s; }
+.sc-k:hover { filter: brightness(1.15); }
+.sc-k:active { transform: translateY(2px); box-shadow: none; }
+.sc-k.h-sm { height: 32px; padding: 0; font-size: 12px; background: #2b2e37; }
+.sc-k.h-md { height: 42px; }
+.sc-k.h-lg { height: 48px; font-size: 20px; padding-top: 6px; }
+.sc-k i { position: absolute; top: 3px; font-style: normal; font-size: 9px; font-weight: 700; line-height: 1; }
+.sc-k i.s { left: 6px; color: var(--amber); }
+.sc-k i.a { right: 6px; color: var(--red); }
+.sc-k.mod.s { color: var(--amber); } .sc-k.mod.a { color: var(--red); }
+.sc-k.num { background: #eceef3; color: #14161b; }
+.sc-k.op { background: #4a4f5c; }
+.sc-k.del { background: linear-gradient(180deg, #8fdc5c, #5fb33a); color: #0e2208; }
+.sc-k.eq { background: linear-gradient(180deg, #4aa3ff, #1f7aea); color: #fff; }
+.on-s .sc-k i.s { font-size: 11px; filter: brightness(1.25); }
+.on-s .sc-k.mod.s { background: var(--amber); color: #2a1d00; }
+.on-a .sc-k i.a { font-size: 11px; filter: brightness(1.25); }
+.on-a .sc-k.mod.a { background: var(--red); color: #2a0000; }

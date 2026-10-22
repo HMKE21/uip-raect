@@ -46,7 +46,8 @@ const NewFileDialog = lazy(() => import('../components/NewFileDialog'));
 const MobileShell = lazy(() => import('./MobileShell'));
 const WinFallback = <div className="os-app-msg"><span className="mp-spin" /></div>;
 import SnapAssist from './SnapAssist';
-import { CalculatorApp, CalendarApp, NotesApp } from './miniApps';
+import { CalendarApp, NotesApp } from './miniApps';
+import SciCalc from './SciCalc';
 import './desktop.css';
 import './mac.css';
 import './extras.css';
@@ -956,7 +957,7 @@ export default function DesktopOS() {
       case 'shortcuts': return <ShortcutsApp ar={ar} tt={tt} />;
       case 'notes': return <NotesApp uid={user?.id} tt={tt} ar={ar} />;
       case 'calendar': return <CalendarApp uid={user?.id} tt={tt} ar={ar} onGo={(p) => navigate(p)} />;
-      case 'calculator': return <CalculatorApp tt={tt} />;
+      case 'calculator': return <SciCalc tt={tt} />;
       default: return null;
     }
   };

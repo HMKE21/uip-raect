@@ -5,7 +5,7 @@ import { toDate } from '../components/exam/examUi';
 import './miniApps.css';
 
 /* ------------------------------------------------------------------------------------------------------------------
- * Small built-in apps of the UIP desktop: Notes, Calculator, Calendar.
+ * Small built-in apps of the UIP desktop: Notes, Calendar (the calculator lives in SciCalc.jsx).
  * Notes and the calendar's personal tasks live in this browser, per account (localStorage). The calendar also shows the
  * student's real exams (/exam-system/my-exams) and scheduled meetings / lectures (/meetings/calendar).
  * ---------------------------------------------------------------------------------------------------------------- */
@@ -80,96 +80,6 @@ export function NotesApp({ uid, tt, ar }) {
           <div className="os-app-msg"><span>{tt('Select a note or create a new one.', 'اختار ملاحظة أو اعمل واحدة جديدة.')}</span></div>
         )}
       </section>
-    </div>
-  );
-}
-
-/* ============================== Calculator ============================== */
-/** Safe expression evaluator (no eval): + − × ÷ ^ % with parentheses and unary minus. Returns a number or throws. */
-function calc(src) {
-  const t = String(src).replace(/×/g, '*').replace(/÷/g, '/').replace(/−/g, '-').replace(/\s+/g, '');
-  let i = 0;
-  const peek = () => t[i];
-  const num = () => {
-    const m = /^\d*\.?\d+(e[+-]?\d+)?|^\d+\.?/i.exec(t.slice(i));
-    if (!m) throw new Error('syntax');
-    i += m[0].length; return parseFloat(m[0]);
-  };
-  const atom = () => {
-    if (peek() === '(') { i += 1; const v = add(); if (peek() !== ')') throw new Error('paren'); i += 1; return post(v); }
-    if (peek() === '-') { i += 1; return -pow(); }
-    if (peek() === '+') { i += 1; return pow(); }
-    return post(num());
-  };
-  const post = (v) => { let x = v; while (peek() === '%') { i += 1; x /= 100; } return x; };
-  const pow = () => { const b = atom(); if (peek() === '^') { i += 1; return b ** pow(); } return b; };
-  const mul = () => {
-    let v = pow();
-    while (peek() === '*' || peek() === '/') { const op = t[i]; i += 1; const r = pow(); v = op === '*' ? v * r : v / r; }
-    return v;
-  };
-  const add = () => {
-    let v = mul();
-    while (peek() === '+' || peek() === '-') { const op = t[i]; i += 1; const r = mul(); v = op === '+' ? v + r : v - r; }
-    return v;
-  };
-  const v = add();
-  if (i < t.length) throw new Error('syntax');
-  if (!Number.isFinite(v)) throw new Error('math');
-  return v;
-}
-const fmtNum = (v) => { const r = Number(v.toPrecision(12)); return Math.abs(r) >= 1e15 || (Math.abs(r) < 1e-9 && r !== 0) ? r.toExponential(6) : String(r); };
-const KEYS = ['C', '(', ')', '÷', '7', '8', '9', '×', '4', '5', '6', '−', '1', '2', '3', '+', '0', '.', 'DEL', '='];
-
-export function CalculatorApp({ tt }) {
-  const [expr, setExpr] = useState('');
-  const [res, setRes] = useState('');
-  const [hist, setHist] = useState([]);
-  const [fresh, setFresh] = useState(false); // the last press was "=": a digit starts over, an operator continues from the result
-  const root = useRef(null);
-
-  const preview = useMemo(() => { if (!expr) return ''; try { return fmtNum(calc(expr)); } catch { return ''; } }, [expr]);
-  const equals = useCallback(() => {
-    if (!expr) return;
-    try { const r = fmtNum(calc(expr)); setHist((h) => [{ e: expr, r }, ...h].slice(0, 20)); setRes(r); setExpr(r); setFresh(true); } catch { setRes(tt('Error', 'خطأ')); setFresh(true); }
-  }, [expr, tt]);
-  const press = useCallback((k) => {
-    if (k === 'C') { setExpr(''); setRes(''); setFresh(false); return; }
-    if (k === 'DEL') { setExpr((e) => (fresh ? '' : e.slice(0, -1))); setFresh(false); return; }
-    if (k === '=') { equals(); return; }
-    const isOp = /^[+−×÷^%]$/.test(k);
-    setExpr((e) => {
-      const base = fresh && !isOp ? '' : e;
-      if (isOp && !base && k !== '−') return base;
-      if (isOp && /[+−×÷^]$/.test(base) && k !== '%') return base.slice(0, -1) + k; // replace the previous operator
-      return base + k;
-    });
-    setRes(''); setFresh(false);
-  }, [equals, fresh]);
-
-  const onKey = (e) => {
-    const map = { '*': '×', '/': '÷', '-': '−', Enter: '=', '=': '=', Backspace: 'DEL', Escape: 'C', Delete: 'C' };
-    const k = map[e.key] || (/^[\d.+()^%]$/.test(e.key) ? e.key : null);
-    if (k) { e.preventDefault(); press(k); }
-  };
-
-  return (
-    <div className="os-calc" ref={root} tabIndex={0} onKeyDown={onKey} dir="ltr">
-      <div className="os-calc__screen" aria-live="polite">
-        <small>{hist[0] && !expr ? `${hist[0].e} =` : ''}</small>
-        <input readOnly value={expr || '0'} aria-label={tt('Expression', 'العملية')} />
-        <span>{(res && res !== expr ? res : '') || (res ? '' : preview)}</span>
-      </div>
-      <div className="os-calc__keys">
-        {KEYS.map((k) => (
-          <button key={k} type="button" className={/^[+−×÷]$/.test(k) ? 'is-op' : k === '=' ? 'is-eq' : /^[\d.]$/.test(k) ? '' : 'is-fn'} onClick={() => { press(k); root.current?.focus(); }}>{k === 'DEL' ? '⌫' : k}</button>
-        ))}
-      </div>
-      {hist.length > 0 && (
-        <ul className="os-calc__hist" aria-label={tt('History', 'السجل')}>
-          {hist.slice(0, 4).map((h, i) => <li key={i}><button type="button" onClick={() => { setExpr(h.r); setFresh(true); }}><span>{h.e}</span><b>= {h.r}</b></button></li>)}
-        </ul>
-      )}
     </div>
   );
 }
