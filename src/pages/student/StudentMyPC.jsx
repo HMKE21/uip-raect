@@ -18,7 +18,9 @@ import { readDataTransfer, itemsFromFileList } from '../../components/zipbench/z
 import { useBackLayer } from '../../lib/backStack';
 import { lockScroll } from '../../lib/scrollLock';
 import { saveBlob } from '../../lib/exporter';
-import { drive, fetchDriveBlob, fetchFolderZip, fetchDownload } from '../../lib/driveApi';
+import { drive, fetchDriveBlob, fetchFolderZip, fetchDownload, sharedApi } from '../../lib/driveApi';
+import { useAuth } from '../../context/AuthContext';
+import { MAX_TAGS_PER_ITEM, MAX_TAG_LEN, tagColor, tokenFromLink, useDriveMarks } from '../../lib/driveMarks';
 import { afterGuard } from '../../lib/saveCenter';
 import { isSystemNode } from '../../desktop/sync';
 import { FileGlyph, FolderGlyph } from '../../desktop/OsIcons';
@@ -195,6 +197,88 @@ function EditorOverlay({ title, load, onSave, sandboxTokenPath, tt, rtl, onClose
   );
 }
 
+/** Tags of one item: add / remove, with the tags you already use offered as one-tap suggestions. Saved as you go. */
+function TagsDialog({ node, marks, tt, onClose }) {
+  const [v, setV] = useState('');
+  const cur = marks.tagsOf(node.id);
+  const add = (name) => { const t = name.trim().slice(0, MAX_TAG_LEN); if (!t || cur.includes(t) || cur.length >= MAX_TAGS_PER_ITEM) return; marks.setTags(node.id, [...cur, t]); setV(''); };
+  const sugg = marks.allTags.filter((t) => !cur.includes(t.name));
+  return (
+    <StModal title={tt(`Tags — ${node.name}`, `التاجات — ${node.name}`)} onClose={onClose}
+      actions={<button type="button" className="btn btn-primary" onClick={onClose}>{tt('Done', 'تم')}</button>}>
+      <div className="mp-tags">
+        <div className="mp-tags__cur">
+          {cur.length === 0 && <small>{tt('No tags yet.', 'مفيش تاجات لسه.')}</small>}
+          {cur.map((t) => (
+            <span key={t} className="mp-tag" style={{ '--tg': tagColor(t) }}>{t}
+              <button type="button" aria-label={tt(`Remove ${t}`, `إزالة ${t}`)} onClick={() => marks.setTags(node.id, cur.filter((x) => x !== t))}><Icon name="x" size={11} /></button></span>
+          ))}
+        </div>
+        <label className="mp-field"><span>{tt(`Add a tag (up to ${MAX_TAGS_PER_ITEM})`, `ضيف تاج (لحد ${MAX_TAGS_PER_ITEM})`)}</span>
+          <input value={v} maxLength={MAX_TAG_LEN} disabled={cur.length >= MAX_TAGS_PER_ITEM} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(v); } }}
+            placeholder={tt('e.g. Math, Exam, Project', 'مثال: رياضة، امتحان، مشروع')} autoFocus /></label>
+        {sugg.length > 0 && (
+          <div className="mp-tags__sugg">
+            <small>{tt('Your tags:', 'التاجات بتاعتك:')}</small>
+            {sugg.slice(0, 12).map((t) => <button key={t.name} type="button" className="mp-tag mp-tag--btn" style={{ '--tg': tagColor(t.name) }} disabled={cur.length >= MAX_TAGS_PER_ITEM} onClick={() => add(t.name)}>+ {t.name}</button>)}
+          </div>
+        )}
+      </div>
+    </StModal>
+  );
+}
+
+/** "Shared with me": the share links other students sent you. Paste one to keep it here; the server decides whether it still works. */
+function SharedWithMe({ marks, tt }) {
+  const [v, setV] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState({}); // token -> 'ok' | 'gone'
+  const tokens = marks.shared.map((x) => x.token).join(',');
+  useEffect(() => {
+    let live = true;
+    marks.shared.slice(0, 20).forEach((x) => {
+      sharedApi.view(x.token).then(() => { if (live) setStatus((s) => ({ ...s, [x.token]: 'ok' })); })
+        .catch((e) => { if (live && (e?.status === 404 || e?.status === 410 || e?.status === 403)) setStatus((s) => ({ ...s, [x.token]: 'gone' })); });
+    });
+    return () => { live = false; };
+  }, [tokens]); // eslint-disable-line react-hooks/exhaustive-deps
+  const add = async () => {
+    const token = tokenFromLink(v);
+    if (!token) { setErr(tt('That does not look like a share link.', 'ده مش شكل رابط مشاركة.')); return; }
+    if (marks.shared.some((x) => x.token === token)) { setErr(tt('Already in the list.', 'الرابط موجود بالفعل.')); return; }
+    setBusy(true); setErr('');
+    try {
+      const d = await sharedApi.view(token);
+      marks.addShared({ token, name: d?.node?.name || token, type: d?.node?.type === 'folder' ? 'folder' : 'file' });
+      setV('');
+    } catch (e) {
+      setErr(e?.status === 404 || e?.status === 410 ? tt('This link is expired or was revoked.', 'الرابط ده منتهي أو اتلغى.') : errorMessage(e));
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="mp-shared">
+      <h3>{tt('Shared with me', 'مشاركة معي')}</h3>
+      <p>{tt('When a classmate sends you a share link, paste it here to keep it close.', 'لما زميلك يبعتلك رابط مشاركة، حطه هنا عشان يفضل قدامك.')}</p>
+      <div className="mp-shared__add">
+        <input value={v} onChange={(e) => { setV(e.target.value); setErr(''); }} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} placeholder={tt('Paste the link', 'الصق الرابط هنا')} dir="ltr" />
+        <button type="button" className="mp-btn mp-btn--primary" disabled={!v.trim() || busy} onClick={add}>{tt('Add', 'إضافة')}</button>
+      </div>
+      {err && <p className="mp-shared__err" role="alert">{err}</p>}
+      {marks.shared.length === 0 ? <p className="mp-shared__empty">{tt('Nothing here yet.', 'لسه مفيش حاجة هنا.')}</p> : (
+        <ul>
+          {marks.shared.map((x) => (
+            <li key={x.token} className={status[x.token] === 'gone' ? 'is-gone' : ''}>
+              <Icon name={x.type === 'folder' ? 'folder' : 'file'} size={18} />
+              <span dir="auto"><b>{x.name}</b><small>{status[x.token] === 'gone' ? tt('No longer available', 'مبقاش متاح') : new Date(x.added).toLocaleDateString()}</small></span>
+              <button type="button" className="mp-btn" disabled={status[x.token] === 'gone'} onClick={() => window.open(`/s/${x.token}`, '_blank', 'noopener')}>{tt('Open', 'فتح')}</button>
+              <button type="button" className="mp-ib" aria-label={tt('Remove', 'إزالة')} onClick={() => marks.removeShared(x.token)}><Icon name="x" size={14} /></button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function NameDialog({ dlg, tt, onClose }) {
   const [v, setV] = useState(dlg.value || '');
   const ref = useRef(null);
@@ -232,6 +316,10 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
   const folderParam = Number(params.get('folder')) || null;
   const inTrash = params.get('view') === 'trash';
 
+  const { user } = useAuth();
+  const marks = useDriveMarks(user?.id);
+  const [special, setSpecial] = useState(null); // null | { type: 'fav' } | { type: 'tag', tag } | { type: 'shared' }
+  const keepSpecial = useRef(false);
   const [data, setData] = useState({ items: [], breadcrumb: [], usage: null });
   const [tree, setTree] = useState([]);
   const [disks, setDisks] = useState([]); // top-level disks with the space each one uses (only loaded at the top of My PC)
@@ -314,7 +402,23 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     drive.tree().then((r) => setTree(r.data || [])).catch(() => {});
   }, [folderParam, inTrash, setParams]);
 
-  useEffect(() => { setSel(new Set()); setAnchor(null); setQuery(''); setResults(null); reload(); }, [reload]);
+  useEffect(() => { setSel(new Set()); setAnchor(null); setQuery(''); setResults(null); if (keepSpecial.current) keepSpecial.current = false; else setSpecial(null); reload(); }, [reload]);
+  // favorites / one tag: show the marked items (live data from the server; anything deleted for good loses its mark)
+  const specialKey = special?.type === 'tag' ? `t:${special.tag}:${marks.idsWithTag(special.tag).join(',')}` : special?.type === 'fav' ? `f:${marks.favs.join(',')}` : '';
+  useEffect(() => {
+    if (!special || special.type === 'shared' || query.trim()) return undefined;
+    const ids = special.type === 'fav' ? marks.favs : marks.idsWithTag(special.tag);
+    if (!ids.length) { setResults([]); return undefined; }
+    let live = true;
+    drive.resolve(ids).then((r) => {
+      if (!live) return;
+      const d = r.data || {};
+      setResults(d.items || []);
+      if (d.gone?.length) marks.forget(d.gone);
+    }).catch(() => { if (live) setResults([]); });
+    return () => { live = false; };
+  }, [specialKey, query, folderParam, inTrash]); // eslint-disable-line react-hooks/exhaustive-deps
+  const showSpecial = (sp) => { keepSpecial.current = !!(folderParam || inTrash); setSel(new Set()); setQuery(''); setSpecial(sp); if (sp.type === 'shared') setResults(null); if (folderParam || inTrash) setParams({}); setSide(false); };
   useEffect(() => { const h = () => reload({ quiet: true }); window.addEventListener('uip-drive-changed', h); return () => window.removeEventListener('uip-drive-changed', h); }, [reload]);
   useEffect(() => { try { window.localStorage.setItem('mp-view', view); } catch { /* storage unavailable */ } }, [view]);
 
@@ -772,6 +876,11 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     if (group.length) {
       out.push({ icon: 'download', label: tt('Download', 'تنزيل'), run: () => group.forEach(download), disabled: group.length > 1 });
       if (one) out.push({ icon: 'share', label: tt('Share', 'مشاركة'), run: () => setDlg({ type: 'share', node: one }) });
+      if (!inTrash) {
+        const allFav = group.every((x) => marks.isFav(x.id));
+        out.push({ icon: 'star', label: allFav ? tt('Remove from favorites', 'إزالة من المفضلة') : tt('Add to favorites', 'إضافة للمفضلة'), run: () => marks.setFav(group.map((x) => x.id), !allFav) });
+        if (one) out.push({ icon: 'bookmark', label: tt('Tags…', 'التاجات…'), run: () => setDlg({ type: 'tags', node: one }) });
+      }
       if (embedded && !inTrash) out.push({ icon: 'external-link', label: tt('Create desktop shortcut', 'إنشاء اختصار على سطح المكتب'), run: () => window.dispatchEvent(new CustomEvent('uip-desktop-shortcut', { detail: { ids: group.map((x) => x.id) } })) });
       if (one && one.type === 'file') out.push({ icon: 'clock', label: tt('Version history', 'سجل الإصدارات'), run: () => setDlg({ type: 'versions', node: one }) });
       out.push({ sep: true });
@@ -935,6 +1044,13 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
               </ul>
             </li>
           </ul>
+          <ul className="mp-quick" aria-label={tt('Quick access', 'وصول سريع')}>
+            <li><button type="button" className={special?.type === 'fav' ? 'is-on' : ''} onClick={() => showSpecial({ type: 'fav' })}><Icon name="star" size={16} /><span>{tt('Favorites', 'المفضلة')}</span>{marks.favs.length > 0 && <em>{marks.favs.length}</em>}</button></li>
+            <li><button type="button" className={special?.type === 'shared' ? 'is-on' : ''} onClick={() => showSpecial({ type: 'shared' })}><Icon name="users" size={16} /><span>{tt('Shared with me', 'مشاركة معي')}</span>{marks.shared.length > 0 && <em>{marks.shared.length}</em>}</button></li>
+            {marks.allTags.map((t) => (
+              <li key={t.name}><button type="button" className={special?.type === 'tag' && special.tag === t.name ? 'is-on' : ''} onClick={() => showSpecial({ type: 'tag', tag: t.name })}><i className="mp-quick__dot" style={{ background: tagColor(t.name) }} /><span dir="auto">{t.name}</span><em>{t.count}</em></button></li>
+            ))}
+          </ul>
           <button type="button" className={`mp-bin${inTrash ? ' is-on' : ''}`} onClick={openTrashView}><Icon name="trash" size={16} /> {tt('Recycle bin', 'سلة المحذوفات')}</button>
           {usage && (
             <div className="mp-usage mp-usage--btn" title={tt('What is using my space?', 'إيه اللي واخد المساحة؟')} role="button" tabIndex={0}
@@ -949,7 +1065,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
         {side && <button type="button" className="mp-scrim" aria-label="close" onClick={() => setSide(false)} />}
 
         <main
-          ref={area} className={`mp-main${dragOver ? ' is-drop' : ''}${box ? ' is-marquee' : ''}`}
+          ref={area} className={`mp-main${dragOver ? ' is-drop' : ''}${box ? ' is-marquee' : ''}${special?.type === 'shared' ? ' is-shared' : ''}`}
           onPointerDown={onMainPointerDown}
           onClick={() => { if (suppressClick.current) return; setSel(new Set()); cursorRef.current = null; rootRef.current?.focus({ preventScroll: true }); }}
           onContextMenu={(e) => { if (!inTrash) showMenu(e, null); }}
@@ -957,6 +1073,14 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
           onDragLeave={(e) => { if (!area.current?.contains(e.relatedTarget)) setDragOver(false); }}
           onDrop={(e) => (inTrash ? undefined : onDropFiles(e))}
         >
+          {special?.type === 'shared' && <SharedWithMe marks={marks} tt={tt} />}
+          {special && special.type !== 'shared' && !query.trim() && (
+            <div className="mp-special">
+              {special.type === 'fav' ? <Icon name="star" size={15} className="mp-star" /> : <i className="mp-quick__dot" style={{ background: tagColor(special.tag) }} />}
+              <b dir="auto">{special.type === 'fav' ? tt('Favorites', 'المفضلة') : special.tag}</b>
+              <button type="button" className="mp-btn" onClick={() => { setSpecial(null); setResults(null); }}>{tt('Back to files', 'رجوع للملفات')}</button>
+            </div>
+          )}
           {box && <div className="mp-marquee" aria-hidden="true" style={{ left: box.x1, top: box.y1, width: box.x2 - box.x1, height: box.y2 - box.y1 }} />}
           {dragOver && <div className="mp-dropmsg"><Icon name="upload" size={30} /><strong>{tt(`Drop to upload to “${locationName}”`, `أفلت هنا للرفع إلى «${locationName}»`)}</strong></div>}
           {loading && <div className="mp-pad"><Skeleton h={64} count={5} /></div>}
@@ -1026,8 +1150,8 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                 <div className="mp-pad" hidden={content.items.length > 0 || content.loading}>
                   <EmptyState
                     icon={results ? 'search' : 'folder'}
-                    title={results ? tt('No matches', 'لا توجد نتائج') : tt('This folder is empty', 'المجلد فاضي')}
-                    text={results ? tt('Try another name.', 'جرّب اسمًا آخر.') : tt('Drop files here, or create a folder or a project.', 'أفلت ملفات هنا، أو أنشئ مجلدًا أو مشروعًا.')}
+                    title={special && special.type !== 'shared' ? (special.type === 'fav' ? tt('No favorites yet', 'مفيش مفضلة لسه') : tt('Nothing with this tag', 'مفيش حاجة بالتاج ده')) : results ? tt('No matches', 'لا توجد نتائج') : tt('This folder is empty', 'المجلد فاضي')}
+                    text={special && special.type === 'fav' ? tt('Right-click a file or folder and choose “Add to favorites”.', 'كليك يمين على ملف أو مجلد واختار «إضافة للمفضلة».') : results ? tt('Try another name.', 'جرّب اسمًا آخر.') : tt('Drop files here, or create a folder or a project.', 'أفلت ملفات هنا، أو أنشئ مجلدًا أو مشروعًا.')}
                   />
                 </div>
               )
@@ -1058,7 +1182,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                       onDrop={(e) => { e.currentTarget.classList.remove('is-over'); if (n.type !== 'folder') return; if (e.dataTransfer.types.includes('application/x-drive-ids')) dropIds(e, n.id); else onDropFiles(e, n.id); }}
                     >
                       <NodeIcon node={n} size={view === 'grid' ? 56 : 28} />
-                      <span className="mp-item__name" dir="auto" title={n.name}>{n.name}{results && n.path ? <small>{n.path}</small> : null}</span>
+                      <span className="mp-item__name" dir="auto" title={n.name}>{n.name}{marks.isFav(n.id) && <Icon name="star" size={12} className="mp-star" />}{marks.tagsOf(n.id).length > 0 && <span className="mp-dots" aria-label={marks.tagsOf(n.id).join(', ')}>{marks.tagsOf(n.id).map((t) => <i key={t} style={{ background: tagColor(t) }} title={t} />)}</span>}{results && n.path ? <small>{n.path}</small> : null}</span>
                       {view === 'list' && (
                         <>
                           <span className="mp-item__date">{timeAgo(n.updated_at || n.created_at, locale)}</span>
@@ -1128,6 +1252,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
       {dlg?.type === 'storage' && <StorageDialog ar={ar} locale={locale} onClose={() => setDlg(null)} onOpenFolder={openFolder} />}
       {dlg?.type === 'share' && <ShareDialog node={dlg.node} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} />}
       {dlg?.type === 'name' && <NameDialog dlg={dlg} tt={tt} onClose={() => setDlg(null)} />}
+      {dlg?.type === 'tags' && <TagsDialog node={dlg.node} marks={marks} tt={tt} onClose={() => setDlg(null)} />}
       {dlg?.type === 'newfile' && (
         <NewFileDialog
           locale={locale} parentId={folderParam} initialType={dlg.kind} onClose={() => setDlg(null)}

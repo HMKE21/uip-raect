@@ -30,7 +30,7 @@ import { Clock, ContextMenu, IdleWarning, NodeGlyph, OsDialog, RunDialog, StartM
 import LockScreen, { SleepScreen } from './LockScreen';
 import { readSec, useDesktopSecurity } from './security';
 import { wallpaperById, wallpaperCss } from './wallpapers';
-import { chromeH, initialWm, winTitle, wmReducer } from './wm';
+import { MAX_DESKS, chromeH, initialWm, winTitle, wmReducer } from './wm';
 import { restoreWm, saveWm } from './wmPersist';
 import WidgetLayer from './Widgets';
 import { clearDropMark, dropOnWindowAt, hasDriveIds, markDropTarget, readDragNodes } from '../lib/driveDnd';
@@ -46,8 +46,10 @@ const NewFileDialog = lazy(() => import('../components/NewFileDialog'));
 const MobileShell = lazy(() => import('./MobileShell'));
 const WinFallback = <div className="os-app-msg"><span className="mp-spin" /></div>;
 import SnapAssist from './SnapAssist';
+import { CalculatorApp, CalendarApp, NotesApp } from './miniApps';
 import './desktop.css';
 import './mac.css';
+import './extras.css';
 
 const EMPTY_POS = {};
 const CELL = { s: { w: 78, h: 88, g: 34 }, m: { w: 94, h: 104, g: 48 }, l: { w: 114, h: 126, g: 64 } };
@@ -129,6 +131,7 @@ const RUN_ALIASES = {
   personalize: 'personalize', 'التخصيص': 'personalize',
   taskmgr: 'taskmgr', 'task manager': 'taskmgr', 'مدير المهام': 'taskmgr',
   bin: 'bin', recycle: 'bin', trash: 'bin', 'سلة المحذوفات': 'bin',
+  notes: 'notes', note: 'notes', 'الملاحظات': 'notes', calendar: 'calendar', 'التقويم': 'calendar', calc: 'calculator', calculator: 'calculator', 'الآلة الحاسبة': 'calculator',
   shortcuts: 'shortcuts', help: 'shortcuts', 'الاختصارات': 'shortcuts',
   cloud: 'cloud', backup: 'cloud', storage: 'cloud', 'النسخ الاحتياطي': 'cloud', 'التخزين': 'cloud',
   lock: 'lock', 'قفل': 'lock', portal: 'portal', exit: 'portal', 'البوابة': 'portal',
@@ -286,6 +289,7 @@ export default function DesktopOS() {
       case 'personalize': openApp('settings', { tab: 'personalize' }); break;
       case 'taskmgr': openApp('taskmgr'); break;
       case 'shortcuts': openApp('shortcuts'); break;
+      case 'notes': case 'calendar': case 'calculator': openApp(id); break;
       case 'run': setOverlay('run'); break;
       case 'lock': setOverlay(null); setLocked(true); break;
       case 'sleep': setOverlay(null); sleepRef.current?.(); break;
@@ -872,7 +876,7 @@ export default function DesktopOS() {
       }
       const id = globalActionFor(e);
       // the code workbench / viewer keep their own keys; only the window-level Alt combos pass through
-      if (e.target?.closest?.('.zb, .st-fv, .mp-editor, .os-wgt') && !/^(close|next|prev|desktop|taskview|pin\d)$/.test(id || '')) return;
+      if (e.target?.closest?.('.zb, .st-fv, .mp-editor, .os-wgt') && !/^(close|next|prev|desktop|taskview|desk\w+|pin\d)$/.test(id || '')) return;
       if (!id) {
         if (e.key === 'Escape' && s.overlay) { e.preventDefault(); setOverlay(null); }
         return;
@@ -884,8 +888,12 @@ export default function DesktopOS() {
         case 'start': setOverlay((o) => (o === 'start' ? null : 'start')); break;
         case 'run': setOverlay((o) => (o === 'run' ? null : 'run')); break;
         case 'taskview': setOverlay((o) => (o === 'taskview' ? null : 'taskview')); break;
-        case 'lock': case 'sleep': case 'settings': case 'personalize': case 'explorer': case 'bin': case 'taskmgr': s.runCommand(id); break;
+        case 'lock': case 'sleep': case 'settings': case 'personalize': case 'explorer': case 'bin': case 'taskmgr': case 'notes': case 'calendar': case 'calculator': s.runCommand(id); break;
         case 'help': s.runCommand('shortcuts'); break;
+        case 'deskNext': dispatch({ type: 'deskStep', dir: 1 }); break;
+        case 'deskPrev': dispatch({ type: 'deskStep', dir: -1 }); break;
+        case 'deskNew': dispatch({ type: 'deskAdd' }); setOverlay(null); break;
+        case 'deskSend': onAct((w) => { const n = ((s.wm.desk || 0) + 1) % Math.max(1, s.wm.desks); const to = n === 0 && s.wm.desks < MAX_DESKS ? s.wm.desks : n; dispatch({ type: 'moveToDesk', id: w.id, n: to }); dispatch({ type: 'deskGo', n: to }); }); break;
         case 'next': dispatch({ type: 'cycle', dir: 1 }); break;
         case 'prev': dispatch({ type: 'cycle', dir: -1 }); break;
         case 'close': onAct((w) => dispatch({ type: 'close', id: w.id })); break;
@@ -913,6 +921,9 @@ export default function DesktopOS() {
     { id: 'bin', en: 'Recycle Bin', ar: 'سلة المحذوفات', glyph: 'bin' },
     { id: 'settings', en: 'Settings', ar: 'الإعدادات', glyph: 'settings' },
     { id: 'personalize', en: 'Personalize', ar: 'التخصيص', glyph: 'personalize' },
+    { id: 'notes', en: 'Notes', ar: 'الملاحظات', glyph: 'notes' },
+    { id: 'calendar', en: 'Calendar', ar: 'التقويم', glyph: 'calendar' },
+    { id: 'calculator', en: 'Calculator', ar: 'الآلة الحاسبة', glyph: 'calculator' },
     { id: 'taskmgr', en: 'Task Manager', ar: 'مدير المهام', glyph: 'taskmgr' },
     { id: 'shortcuts', en: 'Keyboard shortcuts', ar: 'اختصارات الكيبورد', glyph: 'shortcuts' },
     { id: 'run', en: 'Run', ar: 'تشغيل', glyph: 'run' },
@@ -943,12 +954,15 @@ export default function DesktopOS() {
         sec={sec} onSec={applySec} onLockNow={() => runCommand('lock')} onSleepNow={() => runCommand('sleep')} onSelfLogout={logout} />;
       case 'taskmgr': return <TaskManagerApp list={wm.list} ar={ar} tt={tt} usage={desk.usage} onEnd={(id) => dispatch({ type: 'close', id })} onFocus={(id) => dispatch({ type: 'focus', id })} />;
       case 'shortcuts': return <ShortcutsApp ar={ar} tt={tt} />;
+      case 'notes': return <NotesApp uid={user?.id} tt={tt} ar={ar} />;
+      case 'calendar': return <CalendarApp uid={user?.id} tt={tt} ar={ar} onGo={(p) => navigate(p)} />;
+      case 'calculator': return <CalculatorApp tt={tt} />;
       default: return null;
     }
   };
 
   const brightness = Math.min(100, Math.max(40, Number(prefs.brightness) || 100));
-  const activeWin = wm.list.find((w) => w.id === wm.active && !w.min) || null;
+  const activeWin = wm.list.find((w) => w.id === wm.active && !w.min && (w.d || 0) === (wm.desk || 0)) || null;
   const appName = activeWin ? (ar ? APPS[activeWin.app].ar : APPS[activeWin.app].en) : tt('This PC', 'جهازي');
   // a menu-bar menu opened: Spotlight / Mission Control / Start / flyouts and any right-click menu close, so only one thing is ever open
   const closeFloating = useCallback(() => { setOverlay(null); setMenu(null); }, []);
@@ -991,7 +1005,13 @@ export default function DesktopOS() {
       { label: tt('Tile Right', 'تثبيت لليمين'), hint: 'Alt+→', disabled: !activeWin, onClick: () => activeWin && dispatch({ type: 'snap', id: activeWin.id, side: 'right' }) },
       'sep',
       { label: tt('Bring All to Front', 'إظهار الكل'), onClick: () => dispatch({ type: 'restoreAll' }) },
-      ...wm.list.map((w) => ({ label: winTitle(w, APPS, ar), check: w.id === wm.active, onClick: () => dispatch({ type: 'focus', id: w.id }) })),
+      'sep',
+      { label: tt('New desktop', 'مساحة عمل جديدة'), hint: 'Ctrl+Alt+N', disabled: (wm.desks || 1) >= MAX_DESKS, onClick: () => dispatch({ type: 'deskAdd' }) },
+      { label: tt('Next desktop', 'المساحة التالية'), hint: 'Ctrl+Alt+→', disabled: (wm.desks || 1) < 2, onClick: () => dispatch({ type: 'deskStep', dir: 1 }) },
+      { label: tt('Previous desktop', 'المساحة السابقة'), hint: 'Ctrl+Alt+←', disabled: (wm.desks || 1) < 2, onClick: () => dispatch({ type: 'deskStep', dir: -1 }) },
+      { label: tt('Move to next desktop', 'نقل للمساحة التالية'), hint: 'Ctrl+Alt+Shift+]', disabled: !activeWin, onClick: () => { if (!activeWin) return; const n = ((wm.desk || 0) + 1) % Math.max(1, wm.desks || 1); const to = n === 0 && (wm.desks || 1) < MAX_DESKS ? (wm.desks || 1) : n; dispatch({ type: 'moveToDesk', id: activeWin.id, n: to }); dispatch({ type: 'deskGo', n: to }); } },
+      'sep',
+      ...wm.list.map((w) => ({ label: `${(wm.desks || 1) > 1 ? `${(w.d || 0) + 1} · ` : ''}${winTitle(w, APPS, ar)}`, check: w.id === wm.active, onClick: () => dispatch({ type: 'focus', id: w.id }) })),
     ] },
     { id: 'help', label: tt('Help', 'مساعدة'), hideSmall: true, items: [
       { label: tt('Keyboard shortcuts', 'اختصارات الكيبورد'), onClick: () => runCommand('shortcuts') },
@@ -1026,7 +1046,7 @@ export default function DesktopOS() {
     };
   });
 
-  const wmax = wm.list.some((w) => w.id === wm.active && w.max && !w.min);
+  const wmax = wm.list.some((w) => w.id === wm.active && w.max && !w.min && (w.d || 0) === (wm.desk || 0));
   useEffect(() => {
     if (!wmax || !dockPeek) return undefined;
     const h = (e) => { if (e.clientY < window.innerHeight - 120) setDockPeek(false); };
@@ -1042,7 +1062,7 @@ export default function DesktopOS() {
 
   return createPortal(
     <div
-      className={`os os--${theme === 'dark' ? 'dark' : 'light'}${wp.dark === false ? ' os--lightwp' : ''}${mobile ? ' os--mobile' : ''}${wmax ? ' os--wmax' : ''}${wmax && dockPeek ? ' os--dockpeek' : ''}`} dir={dir}
+      className={`os os--${theme === 'dark' ? 'dark' : 'light'}${wp.dark === false ? ' os--lightwp' : ''}${mobile ? ' os--mobile' : ''}${wmax ? ' os--wmax' : ''}${prefs.fontScale === 'l' ? ' os--fs-l' : prefs.fontScale === 'xl' ? ' os--fs-xl' : ''}${prefs.reduceMotion ? ' os--rm' : ''}${prefs.highContrast ? ' os--hc' : ''}${wmax && dockPeek ? ' os--dockpeek' : ''}`} dir={dir}
       style={{ '--os-accent': prefs.accent, '--cell-w': `${cell.w}px`, '--cell-h': `${cell.h}px`, '--glyph': `${cell.g}px` }}
       onPointerDownCapture={(e) => {
         if (!e.target.closest('.os-ctx')) setMenu(null);
@@ -1104,14 +1124,14 @@ export default function DesktopOS() {
 
       <div className="os-wins">
         {wm.list.map((w) => (
-          <WindowFrame key={w.id} win={w} title={winTitle(w, APPS, ar)} active={wm.active === w.id} dir={dir} tt={tt} dispatch={dispatch} unified={w.app === 'explorer'} onAssist={setAssist} icon={<AppGlyph app={w.app} size={16} />}>
+          <WindowFrame key={w.id} off={(w.d || 0) !== (wm.desk || 0)} win={w} title={winTitle(w, APPS, ar)} active={wm.active === w.id} dir={dir} tt={tt} dispatch={dispatch} unified={w.app === 'explorer'} onAssist={setAssist} icon={<AppGlyph app={w.app} size={16} />}>
             {bodyOf(w)}
           </WindowFrame>
         ))}
-        <SnapAssist assist={assist} list={wm.list} titleOf={(w) => winTitle(w, APPS, ar)} iconOf={(w) => <AppGlyph app={w.app} size={20} />} tt={tt} dispatch={dispatch} setAssist={setAssist} />
+        <SnapAssist assist={assist} list={wm.list.filter((w) => (w.d || 0) === (wm.desk || 0))} titleOf={(w) => winTitle(w, APPS, ar)} iconOf={(w) => <AppGlyph app={w.app} size={20} />} tt={tt} dispatch={dispatch} setAssist={setAssist} />
       </div>
 
-      {overlay === 'taskview' && <TaskView list={wm.list} ar={ar} tt={tt} onClose={() => setOverlay(null)} onPick={(id) => { dispatch({ type: 'focus', id }); setOverlay(null); }} onCloseWin={(id) => dispatch({ type: 'close', id })} />}
+      {overlay === 'taskview' && <TaskView list={wm.list} desk={wm.desk || 0} desks={wm.desks || 1} maxDesks={MAX_DESKS} onDesk={(n) => dispatch({ type: 'deskGo', n })} onAddDesk={() => dispatch({ type: 'deskAdd' })} onRemoveDesk={(n) => dispatch({ type: 'deskRemove', n })} onMove={(id, n) => dispatch({ type: 'moveToDesk', id, n })} ar={ar} tt={tt} onClose={() => setOverlay(null)} onPick={(id) => { dispatch({ type: 'focus', id }); setOverlay(null); }} onCloseWin={(id) => dispatch({ type: 'close', id })} />}
       {overlay === 'start' && (
         <StartMenu
           ar={ar} tt={tt} user={user} apps={startApps} desktopItems={deskItems} onClose={() => setOverlay(null)}
@@ -1135,7 +1155,7 @@ export default function DesktopOS() {
       <MenuBar ar={ar} tt={tt} menus={menus} tray={tray} onOpen={closeFloating} closeKey={`${overlay || ''}${menu ? 'm' : ''}${dlg ? 'd' : ''}${locked || asleep ? 'l' : ''}`} />
       {wmax && !dockPeek && <div className="os-dockhot" onPointerEnter={() => setDockPeek(true)} aria-hidden="true" />}
       <Dock
-        items={dockItems} tt={tt} mag={prefs.dockMag !== false} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}
+        items={dockItems} tt={tt} mag={prefs.dockMag !== false && !prefs.reduceMotion} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}
         onBin={() => runCommand('bin')} binFull={desk.binFull} binLabel={tt('Recycle Bin', 'سلة المحذوفات')}
         onPortal={() => runCommand('portal')} portalLabel={tt('UIP Portal', 'بوابة UIP')}
         onLogout={() => runCommand('logout')} logoutLabel={tt('Sign out', 'تسجيل الخروج')}

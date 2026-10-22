@@ -162,6 +162,9 @@ export default function MobileShell(p) {
     { key: 'bin', app: 'bin', label: tt('Recycle Bin', 'سلة المحذوفات'), run: () => openExplorer({ view: 'trash' }) },
     { key: 'settings', app: 'settings', label: tt('Settings', 'الإعدادات'), run: () => runCommand('settings') },
     { key: 'personalize', app: 'personalize', label: tt('Personalize', 'التخصيص'), run: () => runCommand('personalize') },
+    { key: 'notes', app: 'notes', label: tt('Notes', 'الملاحظات'), run: () => runCommand('notes') },
+    { key: 'calendar', app: 'calendar', label: tt('Calendar', 'التقويم'), run: () => runCommand('calendar') },
+    { key: 'calculator', app: 'calculator', label: tt('Calculator', 'الآلة الحاسبة'), run: () => runCommand('calculator') },
     { key: 'taskmgr', app: 'taskmgr', label: tt('Task Manager', 'مدير المهام'), run: () => runCommand('taskmgr') },
     { key: 'portal', app: 'portal', label: tt('UIP Portal', 'بوابة UIP'), run: () => runCommand('portal') },
   ], [tt, openExplorer, runCommand]);

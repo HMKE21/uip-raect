@@ -19,6 +19,9 @@ export const APPS = {
   settings: { en: 'Settings', ar: 'الإعدادات', size: { w: 880, h: 590 }, singleton: true, pin: true },
   taskmgr: { en: 'Task Manager', ar: 'مدير المهام', size: { w: 680, h: 480 }, singleton: true, pin: false },
   shortcuts: { en: 'Keyboard shortcuts', ar: 'اختصارات الكيبورد', size: { w: 760, h: 600 }, singleton: true, pin: true },
+  notes: { en: 'Notes', ar: 'الملاحظات', size: { w: 820, h: 560 }, singleton: true, pin: true },
+  calendar: { en: 'Calendar', ar: 'التقويم', size: { w: 920, h: 600 }, singleton: true, pin: true },
+  calculator: { en: 'Calculator', ar: 'الآلة الحاسبة', size: { w: 400, h: 600 }, singleton: true, pin: true },
   // one window per file (title = the file name): images / PDFs / media / ZIPs, and the code editor
   viewer: { en: 'Viewer', ar: 'العارض', size: { w: 1000, h: 660 }, singleton: false, pin: false },
   editor: { en: 'Code editor', ar: 'محرر الأكواد', size: { w: 1120, h: 700 }, singleton: false, pin: false },
@@ -299,6 +302,22 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
             <Section title={tt('Icon size', 'حجم الأيقونات')}>
               <div className="os-seg">
                 {[['s', tt('Small', 'صغير')], ['m', tt('Medium', 'متوسط')], ['l', tt('Large', 'كبير')]].map(([k, l]) => <button key={k} type="button" className={prefs.iconSize === k ? 'is-on' : ''} onClick={() => setPrefs({ iconSize: k })}>{l}</button>)}
+              </div>
+            </Section>
+            <Section title={tt('Accessibility', 'إمكانيات الوصول')}>
+              <p className="os-set__hint os-set__hint--top">{tt('Text size inside windows and dialogs', 'حجم الخط داخل النوافذ والرسائل')}</p>
+              <div className="os-seg">
+                {[['m', tt('Normal', 'عادي')], ['l', tt('Large', 'كبير')], ['xl', tt('Extra large', 'كبير جدًا')]].map(([k, l]) => <button key={k} type="button" className={(prefs.fontScale || 'm') === k ? 'is-on' : ''} onClick={() => setPrefs({ fontScale: k })}>{l}</button>)}
+              </div>
+              <div className="os-ic-list" style={{ marginTop: 12 }}>
+                {[['reduceMotion', tt('Reduce motion', 'تقليل الحركة'), tt('No window animations, no Dock zoom.', 'من غير حركات للنوافذ ولا تكبير للـ Dock.')],
+                  ['highContrast', tt('High contrast', 'تباين عالي'), tt('Solid backgrounds, stronger text and borders.', 'خلفيات ثابتة ونصوص وحدود أوضح.')]].map(([k, name, hint]) => (
+                  <label key={k} className={`os-ic-row${prefs[k] ? '' : ' is-off'}`}>
+                    <span className="os-ic-row__t" dir="auto"><b>{name}</b><br /><small>{hint}</small></span>
+                    <span className="os-ic-row__s">{prefs[k] ? tt('On', 'شغّال') : tt('Off', 'مقفول')}</span>
+                    <input type="checkbox" role="switch" checked={!!prefs[k]} onChange={(e) => setPrefs({ [k]: e.target.checked })} aria-label={name} />
+                  </label>
+                ))}
               </div>
             </Section>
           </>

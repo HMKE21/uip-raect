@@ -16,7 +16,7 @@ const Glyph = {
 };
 
 /** A draggable / resizable / snappable window frame. Drag and resize move the DOM node directly and commit once on release. */
-function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onAssist, children }) {
+function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onAssist, off, children }) {
   const ref = useRef(null);
   const [preview, setPreview] = useState(null);
   const [fly, setFly] = useState(null); // { x, y } of the snap-layouts flyout, relative to the windows area
@@ -35,7 +35,7 @@ function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onA
   const flyKeep = () => clearTimeout(closeT.current);
   useEffect(() => () => { clearTimeout(openT.current); clearTimeout(closeT.current); }, []);
   useEffect(() => { if (!fly) return undefined; const k = (e) => { if (e.key === 'Escape') setFly(null); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [fly]);
-  const cls = ['os-win', unified && 'os-win--unified', active && 'is-active', win.min && 'is-min', win.max && 'is-max', win.snap && `is-snap-${win.snap}`].filter(Boolean).join(' ');
+  const cls = ['os-win', unified && 'os-win--unified', active && 'is-active', win.min && 'is-min', off && 'is-off', win.max && 'is-max', win.snap && `is-snap-${win.snap}`].filter(Boolean).join(' ');
   const free = !win.max && !win.snap;
   const snapBox = win.snap && !win.max ? snapStyle(win.snap) : null;
 
@@ -126,7 +126,7 @@ function WindowFrame({ win, title, active, dir, icon, tt, dispatch, unified, onA
   return (
     <>
       <div
-        ref={ref} id={`os-${win.id}`} className={cls} tabIndex={-1} role="dialog" aria-label={title}
+        ref={ref} id={`os-${win.id}`} data-app={win.app} className={cls} tabIndex={-1} role="dialog" aria-label={title}
         style={free ? { left: win.x, top: win.y, width: win.w, height: win.h, zIndex: win.z } : { ...(snapBox || {}), zIndex: win.z }}
         onPointerDownCapture={() => { if (!active) dispatch({ type: 'focus', id: win.id }); }}
         onPointerDown={unified ? (e) => { if (e.target.closest('[data-os-drag]') && !e.target.closest('button, input, a, label, select')) startDrag(e); } : undefined}

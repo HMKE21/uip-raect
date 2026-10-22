@@ -211,6 +211,9 @@ const RUN_ITEMS = [
   { cmd: 'taskmgr', en: 'Task Manager', ar: 'مدير المهام', glyph: 'taskmgr' },
   { cmd: 'bin', en: 'Recycle Bin', ar: 'سلة المحذوفات', glyph: 'bin' },
   { cmd: 'shortcuts', en: 'Keyboard shortcuts', ar: 'اختصارات الكيبورد', glyph: 'shortcuts' },
+  { cmd: 'notes', en: 'Notes', ar: 'الملاحظات', glyph: 'notes' },
+  { cmd: 'calendar', en: 'Calendar', ar: 'التقويم', glyph: 'calendar' },
+  { cmd: 'calculator', en: 'Calculator', ar: 'الآلة الحاسبة', glyph: 'calculator' },
   { cmd: 'lock', en: 'Lock screen', ar: 'قفل الشاشة', glyph: 'lock' },
   { cmd: 'portal', en: 'Back to portal', ar: 'الرجوع للموقع', glyph: 'portal' },
   { cmd: 'logout', en: 'Sign out', ar: 'تسجيل الخروج', glyph: 'logout' },
@@ -358,21 +361,39 @@ export function StartMenu({ ar, tt, user, apps, desktopItems, onOpenApp, onOpenN
   );
 }
 
-export function TaskView({ list, ar, tt, onPick, onClose, onCloseWin }) {
+export function TaskView({ list, ar, tt, onPick, onClose, onCloseWin, desk = 0, desks = 1, maxDesks = 6, onDesk, onAddDesk, onRemoveDesk, onMove }) {
+  const onThis = list.filter((w) => (w.d || 0) === desk);
+  const countOf = (n) => list.filter((w) => (w.d || 0) === n).length;
+  const card = (w) => (
+    <div key={w.id} className="os-tv-card" draggable onDragStart={(e) => { e.dataTransfer.setData('text/plain', w.id); e.dataTransfer.effectAllowed = 'move'; }}
+      onPointerDown={(e) => e.stopPropagation()} onClick={() => onPick(w.id)} role="button" tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter') onPick(w.id); }}>
+      <header><AppGlyph app={w.app} size={18} /><span dir="auto">{winTitle(w, APPS, ar)}</span>
+        <button type="button" aria-label={tt('Close', 'إغلاق')} onClick={(e) => { e.stopPropagation(); onCloseWin(w.id); }}><Icon name="x" size={13} /></button>
+      </header>
+      <div className="os-tv-card__body"><AppGlyph app={w.app} size={64} /></div>
+    </div>
+  );
+  const dropOn = (n) => ({
+    onDragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; },
+    onDrop: (e) => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) onMove?.(id, n); },
+  });
   return (
     <div className="os-taskview" onPointerDown={onClose} onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }} tabIndex={-1} ref={(el) => el?.focus()}>
-      {list.length === 0 && <p className="os-taskview__empty">{tt('No open windows.', 'مفيش نوافذ مفتوحة.')}</p>}
-      <div className="os-taskview__grid">
-        {list.map((w) => (
-          <div key={w.id} className="os-tv-card" onPointerDown={(e) => e.stopPropagation()} onClick={() => onPick(w.id)} role="button" tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter') onPick(w.id); }}>
-            <header><AppGlyph app={w.app} size={18} /><span dir="auto">{winTitle(w, APPS, ar)}</span>
-              <button type="button" aria-label={tt('Close', 'إغلاق')} onClick={(e) => { e.stopPropagation(); onCloseWin(w.id); }}><Icon name="x" size={13} /></button>
-            </header>
-            <div className="os-tv-card__body"><AppGlyph app={w.app} size={64} /></div>
+      <div className="os-spaces" onPointerDown={(e) => e.stopPropagation()} role="tablist" aria-label={tt('Desktops', 'مساحات العمل')}>
+        {Array.from({ length: desks }, (_, n) => (
+          <div key={n} className={`os-space${n === desk ? ' is-on' : ''}`} {...dropOn(n)}>
+            <button type="button" role="tab" aria-selected={n === desk} onClick={() => onDesk?.(n)}>
+              <b>{tt(`Desktop ${n + 1}`, `مساحة ${n + 1}`)}</b><small>{countOf(n)}</small>
+            </button>
+            {desks > 1 && <button type="button" className="os-space__x" aria-label={tt('Remove desktop', 'حذف المساحة')} title={tt('Remove desktop (its windows move to the previous one)', 'حذف المساحة (نوافذها بتروح للي قبلها)')} onClick={() => onRemoveDesk?.(n)}><Icon name="x" size={12} /></button>}
           </div>
         ))}
+        {desks < maxDesks && <button type="button" className="os-space os-space--add" {...dropOn('new')} onClick={onAddDesk} aria-label={tt('New desktop', 'مساحة جديدة')}><Icon name="plus" size={15} /></button>}
       </div>
+      {onThis.length === 0 && <p className="os-taskview__empty">{tt('No open windows on this desktop.', 'مفيش نوافذ مفتوحة في المساحة دي.')}</p>}
+      <div className="os-taskview__grid">{onThis.map(card)}</div>
+      {desks > 1 && <p className="os-taskview__tip">{tt('Drag a window onto another desktop to move it there.', 'اسحب النافذة على مساحة تانية عشان تنقلها.')}</p>}
     </div>
   );
 }

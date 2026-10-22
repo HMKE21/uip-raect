@@ -1,5 +1,5 @@
 const prefsKey = (uid) => `uip_desktop_prefs_v1_${uid ?? 'anon'}`; // per account: another student on the same browser never inherits it
-export const DEFAULT_PREFS = { wallpaper: 'sequoia', customWallpaper: null, accent: '#0a84ff', iconSize: 'm', dockMag: true, openMax: true, brightness: 100, hiddenIcons: [], hiddenDock: [], shortcuts: [] };
+export const DEFAULT_PREFS = { wallpaper: 'sequoia', customWallpaper: null, accent: '#0a84ff', iconSize: 'm', dockMag: true, openMax: true, brightness: 100, hiddenIcons: [], hiddenDock: [], shortcuts: [], fontScale: 'm', reduceMotion: false, highContrast: false };
 /** macOS accent palette (blue, purple, pink, red, orange, yellow, green, graphite) + the old UIP indigo. */
 export const ACCENTS = ['#0a84ff', '#bf5af2', '#ff375f', '#ff453a', '#ff9f0a', '#ffd60a', '#30d158', '#8e8e93', '#6366f1'];
 
@@ -16,7 +16,7 @@ export const DESK_ICONS = [
 ];
 export const DOCK_ICONS = [
   ['launchpad', 'Launchpad', 'لوحة التطبيقات', 'launchpad'], ['explorer', 'This PC', 'جهازي', 'explorer'], ['settings', 'Settings', 'الإعدادات', 'settings'],
-  ['shortcuts', 'Keyboard shortcuts', 'اختصارات الكيبورد', 'shortcuts'], ['lock', 'Lock screen', 'قفل الشاشة', 'lock'], ['portal', 'UIP Portal', 'بوابة UIP', 'portal'], ['logout', 'Sign out', 'تسجيل الخروج', 'logout'], ['bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'],
+  ['shortcuts', 'Keyboard shortcuts', 'اختصارات الكيبورد', 'shortcuts'], ['notes', 'Notes', 'الملاحظات', 'notes'], ['calendar', 'Calendar', 'التقويم', 'calendar'], ['calculator', 'Calculator', 'الآلة الحاسبة', 'calculator'], ['lock', 'Lock screen', 'قفل الشاشة', 'lock'], ['portal', 'UIP Portal', 'بوابة UIP', 'portal'], ['logout', 'Sign out', 'تسجيل الخروج', 'logout'], ['bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'],
 ];
 export const NO_ICONS = []; // one shared empty list, so memo dependencies do not change on every render
 /** ids of My PC items the person put on the desktop as shortcuts (the items themselves stay where they are). */
