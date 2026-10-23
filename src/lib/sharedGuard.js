@@ -12,6 +12,31 @@
  */
 import { isDevtoolsShortcut } from './examDevtoolsGuard';
 
+// set only while a visible "Copy" button (shown when the owner allowed downloads) runs its execCommand fallback
+let copyAllowed = false;
+
+/**
+ * Copies text for the "Copy" button of a link that allows downloading. Uses the async clipboard API; when that is
+ * unavailable it falls back to a hidden textarea + execCommand, letting that one `copy` event through the guard.
+ */
+export async function copyPlain(text) {
+  try {
+    if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); return true; }
+  } catch { /* fall through to the legacy path */ }
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none';
+  document.body.appendChild(ta);
+  ta.select();
+  copyAllowed = true;
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch { ok = false; }
+  copyAllowed = false;
+  ta.remove();
+  return ok;
+}
+
 const BLOCKED_CTRL = new Set(['KeyS', 'KeyP', 'KeyU', 'KeyC', 'KeyX', 'KeyA', 'KeyO']);
 
 function debuggerProbe() {
@@ -43,6 +68,7 @@ function consoleProbe() {
 /** Starts the guard; returns a cleanup function. `onLock(true|false)` fires only on transitions. */
 export function startSharedGuard({ onLock, onCapture, intervalMs = 800 } = {}) {
   const stop = (e) => {
+    if (copyAllowed && e.type === 'copy') return;
     // search boxes inside the viewers still need to select their own text
     if (e.type === 'selectstart' && /^(INPUT|TEXTAREA)$/.test(e.target?.tagName || e.target?.parentElement?.tagName || '')) return;
     e.preventDefault(); e.stopPropagation();

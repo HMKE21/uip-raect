@@ -16,6 +16,7 @@ import '../styles/css/drive-share-pro.css'; // professional visual layer
 import '../styles/css/share-access.css';
 import '../styles/css/drive-share-fix.css'; // header stacking + file viewer (code LTR, phone master/detail) — must stay last
 import '../styles/css/shared-page-life.css'; // light floating bubbles + soft animations
+import '../styles/css/shared-page-v2.css'; // copy / search buttons + phone & tablet polish — must stay last
 
 // floating bubbles: position (%), size, hue, speed, start offset, sway
 const BUBBLES = [
@@ -454,7 +455,7 @@ export default function SharedItem() {
                     ))}
                   </nav>
                   <div className="shp__bar-tools">
-                    {listOpen && items.length > 6 && (
+                    {listOpen && items.length > 1 && (
                       <label className="shp__find">
                         <Icon name="search" size={14} />
                         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Filter…', 'بحث في العناصر…')} aria-label={t('Filter items', 'بحث في العناصر')} />
@@ -510,7 +511,7 @@ export default function SharedItem() {
                     {preview.failed && <p className="shp__note">{t('Could not load the preview.', 'تعذّر تحميل المعاينة.')}</p>}
                     {preview.big && <p className="shp__note">{canDl ? t('This file is too large to preview — download it to open it.', 'الملف كبير على المعاينة — نزّله عشان تفتحه.') : t('This file is too large to preview.', 'الملف كبير على المعاينة.')}</p>}
                     {preview.none && <p className="shp__note">{canDl ? t('No preview for this file type — download it to open it.', 'مفيش معاينة لنوع الملف ده — نزّله عشان تفتحه.') : t('No preview is available for this file type.', 'مفيش معاينة متاحة لنوع الملف ده.')}</p>}
-                    {preview.blob && <ProtectedFile key={preview.id} name={preview.name} blob={preview.blob} mark={mark} tt={t} rtl={ar} onFail={() => setPreview((p) => p && { ...p, blob: null, failed: true })} />}
+                    {preview.blob && <ProtectedFile key={preview.id} name={preview.name} blob={preview.blob} mark={mark} tt={t} rtl={ar} canCopy={canDl} onFail={() => setPreview((p) => p && { ...p, blob: null, failed: true })} />}
                   </div>
                 </div>
               </section>

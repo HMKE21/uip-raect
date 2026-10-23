@@ -3,7 +3,7 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { basicSetup } from 'codemirror';
 import { indentWithTab, undo, redo, selectAll, undoDepth, redoDepth } from '@codemirror/commands';
-import { search, SearchQuery, setSearchQuery } from '@codemirror/search';
+import { search, SearchQuery, setSearchQuery, openSearchPanel, closeSearchPanel, searchPanelOpen } from '@codemirror/search';
 import { StreamLanguage } from '@codemirror/language';
 import { javascript, javascriptLanguage } from '@codemirror/lang-javascript';
 import { html, htmlLanguage } from '@codemirror/lang-html';
@@ -147,7 +147,7 @@ function editActions(v) {
  * One CodeMirror view for the whole workbench. Each open file keeps its own EditorState
  * (undo history, selection, scroll) in `statesRef`, swapped in when its tab becomes active.
  */
-export default function CodeEditor({ docId, path, initialText, onChange, onCursor, onContext, readOnly, wrap, fontSize, reveal, theme, ghost }) {
+export default function CodeEditor({ docId, path, initialText, onChange, onCursor, onContext, readOnly, wrap, fontSize, reveal, theme, ghost, findTick }) {
   const host = useRef(null);
   const view = useRef(null);
   const states = useRef(new Map());
@@ -288,6 +288,14 @@ export default function CodeEditor({ docId, path, initialText, onChange, onCurso
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reveal?.key, docId]);
+
+  // a "Search" button outside the editor (phones have no Ctrl+F): toggles CodeMirror's own search panel
+  useEffect(() => {
+    const v = view.current;
+    if (!v || !findTick) return;
+    if (searchPanelOpen(v.state) && findTick % 2 === 0) closeSearchPanel(v); else openSearchPanel(v);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [findTick]);
 
   // turning the AI autocomplete off removes a suggestion that is still showing
   useEffect(() => { if (!ghost?.enabled) view.current?.dispatch({ effects: clearGhostEffect }); }, [ghost?.enabled]);

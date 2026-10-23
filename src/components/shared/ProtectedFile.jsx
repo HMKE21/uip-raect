@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { copyPlain } from '../../lib/sharedGuard';
 import { unzipSync } from 'fflate';
 import Icon from '../Icon';
 import { ProtectedImage, ProtectedPdf } from './ProtectedViewers';
@@ -153,12 +154,120 @@ function ThemeMenu({ value, onChange, label }) {
   );
 }
 
-function ProtectedCode({ name, text, cut, tt }) {
+/** Find-in-page for rendered documents (Word / PowerPoint / Markdown): highlights every hit and steps through them. Uses the CSS Custom Highlight API, so no content is touched. */
+function DocSearch({ hostRef, tt }) {
+  const supported = typeof CSS !== 'undefined' && !!CSS.highlights && typeof Highlight !== 'undefined';
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const [idx, setIdx] = useState(0);
+  const [total, setTotal] = useState(0);
+  const ranges = useRef([]);
+  const input = useRef(null);
+
+  const collect = (needle) => {
+    const host = hostRef.current;
+    const out = [];
+    if (!host || !needle) return out;
+    const low = needle.toLowerCase();
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.parentElement?.closest('.shp-find') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT) });
+    let n = walker.nextNode();
+    while (n && out.length < 2000) {
+      const t = n.nodeValue.toLowerCase();
+      let at = t.indexOf(low);
+      while (at !== -1 && out.length < 2000) {
+        const r = document.createRange();
+        r.setStart(n, at); r.setEnd(n, at + low.length);
+        out.push(r);
+        at = t.indexOf(low, at + low.length);
+      }
+      n = walker.nextNode();
+    }
+    return out;
+  };
+
+  const paint = (list, cur) => {
+    try {
+      CSS.highlights.delete('shp-find'); CSS.highlights.delete('shp-find-cur');
+      if (!list.length) return;
+      CSS.highlights.set('shp-find', new Highlight(...list));
+      if (list[cur]) {
+        CSS.highlights.set('shp-find-cur', new Highlight(list[cur]));
+        const el = list[cur].startContainer.parentElement;
+        el?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      }
+    } catch { /* highlighting is a nicety */ }
+  };
+
+  // recompute when the query changes, and when the document renders / changes after the query was typed
+  useEffect(() => {
+    if (!supported) return undefined;
+    const run = (keep) => {
+      const list = collect(q.trim());
+      ranges.current = list;
+      setTotal(list.length);
+      const cur = keep ? Math.min(idx, Math.max(0, list.length - 1)) : 0;
+      if (!keep) setIdx(0);
+      paint(list, cur);
+    };
+    run(false);
+    const host = hostRef.current;
+    let timer = 0;
+    const mo = host && q.trim() ? new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(() => run(true), 200); }) : null;
+    mo?.observe(host, { childList: true, subtree: true, characterData: true });
+    return () => { clearTimeout(timer); mo?.disconnect(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
+  useEffect(() => { if (supported) paint(ranges.current, idx); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [idx]);
+  useEffect(() => () => { try { CSS.highlights?.delete('shp-find'); CSS.highlights?.delete('shp-find-cur'); } catch { /* ignore */ } }, []);
+  useEffect(() => { if (open) input.current?.focus(); }, [open]);
+
+  if (!supported) return null;
+  const step = (d) => { if (total) setIdx((i) => (i + d + total) % total); };
+  const close = () => { setOpen(false); setQ(''); };
+  if (!open) {
+    return (
+      <div className="shp-find">
+        <div className="shp-find__box">
+          <button type="button" className="shp-find__btn" onClick={() => setOpen(true)} aria-label={tt('Search in this file', 'بحث داخل الملف')}>
+            <Icon name="search" size={15} /><span>{tt('Search', 'بحث')}</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="shp-find is-open"><div className="shp-find__box" role="search">
+      <Icon name="search" size={15} />
+      <input ref={input} type="search" value={q} dir="auto" onChange={(e) => setQ(e.target.value)} placeholder={tt('Find in this file…', 'ابحث داخل الملف…')} aria-label={tt('Search in this file', 'بحث داخل الملف')}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); step(e.shiftKey ? -1 : 1); } else if (e.key === 'Escape') close(); }} />
+      <span className="shp-find__n" aria-live="polite">{q.trim() ? (total ? `${idx + 1} / ${total}` : tt('No matches', 'مفيش نتائج')) : ''}</span>
+      <button type="button" onClick={() => step(-1)} disabled={!total} aria-label={tt('Previous', 'السابق')}><Icon name="chevron-up" size={15} /></button>
+      <button type="button" onClick={() => step(1)} disabled={!total} aria-label={tt('Next', 'التالي')}><Icon name="chevron-down" size={15} /></button>
+      <button type="button" onClick={close} aria-label={tt('Close search', 'إغلاق البحث')}><Icon name="x" size={15} /></button>
+    </div></div>
+  );
+}
+
+/** A rendered document (Word / PowerPoint) with a find bar pinned on top. */
+function SearchableDoc({ className, tt, children }) {
+  const host = useRef(null);
+  return (
+    <div className={className} ref={host}>
+      <DocSearch hostRef={host} tt={tt} />
+      {children}
+    </div>
+  );
+}
+
+function ProtectedCode({ name, text, cut, tt, canCopy, blob }) {
   const site = useSiteTheme();
   const [theme, setTheme] = useState(site);
   useEffect(() => { setTheme(site); }, [site]);
   const [wrap, setWrap] = useState(false);
   const [size, setSize] = useState(13.5);
+  const [find, setFind] = useState(0);
+  const [copied, setCopied] = useState('');
   const lines = useMemo(() => (text.match(/\n/g) || []).length + 1, [text]);
   return (
     <div className="shp-code" style={themeVars(theme)} dir="ltr">
@@ -166,6 +275,20 @@ function ProtectedCode({ name, text, cut, tt }) {
         <strong title={name}>{name.split('/').pop()}</strong>
         <span>{languageName(name)} · {lines.toLocaleString()} {tt('lines', 'سطر')}</span>
         <i />
+        <button type="button" className="shp-code__find" onClick={() => setFind((n) => n + 1)} aria-label={tt('Search in this file', 'بحث داخل الملف')}><Icon name="search" size={14} /><span>{tt('Search', 'بحث')}</span></button>
+        {canCopy && (
+          <button type="button" className={`shp-code__copy${copied === 'ok' ? ' is-done' : copied === 'fail' ? ' is-fail' : ''}`} aria-label={tt('Copy the code', 'نسخ الكود')}
+            onClick={async () => {
+              let all = text;
+              // a big file is shown cut: copy the whole file, not just the part on screen
+              if (cut && blob) { try { all = await blob.text(); } catch { all = text; } }
+              const ok = await copyPlain(all);
+              setCopied(ok ? 'ok' : 'fail');
+              setTimeout(() => setCopied(''), 1600);
+            }}>
+            <Icon name={copied === 'ok' ? 'check' : 'copy'} size={14} /><span>{copied === 'ok' ? tt('Copied', 'تم النسخ') : copied === 'fail' ? tt('Failed', 'فشل') : tt('Copy', 'نسخ')}</span>
+          </button>
+        )}
         <button type="button" className={wrap ? 'is-on' : ''} onClick={() => setWrap((w) => !w)}>{tt('Wrap', 'التفاف')}</button>
         <button type="button" onClick={() => setSize((s) => Math.max(10, s - 1))} aria-label="A−">A−</button>
         <button type="button" onClick={() => setSize((s) => Math.min(22, s + 1))} aria-label="A+">A+</button>
@@ -174,7 +297,7 @@ function ProtectedCode({ name, text, cut, tt }) {
       <div className="shp-code__body">
         <div className="zb-cm-wrap" onMouseDown={(e) => { if (e.button === 0 && e.target.closest?.('.cm-content, .cm-gutters')) e.preventDefault(); }} onDragStart={(e) => e.preventDefault()}>
           <Suspense fallback={<Spin />}>
-            <CodeEditor docId={`${name}:${text.length}`} path={name} initialText={text} readOnly wrap={wrap} fontSize={size} theme={theme} />
+            <CodeEditor docId={`${name}:${text.length}`} path={name} initialText={text} readOnly wrap={wrap} fontSize={size} theme={theme} findTick={find} />
           </Suspense>
         </div>
       </div>
@@ -183,7 +306,7 @@ function ProtectedCode({ name, text, cut, tt }) {
   );
 }
 
-function TextKind({ name, blob, tt, kind, rtl, mark }) {
+function TextKind({ name, blob, tt, kind, rtl, mark, canCopy }) {
   const site = useSiteTheme();
   const limit = kind === 'json' ? MAX_JSON_BYTES : MAX_TEXT_BYTES;
   const { text, cut } = useText(blob, limit);
@@ -200,7 +323,7 @@ function TextKind({ name, blob, tt, kind, rtl, mark }) {
     return (
       <div className="shp-sheet shp-sheet--json">
         <Suspense fallback={<Spin />}>
-          <JsonViewer locked value={parsed.value} text={text} filename={name} meta={e === 'jsonl' || e === 'ndjson' ? 'JSON Lines' : undefined}
+          <JsonViewer locked={!canCopy} value={parsed.value} text={text} filename={name} meta={e === 'jsonl' || e === 'ndjson' ? 'JSON Lines' : undefined}
             labels={{ tree: tt('Tree', 'شجرة'), outline: tt('Outline', 'هيكل'), theme: tt('Theme', 'الثيم'), dark: tt('Dark', 'داكن'), light: tt('Light', 'فاتح'), code: tt('Code', 'كود'), search: tt('Search keys & values…', 'ابحث في المفاتيح والقيم…'), expand: tt('Expand all', 'فتح الكل'), collapse: tt('Collapse all', 'طي الكل'), full: tt('Full screen', 'ملء الشاشة'), exit: tt('Exit full screen', 'إنهاء ملء الشاشة'), nodes: tt('nodes', 'عقدة'), lines: tt('lines', 'سطر'), path: tt('Click a node to see its path', 'اضغط على عقدة لعرض مسارها'), matches: tt('matches', 'نتيجة'), wrap: tt('Wrap', 'التفاف') }} />
         </Suspense>
       </div>
@@ -210,13 +333,13 @@ function TextKind({ name, blob, tt, kind, rtl, mark }) {
     const th = themeById(site);
     return (
       <div className="shp-sheet shp-sheet--md">
-        <Suspense fallback={<Spin />}><MarkdownView locked text={text} path={name} tt={tt} themeEd={th.ed} rtl={rtl} /></Suspense>
+        <Suspense fallback={<Spin />}><MarkdownView locked={!canCopy} text={text} path={name} tt={tt} themeEd={th.ed} rtl={rtl} /></Suspense>
       </div>
     );
   }
   if (!text) return <Note>{tt('This file is empty.', 'الملف فارغ.')}</Note>;
   const shown = kind === 'json' && e === 'json' && parsed?.value !== undefined ? JSON.stringify(parsed.value, null, 2) : text;
-  return <ProtectedCode name={name} text={shown} cut={cut} tt={tt} />;
+  return <ProtectedCode name={name} text={shown} cut={cut} tt={tt} canCopy={canCopy} blob={shown === text ? blob : null} />;
 }
 
 /** Sniffs files with an unknown extension: text -> code view, otherwise no preview. */
@@ -235,9 +358,10 @@ function Sniffed({ name, blob, ...rest }) {
 /**
  * One file, shown with the platform's own viewer for its type — images / PDF (canvas + watermark), video / audio,
  * Word / Excel / PowerPoint, JSON (tree / outline / code), Markdown, source code (CodeMirror) and ZIP (browsable tree).
- * Everything is read-only and `locked`: no copy / download buttons are rendered.
+ * Everything is read-only and `locked`: no copy / download buttons are rendered — unless the owner allowed downloads (`canCopy`),
+ * in which case code / text / Markdown / JSON get a Copy button.
  */
-export default function ProtectedFile({ name, blob, mark, tt, rtl, depth = 0, onFail }) {
+export default function ProtectedFile({ name, blob, mark, tt, rtl, depth = 0, onFail, canCopy = false }) {
   const kind = kindOfName(name);
   const e = extOf(name);
   const fail = () => onFail?.();
@@ -245,12 +369,12 @@ export default function ProtectedFile({ name, blob, mark, tt, rtl, depth = 0, on
     case 'image': return <ProtectedImage blob={e === 'svg' ? new Blob([blob], { type: 'image/svg+xml' }) : blob} mark={mark} onFail={fail} />;
     case 'pdf': return <ProtectedPdf blob={new Blob([blob], { type: 'application/pdf' })} mark={mark} onFail={fail} />;
     case 'video': case 'audio': return <ProtectedMedia blob={blob} kind={kind} mark={mark} />;
-    case 'docx': return <div className="shp-sheet shp-sheet--doc"><Suspense fallback={<Spin />}><DocxPreview blob={blob} tt={tt} /></Suspense></div>;
-    case 'pptx': return <div className="shp-sheet shp-sheet--doc"><Suspense fallback={<Spin />}><PptxPreview blob={blob} tt={tt} /></Suspense></div>;
+    case 'docx': return <SearchableDoc className="shp-sheet shp-sheet--doc" tt={tt}><Suspense fallback={<Spin />}><DocxPreview blob={blob} tt={tt} /></Suspense></SearchableDoc>;
+    case 'pptx': return <SearchableDoc className="shp-sheet shp-sheet--doc" tt={tt}><Suspense fallback={<Spin />}><PptxPreview blob={blob} tt={tt} /></Suspense></SearchableDoc>;
     case 'sheet': return <div className="shp-sheet shp-sheet--grid"><Suspense fallback={<Spin />}><XlsxPreview blob={blob} ext={e} tt={tt} rtl={rtl} /></Suspense></div>;
-    case 'zip': return depth >= 2 ? <Note>{tt('Nested archive.', 'أرشيف متداخل.')}</Note> : <ProtectedZip name={name} blob={blob} mark={mark} tt={tt} rtl={rtl} depth={depth} />;
-    case 'json': case 'md': case 'text': return <TextKind name={name} blob={blob} kind={kind} tt={tt} rtl={rtl} mark={mark} />;
-    case 'unknown': return <Sniffed name={name} blob={blob} tt={tt} rtl={rtl} mark={mark} kind="text" />;
+    case 'zip': return depth >= 2 ? <Note>{tt('Nested archive.', 'أرشيف متداخل.')}</Note> : <ProtectedZip name={name} blob={blob} mark={mark} tt={tt} rtl={rtl} depth={depth} canCopy={canCopy} />;
+    case 'json': case 'md': case 'text': return <TextKind name={name} blob={blob} kind={kind} tt={tt} rtl={rtl} mark={mark} canCopy={canCopy} />;
+    case 'unknown': return <Sniffed name={name} blob={blob} tt={tt} rtl={rtl} mark={mark} kind="text" canCopy={canCopy} />;
     default: return <Note>{tt('No preview is available for this file type.', 'مفيش معاينة متاحة لنوع الملف ده.')}</Note>;
   }
 }
@@ -281,7 +405,7 @@ function TreeRows({ node, depth, open, toggle, sel, pick }) {
 }
 
 /** Browse an archive in memory: file tree + the right viewer for the selected entry. Nothing can be extracted or saved. */
-function ProtectedZip({ name, blob, mark, tt, rtl, depth }) {
+function ProtectedZip({ name, blob, mark, tt, rtl, depth, canCopy }) {
   const siteT = useSiteTheme();
   const [state, setState] = useState({ status: 'loading' });
   const [open, setOpen] = useState(() => new Set());
@@ -373,7 +497,7 @@ function ProtectedZip({ name, blob, mark, tt, rtl, depth }) {
         {sel && (!entry || entry.path !== sel || entry.loading) && <Spin />}
         {sel && entry?.path === sel && entry.big && <Note>{tt('This file is too large to preview.', 'الملف كبير على المعاينة.')}</Note>}
         {sel && entry?.path === sel && entry.error && <Note>{tt('Could not read this file (it may be encrypted).', 'تعذّر قراءة الملف (ممكن يكون مشفّر).')}</Note>}
-        {sel && entry?.path === sel && entry.blob && <ProtectedFile key={entry.path} name={entry.path} blob={entry.blob} mark={mark} tt={tt} rtl={rtl} depth={depth + 1} />}
+        {sel && entry?.path === sel && entry.blob && <ProtectedFile key={entry.path} name={entry.path} blob={entry.blob} mark={mark} tt={tt} rtl={rtl} depth={depth + 1} canCopy={canCopy} />}
         </div>
       </section>
     </div>
