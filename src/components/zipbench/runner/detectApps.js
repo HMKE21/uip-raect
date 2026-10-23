@@ -7,7 +7,7 @@
  *                    isolated container with a real terminal. `app.sandbox` is the gateway's kind (laravel | node | python).
  *
  * Any language / any project: besides the originals, the sandbox runs
- *   single files  (kind 'sandbox', sandbox 'lang', entry = the file): JavaScript, TypeScript, PHP, Java, C, C++, C#, F#, VB.NET, Go, Rust, Zig, Nim, D, Ada, COBOL, Assembly, Ruby, Perl, Raku, Lua, R, Julia, MATLAB/Octave, Bash, PowerShell, Kotlin, Scala, Groovy, Clojure, Dart, Haskell, OCaml, Elixir, Erlang, Lisp, Scheme, Racket, Prolog, Tcl, AWK, Fortran, Pascal, Verilog, VHDL, SQL
+ *   single files  (kind 'sandbox', sandbox 'lang', entry = the file): JavaScript, TypeScript, PHP, Java, C, C++, C#, F#, VB.NET, Go, Rust, Zig, Nim, D, Ada, COBOL, Assembly, Ruby, Perl, Raku, Lua, R, Julia, MATLAB/Octave, Bash, PowerShell, Kotlin, Scala, Groovy, Clojure, Dart, Haskell, OCaml, Elixir, Erlang, Lisp, Scheme, Racket, Prolog, Tcl, AWK, Fortran, Pascal, Verilog, VHDL, SQL, T-SQL
  *   whole projects (sandbox 'maven' | 'gradle' | 'dotnet' | 'go' | 'cargo' | 'rails' | 'php' | 'make'): Spring Boot / Maven / Gradle, ASP.NET, Go modules, Cargo, Rails, Symfony / WordPress / plain PHP, Makefile / CMake
  * A loose JavaScript file also gets an in-browser variant (the browser's own prompt() / alert() / console), so it runs without the sandbox.
  * Pure functions (no DOM, no React) so they are easy to test.
@@ -18,7 +18,7 @@ export const LANGS = {
   js: 'JavaScript', mjs: 'JavaScript', cjs: 'JavaScript', ts: 'TypeScript', mts: 'TypeScript', php: 'PHP', java: 'Java',
   c: 'C', cpp: 'C++', cc: 'C++', cxx: 'C++', cs: 'C#', go: 'Go', rs: 'Rust', rb: 'Ruby', pl: 'Perl', lua: 'Lua', r: 'R', jl: 'Julia',
   sh: 'Bash', bash: 'Bash', kt: 'Kotlin', kts: 'Kotlin', dart: 'Dart', hs: 'Haskell', f90: 'Fortran', f95: 'Fortran', f03: 'Fortran',
-  pas: 'Pascal', pp: 'Pascal', sql: 'SQL',
+  pas: 'Pascal', pp: 'Pascal', sql: 'SQL', tsql: 'T-SQL',
   zig: 'Zig', nim: 'Nim', d: 'D', adb: 'Ada', cob: 'COBOL', cbl: 'COBOL', cobol: 'COBOL', asm: 'Assembly (NASM)', nasm: 'Assembly (NASM)', s: 'Assembly (GNU)',
   fs: 'F#', fsx: 'F#', vb: 'VB.NET', scala: 'Scala', groovy: 'Groovy', gvy: 'Groovy', clj: 'Clojure', cljc: 'Clojure',
   ex: 'Elixir', exs: 'Elixir', erl: 'Erlang', ml: 'OCaml', lisp: 'Common Lisp', lsp: 'Common Lisp', scm: 'Scheme', ss: 'Scheme', rkt: 'Racket',

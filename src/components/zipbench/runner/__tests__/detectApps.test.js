@@ -113,6 +113,11 @@ test('single files: Java (package root), C, C++, Go, Rust, Ruby, Kotlin, C#, SQL
   assert.equal(by['Main.java'].root, 'ex/');
   assert.match(by['Main.java'].label, /^Java — Main\.java/);
 });
+test('a lone .tsql file (T-SQL) is runnable on the sandbox', () => {
+  const apps = detectApps(['main.tsql'], { activePath: 'main.tsql', sandbox: true, readText: read({ 'main.tsql': "PRINT 'hi';" }) });
+  assert.deepEqual(apps.map((a) => [a.kind, a.sandbox, a.entry]), [['sandbox', 'lang', 'main.tsql']]);
+  assert.match(apps[0].label, /^T-SQL — main\.tsql/);
+});
 test('Java with a package runs from the source root above the package folders', () => {
   const src = 'package com.uip.app;\npublic class Main { public static void main(String[] a){} }';
   const apps = detectApps(['src/com/uip/app/Main.java', 'src/com/uip/app/Util.java'], { activePath: 'src/com/uip/app/Main.java', sandbox: true, readText: read({ 'src/com/uip/app/Main.java': src }) });

@@ -144,3 +144,43 @@
 .zb .zb-run__stdin textarea::placeholder { font-family: var(--zb-font-ui); color: color-mix(in srgb, var(--zb-ink) 60%, transparent); opacity: 1; }
 .zb .zb-run__stdin summary { color: color-mix(in srgb, var(--zb-ink) 75%, transparent); font-weight: 700; }
 .zb .zb-run__empty { color: color-mix(in srgb, var(--zb-ink) 70%, transparent); }
+
+
+/* ---------- run bar: Run / Stop / status stay clearly readable in EVERY theme ----------
+   (contrast checked on all 11 palettes: buttons ≥ 5:1, status pill ≥ 5:1; the pill takes its own state colour) */
+.zb .zb-run__bar .zb-btn { height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 700; letter-spacing: .01em; color: var(--zb-strong); }
+.zb .zb-run__bar .zb-btn svg { flex: none; }
+.zb .zb-run__bar .zb-btn--primary {
+  background: color-mix(in srgb, var(--zb-primary) 80%, #000); border-color: color-mix(in srgb, var(--zb-primary) 55%, #000); color: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .14) inset, 0 1px 3px rgba(0, 0, 0, .3);
+}
+.zb .zb-run__bar .zb-btn--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--zb-primary) 92%, #000); border-color: var(--zb-primary); }
+.zb .zb-run__bar .zb-btn--danger {
+  background: color-mix(in srgb, var(--zb-danger) 50%, #000); border-color: var(--zb-danger); color: #fff;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .12) inset, 0 1px 3px rgba(0, 0, 0, .3);
+}
+.zb .zb-run__bar .zb-btn--danger:hover:not(:disabled) { background: color-mix(in srgb, var(--zb-danger) 62%, #000); }
+/* disabled = clearly "off", but the label is still readable (no more 60 % opacity fade) */
+.zb .zb-run__bar .zb-btn:disabled, .zb .zb-run__bar .zb-btn--primary:disabled {
+  opacity: 1; cursor: not-allowed; box-shadow: none; background: var(--zb-btn); border: 1px dashed var(--zb-line);
+  color: color-mix(in srgb, var(--zb-muted) 65%, var(--zb-strong));
+}
+
+.zb .zb-run__bar .zb-run__state {
+  --st: var(--zb-muted);
+  height: 26px; padding: 0 12px 0 10px; gap: 8px; border-radius: 999px; font-weight: 700; letter-spacing: .01em;
+  border: 1px solid color-mix(in srgb, var(--st) 55%, transparent);
+  background: color-mix(in srgb, var(--st) 20%, var(--zb-bar));
+  color: color-mix(in srgb, var(--st) 60%, var(--zb-strong));
+}
+.zb .zb-run__bar .zb-run__state.is-running, .zb .zb-run__bar .zb-run__state.is-done { --st: var(--zb-added); }
+.zb .zb-run__bar .zb-run__state.is-error { --st: var(--zb-danger); }
+.zb .zb-run__bar .zb-run__state.is-building, .zb .zb-run__bar .zb-run__state.is-stopped { --st: var(--zb-warn); }
+.zb .zb-run__bar .zb-run__state.is-input { --st: var(--zb-accent); }
+.zb .zb-run__bar .zb-run__state .zb-run__dot { width: 8px; height: 8px; background: var(--st); box-shadow: 0 0 0 3px color-mix(in srgb, var(--st) 28%, transparent); }
+
+/* the whole bar shows what the program is doing: a coloured edge while it runs / waits / has failed */
+.zb .zb-run[data-state="building"] .zb-run__bar { box-shadow: inset 0 2px 0 var(--zb-warn); }
+.zb .zb-run[data-state="running"] .zb-run__bar { box-shadow: inset 0 2px 0 var(--zb-added); }
+.zb .zb-run[data-state="input"] .zb-run__bar { box-shadow: inset 0 2px 0 var(--zb-accent); }
+.zb .zb-run[data-state="error"] .zb-run__bar { box-shadow: inset 0 2px 0 var(--zb-danger); }

@@ -84,14 +84,14 @@ export default function RunPanel({ tt, runner, apps, app, onSelect, onRun, onClo
   const canRun = !!app && app.kind !== 'unsupported' && !!RUNNER_URL;
 
   return (
-    <div ref={panelRef} className={`zb-run${expanded ? ' is-expanded' : ''}`} style={height && !expanded ? { height } : undefined}>
+    <div ref={panelRef} className={`zb-run${expanded ? ' is-expanded' : ''}`} data-state={state} style={height && !expanded ? { height } : undefined}>
       <div className="zb-run__grip" onPointerDown={startDrag} onDoubleClick={() => setHeight(null)} role="separator" aria-orientation="horizontal" title={tt('Drag to resize', 'اسحب لتغيير الحجم')} />
       <div className="zb-run__bar">
         <div className="zb-run__main">
           <AppPicker tt={tt} apps={apps} app={app} onSelect={onSelect} />
           {running
             ? <button type="button" className="zb-btn zb-btn--danger" onClick={runner.stop}><Icon name="stop" size={14} /> <span>{tt('Stop', 'إيقاف')}</span></button>
-            : <button type="button" className="zb-btn zb-btn--primary" onClick={() => onRun({ stdin })} disabled={!canRun}><Icon name={live ? 'refresh' : 'play'} size={14} /> <span>{live ? tt('Reload', 'إعادة تحميل') : tt('Run', 'تشغيل')}</span></button>}
+            : <button type="button" className="zb-btn zb-btn--primary" onClick={() => onRun({ stdin })} disabled={!canRun} title={canRun ? undefined : tt('Nothing runnable is selected', 'مفيش حاجة قابلة للتشغيل متحددة')}><Icon name={live ? 'refresh' : 'play'} size={14} /> <span>{live ? tt('Reload', 'إعادة تحميل') : tt('Run', 'تشغيل')}</span></button>}
           {live && <button type="button" className="zb-btn" onClick={runner.stop}><Icon name="stop" size={14} /> <span>{tt('Stop', 'إيقاف')}</span></button>}
           {ai?.show && (
             <button type="button" className={`zb-btn zb-btn--ai${ai.hot ? ' is-hot' : ''}`} onClick={() => ai.onExplain()} disabled={ai.busy} title={tt('Ask the AI to explain the error in the output', 'اطلب من الذكاء الاصطناعي يشرح الخطأ اللي في الناتج')}><Icon name="sparkles" size={14} /> <span>{tt('Explain error', 'اشرح الخطأ')}</span></button>

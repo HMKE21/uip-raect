@@ -73,7 +73,7 @@ export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect
   useEffect(() => { if (tab === 'terminal') { const id = window.setTimeout(() => { try { fitRef.current?.fit(); } catch { /* ignore */ } termRef.current?.focus(); }, 30); return () => clearTimeout(id); } return undefined; }, [tab, expanded]);
 
   return (
-    <div ref={panelRef} className={`zb-run zb-sbx${expanded ? ' is-expanded' : ''}`} style={height && !expanded ? { height } : undefined}>
+    <div ref={panelRef} className={`zb-run zb-sbx${expanded ? ' is-expanded' : ''}`} data-state={phase === 'running' ? 'running' : phase === 'error' || phase === 'disconnected' ? 'error' : busy ? 'building' : 'idle'} style={height && !expanded ? { height } : undefined}>
       <div className="zb-run__grip" onPointerDown={onGripDown} onDoubleClick={() => setHeight(null)} role="separator" aria-orientation="horizontal" title={tt('Drag to resize', 'اسحب لتغيير الحجم')} />
       <div className="zb-run__bar">
         <div className="zb-run__main">
@@ -93,7 +93,7 @@ export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect
           {ai?.show && (
             <button type="button" className={`zb-btn zb-btn--ai${ai.hot ? ' is-hot' : ''}`} onClick={() => ai.onExplain()} disabled={ai.busy} title={tt('Ask the AI to explain the error in the output', 'اطلب من الذكاء الاصطناعي يشرح الخطأ اللي في الناتج')}><Icon name="sparkles" size={14} /> <span>{tt('Explain error', 'اشرح الخطأ')}</span></button>
           )}
-          <span className={`zb-run__state is-${phase === 'running' ? 'running' : phase === 'error' || phase === 'disconnected' ? 'error' : busy ? 'building' : 'idle'}`} role="status" title={busy && statusText ? statusText : tt(...label)}>
+          <span className={`zb-run__state is-${phase === 'running' ? 'running' : phase === 'error' || phase === 'disconnected' ? 'error' : busy ? 'building' : phase === 'exited' ? 'done' : phase === 'closed' ? 'stopped' : 'idle'}`} role="status" title={busy && statusText ? statusText : tt(...label)}>
             <i className="zb-run__dot" /><em>{busy && statusText ? statusText : tt(...label)}</em>
           </span>
         </div>
