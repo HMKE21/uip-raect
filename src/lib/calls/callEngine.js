@@ -474,7 +474,7 @@ export function createCallEngine(deps) {
     if (!conn || !conn.getStats) return null;
     const out = {
       conn: conn.connectionState, ice: conn.iceConnectionState, signaling: conn.signalingState, turnConfigured: hasTurn(),
-      audio: { in: 0, out: 0, lost: 0 }, video: { in: 0, out: 0, frames: 0 }, path: null, recoveries,
+      audio: { in: 0, out: 0, lost: 0, inLevel: 0, micLevel: 0 }, video: { in: 0, out: 0, frames: 0 }, path: null, recoveries,
     };
     try {
       const rep = await conn.getStats();
@@ -483,7 +483,8 @@ export function createCallEngine(deps) {
       rep.forEach((r) => { byId[r.id] = r; if (r.type === 'transport' && r.selectedCandidatePairId) selectedId = r.selectedCandidatePairId; });
       rep.forEach((r) => {
         const k = r.kind || r.mediaType;
-        if (r.type === 'inbound-rtp' && (k === 'audio' || k === 'video')) { out[k].in = r.bytesReceived || 0; if (k === 'audio') out.audio.lost = r.packetsLost || 0; else out.video.frames = r.framesDecoded || 0; }
+        if (r.type === 'inbound-rtp' && (k === 'audio' || k === 'video')) { out[k].in = r.bytesReceived || 0; if (k === 'audio') { out.audio.lost = r.packetsLost || 0; out.audio.inLevel = r.audioLevel || 0; } else out.video.frames = r.framesDecoded || 0; }
+        if (r.type === 'media-source' && k === 'audio') out.audio.micLevel = r.audioLevel || 0;
         if (r.type === 'outbound-rtp' && (k === 'audio' || k === 'video')) out[k].out = r.bytesSent || 0;
         if (!selectedId && r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') selectedId = r.id;
       });

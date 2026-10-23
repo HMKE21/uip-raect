@@ -90,6 +90,7 @@ function DebugPanel({ c }) {
       {`conn ${d.conn} / ice ${d.ice}\n`}
       {`path ${d.path ? `${d.path.local}→${d.path.remote} ${d.path.protocol} rtt ${Math.round(d.path.rtt * 1000)}ms` : 'none'}  TURN ${d.turnConfigured ? 'yes' : 'NO'}\n`}
       {`audio in ${kb(d.audio.in)} out ${kb(d.audio.out)} lost ${d.audio.lost}\n`}
+      {`mic level ${(d.audio.micLevel * 100).toFixed(0)}%  incoming level ${(d.audio.inLevel * 100).toFixed(0)}%\n`}
       {`video in ${kb(d.video.in)} out ${kb(d.video.out)} frames ${d.video.frames}\n`}
       {`recoveries ${d.recoveries}`}
     </pre>
