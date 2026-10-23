@@ -1,4 +1,5 @@
 import { CloudAuthError, CloudQuotaError, CloudRetryError, cloudFetch, withRetry } from './errors';
+import { BACKUP_ROOT } from './categories';
 
 /**
  * OneDrive backup provider (Microsoft Graph). OAuth2 authorization-code + PKCE in a pop-up (public/ms-auth.html is the redirect),
@@ -6,7 +7,7 @@ import { CloudAuthError, CloudQuotaError, CloudRetryError, cloudFetch, withRetry
  * Tokens live in sessionStorage (see engine.js), never on the server.
  */
 const SCOPE = 'Files.ReadWrite.AppFolder User.Read offline_access';
-const ROOT = 'UIP My PC';
+const ROOT = BACKUP_ROOT;
 const SMALL = 4 * 1024 * 1024;
 const CHUNK = 320 * 1024 * 16; // multiple of 320 KiB, as Graph requires
 

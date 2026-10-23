@@ -3,6 +3,7 @@ import { isNative } from '../../native';
 import { drive, driveConfig, fetchDriveBlob } from '../driveApi';
 import { DRIVE_SAVED } from '../driveEvents';
 import { CloudAuthError, CloudQuotaError, CloudRetryError } from './errors';
+import { BACKUP_LAYOUT, categoryOf } from './categories';
 import { google } from './google';
 import { microsoft } from './microsoft';
 
@@ -10,7 +11,7 @@ import { microsoft } from './microsoft';
  * Cloud backup engine (Google Drive / OneDrive). One provider per student per device.
  *
  *  - "My PC" on the UIP server stays the FINAL copy (sharing, exams, the sandbox and the AI all read it).
- *  - This engine keeps a BACKUP copy on the student's own cloud drive, in a folder "UIP My PC", with the same folder tree.
+ *  - This engine keeps a BACKUP copy on the student's own cloud drive, in a folder "UIP-NUB", sorted into one sub-folder per kind of file (Code, Documents, Images …).
  *  - It runs in the browser (tokens never reach the server; they live in sessionStorage) and is incremental: a file is uploaded
  *    again only when its signature (name / folder / sha1 / size / updated_at) changed. Deleted files are NOT removed from the
  *    cloud (a backup keeps them).
@@ -35,7 +36,7 @@ const S = {
 let snap = null;
 const subs = new Set();
 const emit = () => { snap = null; subs.forEach((f) => f()); };
-const persist = () => writeJson(localStorage, dbKey(S.uid), { provider: S.provider, auto: S.auto, account: S.account, server: S.server, lastOk: S.lastOk, db: S.db });
+const persist = () => writeJson(localStorage, dbKey(S.uid), { provider: S.provider, auto: S.auto, account: S.account, server: S.server, lastOk: S.lastOk, layout: BACKUP_LAYOUT, db: S.db });
 const snapshot = () => {
   if (!snap) snap = { ready: S.ready, provider: S.provider, auto: S.auto, account: S.account, lastOk: S.lastOk, lastError: S.lastError, status: S.status, progress: S.progress, cfg: S.cfg };
   return snap;
@@ -67,19 +68,26 @@ async function run({ manual = false } = {}) {
     setStatus('running', { progress: { done: 0, total: 0 }, lastError: '' });
     const tok = await getToken();
     const items = (await drive.manifest()).items || [];
-    const byId = new Map(items.map((n) => [n.id, n]));
-    const sigOf = (n) => `${n.name}|${n.parent_id ?? ''}|${n.sha1 || ''}|${n.size_bytes}|${n.updated_at || ''}`;
+    // files from different My PC folders now share one kind-folder: a repeated name gets " (2)", " (3)" … so nothing is overwritten
+    const cloudName = new Map();
+    { const seen = new Map();
+      [...items].filter((n) => n.type === 'file').sort((a, b) => String(a.id).localeCompare(String(b.id), undefined, { numeric: true })).forEach((n) => {
+        const key = `${categoryOf(n.name)}/${n.name.toLowerCase()}`;
+        const k = (seen.get(key) || 0) + 1; seen.set(key, k);
+        cloudName.set(n.id, k === 1 ? n.name : n.name.replace(/(\.[^.\/]+)?$/, ` (${k})$1`));
+      }); }
+    const sigOf = (n) => `${cloudName.get(n.id) || n.name}|${categoryOf(n.name)}|${n.sha1 || ''}|${n.size_bytes}|${n.updated_at || ''}`;
     const todo = items.filter((n) => n.type === 'file' && !SKIP_NAMES.has(n.name) && S.db.files[n.id]?.sig !== sigOf(n));
     S.progress = { done: 0, total: todo.length }; emit();
 
     const rootRemote = todo.length ? await P.ensureRoot(tok, S.db) : null;
-    const remoteFolder = async (parentId) => {
-      if (parentId == null) return rootRemote;
-      const chain = [];
-      for (let cur = byId.get(parentId); cur; cur = cur.parent_id != null ? byId.get(cur.parent_id) : null) chain.unshift(cur);
-      let at = rootRemote;
-      for (const f of chain) { at = await P.ensureFolder(tok, S.db, f.id, f.name, at); } // eslint-disable-line no-await-in-loop
-      return at;
+    // one sub-folder per kind of file ("Code", "Documents", "Images" …) directly under the backup root — not a copy of the My PC tree
+    // (memoised per run: the two upload workers must not both create the same kind-folder)
+    const folderOnce = new Map();
+    const remoteFolder = (node) => {
+      const kind = categoryOf(node.name);
+      if (!folderOnce.has(kind)) folderOnce.set(kind, P.ensureFolder(tok, S.db, `kind:${kind}`, kind, rootRemote).catch((e) => { folderOnce.delete(kind); throw e; }));
+      return folderOnce.get(kind);
     };
 
     let next = 0;
@@ -88,10 +96,10 @@ async function run({ manual = false } = {}) {
         const n = todo[next]; next += 1;
         try {
           const blob = await fetchDriveBlob(n.id);
-          const parentRemote = await remoteFolder(n.parent_id);
+          const parentRemote = await remoteFolder(n);
           const prev = S.db.files[n.id];
           const sameFolder = prev && prev.parent === parentRemote;
-          const remoteId = await P.put(tok, { remoteId: sameFolder ? prev.remoteId : null, name: n.name, parentRemoteId: parentRemote, blob });
+          const remoteId = await P.put(tok, { remoteId: sameFolder ? prev.remoteId : null, name: cloudName.get(n.id) || n.name, parentRemoteId: parentRemote, blob });
           S.db.files[n.id] = { sig: sigOf(n), remoteId, parent: parentRemote };
           done += 1;
         } catch (e) {
@@ -146,7 +154,7 @@ export const cloud = {
     if (S.uid === uid && S.ready) return;
     S.uid = uid; S.ready = false; emit();
     const saved = readJson(localStorage, dbKey(uid));
-    if (saved) { S.provider = saved.provider || ''; S.auto = saved.auto !== false; S.account = saved.account || ''; S.server = !!saved.server; S.lastOk = saved.lastOk || 0; S.db = saved.db || S.db; }
+    if (saved) { S.provider = saved.provider || ''; S.auto = saved.auto !== false; S.account = saved.account || ''; S.server = !!saved.server; S.lastOk = saved.lastOk || 0; S.db = saved.layout === BACKUP_LAYOUT && saved.db ? saved.db : S.db; }
     const cfg = await driveConfig();
     S.cfg = cfg?.cloud || {};
     S.ready = true;

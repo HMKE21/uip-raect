@@ -1,4 +1,5 @@
 import { api } from '../../api/client';
+import { BACKUP_ROOT } from './categories';
 import { CloudAuthError, CloudRetryError, cloudFetch, withRetry } from './errors';
 
 /**
@@ -59,7 +60,7 @@ async function serverConnect(hint) {
 }
 
 const SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const ROOT_NAME = 'UIP My PC';
+const ROOT_NAME = BACKUP_ROOT;
 const SMALL = 4 * 1024 * 1024;
 
 let gsiP = null;
