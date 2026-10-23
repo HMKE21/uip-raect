@@ -43,7 +43,7 @@ function refsNote(m) {
   return `\n\n[Code the student pinned to this question: ${rs.map((r) => `${r.path || 'code'} lines ${r.from}-${r.to}:\n${String(r.text || '').slice(0, 1200)}`).join('\n---\n')}]`;
 }
 
-const unwrap = (res) = (res && res.data) || res || {};
+const unwrap = (res) => (res && res.data) || res || {};
 
 /**
  * A tiny external store. The streaming state lives HERE, not in React state of the workbench: ZipWorkbench is a ~1700 line
