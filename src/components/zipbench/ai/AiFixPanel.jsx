@@ -1,75 +1,30 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '../../Icon';
+import Markdown from './AiMarkdown';
 import { diffRows } from './aiFixUtils';
 import '../../../styles/css/zip-ai-fix.css';
 
-/**
- * Safe mini-markdown for the model's answer: ``` fences, `inline code` and **bold** become React elements — the text is
- * never injected as HTML, so nothing the model (or the student's own code echoed back by it) writes can run.
- */
-function Inline({ text }) {
-  const parts = String(text).split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/g);
-  return parts.map((p, i) => {
-    if (p.length > 2 && p.startsWith('`') && p.endsWith('`')) return <code key={i} dir="ltr">{p.slice(1, -1)}</code>;
-    if (p.length > 4 && p.startsWith('**') && p.endsWith('**')) return <strong key={i}>{p.slice(2, -2)}</strong>;
-    return <Fragment key={i}>{p}</Fragment>;
-  });
-}
-
-/** A fenced block of the answer: Copy, and (convert / tests) "New file" which saves it next to the source file. */
-function CodeBlock({ code, tt, onNewFile }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try { await navigator.clipboard.writeText(code); setCopied(true); window.setTimeout(() => setCopied(false), 1400); } catch { /* clipboard blocked */ }
-  };
-  return (
-    <div className="zb-ai__block">
-      <div className="zb-ai__blockbar">
-        <button type="button" className="zb-ai__mini" onClick={copy}><Icon name={copied ? 'check' : 'copy'} size={12} /> {copied ? tt('Copied', 'تم النسخ') : tt('Copy', 'نسخ')}</button>
-        {onNewFile && <button type="button" className="zb-ai__mini" onClick={() => onNewFile(code)}><Icon name="file-plus" size={12} /> {tt('New file', 'ملف جديد')}</button>}
-      </div>
-      <pre className="zb-ai__code" dir="ltr"><code>{code}</code></pre>
-    </div>
-  );
-}
-
+/** The model's answer (safe markdown — see AiMarkdown). Kept under this name for the explain-error panel. */
 export function Answer({ text, tt, onNewFile, streaming }) {
-  const blocks = [];
-  const re = /```[^\n]*\n([\s\S]*?)(?:```|$)/g; // an unfinished fence (still streaming) renders as code too
-  let last = 0; let m;
-  // eslint-disable-next-line no-cond-assign
-  while ((m = re.exec(text))) {
-    if (m.index > last) blocks.push({ k: 'p', v: text.slice(last, m.index) });
-    blocks.push({ k: 'code', v: m[1].replace(/\n$/, '') });
-    last = m.index + m[0].length;
-    if (m[0].length === 0) re.lastIndex += 1;
-  }
-  if (last < text.length) blocks.push({ k: 'p', v: text.slice(last) });
-  return (
-    <div className="zb-ai__answer">
-      {blocks.map((b, i) => {
-        if (b.k === 'code') return streaming ? <pre key={i} className="zb-ai__code" dir="ltr"><code>{b.v}</code></pre> : <CodeBlock key={i} code={b.v} tt={tt} onNewFile={onNewFile} />;
-        return b.v.split(/\n{2,}/).map((para, j) => {
-          const lines = para.split('\n').filter((l) => l.trim() !== '');
-          if (!lines.length) return null;
-          return <p key={`${i}-${j}`} dir="auto">{lines.map((l, n) => <Fragment key={n}>{n > 0 && <br />}<Inline text={l} /></Fragment>)}</p>;
-        });
-      })}
-    </div>
-  );
+  return <Markdown text={text} tt={tt} streaming={streaming} onNewFile={onNewFile} />;
 }
 
-export function Diff({ edit }) {
+const DIFF_CAP = 40;
+
+export function Diff({ edit, tt }) {
+  const [all, setAll] = useState(false);
   const rows = diffRows(edit);
+  const shown = all ? rows : rows.slice(0, DIFF_CAP);
   return (
     <div className="zb-ai__diff" dir="ltr" role="group">
-      {rows.map((r, i) => (
+      {shown.map((r, i) => (
         <div key={i} className={`zb-ai__row is-${r.t === '-' ? 'del' : r.t === '+' ? 'add' : 'ctx'}`}>
           <span className="zb-ai__ln">{r.n ?? ''}</span>
           <span className="zb-ai__sign" aria-hidden="true">{r.t === ' ' ? '' : r.t}</span>
           <span className="zb-ai__txt">{r.s || ' '}</span>
         </div>
       ))}
+      {rows.length > shown.length && <button type="button" className="zb-ai__more" onClick={() => setAll(true)} dir="auto">{tt ? tt(`Show all ${rows.length} lines`, `عرض كل الـ ${rows.length} سطر`) : `+${rows.length - shown.length}`}</button>}
     </div>
   );
 }
@@ -140,7 +95,7 @@ export default function AiFixPanel({ tt, panel, modes, canSwitchMode, onMode, on
             </div>
             {edits.map((e) => (
               <div key={e.id} className={`zb-ai__edit is-${e.state}`}>
-                <Diff edit={e} />
+                <Diff edit={e} tt={tt} />
                 <div className="zb-ai__edit-acts">
                   {e.state === 'pending' && (
                     <>

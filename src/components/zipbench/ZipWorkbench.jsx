@@ -124,7 +124,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const sandbox = useSandbox(projectId, sandboxTokenPath); // real server / terminal on the uip-sandbox gateway (needs a project id)
   const { can } = useAuth();
   const ai = useAiFix({ enabled: can('ai.code_assist'), tt, projectId }); // projectId: the supervising doctor may have set this project's AI mode
-  const chat = useAiChat({ tt }); // side-panel chat: knows the open file, selection, terminal output and the other open tabs
+  const chat = useAiChat({ tt, scope: projectId || '', label: fileName || '', enabled: !!ai.chatAvailable }); // side-panel chat (saved on the account): knows the open file, selection, terminal output and the other open tabs
   const [chatOpen, setChatOpen] = useState(false);
   const [chatCtx, setChatCtx] = useState({ file: true, selection: true, others: true, output: false }); // what the chat sends as context
   const [chatMode, setChatMode] = useState(null); // null = the server's default mode // "explain / fix this error" (needs the ai.code_assist permission)
@@ -1139,6 +1139,18 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     };
   };
   const sendChat = (text) => chat.send({ text, mode: chatModeNow, buildRequest: buildChatRequest });
+  // "this needs Assistant mode": switch the mode and ask the same question again in it
+  const switchAndRetryChat = () => { setChatMode('assistant'); chat.retry({ mode: 'assistant', buildRequest: buildChatRequest }); };
+  // a code block of a chat answer becomes a new file (next to the open file unless the block names a folder)
+  const chatNewFile = (code, suggested) => {
+    let path = String(suggested || 'file.txt').replace(/^\/+/, '');
+    if (!path.includes('/')) { const a = chatActive(); const dir = a && a.includes('/') ? a.slice(0, a.lastIndexOf('/') + 1) : ''; path = `${dir}${path}`; }
+    if (exists(path)) path = uniquePath(path, exists);
+    const err = createEntry(path, 'file');
+    if (err) { flash(err); return; }
+    setTextFor(path, code);
+    flash(tt(`Created ${path}`, `اتعمل ${path}`));
+  };
   const retryChat = () => chat.retry({ mode: chatModeNow, buildRequest: buildChatRequest });
   const chatChips = (() => {
     const active = chatActive();
@@ -1549,7 +1561,11 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
             onSend={sendChat}
             onStop={chat.stop}
             onRetry={retryChat}
-            onClear={chat.clear}
+            onSwitchAndRetry={switchAndRetryChat}
+            onNewFile={chatNewFile}
+            history={{ chats: chat.chats, listError: chat.listError, activeId: chat.chatId, onLoad: chat.loadChats, onNew: chat.newChat, onOpen: chat.openChat, onRename: chat.renameChat, onDelete: chat.deleteChat, onClearAll: chat.clearAll }}
+            saveState={chat.saveState}
+            onRetrySave={chat.retrySave}
             onClose={closeChat}
             onApply={(msgId, id) => applyChatEdits(msgId, [id])}
             onApplyAll={(msgId) => applyChatEdits(msgId, (chat.messages.find((x) => x.id === msgId)?.edits || []).map((e) => e.id))}

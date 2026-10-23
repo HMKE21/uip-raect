@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '../../../api/client';
 import { streamPost, aiLocale } from './sse';
 
 const URL = '/api/v1/ai-code/chat';
+const CHATS = '/api/v1/ai-code/chats';
 const FLUSH_MS = 40;     // batch streamed tokens into one render
-const HISTORY = 10;      // messages sent back to the server (it keeps the last 10 anyway)
+const HISTORY = 12;      // messages sent back to the server (it keeps the last 10 anyway)
+const SAVE_MS = 700;     // debounce for saving the conversation to the account
 
 /** Messages for the failures the server can answer with before the stream starts. */
 function httpMessage(status, serverMsg, tt) {
@@ -14,27 +17,59 @@ function httpMessage(status, serverMsg, tt) {
   return serverMsg || tt('Something went wrong. Please try again.', 'حصلت مشكلة. جرّب تاني.');
 }
 
+// Ids must be unique across sessions now (a reopened conversation keeps its ids): prefix with the time the page loaded.
+const PREFIX = Date.now().toString(36);
 let uid = 0;
-const nextId = () => { uid += 1; return `m${uid}`; };
+const nextId = () => { uid += 1; return `m${PREFIX}${uid}`; };
+
+function newUuid() {
+  try { if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID(); } catch { /* old browser */ }
+  const h = (n) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  return `${h(8)}-${h(4)}-4${h(3)}-${'89ab'[Math.floor(Math.random() * 4)]}${h(3)}-${h(12)}`;
+}
+
+/** What the model is told about the changes it suggested earlier (the visible text has the edit blocks stripped). */
+function editsNote(m) {
+  const eds = m.edits || [];
+  if (!eds.length) return '';
+  const word = { applied: 'applied by the student', rejected: 'rejected by the student', pending: 'not applied yet', stale: 'could not be applied' };
+  return `\n\n[Changes you suggested in this reply: ${eds.map((e) => `${e.kind === 'create' ? 'new file' : e.rewrite ? 'rewrite of' : 'edit of'} ${e.path} (${word[e.state] || e.state})`).join('; ')}]`;
+}
+
+const unwrap = (res) => (res && res.data) || res || {};
 
 /**
- * Side-panel chat state. Messages live in memory for the life of the workbench (closing the panel keeps them).
+ * Side-panel chat state, saved on the student's account.
  *
- *   const chat = useAiChat({ tt });
+ *   const chat = useAiChat({ tt, scope, label });
  *   chat.send({ text, mode, buildRequest })   // buildRequest() -> { active_path, files, tree, sel_from, sel_to, error } (read at send time)
  *   chat.messages  // [{ id, role: 'user'|'assistant', content, phase?: 'streaming'|'done'|'error'|'stopped', edits?: [{…, id, state}], error? }]
+ *   chat.chats     // saved conversations [{ id, title, message_count, updated_at, label }] (null until loaded)
+ *   chat.newChat() / chat.openChat(id) / chat.renameChat(id, title) / chat.deleteChat(id) / chat.clearAll()
  *
- * The context (open file, selection, terminal output, other tabs) is rebuilt on EVERY send and only the question text is kept
- * in the history, so the conversation does not grow with file contents.
+ * The context (open file, selection, terminal output, other tabs) is rebuilt on EVERY send and only the question text is
+ * kept in the history, so a saved conversation does not carry file contents. A conversation is created on the first
+ * question and re-saved (debounced) whenever it changes — including when the student applies or rejects a suggested change.
  */
-export function useAiChat({ tt }) {
+export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
   const [messages, setMessages] = useState([]);
+  const [chatId, setChatId] = useState(null);
+  const [chats, setChats] = useState(null);
+  const [listError, setListError] = useState(false);
+  const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
   const msgsRef = useRef([]);
   msgsRef.current = messages;
+  const idRef = useRef(null);
+  idRef.current = chatId;
+  const modeRef = useRef(null);
+  const dirty = useRef(false);   // the messages changed by the student's action (not by loading a saved chat)
+  const saveT = useRef(0);
   const abortRef = useRef(null);
   const seqRef = useRef(0);
   const ttRef = useRef(tt);
   ttRef.current = tt;
+  const metaRef = useRef({ scope, label });
+  metaRef.current = { scope, label };
 
   const abort = useCallback(() => {
     seqRef.current += 1;
@@ -42,6 +77,55 @@ export function useAiChat({ tt }) {
     abortRef.current = null;
   }, []);
   useEffect(() => abort, [abort]);
+
+  // ---- saved conversations -------------------------------------------------------------------------------------
+  const loadChats = useCallback(async () => {
+    if (!enabled) return;
+    try {
+      const d = unwrap(await api.get(CHATS));
+      setChats(Array.isArray(d.chats) ? d.chats : []);
+      setListError(false);
+    } catch { setListError(true); setChats((c) => c || []); }
+  }, [enabled]);
+
+  const upsertSummary = useCallback((s) => {
+    setChats((cur) => [s, ...(cur || []).filter((c) => c.id !== s.id)]);
+  }, []);
+
+  const saveNow = useCallback(async () => {
+    clearTimeout(saveT.current);
+    const id = idRef.current;
+    const msgs = msgsRef.current;
+    if (!enabled || !id || !dirty.current || !msgs.length || msgs.some((m) => m.phase === 'streaming')) return;
+    dirty.current = false;
+    setSaveState('saving');
+    try {
+      const body = {
+        mode: modeRef.current || undefined,
+        scope: metaRef.current.scope || undefined,
+        label: metaRef.current.label || undefined,
+        messages: msgs.map((m) => (m.role === 'user'
+          ? { id: m.id, role: 'user', content: m.content }
+          : { id: m.id, role: 'assistant', content: m.content, phase: m.phase, mode: m.mode, error: m.error, edits: m.edits })),
+      };
+      const d = unwrap(await api.put(`${CHATS}/${id}`, body));
+      if (d.chat) upsertSummary(d.chat);
+      setSaveState('saved');
+    } catch {
+      dirty.current = true; // try again on the next change / retry
+      setSaveState('error');
+    }
+  }, [enabled, upsertSummary]);
+
+  // debounce: save a moment after the last change, never while a reply is streaming
+  useEffect(() => {
+    if (!dirty.current || !chatId || !messages.length || messages.some((m) => m.phase === 'streaming')) return undefined;
+    clearTimeout(saveT.current);
+    saveT.current = setTimeout(saveNow, SAVE_MS);
+    return () => clearTimeout(saveT.current);
+  }, [messages, chatId, saveNow]);
+  // leaving the page / closing the panel must not lose the last answer
+  useEffect(() => () => { saveNow(); }, [saveNow]);
 
   const run = useCallback(async ({ history, mode, buildRequest }) => {
     abort();
@@ -51,6 +135,9 @@ export function useAiChat({ tt }) {
     const live = () => seq === seqRef.current;
     const patch = (p) => { if (live()) setMessages((cur) => cur.map((m) => (m.id === id ? { ...m, ...p } : m))); };
 
+    if (!idRef.current) { const n = newUuid(); idRef.current = n; setChatId(n); }
+    modeRef.current = mode;
+    dirty.current = true;
     setMessages([...history, { id, role: 'assistant', content: '', phase: 'streaming', edits: [], mode }]);
 
     const ctrl = new AbortController();
@@ -72,7 +159,7 @@ export function useAiChat({ tt }) {
     const wire = history
       .filter((m) => m.content && m.phase !== 'error')
       .slice(-HISTORY)
-      .map((m) => ({ role: m.role, content: m.content }));
+      .map((m) => ({ role: m.role, content: m.role === 'assistant' ? `${m.content}${editsNote(m)}` : m.content }));
 
     try {
       await streamPost(URL, { ...buildRequest(), messages: wire, mode, locale: aiLocale() }, { signal: ctrl.signal, onEvent });
@@ -104,12 +191,73 @@ export function useAiChat({ tt }) {
     run({ history: cur.slice(0, i + 1), mode, buildRequest });
   }, [run]);
 
-  const stop = useCallback(() => { abort(); setMessages((cur) => cur.map((m) => (m.phase === 'streaming' ? { ...m, phase: 'stopped' } : m))); }, [abort]);
-  const clear = useCallback(() => { abort(); setMessages([]); }, [abort]);
-  const mark = useCallback((msgId, editId, state) => setMessages((cur) => cur.map((m) => (m.id === msgId && m.edits ? { ...m, edits: m.edits.map((e) => (e.id === editId ? { ...e, state } : e)) } : m))), []);
+  const stop = useCallback(() => { abort(); dirty.current = true; setMessages((cur) => cur.map((m) => (m.phase === 'streaming' ? { ...m, phase: 'stopped' } : m))); }, [abort]);
+
+  /** Start an empty conversation (the old one stays saved in the list). */
+  const newChat = useCallback(() => {
+    saveNow();
+    abort();
+    dirty.current = false;
+    idRef.current = null;
+    setChatId(null);
+    setMessages([]);
+    setSaveState('idle');
+  }, [abort, saveNow]);
+
+  const openChat = useCallback(async (id) => {
+    if (id === idRef.current) return true;
+    await saveNow();
+    abort();
+    try {
+      const d = unwrap(await api.get(`${CHATS}/${id}`));
+      const c = d.chat;
+      if (!c || !Array.isArray(c.messages)) throw new Error('bad chat');
+      dirty.current = false;
+      idRef.current = c.id;
+      setChatId(c.id);
+      setMessages(c.messages.map((m) => (m.role === 'assistant' ? { ...m, edits: m.edits || [] } : m)));
+      setSaveState('idle');
+      return true;
+    } catch {
+      setChats((cur) => (cur || []).filter((x) => x.id !== id)); // deleted from another device
+      return false;
+    }
+  }, [abort, saveNow]);
+
+  const renameChat = useCallback(async (id, title) => {
+    const v = String(title || '').trim().slice(0, 120);
+    if (!v) return false;
+    try {
+      await api.patch(`${CHATS}/${id}`, { title: v });
+      setChats((cur) => (cur || []).map((c) => (c.id === id ? { ...c, title: v } : c)));
+      return true;
+    } catch { return false; }
+  }, []);
+
+  const deleteChat = useCallback(async (id) => {
+    try { await api.del(`${CHATS}/${id}`); } catch (e) { if (!e || e.status !== 404) return false; }
+    setChats((cur) => (cur || []).filter((c) => c.id !== id));
+    if (id === idRef.current) { abort(); dirty.current = false; idRef.current = null; setChatId(null); setMessages([]); }
+    return true;
+  }, [abort]);
+
+  const clearAll = useCallback(async () => {
+    try { await api.del(CHATS); } catch { return false; }
+    abort(); dirty.current = false; idRef.current = null; setChatId(null); setMessages([]); setChats([]);
+    return true;
+  }, [abort]);
+
+  const mark = useCallback((msgId, editId, state) => {
+    dirty.current = true;
+    setMessages((cur) => cur.map((m) => (m.id === msgId && m.edits ? { ...m, edits: m.edits.map((e) => (e.id === editId ? { ...e, state } : e)) } : m)));
+  }, []);
 
   return {
-    messages, send, retry, stop, clear, mark,
+    messages, send, retry, stop, mark,
+    chatId, chats, listError, loadChats, newChat, openChat, renameChat, deleteChat, clearAll,
+    saveState, retrySave: saveNow,
     busy: messages.some((m) => m.phase === 'streaming'),
+    /** kept for callers that used the old name */
+    clear: newChat,
   };
 }
