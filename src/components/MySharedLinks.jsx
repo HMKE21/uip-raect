@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './Icon';
 import { StModal, timeAgo } from './student/stUi';
 import { errorMessage } from '../api/client';
@@ -7,6 +7,7 @@ import { AccessOptions, CustomDuration, EXPIRIES, accessText, copyText, customKe
 import '../styles/css/drive-share.css'; // must load before the dialog refinements below
 import '../styles/css/drive-share-dialogs.css';
 import '../styles/css/shared-links-manager.css';
+import '../styles/css/shared-links-panel.css'; // last: layout + colours that work in the dialog, in Settings and inside the desktop window
 
 const STATUS = {
   active: { en: 'Active', ar: 'شغّال', cls: 'is-on' },
@@ -253,8 +254,21 @@ function Settings({ l, ar, tt, busy, act }) {
  * Every link I shared: select several (or all) to pause / resume / delete in one go, or act on a single link;
  * edit its gate, and see who opened it.
  */
-export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
+export function SharedLinksPanel({ ar, locale, onToast: onToastProp, embedded = false }) {
   const tt = useCallback((en, a) => (ar ? a : en), [ar]);
+  // Always give feedback: use the host's toast when it passes one, otherwise show our own inside the panel.
+  const [localToast, setLocalToast] = useState(null);
+  const toastTimer = useRef(0);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  const onToast = useCallback((msg, kind) => {
+    if (onToastProp) { onToastProp(msg, kind); return; }
+    setLocalToast({ msg, kind, id: Date.now() });
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setLocalToast(null), kind === 'error' ? 4200 : 2400);
+  }, [onToastProp]);
+  const [copiedId, setCopiedId] = useState(null); // the link whose Copy button shows "Copied ✓" for a moment
+  const copiedTimer = useRef(0);
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -278,7 +292,7 @@ export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
 
   const act = async (fn, okMsg) => {
     setBusy(true); setError('');
-    try { await fn(); if (okMsg) onToast?.(okMsg); await load(); } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+    try { await fn(); if (okMsg) onToast?.(okMsg); await load(); } catch (e) { const m = errorMessage(e); setError(m); onToast?.(m, 'error'); } finally { setBusy(false); }
   };
 
   const counts = useMemo(() => {
@@ -314,12 +328,17 @@ export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
       onToast?.(msg);
       setBulk(null); setSel(new Set());
       await load();
-    } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+    } catch (e) { const m = errorMessage(e); setError(m); onToast?.(m, 'error'); } finally { setBusy(false); }
   };
 
-  const copy = async (token) => {
-    const ok = await copyText(shareUrl(token));
-    onToast?.(ok ? tt('Link copied.', 'تم نسخ الرابط.') : tt('Could not copy — select the link and copy it.', 'تعذّر النسخ — حدد الرابط وانسخه يدويًا.'), ok ? undefined : 'error');
+  const copy = async (l) => {
+    const ok = await copyText(shareUrl(l.token));
+    if (ok) {
+      setCopiedId(l.id);
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopiedId(null), 1800);
+    }
+    onToast?.(ok ? tt('Link copied to the clipboard.', 'تم نسخ الرابط ✓') : tt('Could not copy — select the link and copy it.', 'تعذّر النسخ — حدد الرابط وانسخه يدويًا.'), ok ? undefined : 'error');
   };
 
   const expiryText = (l) => {
@@ -334,8 +353,21 @@ export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
     { k: 'paused', en: 'Paused', ar: 'موقوفة' }, { k: 'ended', en: 'Ended', ar: 'منتهية' },
   ];
 
+  const toastEl = localToast && (
+    <div className="mp-sl__toastdock" aria-live="polite">
+      <div key={localToast.id} className={`mp-sl__toast${localToast.kind === 'error' ? ' is-error' : ''}`} role="status">
+        <Icon name={localToast.kind === 'error' ? 'alert' : 'check-circle'} size={16} /><span>{localToast.msg}</span>
+      </div>
+    </div>
+  );
+
   if (detail) {
-    return <Activity share={detail} ar={ar} locale={locale} tt={tt} onBack={() => setDetail(null)} onToast={onToast} onChanged={load} />;
+    return (
+      <div className={`mp-sl-wrap${embedded ? ' mp-sl--embedded' : ''}`}>
+        <Activity share={detail} ar={ar} locale={locale} tt={tt} onBack={() => setDetail(null)} onToast={onToast} onChanged={load} />
+        {toastEl}
+      </div>
+    );
   }
 
   const total = items?.length || 0;
@@ -419,7 +451,6 @@ export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
                 <div className="mp-sl__title">
                   <strong title={l.node?.name}>{l.node_deleted ? tt('Deleted item', 'عنصر محذوف') : l.node?.name}</strong>
                   <div className="mp-share__top">
-                    <span className={`mp-badge ${st.cls}`}>{ar ? st.ar : st.en}</span>
                     {l.node_deleted && <span className="mp-badge is-off">{tt('Item deleted — link is dead', 'العنصر اتحذف — الرابط مات')}</span>}
                     <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
                     {l.has_password && <span className="mp-badge mp-badge--soft"><Icon name="lock" size={11} />{tt('Password', 'باسورد')}</span>}
@@ -429,12 +460,15 @@ export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
                     {l.claimed && <span className="mp-badge mp-badge--soft" title={l.claimed_device || ''}><Icon name="shield" size={11} />{tt('Bound to a browser', 'مربوط بمتصفح')}</span>}
                   </div>
                 </div>
+                <span className={`mp-badge mp-sl__status ${st.cls}`}>{ar ? st.ar : st.en}</span>
               </div>
 
               {live && (
                 <div className="mp-share__url">
                   <input readOnly dir="ltr" value={shareUrl(l.token)} onFocus={(e) => e.target.select()} aria-label={tt('Share link', 'رابط المشاركة')} />
-                  <button type="button" className="mp-share__copy" onClick={() => copy(l.token)} disabled={l.expired}><Icon name="copy" size={14} /><span>{tt('Copy', 'نسخ')}</span></button>
+                  <button type="button" className={`mp-share__copy${copiedId === l.id ? ' is-done' : ''}`} onClick={() => copy(l)} disabled={l.expired} aria-live="polite">
+                    <Icon name={copiedId === l.id ? 'check' : 'copy'} size={14} /><span>{copiedId === l.id ? tt('Copied', 'تم النسخ') : tt('Copy', 'نسخ')}</span>
+                  </button>
                 </div>
               )}
 
@@ -466,6 +500,7 @@ export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
           );
         })}
       </div>
+      {toastEl}
     </div>
   );
 }

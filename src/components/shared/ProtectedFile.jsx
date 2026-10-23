@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { unzipSync } from 'fflate';
 import Icon from '../Icon';
 import { ProtectedImage, ProtectedPdf } from './ProtectedViewers';
