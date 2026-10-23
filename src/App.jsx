@@ -1,7 +1,8 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PageLoading from './components/PageLoading';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { readHeldFlag, readLockCache, readUnlockedFlag } from './desktop/desktopApi';
 import { STAFF_LOGIN_PATH } from './config/staffPortal';
 import StaffGate from './components/staff/StaffGate';
 import { ThemeProvider } from './context/ThemeContext';
@@ -172,6 +173,13 @@ const StudentContacts = lazy(() => import('./pages/student/StudentContacts'));
 const StudentPortfolio = lazy(() => import('./pages/student/StudentPortfolio'));
 const StudentMyPC = lazy(() => import('./pages/student/StudentMyPC'));
 const DesktopOS = lazy(() => import('./desktop/DesktopOS'));
+/** The classic "My PC" view has no lock screen of its own: while the desktop is locked (or never unlocked in this tab) send the person back to the lock screen. */
+function ClassicLockGuard({ children }) {
+  const { user } = useAuth();
+  const uid = user?.id;
+  const blocked = readHeldFlag(uid) || (readLockCache(uid) !== false && !readUnlockedFlag(uid));
+  return blocked ? <Navigate to="/student/my-pc" replace /> : children;
+}
 const StudentGraduation = lazy(() => import('./pages/student/StudentGraduation'));
 const StudentGraduationTranscript = lazy(() => import('./pages/student/StudentGraduationTranscript'));
 const StudentGraduationCertificate = lazy(() => import('./pages/student/StudentGraduationCertificate'));
@@ -367,7 +375,7 @@ export default function App() {
                 <Route path="/student/contacts" element={<StudentContacts />} />
                 <Route path="/student/portfolio" element={<StudentPortfolio />} />
                 <Route path="/student/my-pc" element={<DesktopOS />} />
-                <Route path="/student/my-pc/classic" element={<StudentMyPC />} />
+                <Route path="/student/my-pc/classic" element={<ClassicLockGuard><StudentMyPC /></ClassicLockGuard>} />
                 <Route path="/student/graduation" element={<StudentGraduation />} />
                 <Route path="/student/group-chat" element={<StudentGroupChat />} />
                 <Route path="/student/patents" element={<StudentPatents />} />

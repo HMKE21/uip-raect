@@ -232,11 +232,12 @@ export default function DesktopOS() {
   const unverified = useRef(false); // started unlocked only because of the local "no password" cache: the server still has to confirm it
   const [locked, setLockedRaw] = useState(() => {
     const uid = user?.id;
-    if (readHeldFlag(uid)) return true; // the screen was locked in this tab (manual / idle / sleep / remote): a reload (even a hard one) keeps it locked
-    const cached = readLockCache(uid);
-    if (cached === false || readSec(uid).lockOnStart === false) { if (cached === false) unverified.current = true; return false; } // no password (as far as this browser knows), or the person chose not to start locked
+    if (readHeldFlag(uid)) return true; // the screen was locked in this tab (manual / idle / sleep / remote / boot): a reload (even a hard one) keeps it locked
+    if (readSec(uid).lockOnStart === false) return false; // the person chose not to start locked
     if (readUnlockedFlag(uid)) return readLockedFlag(uid);
-    bootLock.current = true; return true;
+    // FAIL CLOSED: a new tab / device starts locked, and a stale "no password" cache no longer opens the desktop —
+    // only the server's answer (see the effect below) may unlock it without a password.
+    bootLock.current = true; writeHeldFlag(uid, true); return true;
   });
   const lockOnRef = useRef(null);
   const setLocked = useCallback((v) => { bootLock.current = false; unverified.current = false; writeHeldFlag(uidRef.current, !!v); setLockedRaw(v); writeLockedFlag(uidRef.current, !!v && lockOnRef.current === true); writeUnlockedFlag(uidRef.current, !v); }, []);
@@ -534,8 +535,8 @@ export default function DesktopOS() {
   const onWake = useCallback(() => { wake(); if (secRef.current.lockAfterSleep && lockOnRef.current === true) setLocked(true); }, [wake, setLocked]);
   useEffect(() => {
     const startLocked = sec.lockOnStart !== false;
-    if ((lockEnabled === false || !startLocked) && bootLock.current) { bootLock.current = false; setLockedRaw(false); writeUnlockedFlag(uidRef.current, true); } // no password set / chose not to start locked: nothing to ask on a new device
-    else if (lockEnabled === true && startLocked && (unverified.current || !readUnlockedFlag(uidRef.current))) { unverified.current = false; setLockedRaw(true); writeUnlockedFlag(uidRef.current, false); } // a password exists (set on another device, or the local cache was stale): ask for it
+    if ((lockEnabled === false || !startLocked) && bootLock.current && (synced || !startLocked)) { bootLock.current = false; setLockedRaw(false); writeHeldFlag(uidRef.current, false); writeUnlockedFlag(uidRef.current, true); } // no password set / chose not to start locked: nothing to ask on a new device
+    else if (lockEnabled === true && startLocked && (unverified.current || !readUnlockedFlag(uidRef.current))) { unverified.current = false; setLockedRaw(true); writeHeldFlag(uidRef.current, true); writeUnlockedFlag(uidRef.current, false); } // a password exists (set on another device, or the local cache was stale): ask for it
     if (synced) unverified.current = false;
   }, [lockEnabled, sec.lockOnStart, synced]);
   // remember where every icon sits (new ones get the first free cell, deleted ones are forgotten)

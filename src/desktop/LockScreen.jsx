@@ -24,7 +24,10 @@ export function LockScreen({ ar, tt, user, lockEnabled, onUnlock: onUnlockRaw, o
       const r = await desktopApi.lockVerify('');
       if (r?.lockEnabled === false) onUnlockRaw(); else onLockEnabled?.(true);
     } catch (x) {
-      if (x?.status === 0 || x?.status >= 500 || !x?.status) onUnlockRaw?.(); // offline: nothing to verify against
+      // Fail closed: only a genuinely offline browser may open without asking the server. A failed / aborted / throttled
+      // request (a hard refresh, many reloads, a 429 or 5xx) must NEVER unlock the screen.
+      if (typeof navigator !== 'undefined' && navigator.onLine === false && lockEnabled === false) onUnlockRaw?.();
+      else if (x?.status === 0 || x?.status >= 500 || !x?.status || x?.status === 429) { /* stay locked; the next click retries */ }
       else onLockEnabled?.(true); // the server has a password: show the password form
     } finally { unlocking.current = false; }
   }, [lockEnabled, onUnlockRaw, onLockEnabled]);
