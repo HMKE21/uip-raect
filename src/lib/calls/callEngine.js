@@ -96,10 +96,43 @@ export function createCallEngine(deps) {
   /** Remember the camera track of a freshly acquired stream and show it in the local preview. */
   function adoptStream(stream) {
     camTrack = firstVideoTrack(stream);
+    watchCam(camTrack);
     try { setLocalVideo(camTrack ? makeStream([camTrack]) : null); } catch { /* preview is best-effort */ }
     if (camTrack && countCameras) {
       Promise.resolve(countCameras()).then((n) => { if (camTrack) set({ canSwitchCam: n > 1 }); }).catch(() => {});
     }
+  }
+
+  // ---- camera health: a webcam can stall mid-call (driver hiccup, camera shared with another window/app). The preview then
+  // freezes and the peer sees black. Browsers flag it as a muted/ended track, or the encoder stops producing frames.
+  let camWatch = 0;
+  let camReopens = 0;
+
+  function watchCam(track) {
+    if (!track) return;
+    const bad = () => {
+      if (camTrack !== track || !inLiveCall() || camWatch) return;
+      camWatch = timers.setTimeout(() => {
+        camWatch = 0;
+        if (camTrack === track && st.camOn && !st.sharing && (track.muted || track.readyState === 'ended')) reopenCamera();
+      }, 2500);
+    };
+    try { track.onmute = bad; track.onended = bad; } catch { /* ignore */ }
+  }
+
+  async function reopenCamera() {
+    if (!st.call || !st.camOn || st.sharing || camReopens >= 4) return;
+    camReopens += 1;
+    const id = st.call.id;
+    try { console.warn('[call] camera stalled - reopening it', camReopens); } catch { /* diagnostics only */ }
+    try { camTrack && camTrack.stop(); } catch { /* ignore */ }
+    try {
+      const stream = await getUserMedia({ video: true, audio: false, facing: st.facing, noise: st.noiseOn });
+      if (!st.call || st.call.id !== id) { stopStream(stream); return; }
+      camTrack = firstVideoTrack(stream);
+      watchCam(camTrack);
+      await applyOutgoingVideo();
+    } catch { /* the camera is really gone; the user can toggle it manually */ }
   }
 
   /** The video m-line's transceiver (exists in video calls only). Its sender is how camera/screen/filters are swapped without renegotiating. */
@@ -168,7 +201,8 @@ export function createCallEngine(deps) {
     sendChain = Promise.resolve();
     makingOffer = false;
     lastLoss = { lost: 0, recv: 0 };
-    stallTicks = 0; lastIn = -1; recoveries = 0;
+    stallTicks = 0; lastIn = -1; recoveries = 0; frameStall = 0; lastFrames = -1; camReopens = 0;
+    if (camWatch) { timers.clearTimeout(camWatch); camWatch = 0; }
     try { setRemoteStream && setRemoteStream(null, null); } catch { /* ignore */ }
     try { vibrate(0); } catch { /* ignore */ }
     if (closeNotify) { try { closeNotify(); } catch { /* ignore */ } closeNotify = null; }
@@ -418,6 +452,8 @@ export function createCallEngine(deps) {
   let stallTicks = 0;
   let lastIn = -1;
   let recoveries = 0;
+  let frameStall = 0;
+  let lastFrames = -1;
 
   function recoverMedia() {
     if (recoveries >= 3) return;
@@ -443,17 +479,24 @@ export function createCallEngine(deps) {
 
   function startStats(conn) {
     if (statsTimer) timers.clearInterval(statsTimer);
-    stallTicks = 0; lastIn = -1; recoveries = 0;
+    stallTicks = 0; lastIn = -1; recoveries = 0; frameStall = 0; lastFrames = -1; camReopens = 0;
     if (!conn.getStats) return;
     statsTimer = timers.setInterval(async () => {
       if (pc !== conn || st.reconnecting) return;
       try {
         const report = await conn.getStats();
-        let lost = 0; let recv = 0; let rtt = 0; let inAudio = 0;
+        let lost = 0; let recv = 0; let rtt = 0; let inAudio = 0; let vFrames = -1;
         report.forEach((r) => {
           if (r.type === 'inbound-rtp' && (r.kind === 'audio' || r.mediaType === 'audio')) { lost = r.packetsLost || 0; recv = r.packetsReceived || 0; inAudio = (r.bytesReceived || 0) + (r.packetsReceived || 0); }
+          if (r.type === 'outbound-rtp' && (r.kind === 'video' || r.mediaType === 'video')) vFrames = r.framesEncoded != null ? r.framesEncoded : (r.framesSent != null ? r.framesSent : -1);
           if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.currentRoundTripTime) rtt = r.currentRoundTripTime;
         });
+        // my camera should keep producing frames even for a still scene; a flat counter = frozen camera
+        if (vFrames >= 0 && st.camOn && !st.sharing && camTrack && st.phase === 'active') {
+          if (vFrames <= lastFrames) { frameStall += 1; } else { frameStall = 0; }
+          lastFrames = vFrames;
+          if (frameStall >= 2) { frameStall = 0; reopenCamera(); }
+        } else { frameStall = 0; lastFrames = vFrames; }
         const dl = Math.max(0, lost - lastLoss.lost);
         const dr = Math.max(0, recv - lastLoss.recv);
         lastLoss = { lost, recv };
@@ -838,6 +881,7 @@ export function createCallEngine(deps) {
       const stream = await getUserMedia({ video: true, audio: false, facing: st.facing, noise: st.noiseOn });
       if (!st.call || st.call.id !== id) { stopStream(stream); return; }
       camTrack = firstVideoTrack(stream);
+      watchCam(camTrack);
       set({ camOn: !!camTrack });
       if (countCameras) Promise.resolve(countCameras()).then((n) => { if (camTrack) set({ canSwitchCam: n > 1 }); }).catch(() => {});
       await applyOutgoingVideo();
@@ -857,6 +901,7 @@ export function createCallEngine(deps) {
       const stream = await getUserMedia({ video: true, audio: false, facing: next, noise: st.noiseOn });
       if (!st.call || st.call.id !== id) { stopStream(stream); return; }
       camTrack = firstVideoTrack(stream);
+      watchCam(camTrack);
       set({ facing: next });
     } catch {
       try { // fall back to the camera that was in use
