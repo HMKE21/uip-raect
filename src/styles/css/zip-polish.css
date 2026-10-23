@@ -101,3 +101,46 @@
 
 /* what the user typed in answer to input() / prompt(): accent colour, bold, a soft pill so it reads as "yours" next to the program's output */
 .zb .zb-run .zb-log__echo { unicode-bidi: isolate; color: var(--zb-accent); font-weight: 700; padding: 0 .4em; margin-inline-start: .25em; border-radius: 5px; background: color-mix(in srgb, var(--zb-accent) 14%, transparent); }
+
+/* =====================================================================================================================
+   Console clarity pass: the terminal surface used to be "theme background + 22% black" = a muddy mid-grey on light themes,
+   with thin 13px text and a low-contrast accent. Now: a clean surface per theme, heavier + larger crisp mono text, strong contrast.
+   ===================================================================================================================== */
+.zb {
+  --zb-term: color-mix(in srgb, var(--zb-bg) 82%, #000);                                              /* fallback */
+  --zb-term: light-dark(color-mix(in srgb, var(--zb-bg) 97%, #000), color-mix(in srgb, var(--zb-bg) 84%, #000));
+  --zb-ink: light-dark(color-mix(in srgb, var(--zb-strong) 92%, #000), color-mix(in srgb, var(--zb-strong) 96%, #fff));
+  --zb-echo: light-dark(color-mix(in srgb, var(--zb-accent) 70%, #000), color-mix(in srgb, var(--zb-accent) 55%, #fff));
+  --zb-con-w: light-dark(500, 400);                                                                   /* heavier strokes on light backgrounds */
+  --zb-fs-con: calc(var(--zb-fs) * 1.1px);
+}
+.zb .zb-run__log {
+  font-family: var(--zb-font-mono); font-size: var(--zb-fs-con); font-weight: var(--zb-con-w); line-height: 1.75; letter-spacing: 0;
+  color: var(--zb-ink); text-rendering: optimizeLegibility; -webkit-font-smoothing: auto; padding: 14px 20px 18px;
+}
+.zb .zb-run .zb-log--stdout, .zb .zb-run .zb-log--log { color: var(--zb-ink); }
+.zb .zb-run .zb-log--stderr, .zb .zb-run .zb-log--error { font-weight: 600; color: light-dark(#b42318, #ff8b82); background: light-dark(rgba(180,35,24,.07), rgba(255,139,130,.10)); }
+.zb .zb-run .zb-log--warn { color: light-dark(#8a5a00, #e3b341); font-weight: 600; }
+.zb .zb-run .zb-log--system { font-weight: 500; font-size: calc(var(--zb-fs-con) * .88); color: color-mix(in srgb, var(--zb-ink) 65%, transparent); }
+.zb .zb-run .zb-log--system::before { color: var(--zb-echo); }
+
+/* the user's own answer: high-contrast accent, bold, outlined pill */
+.zb .zb-run .zb-log__echo {
+  color: var(--zb-echo); font-weight: 800; padding: 1px .55em; margin-inline-start: .3em; border-radius: 6px;
+  background: color-mix(in srgb, var(--zb-accent) 13%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--zb-accent) 38%, transparent) inset;
+}
+
+/* answer line (input box under the console) */
+.zb .zb-run__prompt { background: color-mix(in srgb, var(--zb-accent) 8%, var(--zb-term)); border-top: 2px solid var(--zb-accent); padding: 12px 20px; gap: 12px; }
+.zb .zb-run__chev { color: var(--zb-echo); font-size: calc(var(--zb-fs-con) * 1.25); font-weight: 800; }
+.zb .zb-run__prompt input {
+  font-family: var(--zb-font-mono); font-size: var(--zb-fs-con); font-weight: 600; color: var(--zb-ink); padding: 8px 12px; border-radius: 9px;
+  background: var(--zb-bg); border: 1px solid color-mix(in srgb, var(--zb-accent) 45%, var(--zb-line)); caret-color: var(--zb-accent);
+}
+.zb .zb-run__prompt input:focus { border-color: var(--zb-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--zb-accent) 22%, transparent); }
+.zb .zb-run__prompt input::placeholder { font-family: var(--zb-font-ui); font-weight: 500; font-size: calc(var(--zb-fs-con) * .92); color: color-mix(in srgb, var(--zb-ink) 62%, transparent); opacity: 1; }
+.zb .zb-run__prompt kbd { color: var(--zb-ink); border-color: var(--zb-line); }
+.zb .zb-run__stdin textarea { font-family: var(--zb-font-mono); font-weight: 500; color: var(--zb-ink); }
+.zb .zb-run__stdin textarea::placeholder { font-family: var(--zb-font-ui); color: color-mix(in srgb, var(--zb-ink) 60%, transparent); opacity: 1; }
+.zb .zb-run__stdin summary { color: color-mix(in srgb, var(--zb-ink) 75%, transparent); font-weight: 700; }
+.zb .zb-run__empty { color: color-mix(in srgb, var(--zb-ink) 70%, transparent); }
