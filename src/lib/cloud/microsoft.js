@@ -166,6 +166,17 @@ export const microsoft = {
     try { const me = await cloudFetch('https://graph.microsoft.com/v1.0/me?$select=userPrincipalName,mail', { headers: authed(r.tok) }); const j = await me.json(); account = j.mail || j.userPrincipalName || ''; } catch { /* optional */ }
     return { ...r, account };
   },
+  /** Profile photo of the linked Microsoft account as a data URL ('' when there is none). Best effort. */
+  async profile(tok) {
+    try {
+      const r = await fetch('https://graph.microsoft.com/v1.0/me/photos/96x96/$value', { headers: authed(tok) });
+      if (!r.ok) return { picture: '' };
+      const blob = await r.blob();
+      if (!blob.type.startsWith('image/') || blob.size > 200 * 1024) return { picture: '' };
+      const picture = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.onerror = () => res(''); fr.readAsDataURL(blob); });
+      return { picture };
+    } catch { return { picture: '' }; }
+  },
   async refresh(cfg, refreshToken) {
     if (!refreshToken) throw new CloudAuthError('Sign in again to continue.', 'expired');
     return tokenCall(cfg, { grant_type: 'refresh_token', refresh_token: refreshToken });

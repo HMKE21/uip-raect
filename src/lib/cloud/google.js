@@ -138,6 +138,10 @@ export const google = {
     try { const r = await cloudFetch('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', { headers: authed(tok) }); account = (await r.json())?.user?.emailAddress || ''; } catch { /* optional */ }
     return { tok, account };
   },
+  /** Profile photo URL of the linked Google account ('' when there is none). Best effort. */
+  async profile(tok) {
+    try { const r = await cloudFetch('https://www.googleapis.com/drive/v3/about?fields=user(photoLink)', { headers: authed(tok) }); return { picture: (await r.json())?.user?.photoLink || '' }; } catch { return { picture: '' }; }
+  },
   /** Silent renewal (no click). Throws CloudAuthError when Google wants the person to act. */
   async refresh(cfg, account, { server = false, force = false } = {}) {
     if (server) return serverToken(force);

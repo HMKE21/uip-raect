@@ -43,6 +43,8 @@
 .sc-logo { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; font-weight: 800; color: #fff; flex: none; }
 .sc-logo--google { background: linear-gradient(135deg, #4285f4, #34a853 55%, #fbbc05); }
 .sc-logo--microsoft { background: #0f6cbd; }
+.sc-logo { overflow: hidden; }
+.sc-logo__img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .sc-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 12px; }
 .sc-check { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 /* tray */

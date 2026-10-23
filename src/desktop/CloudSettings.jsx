@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from '../components/Icon';
 import { cloud, useCloud } from '../lib/cloud/engine';
 import { saveCenter, useSaveCenter } from '../lib/saveCenter';
@@ -7,6 +7,19 @@ const Section = ({ title, children }) => (
   <section className="os-set__sec"><h3>{title}</h3>{children}</section>
 );
 const LOGO = { google: 'G', microsoft: 'O' };
+
+/** The linked account's profile photo; falls back to the first letter of its email (or the provider letter when not linked). */
+function CloudAvatar({ id, link }) {
+  const [bad, setBad] = useState(false);
+  const pic = link?.picture;
+  useEffect(() => { setBad(false); }, [pic]);
+  const letter = (link?.account || '').trim().charAt(0).toUpperCase() || LOGO[id];
+  return (
+    <span className={`sc-logo sc-logo--${id}`}>
+      {pic && !bad ? <img className="sc-logo__img" src={pic} alt="" referrerPolicy="no-referrer" onError={() => setBad(true)} /> : letter}
+    </span>
+  );
+}
 
 export function ago(ts, tt) {
   if (!ts) return tt('never', 'لسه');
@@ -42,6 +55,8 @@ export function CloudPanel({ tt, usage }) {
     try { await cloud.connect(id); } catch (e) { setErr(e?.message || tt('Could not connect.', 'تعذّر الربط.')); } finally { setBusy(''); }
   };
   const sum = cloudSummary(cl, tt);
+  const linkedKey = cl.providers.join(',');
+  useEffect(() => { if (linkedKey) cloud.ensureAvatars(); }, [linkedKey]);
   const ids = ['google', 'microsoft'];
   const anyAvailable = ids.some((i) => cloud.available(i));
   const REMIND = [[60, tt('1 min', 'دقيقة')], [120, tt('2 min', 'دقيقتين')], [300, tt('5 min', '5 دقايق')]];
@@ -66,7 +81,7 @@ export function CloudPanel({ tt, usage }) {
             const name = cloud.providers[id].label;
             return (
               <div key={id} className={`sc-card${on ? ' is-on' : ''}`}>
-                <span className={`sc-logo sc-logo--${id}`}>{LOGO[id]}</span>
+                <CloudAvatar id={id} link={lk} />
                 <div className="sc-card__txt"><b>{name}</b>
                   <span>{on ? (lk.account || tt('Connected', 'متصل')) : tt('Not connected', 'غير متصل')}</span>
                   {on && lk.status === 'error' && <span className="sc-tone sc-tone--bad">{lk.lastError}</span>}</div>

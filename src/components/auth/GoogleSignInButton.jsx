@@ -15,6 +15,10 @@ const GoogleLogo = () => (
  * "Continue with Google". Calls onToken(idToken) with the Google ID token; the caller sends it to the API.
  * Renders nothing when Google sign-in isn't configured on the backend.
  */
+// google.accounts.id.initialize() should run once per client id: the button can mount more than once (StrictMode, switching screens),
+// and Google warns about repeated calls. The callback goes through a module-level handler that the mounted button keeps up to date.
+let gsiInitFor = null;
+let gsiHandler = null;
 const BTN_H = 52;   // height of our own button (px) - keep in sync with .auth-google in auth.css
 const GIS_H = 40;   // height of Google's "large" button, which we scale to BTN_H
 
@@ -47,12 +51,16 @@ export default function GoogleSignInButton({ onToken, onError, disabled = false 
     let alive = true;
     loadGoogleIdentity().then((google) => {
       if (!alive) return;
-      google.accounts.id.initialize({
-        client_id: cfg.clientId,
-        ux_mode: 'popup',
-        auto_select: false,
-        callback: (res) => { if (res?.credential) latest.current.onToken(res.credential); },
-      });
+      gsiHandler = (credential) => latest.current.onToken(credential);
+      if (gsiInitFor !== cfg.clientId) {
+        gsiInitFor = cfg.clientId;
+        google.accounts.id.initialize({
+          client_id: cfg.clientId,
+          ux_mode: 'popup',
+          auto_select: false,
+          callback: (res) => { if (res?.credential) gsiHandler?.(res.credential); },
+        });
+      }
       gisRef.current = google;
       setReady(true);
     }).catch(() => {

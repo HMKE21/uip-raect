@@ -41,7 +41,7 @@ const subs = new Set();
 const emit = () => { snap = null; subs.forEach((f) => f()); };
 const persist = () => writeJson(localStorage, dbKey(S.uid), {
   v: 2, auto: S.auto, layout: BACKUP_LAYOUT,
-  links: Object.fromEntries(linkIds().map((id) => { const l = S.links[id]; return [id, { account: l.account, server: l.server, lastOk: l.lastOk, db: l.db }]; })),
+  links: Object.fromEntries(linkIds().map((id) => { const l = S.links[id]; return [id, { account: l.account, picture: l.picture, server: l.server, lastOk: l.lastOk, db: l.db }]; })),
 });
 /** One status for the whole backup: the most urgent state of any linked cloud. */
 function aggregate() {
@@ -58,7 +58,7 @@ const snapshot = () => {
     const oks = ids.map((id) => S.links[id].lastOk || 0);
     snap = {
       ready: S.ready, provider: ids[0] || '', providers: ids, auto: S.auto, account: ids[0] ? S.links[ids[0]].account : '',
-      links: Object.fromEntries(ids.map((id) => { const l = S.links[id]; return [id, { account: l.account, lastOk: l.lastOk, status: l.status, lastError: l.lastError, progress: l.progress }]; })),
+      links: Object.fromEntries(ids.map((id) => { const l = S.links[id]; return [id, { account: l.account, picture: l.picture || '', lastOk: l.lastOk, status: l.status, lastError: l.lastError, progress: l.progress }]; })),
       lastOk: oks.length ? Math.min(...oks) : 0, lastError: ag.lastError, status: ag.status, progress: ag.progress, cfg: S.cfg,
     };
   }
@@ -193,7 +193,7 @@ export const cloud = {
     if (saved) {
       S.auto = saved.auto !== false;
       const fresh = saved.layout === BACKUP_LAYOUT;
-      if (saved.links) Object.entries(saved.links).forEach(([id, l]) => { S.links[id] = { account: l.account || '', server: !!l.server, lastOk: l.lastOk || 0, db: fresh && l.db ? l.db : newDb() }; });
+      if (saved.links) Object.entries(saved.links).forEach(([id, l]) => { S.links[id] = { account: l.account || '', picture: l.picture, server: !!l.server, lastOk: l.lastOk || 0, db: fresh && l.db ? l.db : newDb() }; });
       else if (saved.provider) S.links[saved.provider] = { account: saved.account || '', server: !!saved.server, lastOk: saved.lastOk || 0, db: fresh && saved.db ? saved.db : newDb() }; // old single-cloud format
       Object.entries(S.links).forEach(([id, l]) => { Object.assign(l, { status: 'idle', lastError: '', retried: false, forceTok: false, progress: { done: 0, total: 0 } }); if (!PROVIDERS[id]) delete S.links[id]; });
     }
@@ -216,11 +216,24 @@ export const cloud = {
     const r = await P.connect(S.cfg[id], id === 'google' ? prev?.account : undefined);
     const account = r.account || '';
     const sameAccount = prev && prev.account === account;
-    S.links[id] = { account, server: !!r.server, lastOk: sameAccount ? prev.lastOk : 0, db: sameAccount ? prev.db : newDb(), status: 'idle', lastError: '', retried: false, forceTok: false, progress: { done: 0, total: 0 } };
+    S.links[id] = { account, picture: sameAccount ? prev.picture : undefined, server: !!r.server, lastOk: sameAccount ? prev.lastOk : 0, db: sameAccount ? prev.db : newDb(), status: 'idle', lastError: '', retried: false, forceTok: false, progress: { done: 0, total: 0 } };
     S.auto = true;
     writeJson(sessionStorage, tokKey(S.uid, id), { tok: r.tok, refreshToken: r.refreshToken || null });
     persist(); emit();
     schedule(300);
+    this.ensureAvatars();
+  },
+  /** Fetches the profile photo of every linked cloud that has not been looked up yet (best effort, never throws). */
+  async ensureAvatars() {
+    for (const id of linkIds()) {
+      const l = S.links[id];
+      if (l.picture !== undefined || !PROVIDERS[id].profile) continue;
+      try {
+        const tok = await getToken(id);
+        const { picture } = await PROVIDERS[id].profile(tok);
+        if (S.links[id] === l) { l.picture = picture || ''; persist(); emit(); }
+      } catch { /* needs sign-in again, offline… — the letter avatar stays; tried again next time the panel opens */ }
+    }
   },
   /** Unlink one cloud (id) — or all of them when no id is given. */
   disconnect(id) {
