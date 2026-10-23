@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { useLanguage } from './LanguageContext';
 import { createCallEngine } from '../lib/calls/callEngine';
 import { startTone, stopTone, blip, unlockAudio } from '../lib/calls/ringtone';
+import { createVideoFx } from '../lib/calls/videoFx';
 import CallUI from '../components/calls/CallUI';
 import { CallCtx, IDLE, useCall } from './callCtx';
 
@@ -28,22 +29,56 @@ const CLIENT_ID = (() => {
   }
 })();
 
-function getUserMedia() {
+const NOISE_KEY = 'uip.call.noise';
+const readNoisePref = () => { try { return localStorage.getItem(NOISE_KEY) !== '0'; } catch { return true; } };
+
+/**
+ * opts: { video?: boolean, audio?: boolean (default true), facing?: 'user'|'environment', noise?: boolean (default true) }
+ * Noise suppression / echo cancellation / auto gain are the browser's built-in processing (the same engine Meet-style
+ * web calls use); `voiceIsolation` is picked up by browsers that support it and ignored elsewhere.
+ */
+function getUserMedia(opts = {}) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     const e = new Error('unsupported');
     e.name = 'NotSupportedError';
     return Promise.reject(e);
   }
-  return navigator.mediaDevices.getUserMedia({
-    audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    video: false,
-  });
+  const noise = opts.noise !== false;
+  const audio = opts.audio === false ? false : {
+    echoCancellation: { ideal: true },
+    noiseSuppression: { ideal: noise },
+    autoGainControl: { ideal: noise },
+    voiceIsolation: { ideal: noise },
+    channelCount: { ideal: 1 },
+  };
+  const video = opts.video ? {
+    width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24, max: 30 },
+    facingMode: { ideal: opts.facing === 'environment' ? 'environment' : 'user' },
+  } : false;
+  return navigator.mediaDevices.getUserMedia({ audio, video });
+}
+
+function getDisplayMedia() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    const e = new Error('unsupported');
+    e.name = 'NotSupportedError';
+    return Promise.reject(e);
+  }
+  return navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
+}
+
+async function countCameras() {
+  try {
+    const list = await navigator.mediaDevices.enumerateDevices();
+    return list.filter((d) => d.kind === 'videoinput').length;
+  } catch { return 1; }
 }
 
 /** System notification + tab-title flash for a call that rings while the tab is in the background. */
 function notifyIncoming(call, ar) {
   const name = (call && call.peer && call.peer.name) || '';
-  const title = ar ? 'مكالمة صوتية واردة' : 'Incoming voice call';
+  const video = call && call.type === 'video';
+  const title = video ? (ar ? 'مكالمة فيديو واردة' : 'Incoming video call') : (ar ? 'مكالمة صوتية واردة' : 'Incoming voice call');
   let n = null;
   let flash = 0;
   const prevTitle = document.title;
@@ -68,6 +103,7 @@ export function CallProvider({ children }) {
   const { user, status, can, permissionsReady } = useAuth();
   const { locale } = useLanguage();
   const [state, setState] = useState(IDLE);
+  const [media, setMedia] = useState({ local: null, remote: null }); // live MediaStreams for the <video> tags
   const engineRef = useRef(null);
   const audioRef = useRef(null);
   const arRef = useRef(locale === 'ar');
@@ -94,6 +130,14 @@ export function CallProvider({ children }) {
       clientId: CLIENT_ID,
       base: BASE,
       getUserMedia,
+      getDisplayMedia: typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia ? getDisplayMedia : null,
+      countCameras,
+      createFx: createVideoFx,
+      makeStream: (tracks) => new MediaStream(tracks),
+      setLocalVideo: (stream) => setMedia((m) => (m.local === stream ? m : { ...m, local: stream })),
+      setRemoteVideo: (stream) => setMedia((m) => (m.remote === stream ? m : { ...m, remote: stream })),
+      initialNoise: readNoisePref(),
+      onPref: (key, value) => { if (key === 'noise') { try { localStorage.setItem(NOISE_KEY, value ? '1' : '0'); } catch { /* private mode */ } } },
       createPc: (cfg) => new RTCPeerConnection(cfg),
       tones: { start: startTone, stop: stopTone, blip },
       setRemoteStream: (stream, track) => {
@@ -139,12 +183,18 @@ export function CallProvider({ children }) {
       engine.stop();
       engineRef.current = null;
       setState(IDLE);
+      setMedia({ local: null, remote: null });
     };
   }, [enabled, userId]);
 
   const actions = useMemo(() => ({
-    startCall: (conversationId, peer) => (engineRef.current ? engineRef.current.startCall(conversationId, peer) : Promise.resolve(false)),
-    accept: () => engineRef.current && engineRef.current.accept(),
+    startCall: (conversationId, peer, opts) => (engineRef.current ? engineRef.current.startCall(conversationId, peer, opts) : Promise.resolve(false)),
+    accept: (opts) => engineRef.current && engineRef.current.accept(opts),
+    toggleCamera: () => engineRef.current && engineRef.current.toggleCamera(),
+    switchCamera: () => engineRef.current && engineRef.current.switchCamera(),
+    toggleScreenShare: () => engineRef.current && engineRef.current.toggleScreenShare(),
+    setFilter: (name) => engineRef.current && engineRef.current.setFilter(name),
+    setNoise: (on) => engineRef.current && engineRef.current.setNoise(on),
     decline: () => engineRef.current && engineRef.current.decline(),
     hangup: () => engineRef.current && engineRef.current.hangup(),
     toggleMute: () => engineRef.current && engineRef.current.toggleMute(),
@@ -152,7 +202,7 @@ export function CallProvider({ children }) {
     dismissNotice: () => engineRef.current && engineRef.current.dismissNotice(),
   }), []);
 
-  const value = useMemo(() => ({ ...state, ...actions }), [state, actions]);
+  const value = useMemo(() => ({ ...state, ...actions, localVideo: media.local, remoteVideo: media.remote }), [state, actions, media]);
 
   return (
     <CallCtx.Provider value={value}>

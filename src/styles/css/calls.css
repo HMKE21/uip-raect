@@ -76,6 +76,83 @@
 .call-screen__controls { display: flex; align-items: flex-start; justify-content: center; gap: 36px; }
 .call-ctl { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12.5px; color: rgba(255, 255, 255, .75); }
 
+/* ---------- video calls ---------- */
+.call-btn--accept.call-btn--alt { background: rgba(255, 255, 255, .16); }
+.call-btn--accept.call-btn--alt:hover { background: rgba(255, 255, 255, .26); }
+.call-btn.is-on:not(.call-btn--mute) { background: #fff; color: #171E2E; }
+
+.call-screen--video { padding: 0; justify-content: flex-start; background: #0B0F1C; overflow: hidden; }
+.call-vstage { position: absolute; inset: 0; background: radial-gradient(120% 90% at 50% 0%, #2a3566 0%, #171E2E 55%, #0F1424 100%); }
+.call-vremote { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #000; }
+.call-vremote.is-contain { object-fit: contain; }
+.call-vremote--self { opacity: .9; }
+.call-vremote.is-mirror, .call-vpip.is-mirror { transform: scaleX(-1); }
+.call-vplaceholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
+.call-vplaceholder.is-over { background: rgba(8, 12, 28, .45); }
+
+.call-vtop {
+  position: absolute; top: 0; inset-inline: 0; z-index: 2; display: flex; align-items: center; gap: 12px;
+  padding: max(14px, env(safe-area-inset-top, 0px)) 16px 28px;
+  background: linear-gradient(180deg, rgba(8, 12, 28, .7), rgba(8, 12, 28, 0));
+}
+.call-vtop__info { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 0; text-align: center; gap: 2px; }
+.call-vtop__info > strong { font-size: 16px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.call-vtop__info .call-screen__status { font-size: 13px; min-height: 18px; }
+.call-vtop__muted { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: rgba(255, 255, 255, .75); }
+
+.call-vpip {
+  position: absolute; z-index: 3; inset-inline-end: 14px; bottom: calc(max(24px, env(safe-area-inset-bottom, 0px)) + 96px);
+  width: clamp(96px, 22vw, 200px); aspect-ratio: 3 / 4; object-fit: cover; border-radius: 14px; background: #000;
+  border: 2px solid rgba(255, 255, 255, .55); box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+}
+.call-vbadge {
+  position: absolute; z-index: 3; top: calc(max(14px, env(safe-area-inset-top, 0px)) + 62px); inset-inline: 0; margin-inline: auto; width: max-content; max-width: calc(100% - 24px);
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12.5px;
+  background: rgba(18, 162, 119, .9); color: #fff;
+}
+.call-vbar {
+  position: absolute; z-index: 4; bottom: 0; inset-inline: 0; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px;
+  padding: 28px 16px max(22px, env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(0deg, rgba(8, 12, 28, .78), rgba(8, 12, 28, 0));
+}
+.call-vbar .call-btn { background: rgba(255, 255, 255, .18); backdrop-filter: blur(6px); }
+.call-vbar .call-btn:hover { background: rgba(255, 255, 255, .3); }
+.call-vbar .call-btn.is-on { background: #fff; color: #171E2E; }
+.call-vbar .call-btn--end { background: var(--uip-coral-600, #E5484D); }
+.call-vbar .call-btn--end:hover { background: #f0585d; }
+
+/* effects panel (noise cancellation + filters) */
+.call-fx {
+  position: absolute; z-index: 6; inset-inline: 0; margin-inline: auto; bottom: calc(max(22px, env(safe-area-inset-bottom, 0px)) + 96px);
+  width: min(380px, calc(100vw - 24px)); box-sizing: border-box; padding: 12px 14px 14px; border-radius: 16px; color: #fff;
+  background: rgba(23, 30, 46, .96); border: 1px solid rgba(255, 255, 255, .12); box-shadow: 0 18px 50px rgba(8, 12, 28, .6);
+  animation: call-pop .2s ease; text-align: start;
+}
+.call-screen:not(.call-screen--video) .call-fx { bottom: calc(max(28px, env(safe-area-inset-bottom, 0px)) + 120px); }
+.call-fx__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.call-fx__row {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px; border: 0; cursor: pointer; color: inherit; text-align: start;
+  background: rgba(255, 255, 255, .07);
+}
+.call-fx__row:hover { background: rgba(255, 255, 255, .12); }
+.call-fx__txt { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.3; }
+.call-fx__txt strong { font-size: 14px; }
+.call-fx__txt span { font-size: 12px; color: rgba(255, 255, 255, .65); }
+.call-fx__sw { position: relative; flex: none; width: 38px; height: 22px; border-radius: 999px; background: rgba(255, 255, 255, .25); transition: background .15s ease; }
+.call-fx__sw::after { content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s ease; }
+.call-fx__row.is-on .call-fx__sw { background: var(--uip-teal-600, #12A277); }
+.call-fx__row.is-on .call-fx__sw::after { transform: translateX(16px); }
+[dir="rtl"] .call-fx__row.is-on .call-fx__sw::after { transform: translateX(-16px); }
+.call-fx__label { margin: 12px 2px 6px; font-size: 12px; letter-spacing: .02em; color: rgba(255, 255, 255, .65); }
+.call-fx__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.call-chip {
+  border: 1px solid rgba(255, 255, 255, .22); background: transparent; color: #fff; cursor: pointer; border-radius: 999px; padding: 6px 12px; font-size: 13px;
+}
+.call-chip:hover:not(:disabled) { background: rgba(255, 255, 255, .12); }
+.call-chip.is-on { background: #fff; color: #171E2E; border-color: #fff; font-weight: 600; }
+.call-chip:disabled { opacity: .45; cursor: default; }
+.call-fx__hint { margin: 8px 2px 0; font-size: 12px; color: rgba(255, 255, 255, .6); }
+
 /* ---------- connection quality ---------- */
 .call-quality { display: inline-flex; align-items: flex-end; gap: 2px; height: 14px; }
 .call-quality i { width: 3px; border-radius: 2px; background: rgba(255, 255, 255, .28); }
@@ -138,5 +215,8 @@
 }
 @media (max-width: 420px) {
   .call-incoming { padding: 10px 12px; gap: 10px; }
-  .call-screen__controls { gap: 28px; }
+  .call-screen__controls { gap: 16px; }
+  .call-vbar { gap: 8px; }
+  .call-vbar .call-btn { width: 46px; height: 46px; }
+  .call-vbar .call-btn--lg { width: 56px; height: 56px; }
 }

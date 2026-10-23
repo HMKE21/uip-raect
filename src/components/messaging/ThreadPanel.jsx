@@ -1021,9 +1021,9 @@ export default function ThreadPanel({
   // Voice calls: direct chats only, and not with a deleted account or when either side blocked the other.
   const canCall = !!conversation && !conversation.is_group && !peerDeleted && !dmBlock && call.available;
   const callBusy = call.phase !== 'idle';
-  const startCall = () => {
+  const startCall = (video) => {
     if (!canCall || callBusy) return;
-    call.startCall(conversation.id, { id: conversation.peer_id || others[0]?.id || null, name: peerLabel(conversation), avatar: peerDeleted ? null : others[0]?.avatar_path });
+    call.startCall(conversation.id, { id: conversation.peer_id || others[0]?.id || null, name: peerLabel(conversation), avatar: peerDeleted ? null : others[0]?.avatar_path }, { video: video === true && !!call.videoEnabled });
   };
   const callBack = canCall && !callBusy ? startCall : undefined;
   const allowedTypes = grp && Array.isArray(grp.allowed_types) ? grp.allowed_types : null;
@@ -1239,10 +1239,17 @@ export default function ThreadPanel({
             <Icon name={fullView ? 'collapse' : 'maximize'} size={18} />
           </button>}
             {canCall && (
-              <button type="button" className="msg-icon-btn msg-call-btn" onClick={startCall} disabled={callBusy}
+              <button type="button" className="msg-icon-btn msg-call-btn" onClick={() => startCall(false)} disabled={callBusy}
                 title={callBusy ? t('You are already in a call', 'أنت في مكالمة بالفعل') : t('Voice call', 'مكالمة صوتية')}
                 aria-label={t('Voice call', 'مكالمة صوتية')}>
                 <Icon name="phone" size={18} />
+              </button>
+            )}
+            {canCall && call.videoEnabled && (
+              <button type="button" className="msg-icon-btn msg-call-btn" onClick={() => startCall(true)} disabled={callBusy}
+                title={callBusy ? t('You are already in a call', 'أنت في مكالمة بالفعل') : t('Video call', 'مكالمة فيديو')}
+                aria-label={t('Video call', 'مكالمة فيديو')}>
+                <Icon name="video" size={18} />
               </button>
             )}
             <button type="button" className="msg-icon-btn" title={t('Pinned messages', 'الرسائل المثبّتة')} aria-label={t('Pinned messages', 'الرسائل المثبّتة')} onClick={onShowPinned}>

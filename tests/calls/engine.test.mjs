@@ -60,7 +60,7 @@ test('caller: start → offer → answer → connected → hangup', async () => 
   t.setPoll({ call: call({ role: 'caller', status: 'active' }), signals: [{ id: 1, kind: 'answer', payload: { type: 'answer', sdp: 'A' } }, { id: 2, kind: 'ice', payload: { candidate: 'c' } }], incoming: [] });
   await t.eng.pollNow();
   assert.equal(t.eng.getState().phase, 'connecting');
-  assert.equal(FakePc.last.remoteDescription.sdp, 'A');
+  assert.equal(FakePc.last.remoteDescription.sdp, 'A\r\n'); // SDP is normalised to end with CRLF
   assert.equal(FakePc.last.ice.length, 1);
   FakePc.last.setState('connected');
   assert.equal(t.eng.getState().phase, 'active');
@@ -94,7 +94,7 @@ test('callee: incoming rings → accept → offer answered, queued ICE flushed',
   // ICE arrives BEFORE the offer → must be queued, then flushed
   t.setPoll({ call: call({ status: 'active' }), incoming: [], signals: [{ id: 5, kind: 'ice', payload: { candidate: 'early' } }, { id: 6, kind: 'offer', payload: { type: 'offer', sdp: 'O' } }] });
   await t.eng.pollNow();
-  assert.equal(FakePc.last.remoteDescription.sdp, 'O');
+  assert.equal(FakePc.last.remoteDescription.sdp, 'O\r\n');
   assert.equal(FakePc.last.ice.length, 1);
   assert.ok(t.log.quiet.find((q) => q[1].kind === 'answer'));
   const nextAfter = t.log.gets.filter((g) => g[0].endsWith('/poll')).pop();

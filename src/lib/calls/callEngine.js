@@ -1,5 +1,5 @@
 /**
- * Call engine (1:1 voice; video is phase 2) — framework-free so it can be unit-tested with fakes.
+ * Call engine (1:1 voice + video) — framework-free so it can be unit-tested with fakes.
  *
  * Signaling is polling against /api/v1/messaging/calls/* (the chat itself polls too, so no websocket is needed):
  * the audio goes browser-to-browser over WebRTC and the server only relays offer/answer/ICE + keeps call state.
@@ -20,12 +20,20 @@ export const BUSY_PHASES = ['starting', 'outgoing', 'incoming', 'connecting', 'a
 const IDLE_STATE = {
   phase: 'idle', call: null, peer: null, muted: false, peerMuted: false, quality: 'good',
   reconnecting: false, accepting: false, startedAt: 0, notice: null, minimized: false, available: false, videoEnabled: false, noAccess: false,
+  // video: callType is fixed at start; camOn/sharing = what I send, peerCam/peerSharing = what the other side says it sends
+  callType: 'audio', camOn: false, peerCam: false, sharing: false, peerSharing: false, facing: 'user', canSwitchCam: false, filter: 'none',
+  noiseOn: true,
 };
+
+export const VIDEO_FILTERS = ['none', 'bright', 'vivid', 'warm', 'cool', 'soft', 'bw', 'vintage', 'portrait'];
 
 export function createCallEngine(deps) {
   const {
     api, clientId, getUserMedia, createPc, tones, setRemoteStream, onChange, onFinished,
     isHidden = () => false, notify = () => () => {}, vibrate = () => {}, now = () => Date.now(),
+    // video-only helpers (all optional, so voice-only hosts/tests keep working)
+    setLocalVideo = () => {}, setRemoteVideo = () => {}, makeStream = (tracks) => ({ getTracks: () => tracks }),
+    createFx = null, getDisplayMedia = null, countCameras = async () => 1, onPref = () => {}, initialNoise = true,
     base = '/api/v1/messaging/calls',
     timers = {
       setTimeout: (...a) => setTimeout(...a), clearTimeout: (...a) => clearTimeout(...a),
@@ -33,9 +41,13 @@ export function createCallEngine(deps) {
     },
   } = deps;
 
-  const st = { ...IDLE_STATE };
+  const st = { ...IDLE_STATE, noiseOn: initialNoise !== false };
   let pc = null;
   let localStream = null;
+  let camTrack = null;      // raw camera track (null = camera off / audio-only)
+  let screenTrack = null;   // screen-share track while sharing
+  let fx = null;            // canvas filter pipeline (only created when a filter is picked)
+  let remoteVideo = null;   // MediaStream with the peer's video track
   let pendingIce = [];
   let lastSignalId = 0;
   let pollTimer = 0;
@@ -66,6 +78,66 @@ export function createCallEngine(deps) {
     try { (s || localStream)?.getTracks().forEach((t) => t.stop()); } catch { /* already stopped */ }
   }
 
+  /** Releases mic + camera right now (used when a call attempt is abandoned before it exists). */
+  function dropMedia() {
+    stopStream();
+    localStream = null;
+    try { camTrack && camTrack.stop(); } catch { /* ignore */ }
+    camTrack = null;
+    try { setLocalVideo(null); } catch { /* ignore */ }
+  }
+
+  // ---- video helpers ----------------------------------------------------------------------------------------
+
+  const firstVideoTrack = (stream) => {
+    try { return (stream && stream.getVideoTracks && stream.getVideoTracks()[0]) || null; } catch { return null; }
+  };
+
+  /** Remember the camera track of a freshly acquired stream and show it in the local preview. */
+  function adoptStream(stream) {
+    camTrack = firstVideoTrack(stream);
+    try { setLocalVideo(camTrack ? makeStream([camTrack]) : null); } catch { /* preview is best-effort */ }
+    if (camTrack && countCameras) {
+      Promise.resolve(countCameras()).then((n) => { if (camTrack) set({ canSwitchCam: n > 1 }); }).catch(() => {});
+    }
+  }
+
+  /** The video m-line's transceiver (exists in video calls only). Its sender is how camera/screen/filters are swapped without renegotiating. */
+  function videoTransceiver() {
+    if (!pc || !pc.getTransceivers) return null;
+    try {
+      return pc.getTransceivers().find((t) => t.receiver && t.receiver.track && t.receiver.track.kind === 'video') || null;
+    } catch { return null; }
+  }
+
+  /** Pushes whatever should be on the wire now (screen > camera, through the filter if one is picked) and updates the preview. */
+  async function applyOutgoingVideo() {
+    const src = screenTrack || camTrack;
+    let out = src;
+    if (src && !screenTrack && st.filter !== 'none' && createFx) {
+      try {
+        if (!fx) fx = createFx();
+        out = fx.attach(src, st.filter) || src;
+        if (out === src && st.filter !== 'none') st.filter = 'none'; // canvas filters unsupported here
+      } catch { out = src; st.filter = 'none'; }
+    } else if (fx) {
+      try { fx.stop(); } catch { /* ignore */ }
+      fx = null;
+    }
+    const vt = videoTransceiver();
+    if (vt && vt.sender) {
+      try { await vt.sender.replaceTrack(out || null); } catch { /* the peer just keeps the last frame; the next change retries */ }
+    }
+    try { setLocalVideo(out ? makeStream([out]) : null); } catch { /* ignore */ }
+    emit();
+  }
+
+  /** Tells the other side what I am sending (mute / camera / screen). */
+  function sendState() {
+    if (!st.call) return Promise.resolve();
+    return sendSignal('state', { muted: st.muted, cam: st.camOn, sharing: st.sharing });
+  }
+
   function clearCallTimers() {
     [connectTimer, disconnectTimer, restartTimer, noticeTimer].forEach((h) => h && timers.clearTimeout(h));
     connectTimer = disconnectTimer = restartTimer = noticeTimer = 0;
@@ -84,6 +156,13 @@ export function createCallEngine(deps) {
     }
     stopStream();
     localStream = null;
+    try { camTrack && camTrack.stop(); } catch { /* ignore */ }
+    try { screenTrack && screenTrack.stop(); } catch { /* ignore */ }
+    camTrack = null;
+    screenTrack = null;
+    if (fx) { try { fx.stop(); } catch { /* ignore */ } fx = null; }
+    remoteVideo = null;
+    try { setLocalVideo(null); setRemoteVideo(null); } catch { /* ignore */ }
     pendingIce = [];
     lastSignalId = 0;
     sendChain = Promise.resolve();
@@ -146,6 +225,14 @@ export function createCallEngine(deps) {
     st.accepting = false;
     st.startedAt = 0;
     st.minimized = false;
+    st.callType = 'audio';
+    st.camOn = false;
+    st.peerCam = false;
+    st.sharing = false;
+    st.peerSharing = false;
+    st.filter = 'none';
+    st.facing = 'user';
+    st.canSwitchCam = false;
     st.notice = notice;
     emit();
     if (notice) {
@@ -159,8 +246,14 @@ export function createCallEngine(deps) {
     return { kind, message: message || '' };
   }
 
-  function micNotice(err) {
+  function micNotice(err, video = false) {
     const n = err && err.name;
+    if (video) {
+      if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError') return failNotice('cam_denied');
+      if (n === 'NotFoundError' || n === 'DevicesNotFoundError') return failNotice('cam_missing');
+      if (n === 'NotSupportedError') return failNotice('unsupported');
+      return failNotice('cam_error');
+    }
     if (n === 'NotAllowedError' || n === 'SecurityError' || n === 'PermissionDeniedError') return failNotice('mic_denied');
     if (n === 'NotFoundError' || n === 'DevicesNotFoundError' || n === 'OverconstrainedError') return failNotice('mic_missing');
     if (n === 'NotSupportedError') return failNotice('unsupported');
@@ -221,6 +314,10 @@ export function createCallEngine(deps) {
     };
     conn.ontrack = (e) => {
       if (pc !== conn) return;
+      if (e.track && e.track.kind === 'video') {
+        try { remoteVideo = makeStream([e.track]); setRemoteVideo(remoteVideo); } catch { /* ignore */ }
+        return;
+      }
       try { setRemoteStream && setRemoteStream((e.streams && e.streams[0]) || null, e.track || null); } catch { /* ignore */ }
     };
     const onState = () => { if (pc === conn) onConnState(conn); };
@@ -260,7 +357,7 @@ export function createCallEngine(deps) {
         st.startedAt = now();
         st.phase = 'active';
         startStats(conn);
-        if (st.muted) sendSignal('state', { muted: true });
+        sendState();
       }
       st.reconnecting = false;
       if (st.quality === 'poor') st.quality = 'fair';
@@ -343,6 +440,9 @@ export function createCallEngine(deps) {
     }
     if (s.kind === 'offer') {
       await conn.setRemoteDescription(p);
+      // An answerer's transceiver for the offered video line defaults to recvonly; make it sendrecv so my camera can be turned on later.
+      const vt = videoTransceiver();
+      if (vt && vt.direction !== 'sendrecv') { try { vt.direction = 'sendrecv'; } catch { /* ignore */ } }
       await flushIce(conn);
       const answer = await conn.createAnswer();
       await conn.setLocalDescription(answer);
@@ -360,6 +460,8 @@ export function createCallEngine(deps) {
       }
     } else if (s.kind === 'state') {
       if (typeof p.muted === 'boolean' && p.muted !== st.peerMuted) set({ peerMuted: p.muted });
+      if (typeof p.cam === 'boolean' && p.cam !== st.peerCam) set({ peerCam: p.cam });
+      if (typeof p.sharing === 'boolean' && p.sharing !== st.peerSharing) set({ peerSharing: p.sharing });
     }
   }
 
@@ -401,7 +503,7 @@ export function createCallEngine(deps) {
       const res = await api.get(`${base}/poll`, q);
       if (stopped) return;
       failures = 0;
-      if (!st.available || st.noAccess) { st.noAccess = false; set({ available: true }); }
+      if (!st.available || st.noAccess) { st.noAccess = false; set({ available: true }); getIce().catch(() => {}); }
       await applyPoll((res && res.data) || {}, callId);
     } catch (e) {
       const s = e && e.status;
@@ -468,7 +570,8 @@ export function createCallEngine(deps) {
   }
 
   function ringIncoming(call) {
-    set({ phase: 'incoming', call, peer: call.peer, notice: null, accepting: false, muted: false, peerMuted: false, minimized: false });
+    const video = call.type === 'video';
+    set({ phase: 'incoming', call, peer: call.peer, notice: null, accepting: false, muted: false, peerMuted: false, minimized: false, callType: video ? 'video' : 'audio', peerCam: video, camOn: false, sharing: false, peerSharing: false, filter: 'none' });
     lastSignalId = 0;
     tones.start('incoming');
     try { vibrate([400, 200, 400, 1600]); } catch { /* ignore */ }
@@ -477,35 +580,37 @@ export function createCallEngine(deps) {
 
   // ------------------------------------------------------------------ public actions
 
-  async function startCall(conversationId, peerInfo = {}) {
+  async function startCall(conversationId, peerInfo = {}, opts = {}) {
     if (BUSY_PHASES.includes(st.phase)) return false;
+    const wantVideo = !!(opts && opts.video);
     const token = (attempt += 1);
-    set({ phase: 'starting', call: null, peer: { id: peerInfo.id || null, name: peerInfo.name || '', avatar: peerInfo.avatar || null }, notice: null, muted: false, peerMuted: false, minimized: false });
+    set({ phase: 'starting', call: null, peer: { id: peerInfo.id || null, name: peerInfo.name || '', avatar: peerInfo.avatar || null }, notice: null, muted: false, peerMuted: false, minimized: false, callType: wantVideo ? 'video' : 'audio', camOn: false, peerCam: wantVideo, sharing: false, peerSharing: false, filter: 'none', facing: 'user', canSwitchCam: false });
     if (noticeTimer) { timers.clearTimeout(noticeTimer); noticeTimer = 0; }
 
     let stream;
     try {
-      stream = await getUserMedia();
+      stream = await getUserMedia({ video: wantVideo, facing: st.facing, noise: st.noiseOn });
     } catch (e) {
       if (token !== attempt) return false;
-      return abortStart(micNotice(e));
+      return abortStart(micNotice(e, wantVideo));
     }
     if (token !== attempt) { stopStream(stream); return false; } // cancelled while the permission prompt was open
     localStream = stream;
+    adoptStream(stream);
 
     let call;
     try {
-      const res = await api.post(base, { conversation_id: conversationId, type: 'audio', client_id: clientId });
+      const res = await api.post(base, { conversation_id: conversationId, type: wantVideo ? 'video' : 'audio', client_id: clientId });
       call = res && res.data;
       if (!call) throw new Error('empty');
     } catch (e) {
-      if (token !== attempt) { stopStream(); localStream = null; return false; }
+      if (token !== attempt) { dropMedia(); return false; }
       return abortStart(failNotice('error', e && e.message));
     }
     if (token !== attempt) {
       // cancelled while the request was in flight: end it server-side so the other phone stops ringing
       api.post(`${base}/${call.id}/end`, { reason: 'hangup' }).catch(() => {});
-      stopStream(); localStream = null;
+      dropMedia();
       return false;
     }
     if (CLOSED.includes(call.status)) { // e.g. busy
@@ -515,7 +620,7 @@ export function createCallEngine(deps) {
     }
 
     lastSignalId = 0;
-    set({ phase: 'outgoing', call });
+    set({ phase: 'outgoing', call, camOn: !!camTrack });
     tones.start('outgoing');
     try {
       await buildPc();
@@ -535,17 +640,18 @@ export function createCallEngine(deps) {
   }
 
   function abortStart(notice) {
-    stopStream();
-    localStream = null;
+    dropMedia();
     tones.stop();
     set({ phase: 'idle', call: null, peer: null, notice });
     if (notice) noticeTimer = timers.setTimeout(() => { if (st.notice === notice) set({ notice: null }); }, 7000);
     return false;
   }
 
-  async function accept() {
+  /** `o.video === false` answers a video call with the camera off (audio only). */
+  async function accept(o) {
     if (st.phase !== 'incoming' || st.accepting || !st.call) return;
     const call = st.call;
+    const wantVideo = call.type === 'video' && !(o && o.video === false);
     set({ accepting: true, notice: null });
     tones.stop();
     try { vibrate(0); } catch { /* ignore */ }
@@ -553,28 +659,29 @@ export function createCallEngine(deps) {
 
     let stream;
     try {
-      stream = await getUserMedia();
+      stream = await getUserMedia({ video: wantVideo, facing: st.facing, noise: st.noiseOn });
     } catch (e) {
       if (!st.call || st.call.id !== call.id) return;
-      set({ accepting: false, notice: micNotice(e) });
+      set({ accepting: false, notice: micNotice(e, wantVideo) });
       tones.start('incoming'); // still ringing: they can allow the mic and try again, or decline
       return;
     }
     if (!st.call || st.call.id !== call.id) { stopStream(stream); return; } // ended while the prompt was open
     localStream = stream;
+    adoptStream(stream);
 
     let res;
     try {
       res = await api.post(`${base}/${call.id}/accept`, { client_id: clientId });
     } catch (e) {
-      stopStream(); localStream = null;
+      dropMedia();
       if (!st.call || st.call.id !== call.id) return;
       finish('missed', call, { notice: failNotice('unavailable', e && e.message) });
       return;
     }
     if (!st.call || st.call.id !== call.id) return;
     lastSignalId = 0;
-    set({ phase: 'connecting', accepting: false, call: { ...call, ...res.data, role: 'callee' } });
+    set({ phase: 'connecting', accepting: false, call: { ...call, ...res.data, role: 'callee' }, camOn: !!camTrack });
     startConnectTimer();
     try {
       await buildPc();
@@ -625,7 +732,102 @@ export function createCallEngine(deps) {
     const muted = !st.muted;
     localStream.getAudioTracks().forEach((t) => { t.enabled = !muted; });
     set({ muted });
-    if (st.phase === 'active') sendSignal('state', { muted });
+    if (st.phase === 'active') sendState();
+  }
+
+  // ------------------------------------------------------------------ video / audio options during a call
+
+  const inLiveCall = () => !!st.call && (st.phase === 'connecting' || st.phase === 'active');
+
+  async function toggleCamera() {
+    if (!inLiveCall() || st.callType !== 'video' || !videoTransceiver() || st.sharing) return;
+    if (st.camOn) {
+      try { camTrack && camTrack.stop(); } catch { /* ignore */ }
+      camTrack = null;
+      set({ camOn: false });
+      await applyOutgoingVideo();
+      sendState();
+      return;
+    }
+    const id = st.call.id;
+    try {
+      const stream = await getUserMedia({ video: true, audio: false, facing: st.facing, noise: st.noiseOn });
+      if (!st.call || st.call.id !== id) { stopStream(stream); return; }
+      camTrack = firstVideoTrack(stream);
+      set({ camOn: !!camTrack });
+      if (countCameras) Promise.resolve(countCameras()).then((n) => { if (camTrack) set({ canSwitchCam: n > 1 }); }).catch(() => {});
+      await applyOutgoingVideo();
+      sendState();
+    } catch (e) {
+      if (st.call && st.call.id === id) set({ notice: micNotice(e, true) });
+    }
+  }
+
+  async function switchCamera() {
+    if (!inLiveCall() || !camTrack || st.sharing || !videoTransceiver()) return;
+    const id = st.call.id;
+    const next = st.facing === 'user' ? 'environment' : 'user';
+    const old = camTrack;
+    try { old.stop(); } catch { /* ignore */ } // some phones cannot open two cameras at once
+    try {
+      const stream = await getUserMedia({ video: true, audio: false, facing: next, noise: st.noiseOn });
+      if (!st.call || st.call.id !== id) { stopStream(stream); return; }
+      camTrack = firstVideoTrack(stream);
+      set({ facing: next });
+    } catch {
+      try { // fall back to the camera that was in use
+        const stream = await getUserMedia({ video: true, audio: false, facing: st.facing, noise: st.noiseOn });
+        if (st.call && st.call.id === id) camTrack = firstVideoTrack(stream); else stopStream(stream);
+      } catch { camTrack = null; set({ camOn: false }); }
+    }
+    await applyOutgoingVideo();
+    if (!camTrack) sendState();
+  }
+
+  async function stopSharing() {
+    const t = screenTrack;
+    screenTrack = null;
+    try { t && t.stop(); } catch { /* ignore */ }
+    if (!st.call) return;
+    set({ sharing: false });
+    await applyOutgoingVideo();
+    sendState();
+  }
+
+  async function toggleScreenShare() {
+    if (!inLiveCall() || st.callType !== 'video' || !videoTransceiver()) return;
+    if (st.sharing) { await stopSharing(); return; }
+    if (!getDisplayMedia) return;
+    const id = st.call.id;
+    try {
+      const stream = await getDisplayMedia();
+      if (!st.call || st.call.id !== id) { stopStream(stream); return; }
+      screenTrack = firstVideoTrack(stream);
+      if (!screenTrack) return;
+      screenTrack.onended = () => { if (screenTrack) stopSharing(); }; // the browser's own "Stop sharing" bar
+      set({ sharing: true });
+      await applyOutgoingVideo();
+      sendState();
+    } catch (e) {
+      // the picker being dismissed is not an error
+      if (st.call && st.call.id === id && e && e.name !== 'NotAllowedError' && e.name !== 'AbortError') set({ notice: failNotice('screen_error') });
+    }
+  }
+
+  async function setFilter(name) {
+    if (!VIDEO_FILTERS.includes(name) || name === st.filter) return;
+    set({ filter: name });
+    if (inLiveCall() && camTrack && !screenTrack) await applyOutgoingVideo();
+  }
+
+  function setNoise(on) {
+    const v = !!on;
+    set({ noiseOn: v });
+    try { onPref('noise', v); } catch { /* ignore */ }
+    try {
+      const a = localStream && localStream.getAudioTracks && localStream.getAudioTracks()[0];
+      if (a && a.applyConstraints) a.applyConstraints({ noiseSuppression: v, autoGainControl: v, echoCancellation: true }).catch(() => {});
+    } catch { /* the choice still applies from the next call */ }
   }
 
   function setMinimized(v) { set({ minimized: !!v }); }
@@ -656,6 +858,7 @@ export function createCallEngine(deps) {
 
   return {
     start, stop, startCall, accept, decline, hangup, toggleMute, setMinimized, dismissNotice,
+    toggleCamera, switchCamera, toggleScreenShare, setFilter, setNoise,
     pollNow, kick: () => schedule(0), getState: () => ({ ...st }),
   };
 }
