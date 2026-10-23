@@ -49,8 +49,9 @@ export default function ParticipantTile({
     const el = videoRef.current;
     if (!el) return undefined;
     if (el.srcObject !== (stream || null)) el.srcObject = stream || null;
+    // your own tile must NEVER play your own mic (that is the echo you hear); everyone else's must be audible
+    el.muted = !!isLocal;
     if (!stream || isLocal) return undefined;
-    el.muted = false;
     el.volume = 1;
     const play = () => { const p = el.play(); if (p && p.catch) p.catch(() => {}); };
     play();

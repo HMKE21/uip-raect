@@ -52,7 +52,6 @@ function getUserMedia(opts = {}) {
     autoGainControl: noise,
     voiceIsolation: { ideal: noise },
     channelCount: { ideal: 1 },
-    sampleRate: { ideal: 48000 },
   };
   // phones/tablets: 960x540 @ ≤20 fps keeps encoding affordable; desktops get 720p
   const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test((typeof navigator !== 'undefined' && navigator.userAgent) || '');

@@ -472,7 +472,11 @@ export function useMeetingRoom({
 
     async function setup() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          // echo cancellation + noise suppression are what stop the "voice coming back" echo and the whistle: ask for them explicitly
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } },
+        });
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         stream.getVideoTracks().forEach((t) => { t.enabled = cameraEnabled; });
         stream.getAudioTracks().forEach((t) => { t.enabled = micEnabled; });
