@@ -233,7 +233,13 @@ export function createCallEngine(deps) {
     if (connectTimer) timers.clearTimeout(connectTimer);
     connectTimer = timers.setTimeout(() => {
       connectTimer = 0;
-      if (st.phase === 'connecting') endLocal('failed');
+      if (st.phase === 'connecting') {
+        try {
+          // eslint-disable-next-line no-console
+          console.warn('[call] connect timeout', { conn: pc && pc.connectionState, ice: pc && pc.iceConnectionState, signaling: pc && pc.signalingState });
+        } catch { /* diagnostics only */ }
+        endLocal('failed');
+      }
     }, 30000);
   }
 
@@ -314,10 +320,27 @@ export function createCallEngine(deps) {
 
   // ------------------------------------------------------------------ signals in
 
+  // The SDP must use CRLF line endings and end with one. Server-side input trimming (or a proxy)
+  // can strip the trailing newline, which makes setRemoteDescription reject the offer/answer.
+  function fixSdp(p) {
+    if (p && typeof p.sdp === 'string') {
+      const sdp = p.sdp.replace(/\r?\n/g, '\r\n');
+      return { ...p, sdp: sdp.endsWith('\r\n') ? sdp : `${sdp}\r\n` };
+    }
+    return p;
+  }
+
   async function handleSignal(s) {
     const conn = pc;
     if (!conn) return;
-    const p = s.payload || {};
+    let p = s.payload || {};
+    if (s.kind === 'offer' || s.kind === 'answer') {
+      try {
+        // eslint-disable-next-line no-console
+        console.info('[call] signal in', s.kind, { sdpEndsWithCRLF: typeof p.sdp === 'string' && p.sdp.endsWith('\r\n'), len: typeof p.sdp === 'string' ? p.sdp.length : 0 });
+      } catch { /* diagnostics only */ }
+      p = fixSdp(p);
+    }
     if (s.kind === 'offer') {
       await conn.setRemoteDescription(p);
       await flushIce(conn);
@@ -432,7 +455,11 @@ export function createCallEngine(deps) {
         if (st.call == null || st.call.id !== polledId) return;
         try {
           await handleSignal(s);
-        } catch {
+        } catch (err) {
+          try {
+            // eslint-disable-next-line no-console
+            console.warn('[call] signal failed', s.kind, err && (err.name + ': ' + err.message));
+          } catch { /* diagnostics only */ }
           if (s.kind === 'offer' || s.kind === 'answer') { endLocal('failed'); return; }
         }
         lastSignalId = Math.max(lastSignalId, s.id);
