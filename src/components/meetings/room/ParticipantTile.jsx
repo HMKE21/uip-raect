@@ -40,27 +40,44 @@ export default function ParticipantTile({
   const t = useTranslations(translations);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  useEffect(() => {
-    if (videoRef.current) videoRef.current.srcObject = stream || null;
-  }, [stream]);
-
   const initial = (displayName || '?').trim().charAt(0).toUpperCase() || '?';
   const showVideo = stream && cameraEnabled !== false;
+
+  // The <video> stays mounted even while the camera is off: it is also what plays this participant's VOICE. (It used to be
+  // unmounted with the camera, which silenced the call; and re-mounting it never re-attached the stream.)
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return undefined;
+    if (el.srcObject !== (stream || null)) el.srcObject = stream || null;
+    if (!stream || isLocal) return undefined;
+    el.muted = false;
+    el.volume = 1;
+    const play = () => { const p = el.play(); if (p && p.catch) p.catch(() => {}); };
+    play();
+    // autoplay refused (no gesture yet) -> retry on the next tap/key anywhere, and whenever a track starts flowing
+    window.addEventListener('pointerdown', play, { once: true, capture: true });
+    window.addEventListener('keydown', play, { once: true, capture: true });
+    stream.addEventListener && stream.addEventListener('addtrack', play);
+    return () => {
+      window.removeEventListener('pointerdown', play, true);
+      window.removeEventListener('keydown', play, true);
+      stream.removeEventListener && stream.removeEventListener('addtrack', play);
+    };
+  }, [stream, isLocal]);
 
   return (
     <div
       className="meeting-tile"
       style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: '#1b1c22' }}
     >
-      {showVideo ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isLocal}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', transform: isLocal && !screenSharing ? 'scaleX(-1)' : 'none' }}
-        />
-      ) : (
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted={isLocal}
+        style={{ width: '100%', height: '100%', objectFit: 'cover', transform: isLocal && !screenSharing ? 'scaleX(-1)' : 'none', display: showVideo ? 'block' : 'none' }}
+      />
+      {showVideo ? null : (
         <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div
             style={{

@@ -175,8 +175,11 @@ export function CallProvider({ children }) {
       setRemoteStream: (stream, track) => {
         const el = audioRef.current;
         if (!el) return;
-        const src = stream || (track ? new MediaStream([track]) : null);
-        if (el.srcObject !== src) { el.srcObject = src; } // an unmute re-attach hands us the same stream: don't restart playback
+        // Voice only: hand the <audio> a stream with just the audio track, so the video track riding in the same remote stream can never interfere.
+        const src = track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null);
+        const cur = el.srcObject;
+        const same = cur && src && cur.getAudioTracks && src.getAudioTracks && cur.getAudioTracks()[0] === src.getAudioTracks()[0];
+        if (!same) { el.srcObject = src; } // an unmute re-attach hands us the same track: don't restart playback
         if (!src) { setAudioBlocked(false); return; }
         el.muted = false;
         el.volume = 1;
