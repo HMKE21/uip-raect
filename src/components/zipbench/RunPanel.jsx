@@ -21,7 +21,9 @@ const TB_ERR = /^([A-Za-z_][\w.]*(?:Error|Exception|Warning|Interrupt|Exit))(:?)
 
 /** One console entry. Python tracebacks (stderr) get a readable structure: header, file/line, the code line, and a bold error name. */
 function LogLine({ l }) {
-  const plain = <div className={`zb-log zb-log--${l.level}`}>{l.text}</div>;
+  const plain = Array.isArray(l.echo)
+    ? <div className={`zb-log zb-log--${l.level}`}>{l.text.slice(0, l.echo[0])}<span className="zb-log__echo">{l.text.slice(l.echo[0], l.echo[1])}</span>{l.text.slice(l.echo[1])}</div>
+    : <div className={`zb-log zb-log--${l.level}`}>{l.text}</div>;
   if (l.level !== 'stderr' && l.level !== 'error') return plain;
   const lines = String(l.text).replace(/\n$/, '').split('\n');
   if (!lines.some((s) => TB_HEAD.test(s) || TB_FILE.test(s))) return plain;

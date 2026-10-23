@@ -98,3 +98,6 @@
   .zb { --zb-fs-chat: calc(var(--zb-fs) * 1.08px); }
   .zb .zb-run__log { padding: 10px 12px 14px; }
 }
+
+/* what the user typed in answer to input() / prompt(): accent colour, bold, a soft pill so it reads as "yours" next to the program's output */
+.zb .zb-run .zb-log__echo { unicode-bidi: isolate; color: var(--zb-accent); font-weight: 700; padding: 0 .4em; margin-inline-start: .25em; border-radius: 5px; background: color-mix(in srgb, var(--zb-accent) 14%, transparent); }

@@ -17,6 +17,7 @@ import '../styles/css/share-access.css';
 import '../styles/css/drive-share-fix.css'; // header stacking + file viewer (code LTR, phone master/detail) — must stay last
 import '../styles/css/shared-page-life.css'; // light floating bubbles + soft animations
 import '../styles/css/shared-page-v2.css'; // copy / search buttons + phone & tablet polish — must stay last
+import '../styles/css/shared-viewer-polish.css'; // viewer card padding / header / buttons — must stay last
 
 // floating bubbles: position (%), size, hue, speed, start offset, sway
 const BUBBLES = [

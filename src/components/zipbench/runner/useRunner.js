@@ -101,7 +101,7 @@ export function useRunner() {
     const text = String(value ?? '');
     setLogs((prev) => {
       const last = prev[prev.length - 1];
-      if (last && last.level === 'stdout' && !/\n$/.test(last.text)) return prev.slice(0, -1).concat({ ...last, text: `${last.text}${text}\n` });
+      if (last && last.level === 'stdout' && !/\n$/.test(last.text)) return prev.slice(0, -1).concat({ ...last, text: `${last.text}${text}\n`, echo: [last.text.length, last.text.length + text.length] }); // echo = where the user's typed answer sits, so the console can colour it
       return prev.concat({ level: 'stdout', text: `${text}\n` });
     });
     // browser JavaScript (prompt()/confirm()): answers are kept as a list (an empty answer is a real answer), and `skip`
