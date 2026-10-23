@@ -144,6 +144,6 @@ export const microsoft = {
 
   async put(tok, { name, parentRemoteId, blob }) {
     const path = `${parentRemoteId}/${safeName(name)}`;
-    return inFolder(parentRemoteId, () => withRetry(() => (blob.size <= SMALL ? putSmall(tok, path, blob) : putLarge(tok, path, blob))));
+    return inFolder(parentRemoteId, () => withRetry(() => (blob.size <= SMALL ? putSmall(tok, path, blob) : putLarge(tok, path, blob)), 7));
   },
 };
