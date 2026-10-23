@@ -27,6 +27,7 @@ import { isSystemNode } from '../../desktop/sync';
 import { FileGlyph, FolderGlyph } from '../../desktop/OsIcons';
 import { extOf, isTextName, opensInEditor } from '../../lib/driveFileKinds';
 import { useSharedClip } from '../../lib/driveClipboard';
+import { keyOf } from '../../desktop/shortcuts';
 import { DROP_EVENT, readDragIds, setDragData } from '../../lib/driveDnd';
 import ContentMatches from '../../components/ContentMatches';
 import { useContentSearch } from '../../lib/useContentSearch';
@@ -814,7 +815,9 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     if (dlg || menu || e.target.closest('input, textarea, select')) return;
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key;
-    if (key === 'F5' || (mod && key.toLowerCase() === 'r')) { e.preventDefault(); reload(); return; }
+    // with Ctrl held, match the PHYSICAL key: on the Arabic layout e.key is 'ؤ' / 'ء' / 'ي'… so Ctrl+C / X / V / A never matched
+    const lk = mod && /^Key[A-Z]$/.test(e.code || '') ? keyOf(e).toLowerCase() : key.toLowerCase();
+    if (key === 'F5' || (mod && lk === 'r')) { e.preventDefault(); reload(); return; }
     if (inTrash) return;
 
     // arrows / Home / End — move between items (grid: left-right and up-down, list: up-down). In RTL the row runs right→left.
@@ -841,12 +844,12 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     else if (key === 'F2' && selected.length === 1) { e.preventDefault(); rename(selected[0]); }
     else if (key === 'Enter' && selected.length === 1) { e.preventDefault(); openNode(selected[0]); }
     else if (key === 'Backspace' || (e.altKey && key === 'ArrowUp') || (e.altKey && key === (ar ? 'ArrowRight' : 'ArrowLeft'))) { e.preventDefault(); goUp(); }
-    else if (mod && e.shiftKey && key.toLowerCase() === 'n') { e.preventDefault(); newFolder(); }
-    else if (mod && key.toLowerCase() === 'a') { e.preventDefault(); setSel(new Set(items.map((n) => n.id))); }
-    else if (mod && key.toLowerCase() === 'i') { e.preventDefault(); setSel(new Set(items.filter((n) => !sel.has(n.id)).map((n) => n.id))); }
-    else if (mod && key.toLowerCase() === 'c' && selected.length) { e.preventDefault(); setClip({ ids: selected.map((n) => n.id), mode: 'copy' }); flash(tt('Copied to clipboard.', 'تم النسخ للحافظة.')); }
-    else if (mod && key.toLowerCase() === 'x' && selected.length) { e.preventDefault(); setClip({ ids: selected.map((n) => n.id), mode: 'cut' }); flash(tt('Cut.', 'تم القص.')); }
-    else if (mod && key.toLowerCase() === 'v' && clip) { e.preventDefault(); paste(); }
+    else if (mod && e.shiftKey && lk === 'n') { e.preventDefault(); newFolder(); }
+    else if (mod && lk === 'a') { e.preventDefault(); setSel(new Set(items.map((n) => n.id))); }
+    else if (mod && lk === 'i') { e.preventDefault(); setSel(new Set(items.filter((n) => !sel.has(n.id)).map((n) => n.id))); }
+    else if (mod && lk === 'c' && selected.length) { e.preventDefault(); setClip({ ids: selected.map((n) => n.id), mode: 'copy' }); flash(tt('Copied to clipboard.', 'تم النسخ للحافظة.')); }
+    else if (mod && lk === 'x' && selected.length) { e.preventDefault(); setClip({ ids: selected.map((n) => n.id), mode: 'cut' }); flash(tt('Cut.', 'تم القص.')); }
+    else if (mod && lk === 'v' && clip) { e.preventDefault(); paste(); }
     else if (key === 'Escape') setSel(new Set());
     else if (key.length === 1 && !mod && !e.altKey && key !== ' ') {
       // type the first letters of a name to jump to it

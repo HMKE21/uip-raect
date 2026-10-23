@@ -808,7 +808,7 @@ export default function DesktopOS() {
   };
 
   const onDeskKey = (e) => {
-    if (e.target !== deskRef.current && !e.target.closest?.('.os-icon')) return;
+    if (e.target !== deskRef.current && e.target !== document.body && !e.target.closest?.('.os-icon')) return;
     const k = e.key;
     const mod = e.ctrlKey || e.metaKey;
     const keys = icons.map((i) => i.key);
@@ -878,7 +878,7 @@ export default function DesktopOS() {
 
   // ---- keyboard shortcuts ------------------------------------------------------------------------------
   const S = useRef({});
-  S.current = { wm, overlay, locked, asleep, dlg, taskItems, taskClick, runCommand, refreshAll };
+  S.current = { wm, overlay, locked, asleep, dlg, taskItems, taskClick, runCommand, refreshAll, deskKey: onDeskKey };
   useEffect(() => {
     const onKey = (e) => {
       const s = S.current;
@@ -890,6 +890,13 @@ export default function DesktopOS() {
         e.preventDefault();
         s.refreshAll();
         return;
+      }
+      // Nothing is focused (after closing a window, clicking the Dock / menu bar / a widget …) and no window is active: the keys belong to the
+      // desktop icons — Ctrl+C / X / V / A, Delete, F2, arrows. Before, they only worked while the desktop itself held focus, hence "sometimes".
+      if ((e.target === document.body || e.target === document.documentElement) && !s.wm.active && !s.overlay) {
+        const before = e.defaultPrevented;
+        s.deskKey({ ...e, target: document.body, key: e.key, code: e.code, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, altKey: e.altKey, preventDefault: () => e.preventDefault() });
+        if (!before && e.defaultPrevented) return;
       }
       const id = globalActionFor(e);
       // the code workbench / viewer keep their own keys; only the window-level Alt combos pass through

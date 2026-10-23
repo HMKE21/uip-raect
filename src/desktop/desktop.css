@@ -23,7 +23,7 @@ body.os-dragging iframe { pointer-events: none; }
 @keyframes os-rise { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
 
 .os-wall { position: absolute; inset: 0; background-size: cover; transition: background .4s; }
-.os-desk { position: absolute; inset: 0 0 48px; outline: none; touch-action: none; } /* icons are placed absolutely, cell by cell (see DesktopOS) */
+.os-desk { position: absolute; inset: 0 0 48px; outline: none; touch-action: none; user-select: none; -webkit-user-select: none; } /* icons are placed absolutely, cell by cell (see DesktopOS) */
 .os-desk.is-drop { box-shadow: inset 0 0 0 3px var(--os-accent); background: color-mix(in srgb, var(--os-accent) 12%, transparent); }
 .os-icon {
   position: absolute; touch-action: none; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px; padding: 8px 4px 6px; border: 1px solid transparent; border-radius: 8px;
