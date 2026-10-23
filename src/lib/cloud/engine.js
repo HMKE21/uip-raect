@@ -8,7 +8,7 @@ import { google } from './google';
 import { microsoft } from './microsoft';
 
 /**
- * Cloud backup engine (Google Drive / OneDrive). One provider per student per device.
+ * Cloud backup engine (Google Drive / OneDrive). Google Drive and OneDrive can both be linked at once.
  *
  *  - "My PC" on the UIP server stays the FINAL copy (sharing, exams, the sandbox and the AI all read it).
  *  - This engine keeps a BACKUP copy on the student's own cloud drive, in a folder "UIP-NUB", sorted into one sub-folder per kind of file (Code, Documents, Images …).
@@ -23,51 +23,70 @@ const EVERY_MS = 10 * 60 * 1000;
 const PARALLEL = 2;
 
 const dbKey = (uid) => `uip_cloud_v1:${uid}`;
-const tokKey = (uid) => `uip_cloud_tok:${uid}`;
+const tokKey = (uid, id) => `uip_cloud_tok:${uid}:${id}`;
 const readJson = (store, key) => { try { return JSON.parse(store.getItem(key) || 'null'); } catch { return null; } };
 const writeJson = (store, key, v) => { try { if (v == null) store.removeItem(key); else store.setItem(key, JSON.stringify(v)); } catch { /* storage full / blocked */ } };
 
 const S = {
-  uid: null, cfg: null, ready: false,
-  provider: '', auto: true, account: '', server: false, lastOk: 0, lastError: '', retried: false, forceTok: false,
-  status: 'idle', progress: { done: 0, total: 0 },
-  db: { rootId: null, folders: {}, files: {} }, // persisted remote ids + per-file signatures
+  uid: null, cfg: null, ready: false, auto: true,
+  // one entry per linked cloud — Google Drive and OneDrive can both be linked at the same time
+  // link = { account, server, lastOk, lastError, retried, forceTok, status, progress, db: { rootId, folders, files } }
+  links: {},
+  lastError: '', status: 'idle', progress: { done: 0, total: 0 },
 };
+const newDb = () => ({ rootId: null, folders: {}, files: {} });
+const linkIds = () => Object.keys(S.links).filter((id) => PROVIDERS[id]);
 let snap = null;
 const subs = new Set();
 const emit = () => { snap = null; subs.forEach((f) => f()); };
-const persist = () => writeJson(localStorage, dbKey(S.uid), { provider: S.provider, auto: S.auto, account: S.account, server: S.server, lastOk: S.lastOk, layout: BACKUP_LAYOUT, db: S.db });
+const persist = () => writeJson(localStorage, dbKey(S.uid), {
+  v: 2, auto: S.auto, layout: BACKUP_LAYOUT,
+  links: Object.fromEntries(linkIds().map((id) => { const l = S.links[id]; return [id, { account: l.account, server: l.server, lastOk: l.lastOk, db: l.db }]; })),
+});
+/** One status for the whole backup: the most urgent state of any linked cloud. */
+function aggregate() {
+  const ls = linkIds().map((id) => S.links[id]);
+  const pick = (st) => ls.find((l) => l.status === st);
+  const st = ['running', 'needs-auth', 'error', 'offline'].find((x) => pick(x)) || 'idle';
+  const bad = pick('needs-auth') || pick('error');
+  return { status: st, lastError: bad?.lastError || '', progress: { done: ls.reduce((n, l) => n + (l.progress?.done || 0), 0), total: ls.reduce((n, l) => n + (l.progress?.total || 0), 0) } };
+}
 const snapshot = () => {
-  if (!snap) snap = { ready: S.ready, provider: S.provider, auto: S.auto, account: S.account, lastOk: S.lastOk, lastError: S.lastError, status: S.status, progress: S.progress, cfg: S.cfg };
+  if (!snap) {
+    const ids = linkIds();
+    const ag = aggregate();
+    const oks = ids.map((id) => S.links[id].lastOk || 0);
+    snap = {
+      ready: S.ready, provider: ids[0] || '', providers: ids, auto: S.auto, account: ids[0] ? S.links[ids[0]].account : '',
+      links: Object.fromEntries(ids.map((id) => { const l = S.links[id]; return [id, { account: l.account, lastOk: l.lastOk, status: l.status, lastError: l.lastError, progress: l.progress }]; })),
+      lastOk: oks.length ? Math.min(...oks) : 0, lastError: ag.lastError, status: ag.status, progress: ag.progress, cfg: S.cfg,
+    };
+  }
   return snap;
 };
 
 let timer = 0; let again = false; let running = false; let inited = false;
 
-function setStatus(status, extra) { S.status = status; Object.assign(S, extra || {}); emit(); }
+function setLink(id, status, extra) { const l = S.links[id]; if (!l) return; l.status = status; Object.assign(l, extra || {}); emit(); }
 
-async function getToken() {
-  const P = PROVIDERS[S.provider];
-  const sess = readJson(sessionStorage, tokKey(S.uid));
-  if (!S.forceTok && sess?.tok && sess.tok.expiresAt > Date.now()) return sess.tok;
-  const force = S.forceTok; S.forceTok = false;
-  const r = await P.refresh(S.cfg[S.provider], S.provider === 'google' ? S.account : sess?.refreshToken, { server: S.server, force });
+async function getToken(id) {
+  const P = PROVIDERS[id]; const l = S.links[id];
+  const sess = readJson(sessionStorage, tokKey(S.uid, id));
+  if (!l.forceTok && sess?.tok && sess.tok.expiresAt > Date.now()) return sess.tok;
+  const force = l.forceTok; l.forceTok = false;
+  const r = await P.refresh(S.cfg[id], id === 'google' ? l.account : sess?.refreshToken, { server: l.server, force });
   const tok = r.tok || r;
-  writeJson(sessionStorage, tokKey(S.uid), { tok, refreshToken: r.refreshToken || sess?.refreshToken || null });
+  writeJson(sessionStorage, tokKey(S.uid, id), { tok, refreshToken: r.refreshToken || sess?.refreshToken || null });
   return tok;
 }
 
-async function run({ manual = false } = {}) {
-  if (!S.uid || !S.provider || (!S.auto && !manual)) return;
-  if (running) { again = true; return; }
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) { setStatus('offline'); return; }
-  running = true; again = false;
-  const P = PROVIDERS[S.provider];
+/** Backs the manifest up to ONE linked cloud. Failures of one cloud never stop the other. */
+async function runOne(id, items) {
+  const P = PROVIDERS[id]; const l = S.links[id];
   let fatal = null; let done = 0; let failed = 0; let firstErr = '';
   try {
-    setStatus('running', { progress: { done: 0, total: 0 }, lastError: '' });
-    const tok = await getToken();
-    const items = (await drive.manifest()).items || [];
+    setLink(id, 'running', { progress: { done: 0, total: 0 }, lastError: '' });
+    const tok = await getToken(id);
     // files from different My PC folders now share one kind-folder: a repeated name gets " (2)", " (3)" … so nothing is overwritten
     const cloudName = new Map();
     { const seen = new Map();
@@ -77,16 +96,16 @@ async function run({ manual = false } = {}) {
         cloudName.set(n.id, k === 1 ? n.name : n.name.replace(/(\.[^.\/]+)?$/, ` (${k})$1`));
       }); }
     const sigOf = (n) => `${cloudName.get(n.id) || n.name}|${categoryOf(n.name)}|${n.sha1 || ''}|${n.size_bytes}|${n.updated_at || ''}`;
-    const todo = items.filter((n) => n.type === 'file' && !SKIP_NAMES.has(n.name) && S.db.files[n.id]?.sig !== sigOf(n));
-    S.progress = { done: 0, total: todo.length }; emit();
+    const todo = items.filter((n) => n.type === 'file' && !SKIP_NAMES.has(n.name) && l.db.files[n.id]?.sig !== sigOf(n));
+    l.progress = { done: 0, total: todo.length }; emit();
 
-    const rootRemote = todo.length ? await P.ensureRoot(tok, S.db) : null;
+    const rootRemote = todo.length ? await P.ensureRoot(tok, l.db) : null;
     // one sub-folder per kind of file ("Code", "Documents", "Images" …) directly under the backup root — not a copy of the My PC tree
     // (memoised per run: the two upload workers must not both create the same kind-folder)
     const folderOnce = new Map();
     const remoteFolder = (node) => {
       const kind = categoryOf(node.name);
-      if (!folderOnce.has(kind)) folderOnce.set(kind, P.ensureFolder(tok, S.db, `kind:${kind}`, kind, rootRemote).catch((e) => { folderOnce.delete(kind); throw e; }));
+      if (!folderOnce.has(kind)) folderOnce.set(kind, P.ensureFolder(tok, l.db, `kind:${kind}`, kind, rootRemote).catch((e) => { folderOnce.delete(kind); throw e; }));
       return folderOnce.get(kind);
     };
 
@@ -97,34 +116,49 @@ async function run({ manual = false } = {}) {
         try {
           const blob = await fetchDriveBlob(n.id);
           const parentRemote = await remoteFolder(n);
-          const prev = S.db.files[n.id];
+          const prev = l.db.files[n.id];
           const sameFolder = prev && prev.parent === parentRemote;
           const remoteId = await P.put(tok, { remoteId: sameFolder ? prev.remoteId : null, name: cloudName.get(n.id) || n.name, parentRemoteId: parentRemote, blob });
-          S.db.files[n.id] = { sig: sigOf(n), remoteId, parent: parentRemote };
+          l.db.files[n.id] = { sig: sigOf(n), remoteId, parent: parentRemote };
           done += 1;
         } catch (e) {
           if (e instanceof CloudAuthError || e instanceof CloudQuotaError) { fatal = e; } else {
             failed += 1;
             if (!firstErr) firstErr = e?.message || '';
-            if (e?.status === 404) { S.db.rootId = null; S.db.folders = {}; } // the cloud folder was deleted: rebuild it next time
+            if (e?.status === 404) { l.db.rootId = null; l.db.folders = {}; } // the cloud folder was deleted: rebuild it next time
           }
         }
-        S.progress = { done: done + failed, total: todo.length }; emit();
+        l.progress = { done: done + failed, total: todo.length }; emit();
       }
     };
     await Promise.all(Array.from({ length: Math.min(PARALLEL, todo.length) }, worker));
     persist();
     if (fatal) throw fatal;
-    if (failed) setStatus('error', { lastError: firstErr || 'Some files could not be copied. They will be tried again.' });
-    else { S.lastOk = Date.now(); S.retried = false; persist(); setStatus('idle', { lastError: '' }); }
+    if (failed) setLink(id, 'error', { lastError: firstErr || 'Some files could not be copied. They will be tried again.' });
+    else { l.lastOk = Date.now(); l.retried = false; persist(); setLink(id, 'idle', { lastError: '' }); }
   } catch (e) {
-    if (e instanceof CloudAuthError && e.code === 'expired' && S.server && !S.retried) {
-      S.retried = true; S.forceTok = true; again = true; // Google refused our cached token: ask the server for a brand-new one and go again
-      writeJson(sessionStorage, tokKey(S.uid), null);
-    } else if (e instanceof CloudAuthError) { S.retried = false; setStatus('needs-auth', { lastError: e.message }); }
-    else if (e instanceof CloudQuotaError) setStatus('error', { lastError: e.message });
-    else if (e instanceof CloudRetryError && e.status === 0) setStatus('offline');
-    else setStatus('error', { lastError: e?.message || 'Backup failed.' });
+    if (e instanceof CloudAuthError && e.code === 'expired' && l.server && !l.retried) {
+      l.retried = true; l.forceTok = true; again = true; // the provider refused our cached token: ask the server for a brand-new one and go again
+      writeJson(sessionStorage, tokKey(S.uid, id), null);
+    } else if (e instanceof CloudAuthError) { l.retried = false; setLink(id, 'needs-auth', { lastError: e.message }); }
+    else if (e instanceof CloudQuotaError) setLink(id, 'error', { lastError: e.message });
+    else if (e instanceof CloudRetryError && e.status === 0) setLink(id, 'offline');
+    else setLink(id, 'error', { lastError: e?.message || 'Backup failed.' });
+  }
+}
+
+async function run({ manual = false } = {}) {
+  if (!S.uid || !linkIds().length || (!S.auto && !manual)) return;
+  if (running) { again = true; return; }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) { linkIds().forEach((id) => { S.links[id].status = 'offline'; }); emit(); return; }
+  running = true; again = false;
+  try {
+    const items = (await drive.manifest()).items || [];
+    // the clouds are independent: each one is tried even if another one needs a new sign-in or has an error
+    for (const id of linkIds()) { if (S.links[id] && S.links[id].status !== 'needs-auth') await runOne(id, items); }
+  } catch (e) {
+    linkIds().forEach((id) => { S.links[id].status = e instanceof CloudRetryError && e.status === 0 ? 'offline' : 'error'; if (S.links[id].status === 'error') S.links[id].lastError = e?.message || 'Backup failed.'; });
+    emit();
   } finally {
     running = false;
     if (again) schedule(2000);
@@ -148,41 +182,52 @@ function installListeners() {
 export const cloud = {
   providers: PROVIDERS,
 
-  /** Call once per signed-in student. Loads the server config + this student's saved link. */
+  /** Call once per signed-in student. Loads the server config + this student's saved links. */
   async init(uid) {
     if (!uid) return;
     if (S.uid === uid && S.ready) return;
-    S.uid = uid; S.ready = false; emit();
+    S.uid = uid; S.ready = false; S.links = {}; emit();
     const saved = readJson(localStorage, dbKey(uid));
-    if (saved) { S.provider = saved.provider || ''; S.auto = saved.auto !== false; S.account = saved.account || ''; S.server = !!saved.server; S.lastOk = saved.lastOk || 0; S.db = saved.layout === BACKUP_LAYOUT && saved.db ? saved.db : S.db; }
+    if (saved) {
+      S.auto = saved.auto !== false;
+      const fresh = saved.layout === BACKUP_LAYOUT;
+      if (saved.links) Object.entries(saved.links).forEach(([id, l]) => { S.links[id] = { account: l.account || '', server: !!l.server, lastOk: l.lastOk || 0, db: fresh && l.db ? l.db : newDb() }; });
+      else if (saved.provider) S.links[saved.provider] = { account: saved.account || '', server: !!saved.server, lastOk: saved.lastOk || 0, db: fresh && saved.db ? saved.db : newDb() }; // old single-cloud format
+      Object.entries(S.links).forEach(([id, l]) => { Object.assign(l, { status: 'idle', lastError: '', retried: false, forceTok: false, progress: { done: 0, total: 0 } }); if (!PROVIDERS[id]) delete S.links[id]; });
+    }
     const cfg = await driveConfig();
     S.cfg = cfg?.cloud || {};
     S.ready = true;
-    if (S.provider && !PROVIDERS[S.provider]) { S.provider = ''; }
     installListeners();
-    if (S.provider) { S.status = readJson(sessionStorage, tokKey(uid)) ? 'idle' : 'idle'; schedule(3500); }
+    if (linkIds().length) schedule(3500);
     emit();
   },
-  stop() { clearTimeout(timer); S.uid = null; S.ready = false; S.provider = ''; S.status = 'idle'; emit(); },
+  stop() { clearTimeout(timer); S.uid = null; S.ready = false; S.links = {}; emit(); },
 
   available(id) { return !isNative && !!PROVIDERS[id] && PROVIDERS[id].enabled(S.cfg?.[id]); }, // the Android app can't open the OAuth pop-ups yet
 
-  /** From a click. */
+  /** From a click. Linking one cloud never unlinks the other. */
   async connect(id) {
     const P = PROVIDERS[id];
     if (!P || !this.available(id)) throw new Error('This cloud is not set up on the server yet.');
-    const r = await P.connect(S.cfg[id], id === 'google' ? S.account : undefined);
-    const changed = S.provider !== id;
-    S.provider = id; S.server = !!r.server; S.retried = false; S.forceTok = false; S.auto = true; S.account = r.account || ''; S.lastError = '';
-    if (changed) S.db = { rootId: null, folders: {}, files: {} };
-    writeJson(sessionStorage, tokKey(S.uid), { tok: r.tok, refreshToken: r.refreshToken || null });
-    persist(); setStatus('idle');
+    const prev = S.links[id];
+    const r = await P.connect(S.cfg[id], id === 'google' ? prev?.account : undefined);
+    const account = r.account || '';
+    const sameAccount = prev && prev.account === account;
+    S.links[id] = { account, server: !!r.server, lastOk: sameAccount ? prev.lastOk : 0, db: sameAccount ? prev.db : newDb(), status: 'idle', lastError: '', retried: false, forceTok: false, progress: { done: 0, total: 0 } };
+    S.auto = true;
+    writeJson(sessionStorage, tokKey(S.uid, id), { tok: r.tok, refreshToken: r.refreshToken || null });
+    persist(); emit();
     schedule(300);
   },
-  disconnect() {
-    if (S.provider === 'google' && S.server) PROVIDERS.google.disconnectServer();
-    S.server = false; S.provider = ''; S.account = ''; S.lastError = ''; S.db = { rootId: null, folders: {}, files: {} }; S.status = 'idle';
-    writeJson(sessionStorage, tokKey(S.uid), null); persist(); emit();
+  /** Unlink one cloud (id) — or all of them when no id is given. */
+  disconnect(id) {
+    (id ? [id] : linkIds()).forEach((x) => {
+      if (x === 'google' && S.links[x]?.server) PROVIDERS.google.disconnectServer();
+      delete S.links[x];
+      writeJson(sessionStorage, tokKey(S.uid, x), null);
+    });
+    persist(); emit();
   },
   setAuto(on) { S.auto = !!on; persist(); emit(); if (on) schedule(500); },
   runNow() { clearTimeout(timer); return run({ manual: true }); },

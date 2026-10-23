@@ -11,7 +11,7 @@ import '../../styles/css/save-center.css';
 /** Where a document ends up, as one sentence (used by the "Save changes?" dialog and the reminders). */
 function whereText(where, cl, tt) {
   if (where === 'project') return tt('Saving updates the file for everyone on the project.', 'الحفظ بيحدّث الملف لكل أعضاء المشروع.');
-  const name = cl.provider ? cloud.providers[cl.provider].label : '';
+  const name = cl.providers.map((i) => cloud.providers[i].label).join(' + ');
   const base = tt('Saving stores it in My PC — the final copy on the university server.', 'الحفظ بيخزّنه في جهازي — النسخة النهائية على سيرفر الجامعة.');
   if (where !== 'mypc') return base;
   return cl.provider && cl.auto ? `${base} ${tt(`A backup copy then goes to your ${name}.`, `وبعدها بتتنسخ نسخة احتياطية على ${name} بتاعك.`)}` : base;
@@ -26,7 +26,7 @@ function BackupLine({ at, cl, tt }) {
       </span>
     );
   }
-  const name = cloud.providers[cl.provider].label;
+  const name = cl.providers.map((i) => cloud.providers[i].label).join(' + ');
   if (!cl.auto) return <span className="sc-line sc-line--off"><Icon name="cloud-off" size={13} /> {tt(`${name} backup is paused`, `نسخ ${name} متوقف`)}</span>;
   if (cl.status === 'needs-auth') return <span className="sc-line sc-line--warn"><Icon name="alert-triangle" size={13} /> {tt(`Sign in to ${name} to back up`, `سجّل الدخول لـ ${name} عشان النسخ`)}<button type="button" className="sc-link" onClick={() => saveCenter.openCloudSettings()}>{tt('Sign in', 'دخول')}</button></span>;
   if (cl.status === 'offline') return <span className="sc-line sc-line--warn"><Icon name="cloud-off" size={13} /> {tt('Offline — the backup will follow when you reconnect', 'أوفلاين — النسخ هيكمل لما الإنترنت يرجع')}</span>;

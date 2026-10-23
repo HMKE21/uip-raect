@@ -75,13 +75,24 @@ const authed = (tok, extra) => ({ ...(extra || {}), Authorization: `Bearer ${tok
 const enc = (path) => path.split('/').map(encodeURIComponent).join('/');
 const approot = (path) => `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${enc(path)}`;
 
+/** OneDrive answers 409 (nameAlreadyExists / resourceLocked / "another upload is changing this item") when two requests touch the same
+ *  folder or file at once. That is a temporary clash, not a failure: retry it with a back-off instead of reporting "Cloud error 409". */
+async function graph(url, init) {
+  try { return await cloudFetch(url, init); } catch (e) {
+    if (e?.status === 409) throw new CloudRetryError('OneDrive is busy.', 409);
+    throw e;
+  }
+}
+/** OneDrive refuses  " * : < > ? / \ |  and a trailing dot / space in names. */
+const safeName = (n) => String(n).replace(/[\\"*:<>?/|]/g, '_').replace(/[. ]+$/, '') || '_';
+
 async function putSmall(tok, path, blob) {
-  const r = await cloudFetch(`${approot(path)}:/content?@microsoft.graph.conflictBehavior=replace`, { method: 'PUT', headers: authed(tok, { 'Content-Type': blob.type || 'application/octet-stream' }), body: blob });
+  const r = await graph(`${approot(path)}:/content?@microsoft.graph.conflictBehavior=replace`, { method: 'PUT', headers: authed(tok, { 'Content-Type': blob.type || 'application/octet-stream' }), body: blob });
   return (await r.json()).id;
 }
 
 async function putLarge(tok, path, blob) {
-  const s = await cloudFetch(`${approot(path)}:/createUploadSession`, { method: 'POST', headers: authed(tok, { 'Content-Type': 'application/json' }), body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace' } }) });
+  const s = await graph(`${approot(path)}:/createUploadSession`, { method: 'POST', headers: authed(tok, { 'Content-Type': 'application/json' }), body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace' } }) });
   const { uploadUrl } = await s.json();
   let id = null;
   for (let off = 0; off < blob.size; off += CHUNK) {
@@ -90,10 +101,25 @@ async function putLarge(tok, path, blob) {
     try { res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Range': `bytes ${off}-${end - 1}/${blob.size}` }, body: blob.slice(off, end) }); } catch { throw new CloudRetryError('Network problem.', 0); }
     if (res.status === 507) throw new CloudQuotaError();
     if (res.status >= 500 || res.status === 429) throw new CloudRetryError('Microsoft is busy.', res.status);
+    if (res.status === 409) throw new CloudRetryError('OneDrive is busy.', 409);
+    if (res.status === 401) throw new CloudAuthError('Your cloud session expired.', 'expired');
     if (!res.ok) throw Object.assign(new Error(`Cloud error ${res.status}.`), { status: res.status });
     if (res.status === 200 || res.status === 201) id = (await res.json()).id;
   }
   return id;
+}
+
+/** Creates `name` inside `parentPath` (app folder root when empty). Already existing = fine. */
+async function makeFolder(tok, parentPath, name) {
+  const url = parentPath ? `${approot(parentPath)}:/children` : 'https://graph.microsoft.com/v1.0/me/drive/special/approot/children';
+  await withRetry(async () => {
+    try {
+      await cloudFetch(url, { method: 'POST', headers: authed(tok, { 'Content-Type': 'application/json' }), body: JSON.stringify({ name, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }) });
+    } catch (e) {
+      if (e?.status === 409) return; // nameAlreadyExists: the folder is already there
+      throw e;
+    }
+  });
 }
 
 export const microsoft = {
@@ -114,12 +140,13 @@ export const microsoft = {
     return tokenCall(cfg, { grant_type: 'refresh_token', refresh_token: refreshToken });
   },
 
-  // OneDrive creates the intermediate folders itself when a file is addressed by path.
-  async ensureRoot() { return ROOT; },
-  async ensureFolder(tok, state, nodeId, name, parentRemoteId) { return `${parentRemoteId}/${name}`; },
+  // Folders are created explicitly (and idempotently) BEFORE the parallel uploads start. Letting two uploads create the same
+  // folder implicitly by path is what produced "Cloud error 409".
+  async ensureRoot(tok) { await makeFolder(tok, '', ROOT); return ROOT; },
+  async ensureFolder(tok, state, nodeId, name, parentRemoteId) { const n = safeName(name); await makeFolder(tok, parentRemoteId, n); return `${parentRemoteId}/${n}`; },
 
   async put(tok, { name, parentRemoteId, blob }) {
-    const path = `${parentRemoteId}/${name}`;
+    const path = `${parentRemoteId}/${safeName(name)}`;
     return withRetry(() => (blob.size <= SMALL ? putSmall(tok, path, blob) : putLarge(tok, path, blob)));
   },
 };

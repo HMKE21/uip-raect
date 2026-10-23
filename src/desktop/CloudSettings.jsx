@@ -22,12 +22,12 @@ export function ago(ts, tt) {
 /** Short status line + tone for the tray icon, the toasts and the settings page. */
 export function cloudSummary(cl, tt) {
   if (!cl.provider) return { tone: 'off', text: tt('No cloud backup', 'مفيش نسخ احتياطي سحابي') };
-  const name = cloud.providers[cl.provider].label;
+  const name = cl.providers.map((i) => cloud.providers[i].label).join(' + ');
   if (!cl.auto) return { tone: 'off', text: tt(`${name}: auto-backup is off`, `${name}: النسخ التلقائي متوقف`) };
   if (cl.status === 'needs-auth') return { tone: 'warn', text: tt(`${name}: sign in again`, `${name}: سجّل الدخول تاني`) };
   if (cl.status === 'offline') return { tone: 'warn', text: tt(`${name}: offline — will resume`, `${name}: أوفلاين — هيكمل بعدين`) };
   if (cl.status === 'running') return { tone: 'busy', text: tt(`${name}: backing up ${cl.progress.done}/${cl.progress.total}`, `${name}: جاري النسخ ${cl.progress.done}/${cl.progress.total}`) };
-  if (cl.status === 'error') return { tone: 'bad', text: `${name}: ${cl.lastError || tt('problem', 'مشكلة')}` };
+  if (cl.status === 'error') return { tone: 'bad', text: `${cl.providers.filter((i) => cl.links[i].status === 'error').map((i) => cloud.providers[i].label).join(' + ') || name}: ${cl.lastError || tt('problem', 'مشكلة')}` };
   return { tone: 'ok', text: tt(`${name}: backed up ${ago(cl.lastOk, tt)}`, `${name}: آخر نسخة ${ago(cl.lastOk, tt)}`) };
 }
 
@@ -60,17 +60,19 @@ export function CloudPanel({ tt, usage }) {
         <p className="os-set__hint">{tt('A copy of your My PC files is kept in your own Google Drive or OneDrive, in a folder called “UIP My PC”. Exams, submissions and results never leave the university server.', 'نسخة من ملفات جهازي بتتحفظ في Google Drive أو OneDrive بتاعك، في فولدر اسمه “UIP My PC”. الامتحانات والتسليمات والنتائج بتفضل على سيرفر الجامعة بس.')}</p>
         {!anyAvailable && <p className="os-set__hint">{cl.ready ? tt('Cloud backup is not available here yet (it has to be enabled by the platform admin, and it does not run inside the Android app).', 'النسخ السحابي مش متاح هنا لسه (لازم الأدمن يفعّله، ومش بيشتغل جوه تطبيق الأندرويد).') : tt('Loading…', 'جارٍ التحميل…')}</p>}
         <div className="sc-prov">
-          {ids.filter((i) => cloud.available(i) || cl.provider === i).map((id) => {
-            const on = cl.provider === id;
+          {ids.filter((i) => cloud.available(i) || cl.links[i]).map((id) => {
+            const lk = cl.links[id];
+            const on = !!lk;
             const name = cloud.providers[id].label;
             return (
               <div key={id} className={`sc-card${on ? ' is-on' : ''}`}>
                 <span className={`sc-logo sc-logo--${id}`}>{LOGO[id]}</span>
                 <div className="sc-card__txt"><b>{name}</b>
-                  <span>{on ? (cl.account || tt('Connected', 'متصل')) : tt('Not connected', 'غير متصل')}</span></div>
+                  <span>{on ? (lk.account || tt('Connected', 'متصل')) : tt('Not connected', 'غير متصل')}</span>
+                  {on && lk.status === 'error' && <span className="sc-tone sc-tone--bad">{lk.lastError}</span>}</div>
                 {!on && <button type="button" className="os-btn os-btn--primary" disabled={!!busy} onClick={() => connect(id)}>{busy === id ? tt('Connecting…', 'جارٍ الربط…') : tt('Connect', 'ربط')}</button>}
-                {on && cl.status === 'needs-auth' && <button type="button" className="os-btn os-btn--primary" disabled={!!busy} onClick={() => connect(id)}>{tt('Sign in again', 'سجّل الدخول')}</button>}
-                {on && cl.status !== 'needs-auth' && <button type="button" className="os-btn" onClick={() => cloud.disconnect()}>{tt('Disconnect', 'فصل')}</button>}
+                {on && lk.status === 'needs-auth' && <button type="button" className="os-btn os-btn--primary" disabled={!!busy} onClick={() => connect(id)}>{tt('Sign in again', 'سجّل الدخول')}</button>}
+                {on && lk.status !== 'needs-auth' && <button type="button" className="os-btn" onClick={() => cloud.disconnect(id)}>{tt('Disconnect', 'فصل')}</button>}
               </div>
             );
           })}
@@ -79,13 +81,12 @@ export function CloudPanel({ tt, usage }) {
         {cl.provider && (
           <div className="sc-actions">
             <label className="sc-check"><input type="checkbox" checked={cl.auto} onChange={(e) => cloud.setAuto(e.target.checked)} />{tt('Back up automatically after every save', 'نسخ احتياطي تلقائي بعد كل حفظ')}</label>
-            <button type="button" className="os-btn" disabled={cl.status === 'running' || cl.status === 'needs-auth'} onClick={() => cloud.runNow()}>
+            <button type="button" className="os-btn" disabled={cl.status === 'running'} onClick={() => cloud.runNow()}>
               <Icon name="cloud-up" size={14} /> {cl.status === 'running' ? `${cl.progress.done}/${cl.progress.total}` : tt('Back up now', 'انسخ دلوقتي')}
             </button>
           </div>
         )}
-        {cl.provider && cl.status === 'error' && <p className="os-set__err">{cl.lastError}</p>}
-        {cl.provider && <p className="os-set__hint">{tt('Deleting a file in My PC does not delete its backup. Sign-in lasts for this browser session; you may be asked to sign in again.', 'مسح ملف من جهازي مبيمسحش نسخته الاحتياطية. تسجيل الدخول بيفضل طول جلسة المتصفح، وممكن يطلب منك تسجّل تاني.')}</p>}
+                {cl.provider && <p className="os-set__hint">{tt('Deleting a file in My PC does not delete its backup. Sign-in lasts for this browser session; you may be asked to sign in again.', 'مسح ملف من جهازي مبيمسحش نسخته الاحتياطية. تسجيل الدخول بيفضل طول جلسة المتصفح، وممكن يطلب منك تسجّل تاني.')}</p>}
       </Section>
 
       <Section title={tt('Unsaved changes', 'التعديلات غير المحفوظة')}>
