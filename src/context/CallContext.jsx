@@ -99,11 +99,16 @@ function notifyIncoming(call, ar) {
   };
 }
 
+// A 0.1 s silent WAV. Playing it from inside a click "unlocks" the <audio> element on iOS Safari / Android WebView, which otherwise
+// refuse to start the remote voice later (it begins asynchronously, long after the tap) - that is a classic one-way-audio cause.
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+
 export function CallProvider({ children }) {
   const { user, status, can, permissionsReady } = useAuth();
   const { locale } = useLanguage();
   const [state, setState] = useState(IDLE);
   const [media, setMedia] = useState({ local: null, remote: null }); // live MediaStreams for the <video> tags
+  const [audioBlocked, setAudioBlocked] = useState(false); // the browser refused to start the other person's voice until the user taps
   const engineRef = useRef(null);
   const audioRef = useRef(null);
   const arRef = useRef(locale === 'ar');
@@ -111,6 +116,30 @@ export function CallProvider({ children }) {
 
   const enabled = status === 'authenticated' && !!user && permissionsReady && can('messaging.use');
   const userId = user && user.id;
+
+  /** Call from a user gesture (tap on call / answer): lets the remote <audio> start later without another tap. */
+  const primeAudio = () => {
+    const el = audioRef.current;
+    if (!el || el.srcObject) return;
+    try {
+      el.muted = false;
+      el.volume = 1;
+      el.src = SILENT_WAV;
+      const p = el.play();
+      if (p && p.catch) p.catch(() => {});
+    } catch { /* best effort */ }
+  };
+
+  /** Retry playing the remote voice (used by the "tap to enable sound" button and by any later user gesture). */
+  const resumeAudio = () => {
+    const el = audioRef.current;
+    if (!el || !el.srcObject) return;
+    el.muted = false;
+    el.volume = 1;
+    const p = el.play();
+    if (p && p.then) p.then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true));
+    else setAudioBlocked(false);
+  };
 
   // Browsers only start audio after a gesture: unlock the ringtone context on the first interaction.
   useEffect(() => {
@@ -143,8 +172,21 @@ export function CallProvider({ children }) {
       setRemoteStream: (stream, track) => {
         const el = audioRef.current;
         if (!el) return;
-        el.srcObject = stream || (track ? new MediaStream([track]) : null);
-        if (el.srcObject) el.play().catch(() => {});
+        const src = stream || (track ? new MediaStream([track]) : null);
+        if (el.srcObject !== src) { el.srcObject = src; } // an unmute re-attach hands us the same stream: don't restart playback
+        if (!src) { setAudioBlocked(false); return; }
+        el.muted = false;
+        el.volume = 1;
+        const p = el.play();
+        if (p && p.then) {
+          p.then(() => setAudioBlocked(false)).catch(() => {
+            // autoplay refused: ask for a tap, and also retry on the very next interaction anywhere on the page
+            setAudioBlocked(true);
+            const retry = () => resumeAudio();
+            window.addEventListener('pointerdown', retry, { once: true, capture: true });
+            window.addEventListener('keydown', retry, { once: true, capture: true });
+          });
+        }
       },
       onChange: setState,
       onFinished: () => {
@@ -184,12 +226,15 @@ export function CallProvider({ children }) {
       engineRef.current = null;
       setState(IDLE);
       setMedia({ local: null, remote: null });
+      setAudioBlocked(false);
     };
   }, [enabled, userId]);
 
   const actions = useMemo(() => ({
-    startCall: (conversationId, peer, opts) => (engineRef.current ? engineRef.current.startCall(conversationId, peer, opts) : Promise.resolve(false)),
-    accept: (opts) => engineRef.current && engineRef.current.accept(opts),
+    startCall: (conversationId, peer, opts) => { primeAudio(); return engineRef.current ? engineRef.current.startCall(conversationId, peer, opts) : Promise.resolve(false); },
+    accept: (opts) => { primeAudio(); return engineRef.current && engineRef.current.accept(opts); },
+    resumeAudio: () => resumeAudio(),
+    getDiagnostics: () => (engineRef.current && engineRef.current.diagnostics ? engineRef.current.diagnostics() : Promise.resolve(null)),
     toggleCamera: () => engineRef.current && engineRef.current.toggleCamera(),
     switchCamera: () => engineRef.current && engineRef.current.switchCamera(),
     toggleScreenShare: () => engineRef.current && engineRef.current.toggleScreenShare(),
@@ -202,13 +247,14 @@ export function CallProvider({ children }) {
     dismissNotice: () => engineRef.current && engineRef.current.dismissNotice(),
   }), []);
 
-  const value = useMemo(() => ({ ...state, ...actions, localVideo: media.local, remoteVideo: media.remote }), [state, actions, media]);
+  const value = useMemo(() => ({ ...state, ...actions, localVideo: media.local, remoteVideo: media.remote, audioBlocked }), [state, actions, media, audioBlocked]);
 
   return (
     <CallCtx.Provider value={value}>
       {children}
       {/* The remote voice plays here; it must stay mounted for the whole call. */}
-      <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />
+      {/* not display:none - some WebViews / Safari pause media elements that are not rendered */}
+      <audio ref={audioRef} autoPlay playsInline style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none', left: 0, top: 0 }} />
       {enabled && <CallUI />}
     </CallCtx.Provider>
   );

@@ -168,6 +168,7 @@ export function createCallEngine(deps) {
     sendChain = Promise.resolve();
     makingOffer = false;
     lastLoss = { lost: 0, recv: 0 };
+    stallTicks = 0; lastIn = -1; recoveries = 0;
     try { setRemoteStream && setRemoteStream(null, null); } catch { /* ignore */ }
     try { vibrate(0); } catch { /* ignore */ }
     if (closeNotify) { try { closeNotify(); } catch { /* ignore */ } closeNotify = null; }
@@ -314,11 +315,19 @@ export function createCallEngine(deps) {
     };
     conn.ontrack = (e) => {
       if (pc !== conn) return;
-      if (e.track && e.track.kind === 'video') {
-        try { remoteVideo = makeStream([e.track]); setRemoteVideo(remoteVideo); } catch { /* ignore */ }
+      const track = e.track || null;
+      if (track && track.kind === 'video') {
+        const attachVideo = () => { try { remoteVideo = makeStream([track]); setRemoteVideo(remoteVideo); } catch { /* ignore */ } };
+        attachVideo();
+        // A remote track is "muted" until its first RTP packet arrives. Some browsers / WebViews attach the <video> too early and
+        // keep painting black, so hand the element a fresh stream the moment real frames start flowing.
+        try { track.onunmute = () => { if (pc === conn) attachVideo(); }; } catch { /* ignore */ }
         return;
       }
-      try { setRemoteStream && setRemoteStream((e.streams && e.streams[0]) || null, e.track || null); } catch { /* ignore */ }
+      const attachAudio = () => { try { setRemoteStream && setRemoteStream((e.streams && e.streams[0]) || null, track); } catch { /* ignore */ } };
+      attachAudio();
+      // Same idea for sound: if the first play() was refused (autoplay policy) or happened before any packet, try again on unmute.
+      try { if (track) track.onunmute = () => { if (pc === conn) attachAudio(); }; } catch { /* ignore */ }
     };
     const onState = () => { if (pc === conn) onConnState(conn); };
     conn.onconnectionstatechange = onState;
@@ -378,11 +387,18 @@ export function createCallEngine(deps) {
     }
   }
 
-  async function restartIce() {
+  const hasTurn = () => !!(iceCache && iceCache.servers.some((x) => [].concat(x.urls || []).some((u) => /^turns?:/i.test(u))));
+
+  async function restartIce(relay = false) {
     const conn = pc;
     if (!conn || !isCaller() || makingOffer) return;
     makingOffer = true;
     try {
+      if (relay && hasTurn() && conn.getConfiguration && conn.setConfiguration) {
+        // direct path is up but carries no media (one-way audio / black video): force everything through the TURN relay
+        try { conn.setConfiguration({ ...conn.getConfiguration(), iceTransportPolicy: 'relay' }); } catch { /* keep going with a plain restart */ }
+        try { console.warn('[call] no media on the direct path - restarting ICE through TURN relay'); } catch { /* diagnostics only */ }
+      }
       if (conn.restartIce) conn.restartIce();
       const offer = await conn.createOffer({ iceRestart: true });
       if (pc !== conn) return;
@@ -393,16 +409,35 @@ export function createCallEngine(deps) {
     }
   }
 
+  /**
+   * "Connected" does not prove sound/video really flows (one-way NAT/firewall paths look connected). While active we watch the
+   * inbound audio counters; if nothing arrives for ~8 s we recover: the caller restarts ICE (second time through the TURN relay),
+   * the callee asks the caller to do it with a `state` signal.
+   */
+  let stallTicks = 0;
+  let lastIn = -1;
+  let recoveries = 0;
+
+  function recoverMedia() {
+    if (recoveries >= 3) return;
+    recoveries += 1;
+    stallTicks = 0;
+    set({ quality: 'poor' });
+    if (isCaller()) restartIce(recoveries >= 2);
+    else sendSignal('state', { muted: st.muted, cam: st.camOn, sharing: st.sharing, restart: true, attempt: recoveries });
+  }
+
   function startStats(conn) {
     if (statsTimer) timers.clearInterval(statsTimer);
+    stallTicks = 0; lastIn = -1; recoveries = 0;
     if (!conn.getStats) return;
     statsTimer = timers.setInterval(async () => {
       if (pc !== conn || st.reconnecting) return;
       try {
         const report = await conn.getStats();
-        let lost = 0; let recv = 0; let rtt = 0;
+        let lost = 0; let recv = 0; let rtt = 0; let inAudio = 0;
         report.forEach((r) => {
-          if (r.type === 'inbound-rtp' && (r.kind === 'audio' || r.mediaType === 'audio')) { lost = r.packetsLost || 0; recv = r.packetsReceived || 0; }
+          if (r.type === 'inbound-rtp' && (r.kind === 'audio' || r.mediaType === 'audio')) { lost = r.packetsLost || 0; recv = r.packetsReceived || 0; inAudio = (r.bytesReceived || 0) + (r.packetsReceived || 0); }
           if (r.type === 'candidate-pair' && (r.nominated || r.selected) && r.currentRoundTripTime) rtt = r.currentRoundTripTime;
         });
         const dl = Math.max(0, lost - lastLoss.lost);
@@ -411,8 +446,41 @@ export function createCallEngine(deps) {
         const ratio = dl + dr > 0 ? dl / (dl + dr) : 0;
         const q = ratio > 0.15 || rtt > 0.6 ? 'poor' : (ratio > 0.05 || rtt > 0.3 ? 'fair' : 'good');
         if (q !== st.quality) set({ quality: q });
+        // media watchdog (audio is always negotiated; a muted mic still sends silence packets, so a flat counter means a dead path)
+        if (inAudio > lastIn) { stallTicks = 0; } else if (st.phase === 'active') { stallTicks += 1; }
+        lastIn = inAudio;
+        if (stallTicks >= 2) recoverMedia();
       } catch { /* stats are best-effort */ }
     }, 4000);
+  }
+
+  /** Snapshot for the on-screen debug panel (and the console): what is really flowing, and over which kind of path. */
+  async function diagnostics() {
+    const conn = pc;
+    if (!conn || !conn.getStats) return null;
+    const out = {
+      conn: conn.connectionState, ice: conn.iceConnectionState, signaling: conn.signalingState, turnConfigured: hasTurn(),
+      audio: { in: 0, out: 0, lost: 0 }, video: { in: 0, out: 0, frames: 0 }, path: null, recoveries,
+    };
+    try {
+      const rep = await conn.getStats();
+      const byId = {};
+      let selectedId = null;
+      rep.forEach((r) => { byId[r.id] = r; if (r.type === 'transport' && r.selectedCandidatePairId) selectedId = r.selectedCandidatePairId; });
+      rep.forEach((r) => {
+        const k = r.kind || r.mediaType;
+        if (r.type === 'inbound-rtp' && (k === 'audio' || k === 'video')) { out[k].in = r.bytesReceived || 0; if (k === 'audio') out.audio.lost = r.packetsLost || 0; else out.video.frames = r.framesDecoded || 0; }
+        if (r.type === 'outbound-rtp' && (k === 'audio' || k === 'video')) out[k].out = r.bytesSent || 0;
+        if (!selectedId && r.type === 'candidate-pair' && (r.nominated || r.selected) && r.state === 'succeeded') selectedId = r.id;
+      });
+      const pair = selectedId && byId[selectedId];
+      if (pair) {
+        const l = byId[pair.localCandidateId] || {};
+        const rm = byId[pair.remoteCandidateId] || {};
+        out.path = { local: l.candidateType || '?', remote: rm.candidateType || '?', protocol: l.protocol || '?', rtt: pair.currentRoundTripTime || 0 };
+      }
+    } catch { /* best-effort */ }
+    return out;
   }
 
   // ------------------------------------------------------------------ signals in
@@ -462,6 +530,7 @@ export function createCallEngine(deps) {
       if (typeof p.muted === 'boolean' && p.muted !== st.peerMuted) set({ peerMuted: p.muted });
       if (typeof p.cam === 'boolean' && p.cam !== st.peerCam) set({ peerCam: p.cam });
       if (typeof p.sharing === 'boolean' && p.sharing !== st.peerSharing) set({ peerSharing: p.sharing });
+      if (p.restart === true && isCaller() && st.phase === 'active') restartIce(Number(p.attempt) >= 2);
     }
   }
 
@@ -859,6 +928,6 @@ export function createCallEngine(deps) {
   return {
     start, stop, startCall, accept, decline, hangup, toggleMute, setMinimized, dismissNotice,
     toggleCamera, switchCamera, toggleScreenShare, setFilter, setNoise,
-    pollNow, kick: () => schedule(0), getState: () => ({ ...st }),
+    pollNow, kick: () => schedule(0), getState: () => ({ ...st }), diagnostics,
   };
 }

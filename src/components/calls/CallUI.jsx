@@ -51,11 +51,49 @@ function StreamVideo({ stream, className }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el) return undefined;
     if (el.srcObject !== (stream || null)) el.srcObject = stream || null;
-    if (stream) { const p = el.play(); if (p && p.catch) p.catch(() => {}); }
+    const play = () => { const p = el.play(); if (p && p.catch) p.catch(() => {}); };
+    if (stream) play();
+    // Some browsers/WebViews leave the element black if play() ran before the first frame: nudge it once metadata / data arrives.
+    el.addEventListener('loadedmetadata', play);
+    el.addEventListener('canplay', play);
+    const tracks = stream && stream.getVideoTracks ? stream.getVideoTracks() : [];
+    tracks.forEach((t) => { try { t.addEventListener('unmute', play); } catch { /* ignore */ } });
+    return () => {
+      el.removeEventListener('loadedmetadata', play);
+      el.removeEventListener('canplay', play);
+      tracks.forEach((t) => { try { t.removeEventListener('unmute', play); } catch { /* ignore */ } });
+    };
   }, [stream]);
   return <video ref={ref} className={className} autoPlay playsInline muted />;
+}
+
+const debugOn = () => {
+  try { return localStorage.getItem('uip.call.debug') === '1' || /[?&]calldebug\b/.test(window.location.search); } catch { return false; }
+};
+
+/** Developer panel (enable: localStorage.setItem('uip.call.debug','1') or add ?calldebug to the URL): shows what really flows. */
+function DebugPanel({ c }) {
+  const [d, setD] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => { try { const r = await c.getDiagnostics(); if (alive) setD(r); } catch { /* ignore */ } };
+    tick();
+    const h = setInterval(tick, 2000);
+    return () => { alive = false; clearInterval(h); };
+  }, [c]);
+  if (!d) return null;
+  const kb = (n) => `${Math.round((n || 0) / 1024)}KB`;
+  return (
+    <pre className="call-debug" dir="ltr">
+      {`conn ${d.conn} / ice ${d.ice}\n`}
+      {`path ${d.path ? `${d.path.local}→${d.path.remote} ${d.path.protocol} rtt ${Math.round(d.path.rtt * 1000)}ms` : 'none'}  TURN ${d.turnConfigured ? 'yes' : 'NO'}\n`}
+      {`audio in ${kb(d.audio.in)} out ${kb(d.audio.out)} lost ${d.audio.lost}\n`}
+      {`video in ${kb(d.video.in)} out ${kb(d.video.out)} frames ${d.video.frames}\n`}
+      {`recoveries ${d.recoveries}`}
+    </pre>
+  );
 }
 
 /** Noise cancellation (all calls) + filters (video calls, where the browser can draw them). */
@@ -156,6 +194,13 @@ export default function CallUI() {
       <button type="button" className="call-toast__x" onClick={c.dismissNotice} aria-label={t('Dismiss', 'إغلاق')}><Icon name="x" size={14} /></button>
     </div>
   ) : null;
+
+  const soundBanner = c.audioBlocked && inCall ? (
+    <button type="button" className="call-soundfix" onClick={c.resumeAudio}>
+      <Icon name="phone" size={16} /> {t('Tap to enable call sound', 'اضغط لتشغيل صوت المكالمة')}
+    </button>
+  ) : null;
+  const debugPanel = inCall && debugOn() ? <DebugPanel c={c} /> : null;
 
   let body = null;
 
@@ -310,5 +355,5 @@ export default function CallUI() {
   }
 
   if (!body && !toast) return null;
-  return createPortal(<div className="call-layer" dir={ar ? 'rtl' : 'ltr'}>{body}{toast}</div>, document.body);
+  return createPortal(<div className="call-layer" dir={ar ? 'rtl' : 'ltr'}>{body}{soundBanner}{debugPanel}{toast}</div>, document.body);
 }
