@@ -161,7 +161,7 @@ function ProtectedCode({ name, text, cut, tt }) {
         <ThemeMenu value={theme} onChange={setTheme} label={tt('Theme', 'الثيم')} />
       </div>
       <div className="shp-code__body">
-        <div className="zb-cm-wrap">
+        <div className="zb-cm-wrap" onMouseDown={(e) => { if (e.button === 0 && e.target.closest?.('.cm-content, .cm-gutters')) e.preventDefault(); }} onDragStart={(e) => e.preventDefault()}>
           <Suspense fallback={<Spin />}>
             <CodeEditor docId={`${name}:${text.length}`} path={name} initialText={text} readOnly wrap={wrap} fontSize={size} theme={theme} />
           </Suspense>

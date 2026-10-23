@@ -15,6 +15,14 @@ import '../styles/css/drive-share-responsive.css';
 import '../styles/css/drive-share-pro.css'; // professional visual layer
 import '../styles/css/share-access.css';
 import '../styles/css/drive-share-fix.css'; // header stacking + file viewer (code LTR, phone master/detail) — must stay last
+import '../styles/css/shared-page-life.css'; // light floating bubbles + soft animations
+
+// floating bubbles: position (%), size, hue, speed, start offset, sway
+const BUBBLES = [
+  [6, 44, 235, 26, 0, 24], [16, 22, 190, 19, -6, 18], [27, 64, 290, 32, -12, 30], [38, 28, 330, 21, -3, 22],
+  [49, 52, 210, 29, -15, 26], [58, 20, 160, 18, -9, 16], [68, 70, 260, 34, -20, 34], [78, 30, 20, 22, -5, 20],
+  [86, 46, 320, 27, -11, 28], [93, 24, 200, 20, -17, 18], [11, 36, 45, 25, -22, 22], [73, 18, 175, 17, -8, 14],
+].map(([x, s, h, d, dl, sw], i) => ({ '--x': `${x}%`, '--s': `${s}px`, '--h': h, '--d': `${d}s`, '--dl': `${dl}s`, '--sw': `${sw}px`, '--y': `${20 + ((i * 17) % 60)}%` }));
 
 const BIG_PREVIEW_BYTES = 80 * 1024 * 1024; // non-media files above this are not previewed in the browser
 
@@ -369,7 +377,7 @@ export default function SharedItem() {
 
   return (
     <div className={`shp${(away || shot) && !canDl ? ' is-away' : ''}`} dir={ar ? 'rtl' : 'ltr'} onContextMenu={(e) => e.preventDefault()}>
-      <div className="shp__bubbles" aria-hidden="true">{Array.from({ length: 6 }, (_, i) => <i key={i} />)}</div>
+      <div className="shp__bubbles" aria-hidden="true">{BUBBLES.map((b, i) => <i key={i} style={b} />)}</div>
       <header className="shp__top">
         <div className="shp__who">
           {data && <SenderAvatar name={owner} src={avatarSrc(share.owner_avatar)} />}
@@ -382,8 +390,8 @@ export default function SharedItem() {
         </div>
         <div className="shp__tools">
           <span className="shp__secure" title={t('Protected link', 'رابط محمي')}><Icon name="shield" size={14} /><span>{t('Secure link', 'رابط آمن')}</span></span>
-          <button type="button" className="shp__tool" onClick={toggleLocale} title={t('العربية', 'English')} aria-label={t('Switch to Arabic', 'التبديل للإنجليزية')}>
-            <Icon name="globe" size={16} /><span>{ar ? 'EN' : 'عربي'}</span>
+          <button type="button" className="shp__tool shp__tool--icon" onClick={toggleLocale} title={ar ? 'English' : 'العربية'} aria-label={ar ? 'Switch to English' : 'التبديل للعربية'}>
+            <Icon name="globe" size={16} />
           </button>
           <button type="button" className="shp__tool shp__tool--icon" onClick={toggleTheme} title={theme === 'dark' ? t('Light mode', 'الوضع الفاتح') : t('Dark mode', 'الوضع الداكن')} aria-label={t('Toggle theme', 'تبديل الثيم')}>
             <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={17} />
