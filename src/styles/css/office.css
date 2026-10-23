@@ -10,7 +10,7 @@
 .xg__formula { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--ed-line); background: var(--ed-panel); }
 .xg__formula input { flex: 1; font-family: ui-monospace, Menlo, Consolas, monospace; }
 .xg__ref { min-width: 54px; text-align: center; font-weight: 700; font-size: 12px; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,.07); direction: ltr; }
-.xg__scroll { flex: 1; min-height: 0; overflow: auto; outline: none; background: var(--xg-bg, #0c111c); color: var(--xg-fg, inherit); position: relative; scrollbar-width: thin; }
+.xg__scroll { flex: 1; min-height: 0; overflow: auto; outline: none; background: var(--xg-bg, #0c111c); color: var(--xg-fg, inherit); position: relative; }
 .xg__row { position: absolute; inset-inline-start: 0; display: flex; }
 .xg__row--head { position: sticky; z-index: 3; background: var(--xg-head, #171e30); }
 .xg__corner, .xg__colh, .xg__rowh { flex: none; display: flex; align-items: center; justify-content: center; gap: 4px; background: var(--xg-head, #171e30); color: var(--xg-head-fg, var(--ed-muted)); font-size: 11.5px; border-inline-end: 1px solid var(--xg-line); border-bottom: 1px solid var(--xg-line); user-select: none; }

@@ -33,7 +33,7 @@
 .jv-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 
 /* body */
-.jv-body { flex: 1; min-height: 240px; max-height: 560px; overflow: auto; padding: 8px 0; line-height: 1.65; scrollbar-width: thin; scrollbar-color: var(--jv-border) transparent; }
+.jv-body { flex: 1; min-height: 240px; max-height: 560px; overflow: auto; padding: 8px 0; line-height: 1.65; }
 .jv.is-full .jv-body { max-height: none; }
 .jv-key { color: var(--jv-key); } .jv-str { color: var(--jv-str); word-break: break-word; } .jv-num { color: var(--jv-num); }
 .jv-bool { color: var(--jv-bool); } .jv-null { color: var(--jv-null); } .jv-punct { color: var(--jv-punct); } .jv-idx { color: var(--jv-idx); }
@@ -137,7 +137,7 @@
 .jv-gtools button:hover:not(:disabled) { background: var(--jv-hover); color: var(--jv-accent); }
 .jv-gtools button:disabled { opacity: .35; cursor: default; }
 .jv-zoom { min-width: 42px; text-align: center; font: 600 11px ui-monospace, monospace; color: var(--jv-dim); }
-.jv-grows { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--jv-border) transparent; }
+.jv-grows { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; }
 .jv-rs { position: absolute; z-index: 3; touch-action: none; }
 .jv-rs--x { top: 30px; right: -4px; bottom: 14px; width: 9px; cursor: ew-resize; }
 .jv-rs--y { left: 14px; right: 14px; bottom: -4px; height: 9px; cursor: ns-resize; }

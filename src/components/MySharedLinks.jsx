@@ -3,7 +3,7 @@ import Icon from './Icon';
 import { StModal, timeAgo } from './student/stUi';
 import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
-import { CustomDuration, EXPIRIES, copyText, customKey, genPassword, shareUrl } from './ShareDialog';
+import { AccessOptions, CustomDuration, EXPIRIES, accessText, copyText, customKey, genPassword, minutesToKey, modeOf, shareUrl } from './ShareDialog';
 import '../styles/css/drive-share.css'; // must load before the dialog refinements below
 import '../styles/css/drive-share-dialogs.css';
 import '../styles/css/shared-links-manager.css';
@@ -14,6 +14,7 @@ const STATUS = {
   expired: { en: 'Expired', ar: 'منتهي', cls: 'is-off' },
   revoked: { en: 'Turned off', ar: 'متوقف نهائيًا', cls: 'is-off' },
 };
+const USED = { en: 'Used', ar: 'اتستخدم', cls: 'is-off' }; // a one-time link whose window is over
 const EVENT = {
   open: { en: 'Opened the link', ar: 'فتح الرابط', icon: 'eye' },
   enter: { en: 'Passed the gate', ar: 'عدّى البوابة', icon: 'check-circle' },
@@ -147,6 +148,13 @@ function Settings({ l, ar, tt, busy, act }) {
   const [u, setU] = useState('m');
   const pwBad = pw !== '' && (pw.length < 4 || pw.length > 64);
   const perm = l.can_download ? 'dl' : 'view';
+  // who can open it: anyone / one person / one time (+ how long after the first open)
+  const curMode = modeOf(l);
+  const curAccess = l.access_minutes ? minutesToKey(l.access_minutes) : '10m';
+  const [mode, setMode] = useState(curMode);
+  const [access, setAccess] = useState(curAccess);
+  const changed = mode !== curMode || (mode === 'once' && access !== curAccess);
+  const [confirmReset, setConfirmReset] = useState(false);
   return (
     <div className="mp-sl__settings">
       <div className="mp-share__group">
@@ -180,6 +188,36 @@ function Settings({ l, ar, tt, busy, act }) {
             </>
           )}
         </div>
+      </div>
+
+      <div className="mp-share__group mp-share__group--full">
+        <span className="mp-share__lbl">{tt('Who can open it', 'مين يقدر يفتحه')}</span>
+        <AccessOptions ar={ar} mode={mode} onMode={setMode} access={access} onAccess={setAccess} disabled={busy} />
+        {changed && (
+          <div className="mp-sl__row">
+            <button type="button" className="btn btn-primary" disabled={busy || (mode === 'once' && !access)}
+              onClick={() => act(() => drive.updateShare(l.id, { single_person: mode === 'single', one_time: mode === 'once', ...(mode === 'once' ? { access } : {}) }),
+                tt('Saved. The link starts fresh — the first browser that opens it from now on is the one it binds to.', 'تم الحفظ. الرابط بدأ من الأول — أول متصفح يفتحه من دلوقتي هو اللي بيتربط بيه.'))}>{tt('Apply', 'تطبيق')}</button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => { setMode(curMode); setAccess(curAccess); }}>{tt('Cancel', 'إلغاء')}</button>
+          </div>
+        )}
+        {!changed && curMode !== 'any' && (
+          <div className="mp-access__state">
+            {l.claimed ? (
+              <>
+                <span><Icon name="user" size={13} /> {tt('Bound to', 'مربوط بـ')} <b>{l.claimed_device || tt('one browser', 'متصفح واحد')}</b>{l.claimed_at ? <> · {fmtDT(l.claimed_at, ar)}</> : null}</span>
+                {l.one_time && l.claim_expires_at && <span><Icon name="clock" size={13} /> {l.consumed ? tt('Closed for good since ', 'اتقفل نهائيًا من ') : tt('Closes ', 'بيتقفل ')}{fmtDT(l.claim_expires_at, ar)}</span>}
+                {confirmReset ? (
+                  <span className="mp-sl__confirm">
+                    {tt('Forget this browser? The next one to open the link takes its place.', 'تنسى المتصفح ده؟ أول متصفح يفتح الرابط بعد كده هيحل مكانه.')}
+                    <button type="button" className="btn btn-primary" disabled={busy} onClick={() => act(async () => { await drive.resetShareClaim(l.id); setConfirmReset(false); }, tt('Link reset.', 'تم إعادة ضبط الرابط.'))}>{tt('Yes, reset', 'أيوه، أعد الضبط')}</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => setConfirmReset(false)}>{tt('Cancel', 'إلغاء')}</button>
+                  </span>
+                ) : <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setConfirmReset(true)}><Icon name="refresh" size={14} /><span>{tt('Reset (open for someone else)', 'إعادة ضبط (تفتحه لحد تاني)')}</span></button>}
+              </>
+            ) : <span><Icon name="clock" size={13} /> {tt('Nobody has opened it yet — the first browser to open it will be bound to it.', 'لسه محدش فتحه — أول متصفح يفتحه هيتربط بيه.')}</span>}
+          </div>
+        )}
       </div>
 
       <div className="mp-share__group mp-share__group--full">
@@ -368,8 +406,8 @@ export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
         {items && items.length === 0 && <div className="mp-share__empty"><Icon name="link" size={20} /><span>{tt('You haven’t shared anything yet. Select a file in My PC and press Share.', 'لسه ما شاركتش حاجة. اختار ملف في جهازي واضغط مشاركة.')}</span></div>}
         {items && items.length > 0 && shown.length === 0 && <div className="mp-share__empty"><span>{tt('No links match.', 'مفيش روابط مطابقة.')}</span></div>}
         {shown.map((l) => {
-          const st = STATUS[l.status] || STATUS.active;
-          const live = l.status === 'active' || l.status === 'paused';
+          const st = l.consumed ? USED : (STATUS[l.status] || STATUS.active);
+          const live = l.status === 'active' || l.status === 'paused' || !!l.consumed; // a used one-time link can still be reset
           const on = sel.has(l.id);
           return (
             <article key={l.id} className={`mp-share__row mp-sl__card${live ? '' : ' is-expired'}${on ? ' is-picked' : ''}${l.status === 'paused' ? ' is-paused' : ''}`}>
@@ -386,6 +424,9 @@ export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
                     <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
                     {l.has_password && <span className="mp-badge mp-badge--soft"><Icon name="lock" size={11} />{tt('Password', 'باسورد')}</span>}
                     {l.require_visitor_info && <span className="mp-badge mp-badge--soft"><Icon name="users" size={11} />{tt('Visitor details', 'بيانات الزائر')}</span>}
+                    {l.one_time && <span className="mp-badge mp-badge--soft"><Icon name="clock" size={11} />{tt('One time', 'مرة واحدة')} · {accessText(l.access_minutes, ar)}</span>}
+                    {l.single_person && !l.one_time && <span className="mp-badge mp-badge--soft"><Icon name="user" size={11} />{tt('One person', 'شخص واحد')}</span>}
+                    {l.claimed && <span className="mp-badge mp-badge--soft" title={l.claimed_device || ''}><Icon name="shield" size={11} />{tt('Bound to a browser', 'مربوط بمتصفح')}</span>}
                   </div>
                 </div>
               </div>

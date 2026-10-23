@@ -82,8 +82,8 @@ body.msg-page-active main.app-shell__main {
    info) instead of the browser's default chunky bar Ã¢â‚¬â€ this is what
    actually reads as "polished chat app" rather than "web page". */
 .msg-rail__list, .msg-thread__scroll, .msg-info__body, .msg-search-results {
-  scrollbar-width: thin;
-  scrollbar-color: var(--border-subtle) transparent;
+
+
 }
 .msg-rail__list::-webkit-scrollbar, .msg-thread__scroll::-webkit-scrollbar,
 .msg-info__body::-webkit-scrollbar, .msg-search-results::-webkit-scrollbar { width: 6px; }

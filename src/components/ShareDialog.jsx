@@ -6,6 +6,7 @@ import { drive } from '../lib/driveApi';
 import { publicOrigin } from '../config/siteUrl';
 import '../styles/css/drive-share.css'; // must load before the dialog refinements below
 import '../styles/css/drive-share-dialogs.css';
+import '../styles/css/share-access.css';
 
 export const EXPIRIES = [
   { key: '1d', en: '1 day', ar: 'يوم' },
@@ -46,6 +47,76 @@ export function CustomDuration({ ar, n, unit, onN, onUnit, disabled }) {
   );
 }
 
+// ---- who can open the link: anyone / one person (first browser) / one time (+ how long it stays open after the first open) ----
+export const ACCESS_PRESETS = [
+  { key: '5m', en: '5 minutes', ar: '5 دقائق' }, { key: '10m', en: '10 minutes', ar: '10 دقائق' }, { key: '30m', en: '30 minutes', ar: '30 دقيقة' },
+  { key: '1h', en: '1 hour', ar: 'ساعة' }, { key: '1d', en: '1 day', ar: 'يوم' }, { key: 'custom', en: 'Custom…', ar: 'مدة مخصصة…' },
+];
+const MAX_ACCESS_MINUTES = 30 * 24 * 60;
+/** '10' + 'm' -> '10m'; null unless a whole number between 1 minute and 30 days */
+export function accessKey(n, unit) {
+  const v = Number(n); const u = UNITS.find((x) => x.key === unit);
+  if (!u || !Number.isInteger(v) || v < 1 || v * u.mins > MAX_ACCESS_MINUTES) return null;
+  return `${v}${unit}`;
+}
+/** minutes -> '1d' | '2h' | '45m' */
+export const minutesToKey = (m) => { const v = Number(m) || 0; if (v >= 1440 && v % 1440 === 0) return `${v / 1440}d`; if (v >= 60 && v % 60 === 0) return `${v / 60}h`; return `${Math.max(1, v)}m`; };
+/** minutes -> "10 minutes" / "2 hours" / "1 day" */
+export function accessText(mins, ar) {
+  const v = Number(mins) || 0;
+  const [n, u] = v >= 1440 && v % 1440 === 0 ? [v / 1440, 'd'] : v >= 60 && v % 60 === 0 ? [v / 60, 'h'] : [v, 'm'];
+  const w = { m: [['minute', 'minutes'], ['دقيقة', 'دقيقتين', 'دقائق', 'دقيقة']], h: [['hour', 'hours'], ['ساعة', 'ساعتين', 'ساعات', 'ساعة']], d: [['day', 'days'], ['يوم', 'يومين', 'أيام', 'يوم']] }[u];
+  if (!ar) return `${n} ${n === 1 ? w[0][0] : w[0][1]}`;
+  return n === 1 ? w[1][0] : n === 2 ? w[1][1] : `${n} ${n <= 10 ? w[1][2] : w[1][3]}`;
+}
+
+export const ACCESS_MODES = [
+  { key: 'any', icon: 'users', en: 'Anyone with the link', ar: 'أي حد معاه الرابط', hint_en: 'Can be opened (and forwarded) by anyone.', hint_ar: 'أي حد يقدر يفتحه ويبعته لغيره.' },
+  { key: 'single', icon: 'user', en: 'One person only', ar: 'شخص واحد بس', hint_en: 'The first browser that opens it owns it. If it is forwarded, it will not open for anyone else.', hint_ar: 'أول متصفح يفتحه بيتربط بيه. لو اتبعت لحد تاني مش هيفتح عنده.' },
+  { key: 'once', icon: 'clock', en: 'One time only', ar: 'مرة واحدة بس', hint_en: 'Opens once, for one person. After the first open it stays available for the time you choose, then closes for good.', hint_ar: 'بيتفتح مرة واحدة لشخص واحد. بعد أول فتح بيفضل متاح للمدة اللي تحددها وبعدين بيتقفل نهائيًا.' },
+];
+export const modeOf = (l) => (l?.one_time ? 'once' : l?.single_person ? 'single' : 'any');
+
+/** Radio group + (for "one time") the access duration. `access` is a key like '10m'; onAccess(null) while a custom value is invalid. */
+export function AccessOptions({ ar, mode, onMode, access, onAccess, disabled }) {
+  const preset = ACCESS_PRESETS.find((x) => x.key === access && x.key !== 'custom');
+  const [custom, setCustom] = useState(!preset && !!access);
+  const m = /^(\d+)([mhd])$/.exec(access || '');
+  const [n, setN] = useState(m ? m[1] : '15');
+  const [u, setU] = useState(m ? m[2] : 'm');
+  const cur = ACCESS_MODES.find((x) => x.key === mode) || ACCESS_MODES[0];
+  return (
+    <div className="mp-access">
+      <div className="mp-seg mp-seg--wrap" role="radiogroup" aria-label={ar ? 'مين يقدر يفتح الرابط' : 'Who can open the link'}>
+        {ACCESS_MODES.map((x) => (
+          <button key={x.key} type="button" role="radio" aria-checked={mode === x.key} className={mode === x.key ? 'is-on' : ''} disabled={disabled} onClick={() => onMode(x.key)}>
+            <Icon name={x.icon} size={14} />{ar ? x.ar : x.en}
+          </button>
+        ))}
+      </div>
+      <small className="mp-access__hint">{ar ? cur.hint_ar : cur.hint_en}</small>
+      {mode === 'once' && (
+        <div className="mp-access__when">
+          <span className="mp-share__lbl">{ar ? 'بعد أول فتح يفضل متاح لمدة' : 'After the first open it stays available for'}</span>
+          <div className="mp-seg mp-seg--wrap" role="radiogroup">
+            {ACCESS_PRESETS.map((x) => {
+              const on = x.key === 'custom' ? custom : !custom && access === x.key;
+              return (
+                <button key={x.key} type="button" role="radio" aria-checked={on} className={on ? 'is-on' : ''} disabled={disabled}
+                  onClick={() => { if (x.key === 'custom') { setCustom(true); onAccess(accessKey(n, u)); } else { setCustom(false); onAccess(x.key); } }}>
+                  {ar ? x.ar : x.en}
+                </button>
+              );
+            })}
+          </div>
+          {custom && <CustomDuration ar={ar} n={n} unit={u} disabled={disabled} onN={(v) => { setN(v); onAccess(accessKey(v, u)); }} onUnit={(v) => { setU(v); onAccess(accessKey(n, v)); }} />}
+          {custom && accessKey(n, u) === null && <small className="mp-access__hint is-bad">{ar ? 'اكتب رقم صحيح: من دقيقة لـ 30 يوم.' : 'Enter a whole number: 1 minute to 30 days.'}</small>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 12 readable random characters (no 0/O/1/l look-alikes). */
 export function genPassword() {
   const abc = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -80,6 +151,8 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast, onMana
   const [editU, setEditU] = useState('m');
   const newExpiry = expiry === 'custom' ? customKey(customN, customU) : expiry;
   const [canDownload, setCanDownload] = useState(true);
+  const [mode, setMode] = useState('any');     // any | single | once
+  const [access, setAccess] = useState('10m'); // how long a one-time link stays open after its first open
   const [requireInfo, setRequireInfo] = useState(false); // the visitor must type name + email + mobile first
   const [usePw, setUsePw] = useState(false);
   const [pw, setPw] = useState('');
@@ -162,6 +235,10 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast, onMana
             </div>
           </div>
           <div className="mp-share__group mp-share__group--full">
+            <span className="mp-share__lbl">{tt('Who can open it', 'مين يقدر يفتحه')}</span>
+            <AccessOptions ar={ar} mode={mode} onMode={setMode} access={access} onAccess={setAccess} disabled={busy} />
+          </div>
+          <div className="mp-share__group mp-share__group--full">
             <span className="mp-share__lbl">{tt('Before opening the link', 'قبل ما يفتح الرابط')}</span>
             <label className="mp-gate-opt">
               <input type="checkbox" checked={requireInfo} disabled={busy} onChange={(e) => setRequireInfo(e.target.checked)} />
@@ -190,10 +267,10 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast, onMana
             )}
           </div>
           <button
-            type="button" className="btn btn-primary mp-share__create" disabled={busy || !newExpiry || pwBad || (usePw && !pw)}
+            type="button" className="btn btn-primary mp-share__create" disabled={busy || !newExpiry || pwBad || (usePw && !pw) || (mode === 'once' && !access)}
             title={newExpiry ? undefined : tt('Enter a whole number: 1 minute to 365 days', 'اكتب رقم صحيح: من دقيقة لـ 365 يوم')}
             onClick={() => act(async () => {
-              const l = await drive.createShare(node.id, { expiry: newExpiry, canDownload, requireInfo, password: usePw ? pw : '' });
+              const l = await drive.createShare(node.id, { expiry: newExpiry, canDownload, requireInfo, password: usePw ? pw : '', singlePerson: mode === 'single', oneTime: mode === 'once', access: mode === 'once' ? access : undefined });
               if (l?.token) await copyText(shareUrl(l.token));
               setPw(''); setUsePw(false); setShowPw(false);
             }, usePw ? tt('Link created and copied — remember the password, it can’t be shown again.', 'تم إنشاء الرابط ونسخه — افتكر الباسورد، مش هيتعرض تاني.') : tt('Link created and copied.', 'تم إنشاء الرابط ونسخه.'))}
@@ -217,6 +294,8 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast, onMana
                 <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
                 {l.has_password && <span className="mp-badge mp-badge--soft"><Icon name="lock" size={11} />{tt('Password', 'باسورد')}</span>}
                 {l.require_visitor_info && <span className="mp-badge mp-badge--soft"><Icon name="users" size={11} />{tt('Visitor details', 'بيانات الزائر')}</span>}
+                {l.one_time && <span className="mp-badge mp-badge--soft"><Icon name="clock" size={11} />{tt('One time', 'مرة واحدة')} · {accessText(l.access_minutes, ar)}</span>}
+                {l.single_person && !l.one_time && <span className="mp-badge mp-badge--soft"><Icon name="user" size={11} />{tt('One person', 'شخص واحد')}</span>}
                 <button type="button" className="mp-share__off" disabled={busy} onClick={() => act(() => drive.revokeShare(l.id), tt('Link turned off.', 'تم إيقاف الرابط.'))}>
                   <Icon name="x" size={13} /><span>{tt('Turn off', 'إيقاف')}</span>
                 </button>

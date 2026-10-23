@@ -7,7 +7,7 @@
 .app-shell--insight .sidebar .sidebar__nav {
   flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
   margin-bottom: 12px; padding-inline-end: 4px;
-  scrollbar-width: thin; scrollbar-color: var(--border-subtle) transparent;
+
   overscroll-behavior: contain;
 }
 .app-shell--insight .sidebar .sidebar__nav::-webkit-scrollbar { width: 6px; }

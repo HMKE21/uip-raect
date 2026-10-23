@@ -618,7 +618,7 @@ export const api = {
   get: (path, params, headers) => request('GET', path, { params, ...(headers ? { headers } : {}) }),
   /** GET a file. Same Bearer + refresh-on-401 path as every other call; returns the Response. */
   blob: (path, params, headers) => request('GET', path, { params, asResponse: true, headers: { Accept: '*/*', ...(headers || {}) } }),
-  post: (path, body) => request('POST', path, { body }),
+  post: (path, body, headers) => request('POST', path, { body, ...(headers ? { headers } : {}) }),
   put: (path, body) => request('PUT', path, { body }),
   patch: (path, body) => request('PATCH', path, { body }),
   postForm: (path, formData) => request('POST', path, { formData }),

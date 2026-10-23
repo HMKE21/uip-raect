@@ -181,7 +181,7 @@
 .mx-ed__seg--scroll::-webkit-scrollbar { display: none; }
 .mx-ed__seg--scroll button { flex: 0 0 auto; white-space: nowrap; }
 .mx-flt { display: grid; gap: 10px; }
-.mx-flt__presets { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+.mx-flt__presets { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
 .mx-flt__presets button { flex: 0 0 auto; white-space: nowrap; }
 .mx-flt__sliders { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .mx-q { display: grid; gap: 8px; }

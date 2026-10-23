@@ -348,7 +348,7 @@ select:not([multiple]):not([size]) option { font-weight: 500; }
     color: var(--text-primary, #111);
     box-shadow: 0 18px 40px -12px rgba(20, 28, 70, .28), 0 4px 12px rgba(20, 28, 70, .08);
     overflow-y: auto;
-    scrollbar-width: thin;
+
     opacity: 0;
     translate: 0 -6px;
     scale: .98;

@@ -63,7 +63,7 @@ html[data-palette="white"] .app-shell.app-shell--insight .sidebar .sidebar__logo
 html[data-palette="white"] .app-shell.app-shell--insight .sidebar .sidebar__brand-name { color: var(--sb-text-strong); }
 html[data-palette="white"] .app-shell.app-shell--insight .sidebar .sidebar__brand-light { color: var(--sb-text); font-weight: 500; }
 html[data-palette="white"] .app-shell.app-shell--insight .sidebar .sidebar__brand-sub { color: var(--sb-text); letter-spacing: .08em; font-weight: 600; }
-html[data-palette="white"] .app-shell.app-shell--insight .sidebar .sidebar__nav { scrollbar-color: #D6DBEE transparent; }
+html[data-palette="white"] .app-shell.app-shell--insight .sidebar .sidebar__nav { }
 html[data-palette="white"] .app-shell.app-shell--insight .sidebar .sidebar__nav::-webkit-scrollbar-thumb { background: #D6DBEE; }
 
 html[data-palette="white"] .app-shell.app-shell--insight .sidebar .sidebar__section-title { color: #8A90A6; opacity: 1; font-weight: 700; }

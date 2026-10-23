@@ -151,10 +151,11 @@ export const drive = {
   shares: (id) => api.get(`${B}/nodes/${id}/shares`).then(unwrap),
   mySharedLinks: () => api.get(`${B}/shares`).then(unwrap),
   /** requireInfo = the visitor must type name + email + mobile before opening; password = optional link password. */
-  createShare: (id, { expiry, canDownload, requireInfo, password }) => api.post(`${B}/nodes/${id}/shares`, {
-    expiry, can_download: !!canDownload, require_visitor_info: !!requireInfo, ...(password ? { password } : {}),
+  createShare: (id, { expiry, canDownload, requireInfo, password, singlePerson, oneTime, access }) => api.post(`${B}/nodes/${id}/shares`, {
+    expiry, can_download: !!canDownload, require_visitor_info: !!requireInfo, single_person: !!singlePerson, one_time: !!oneTime,
+    ...(oneTime && access ? { access } : {}), ...(password ? { password } : {}),
   }).then(unwrap),
-  /** patch: { expiry?, can_download?, require_visitor_info?, password?, remove_password? } */
+  /** patch: { expiry?, can_download?, require_visitor_info?, single_person?, one_time?, access? ('10m' | '2h' | '1d'), password?, remove_password? } */
   updateShare: (shareId, patch) => api.patch(`${B}/shares/${shareId}`, patch).then(unwrap),
   revokeShare: (shareId) => api.del(`${B}/shares/${shareId}`),
   /** "My shared links" page: every link (active / paused / expired / turned off) with visitor counts. */
@@ -164,6 +165,8 @@ export const drive = {
   clearShareActivity: (shareId) => api.del(`${B}/shares/${shareId}/activity`),
   /** Bulk on my links: action 'pause' | 'resume' | 'delete', with ids: number[] or all: true -> { done, skipped }. */
   bulkShares: (action, { ids = [], all = false } = {}) => api.post(`${B}/shares/bulk`, { action, ids, all }).then(unwrap),
+  /** Single-person / one-time link: forget the browser it was bound to (and restart the one-time window). */
+  resetShareClaim: (shareId) => api.post(`${B}/shares/${shareId}/reset-claim`, {}).then(unwrap),
   pauseShare: (shareId) => api.post(`${B}/shares/${shareId}/pause`, {}).then(unwrap),
   resumeShare: (shareId) => api.post(`${B}/shares/${shareId}/resume`, {}).then(unwrap),
   /** Delete the link and its whole log for good. */
@@ -259,20 +262,46 @@ export async function fetchDownload(node, opts) {
 /** Public share page (no login): /api/v1/public/drive-share/{token}. */
 const P = (token) => `/api/v1/public/drive-share/${encodeURIComponent(token)}`;
 
-// The gate session (after the visitor typed name/email/phone and/or the password) lives in sessionStorage per link and is
-// sent on every request in X-Share-Session. The server drops it when the owner changes the password / settings.
+// This device remembers the visitor, so the gate is not asked again on every visit:
+//  - the gate session (issued after the name/email/phone and/or the password) is kept in localStorage per link and is sent
+//    on every request in X-Share-Session. The server still drops it when the owner changes the password / the link's settings;
+//  - the details the visitor typed (never the password) pre-fill the form if the gate does come back;
+//  - a random per-device secret (X-Share-Client) is what "one person only" / "one time" links are bound to. Only its hash is stored.
 const SK = (token) => `shp:${token}`;
-export const shareSession = {
-  get: (token) => { try { return sessionStorage.getItem(SK(token)) || ''; } catch { return ''; } },
-  set: (token, v) => { try { sessionStorage.setItem(SK(token), v); } catch { /* private mode */ } },
-  clear: (token) => { try { sessionStorage.removeItem(SK(token)); } catch { /* ignore */ } },
+const ls = {
+  get: (k) => { try { return window.localStorage.getItem(k) || ''; } catch { return ''; } },
+  set: (k, v) => { try { window.localStorage.setItem(k, v); } catch { /* private mode */ } },
+  del: (k) => { try { window.localStorage.removeItem(k); } catch { /* ignore */ } },
 };
-const gateHeaders = (token) => { const v = shareSession.get(token); return v ? { 'X-Share-Session': v } : undefined; };
+export const shareSession = {
+  get: (token) => ls.get(SK(token)) || (() => { try { return window.sessionStorage.getItem(SK(token)) || ''; } catch { return ''; } })(),
+  set: (token, v) => { ls.set(SK(token), v); },
+  clear: (token) => { ls.del(SK(token)); try { window.sessionStorage.removeItem(SK(token)); } catch { /* ignore */ } },
+};
+export const shareVisitor = {
+  get: () => { try { const v = JSON.parse(ls.get('shv') || 'null'); return v && typeof v === 'object' ? { name: String(v.name || ''), email: String(v.email || ''), phone: String(v.phone || '') } : null; } catch { return null; } },
+  set: ({ name, email, phone }) => ls.set('shv', JSON.stringify({ name: name || '', email: email || '', phone: phone || '' })),
+};
+export const shareClient = () => {
+  let v = ls.get('shc');
+  if (!/^[A-Za-z0-9]{32,64}$/.test(v)) {
+    const buf = new Uint8Array(24);
+    try { crypto.getRandomValues(buf); } catch { buf.forEach((_, i) => { buf[i] = Math.floor(Math.random() * 256); }); }
+    v = Array.from(buf, (n) => n.toString(16).padStart(2, '0')).join('');
+    ls.set('shc', v);
+  }
+  return v;
+};
+/** confirm = the visitor pressed "Open" on a one-person / one-time link (this is what binds the link to this browser). */
+const gateHeaders = (token, confirm = false) => {
+  const v = shareSession.get(token);
+  return { 'X-Share-Client': shareClient(), ...(v ? { 'X-Share-Session': v } : {}), ...(confirm ? { 'X-Share-Confirm': '1' } : {}) };
+};
 
 export const sharedApi = {
-  view: (token, nodeId) => api.get(P(token), nodeId ? { node: nodeId } : undefined, gateHeaders(token)).then(unwrap),
+  view: (token, nodeId, { confirm = false } = {}) => api.get(P(token), nodeId ? { node: nodeId } : undefined, gateHeaders(token, confirm)).then(unwrap),
   /** Gate: { name, email, phone, password } → { session, visitor_name }. Throws with err.data (errors.code / fields) on a wrong password etc. */
-  enter: (token, body) => api.post(`${P(token)}/enter`, body).then(unwrap),
+  enter: (token, body) => api.post(`${P(token)}/enter`, body, gateHeaders(token)).then(unwrap),
   file: async (token, nodeId, { download = false } = {}) => {
     const res = await api.blob(`${P(token)}/file`, { ...(nodeId ? { node: nodeId } : {}), ...(download ? { download: 1 } : {}) }, gateHeaders(token));
     return res.blob();

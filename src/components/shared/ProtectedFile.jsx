@@ -9,6 +9,7 @@ import { TEXT_EXT, TEXT_NAMES, JSON_EXT } from '../../lib/driveFileKinds';
 import '../../styles/css/file-viewer.css';
 import '../../styles/css/editor.css';
 import '../../styles/css/zip-workbench.css';
+import '../../styles/css/theme-menu.css';
 import '../../styles/css/zip-markdown.css';
 
 const CodeEditor = lazy(() => import('../zipbench/CodeEditor'));
@@ -92,6 +93,54 @@ function useSiteTheme() {
 }
 
 /** Read-only code view: the platform's CodeMirror (highlighting, folding, line numbers, search) with a theme picker. */
+/** Theme picker as a real menu (the browser's own <select> popup cannot be styled and has the default scrollbar). */
+function ThemeMenu({ value, onChange, label }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btn = useRef(null);
+  const list = useRef(null);
+  const cur = THEMES.find((x) => x.id === value) || THEMES[0];
+  useEffect(() => {
+    if (!open) return undefined;
+    const r = btn.current?.getBoundingClientRect();
+    if (r) {
+      const w = 210; const maxH = Math.min(340, window.innerHeight - 24);
+      const below = window.innerHeight - r.bottom - 8 >= Math.min(maxH, 220);
+      setPos({
+        left: Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)),
+        top: below ? r.bottom + 6 : undefined, bottom: below ? undefined : window.innerHeight - r.top + 6, width: w,
+        maxH: below ? Math.min(maxH, window.innerHeight - r.bottom - 14) : Math.min(maxH, r.top - 14),
+      });
+    }
+    const down = (e) => { if (!list.current?.contains(e.target) && !btn.current?.contains(e.target)) setOpen(false); };
+    const key = (e) => { if (e.key === 'Escape') setOpen(false); };
+    const away = (e) => { if (!list.current?.contains(e.target)) setOpen(false); };
+    window.addEventListener('pointerdown', down, true); window.addEventListener('keydown', key, true);
+    window.addEventListener('resize', away); window.addEventListener('scroll', away, true);
+    return () => {
+      window.removeEventListener('pointerdown', down, true); window.removeEventListener('keydown', key, true);
+      window.removeEventListener('resize', away); window.removeEventListener('scroll', away, true);
+    };
+  }, [open]);
+  useEffect(() => { if (open && pos) list.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'center' }); }, [open, pos]);
+  return (
+    <>
+      <button ref={btn} type="button" className={`shp-theme${open ? ' is-open' : ''}`} aria-haspopup="listbox" aria-expanded={open} aria-label={label} onClick={() => setOpen((o) => !o)}>
+        <span>{cur.name}</span><Icon name="chevron-down" size={13} />
+      </button>
+      {open && pos && createPortal(
+        <div ref={list} className="shp-theme__menu" role="listbox" aria-label={label} dir="ltr"
+          style={{ ...themeVars(value), position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, width: pos.width, maxHeight: pos.maxH }}>
+          {THEMES.map((th) => (
+            <button key={th.id} type="button" role="option" aria-selected={th.id === value} className={th.id === value ? 'is-on' : ''} onClick={() => { onChange(th.id); setOpen(false); }}>
+              <span>{th.name}</span>{th.id === value && <Icon name="check" size={14} />}
+            </button>
+          ))}
+        </div>, document.body)}
+    </>
+  );
+}
+
 function ProtectedCode({ name, text, cut, tt }) {
   const site = useSiteTheme();
   const [theme, setTheme] = useState(site);
@@ -108,9 +157,7 @@ function ProtectedCode({ name, text, cut, tt }) {
         <button type="button" className={wrap ? 'is-on' : ''} onClick={() => setWrap((w) => !w)}>{tt('Wrap', 'التفاف')}</button>
         <button type="button" onClick={() => setSize((s) => Math.max(10, s - 1))} aria-label="A−">A−</button>
         <button type="button" onClick={() => setSize((s) => Math.min(22, s + 1))} aria-label="A+">A+</button>
-        <select value={theme} onChange={(e) => setTheme(e.target.value)} aria-label={tt('Theme', 'الثيم')}>
-          {THEMES.map((th) => <option key={th.id} value={th.id}>{th.name}</option>)}
-        </select>
+        <ThemeMenu value={theme} onChange={setTheme} label={tt('Theme', 'الثيم')} />
       </div>
       <div className="shp-code__body">
         <div className="zb-cm-wrap">

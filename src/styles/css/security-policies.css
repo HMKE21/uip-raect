@@ -29,7 +29,7 @@
 .pol-stat__meta { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pol-stat.is-off .pol-stat__dot { background: var(--bg-canvas); color: var(--text-secondary); }
 .pol-stat.is-off .pol-stat__value { color: var(--text-secondary); }
-@media (max-width: 760px) { .pol-overview { display: flex; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; margin-inline: -4px; padding-inline: 4px; scrollbar-width: thin; } .pol-stat { flex: 0 0 168px; scroll-snap-align: start; } }
+@media (max-width: 760px) { .pol-overview { display: flex; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; margin-inline: -4px; padding-inline: 4px; } .pol-stat { flex: 0 0 168px; scroll-snap-align: start; } }
 
 /* ---- Tabs ----------------------------------------------------------------- */
 .pol-tabs { display: flex; gap: 6px; padding: 6px; border-radius: 18px; border: 1px solid var(--border-subtle); background: var(--bg-surface); overflow-x: auto; scrollbar-width: none; }

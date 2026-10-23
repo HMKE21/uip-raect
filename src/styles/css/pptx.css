@@ -4,14 +4,14 @@
    Uses the --ed-* variables from editor.css; RTL-safe (logical properties).
    ──────────────────────────────────────────────────────────── */
 .px { flex: 1; min-height: 0; display: flex; position: relative; }
-.px__thumbs { width: 168px; flex: none; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; background: var(--ed-panel); border-inline-end: 1px solid var(--ed-line); scrollbar-width: thin; }
+.px__thumbs { width: 168px; flex: none; overflow: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; background: var(--ed-panel); border-inline-end: 1px solid var(--ed-line); }
 .px__tw { border-radius: 8px; } .px__tw.is-over { box-shadow: 0 -3px 0 var(--ed-accent); }
 .px__thumb { position: relative; display: block; width: 100%; border: 2px solid transparent; border-radius: 6px; padding: 0; background: none; cursor: pointer; overflow: hidden; }
 .px__thumb:hover { border-color: rgba(255,255,255,.25); } .px__thumb.is-on { border-color: var(--ed-accent); }
 .px__thumb .px__slide { box-shadow: none; pointer-events: none; }
 .px__thumb > b { position: absolute; inset-block-end: 3px; inset-inline-start: 5px; font-size: 11px; color: #fff; background: rgba(0,0,0,.6); border-radius: 4px; padding: 0 6px; z-index: 2; }
 .px__main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
-.px__stage { flex: 1; min-height: 0; overflow: auto; display: flex; background: #0b0f19; padding: 20px; outline: none; scrollbar-width: thin; }
+.px__stage { flex: 1; min-height: 0; overflow: auto; display: flex; background: #0b0f19; padding: 20px; outline: none; }
 .px__fit { margin: auto; flex: none; }
 .px__wrap { position: relative; }
 .px__slide { position: relative; background: #fff; box-shadow: 0 10px 40px rgba(0,0,0,.55); overflow: hidden; user-select: none; -webkit-user-select: none; }
@@ -61,7 +61,7 @@
 .pxr__tabs { display: flex; align-items: center; gap: 2px; padding: 4px 10px 0; overflow-x: auto; scrollbar-width: none; }
 .pxr__tabs > button[role="tab"] { background: none; border: 0; color: var(--ed-muted); font: inherit; font-weight: 600; padding: 7px 14px; border-radius: 8px 8px 0 0; cursor: pointer; border-bottom: 2px solid transparent; }
 .pxr__tabs > button[role="tab"]:hover { color: var(--ed-text); } .pxr__tabs > button[aria-selected="true"] { color: var(--ed-text); border-bottom-color: var(--ed-accent); background: rgba(255,255,255,.05); }
-.pxr__body { display: flex; align-items: stretch; gap: 0; padding: 6px 8px 4px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; min-height: 66px; }
+.pxr__body { display: flex; align-items: stretch; gap: 0; padding: 6px 8px 4px; overflow-x: auto; overflow-y: hidden; min-height: 66px; }
 .pxr__g { display: flex; flex-direction: column; justify-content: space-between; padding-inline: 8px; border-inline-end: 1px solid var(--ed-line); flex: none; }
 .pxr__g:last-child { border-inline-end: 0; }
 .pxr__row { display: flex; align-items: center; gap: 3px; min-height: 32px; flex-wrap: nowrap; }

@@ -351,7 +351,7 @@
       min-height: 0;
       margin-inline: -6px;
       padding: 2px 6px;
-      scrollbar-width: thin;
+
     }
     .shp__main:has(.shp__list):has(.shp__viewer) > .shp__viewer {
       grid-column: 2;

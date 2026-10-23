@@ -159,7 +159,7 @@
 .vp__menu--cc .vp__menu-load { margin-top: 4px; background: rgba(110, 168, 255, .16); color: #cfe0ff; }
 
 /* subtitle menu: compact, never taller than the player, slim scrollbar instead of the native arrows */
-.vp__menu { scrollbar-width: thin; scrollbar-color: rgba(255, 255, 255, .35) transparent; overscroll-behavior: contain; }
+.vp__menu { overscroll-behavior: contain; }
 .vp__menu::-webkit-scrollbar { width: 6px; }
 .vp__menu::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 .vp__menu::-webkit-scrollbar-track { background: transparent; }

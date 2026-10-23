@@ -43,7 +43,7 @@
   overscroll-behavior: contain;
   padding: 18px 22px;
   color: var(--text-primary);
-  scrollbar-width: thin;
+
 }
 .st-modal:has(.mp-share) > .st-modal__actions,
 .st-modal:has(.mp-sl) > .st-modal__actions {

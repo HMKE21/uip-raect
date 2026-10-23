@@ -90,7 +90,7 @@
 @media (max-width: 900px) { .sa-search { max-width: none; flex-basis: 100%; } .sa-toolbar__gap { display: none; } }
 @media (max-width: 760px) {
   .sa-hero { padding: 16px; border-radius: 20px; } .sa-hero__icon { width: 44px; height: 44px; border-radius: 14px; }
-  .sa-kpis { display: flex; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; scrollbar-width: thin; }
+  .sa-kpis { display: flex; overflow-x: auto; scroll-snap-type: x proximity; padding-bottom: 4px; }
   .sa-kpi { flex: 0 0 220px; scroll-snap-align: start; }
   .sa-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .sa-table, .sa-table tbody { display: block; }

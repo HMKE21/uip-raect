@@ -21,7 +21,7 @@
   --tl-off: #4a4a50; --dot: rgba(255, 255, 255, .85);
   --shadow: 0 24px 64px rgba(0, 0, 0, .6), 0 0 0 1px rgba(255, 255, 255, .1);
 }
-.os * { scrollbar-width: thin; scrollbar-color: rgba(128, 128, 136, .5) transparent; }
+.os * { }
 .os-wall { background-size: cover; }
 @media (max-width: 559px) { .os { --dock-h: 70px; } }
 
@@ -342,7 +342,7 @@ body.os-dragging .os-wall { transition: none; }
 .os-dlg--run .os-spot__field input::placeholder { color: var(--g-mute); opacity: .8; }
 .os-dlg--run .os-spot__field kbd { height: 22px; padding: 0 8px; display: inline-flex; align-items: center; border-radius: 6px; font: 600 11px/1 inherit; letter-spacing: .02em; border: .5px solid var(--g-line); background: transparent; }
 
-.os-dlg--run .os-spot__list { margin-top: 6px; padding: 8px 4px 6px; gap: 2px; max-height: min(364px, 46vh); scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--g-mute) 55%, transparent) transparent; }
+.os-dlg--run .os-spot__list { margin-top: 6px; padding: 8px 4px 6px; gap: 2px; max-height: min(364px, 46vh); }
 .os-dlg--run .os-spot__list::-webkit-scrollbar { width: 8px; }
 .os-dlg--run .os-spot__list::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 .os-dlg--run .os-spot__list::-webkit-scrollbar-track { background: transparent; }

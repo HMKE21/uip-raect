@@ -57,7 +57,7 @@ html[data-palette="white"][data-theme="dark"] .app-shell.app-shell--insight .sid
   border-inline-end: 1px solid var(--sb-border);
   box-shadow: none;
 }
-html[data-palette="white"][data-theme="dark"] .app-shell.app-shell--insight .sidebar .sidebar__nav { scrollbar-color: #2C3550 transparent; }
+html[data-palette="white"][data-theme="dark"] .app-shell.app-shell--insight .sidebar .sidebar__nav { }
 html[data-palette="white"][data-theme="dark"] .app-shell.app-shell--insight .sidebar .sidebar__nav::-webkit-scrollbar-thumb { background: #2C3550; }
 html[data-palette="white"][data-theme="dark"] .app-shell.app-shell--insight .sidebar .sidebar__section-title { color: #8A93AD; opacity: 1; font-weight: 700; }
 html[data-palette="white"][data-theme="dark"] .app-shell.app-shell--insight .sidebar .sidebar__section-title::after { display: none; }

@@ -1,5 +1,5 @@
 /* Word editor + preview (DocxView / DocxRibbon / DocxPreview). Page look matches the exporter in lib/officeFmt/docx.js. */
-.dx__stage { flex: 1; min-height: 0; overflow: auto; background: #0b0f19; padding: 22px 16px 40px; display: flex; flex-direction: column; align-items: center; scrollbar-width: thin; }
+.dx__stage { flex: 1; min-height: 0; overflow: auto; background: #0b0f19; padding: 22px 16px 40px; display: flex; flex-direction: column; align-items: center; }
 .dx__preview { overflow: auto; padding: 12px; display: flex; flex-direction: column; align-items: center; }
 
 .dxp {

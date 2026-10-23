@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
 import { errorMessage } from '../api/client';
-import { sharedApi, shareSession } from '../lib/driveApi';
+import { sharedApi, shareSession, shareVisitor } from '../lib/driveApi';
 import { saveBlob } from '../lib/exporter';
 import { startSharedGuard } from '../lib/sharedGuard';
 import { avatarSrc } from '../components/insight/AvatarUploader';
@@ -13,6 +13,7 @@ import ProtectedFile, { kindOfName } from '../components/shared/ProtectedFile';
 import '../styles/css/drive-share.css';
 import '../styles/css/drive-share-responsive.css';
 import '../styles/css/drive-share-pro.css'; // professional visual layer
+import '../styles/css/share-access.css';
 import '../styles/css/drive-share-fix.css'; // header stacking + file viewer (code LTR, phone master/detail) — must stay last
 
 const BIG_PREVIEW_BYTES = 80 * 1024 * 1024; // non-media files above this are not previewed in the browser
@@ -37,6 +38,8 @@ function LinkUnavailable({ err, t, onRetry, checking }) {
     : err.code === 'share_expired' ? 'expired'
       : err.code === 'share_revoked' ? 'off'
         : err.code === 'share_gone' ? 'gone'
+          : err.code === 'share_consumed' ? 'used'
+            : err.code === 'share_claimed' ? 'claimed'
           : err.status === 404 ? 'missing' : 'other';
   const V = {
     paused: { icon: 'pause', tone: 'warn', badge: t('Temporarily paused', 'موقوف مؤقتًا'),
@@ -49,6 +52,12 @@ function LinkUnavailable({ err, t, onRetry, checking }) {
     off: { icon: 'lock', tone: 'danger', badge: t('Turned off', 'متوقف'),
       title: t('This link was turned off', 'الرابط ده اتقفل'),
       text: t('The owner stopped sharing this item permanently. Ask them to send you a new link if you still need it.', 'صاحب الملف وقّف مشاركته نهائيًا. اطلب منه رابط جديد لو لسه محتاجه.'), tips: [] },
+    used: { icon: 'clock', tone: 'muted', badge: t('Already used', 'اتستخدم'),
+      title: t('This one-time link has been used', 'الرابط ده كان لمرة واحدة وخلص'),
+      text: t('It opens only once, and its time is over. Ask the owner to send you a new link if you still need it.', 'الرابط ده بيتفتح مرة واحدة بس، ومدته خلصت. اطلب من صاحب الملف رابط جديد لو لسه محتاجه.'), tips: [] },
+    claimed: { icon: 'lock', tone: 'danger', badge: t('Opened by someone else', 'اتفتح عند حد تاني'),
+      title: t('This link is already taken', 'الرابط ده اتفتح عند شخص تاني'),
+      text: t('The owner made this link for one person only, and it was already opened on another device or browser, so it will not open here. Ask the owner for your own link.', 'صاحب الملف عمل الرابط ده لشخص واحد بس، واتفتح فعلًا على جهاز أو متصفح تاني، فمش هيفتح هنا. اطلب منه رابط خاص بيك.'), tips: [] },
     gone: { icon: 'file', tone: 'muted', badge: t('Not available', 'مش متاح'),
       title: t('This item is no longer available', 'العنصر ده مبقاش متاح'),
       text: t('The file or folder was moved or deleted by its owner.', 'الملف أو المجلد اتنقل أو اتحذف من صاحبه.'), tips: [] },
@@ -84,9 +93,43 @@ function LinkUnavailable({ err, t, onRetry, checking }) {
   );
 }
 
+/** Plain-words warning for a link meant for one person / one time (shown BEFORE it can be opened). */
+function ClaimNotice({ info, t }) {
+  if (!info || (!info.one_time && !info.single_person)) return null;
+  const mins = Number(info.access_minutes) || 0;
+  const span = mins >= 1440 && mins % 1440 === 0 ? t(`${mins / 1440} day(s)`, `${mins / 1440} يوم`) : mins >= 60 && mins % 60 === 0 ? t(`${mins / 60} hour(s)`, `${mins / 60} ساعة`) : t(`${mins} minute(s)`, `${mins} دقيقة`);
+  return (
+    <div className="shp__claim" role="note">
+      <Icon name={info.one_time ? 'clock' : 'user'} size={18} />
+      <div>
+        <b>{info.one_time ? t('This link opens only once', 'الرابط ده بيتفتح مرة واحدة بس') : t('This link is for one person only', 'الرابط ده لشخص واحد بس')}</b>
+        <span>
+          {info.one_time
+            ? t(`Once you open it, it stays available on this device for ${span}, then it closes for good. It will not open again, and it will not open for anyone else.`, `أول ما تفتحه هيفضل متاح على الجهاز ده لمدة ${span}، وبعدها بيتقفل نهائيًا. مش هيتفتح تاني ولا عند أي حد غيرك.`)
+            : t('It binds to the first device and browser that opens it. If you send it to someone else, it will not open for them.', 'بيتربط بأول جهاز ومتصفح يفتحه. لو بعتّه لحد تاني مش هيفتح عنده.')}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Shown after the gate (or when there is none) and before the first open of a one-person / one-time link. */
+function ConfirmOpen({ info, t, busy, error, onOpen }) {
+  return (
+    <section className="shp__card shp__gate" aria-labelledby="shp-confirm-h">
+      <span className="shp__state-ico shp__state-ico--gate" style={{ alignSelf: 'center' }}><Icon name={info.one_time ? 'clock' : 'user'} size={30} /></span>
+      <h1 id="shp-confirm-h">{info.one_time ? t('Open this one-time link?', 'تفتح الرابط ده (مرة واحدة)؟') : t('Open this private link?', 'تفتح الرابط الخاص ده؟')}</h1>
+      <p>{info.owner_name ? t(`${info.owner_name} shared something with you. `, `${info.owner_name} شارك معاك ملف. `) : ''}{t('Read this first:', 'اقرا ده الأول:')}</p>
+      <ClaimNotice info={info} t={t} />
+      {error && <div className="mp-share__err" role="alert">{error}</div>}
+      <button type="button" className="btn btn-primary" disabled={busy} onClick={onOpen}>{busy ? t('Opening…', 'جارِ الفتح…') : t('Open it now', 'افتحه دلوقتي')}</button>
+    </section>
+  );
+}
+
 /** Gate shown before the content when the owner asked for the visitor's details and/or a password. */
 function GateForm({ gate, token, t, ar, onDone }) {
-  const [f, setF] = useState({ name: '', email: '', phone: '', password: '' });
+  const [f, setF] = useState(() => ({ name: '', email: '', phone: '', password: '', ...(shareVisitor.get() || {}) })); // this device remembers who you are
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [fields, setFields] = useState({});
@@ -118,6 +161,7 @@ function GateForm({ gate, token, t, ar, onDone }) {
         ...(gate.needs_password ? { password: f.password } : {}),
       });
       if (res?.session) shareSession.set(token, res.session);
+      if (gate.needs_info) shareVisitor.set({ name: f.name.trim(), email: f.email.trim(), phone: f.phone.trim() });
       onDone();
     } catch (er) {
       const errs = er?.payload?.errors;
@@ -137,6 +181,7 @@ function GateForm({ gate, token, t, ar, onDone }) {
           : gate.needs_info ? t('Enter your details to continue.', 'اكتب بياناتك عشان تكمّل.')
             : t('Enter the password to continue.', 'اكتب الباسورد عشان تكمّل.')}
       </p>
+      <ClaimNotice info={gate} t={t} />
       <form onSubmit={submit} noValidate>
         {gate.needs_info && (
           <>
@@ -192,6 +237,9 @@ export default function SharedItem() {
   const [locked, setLocked] = useState(false);
   const [gate, setGate] = useState(null); // { needs_password, needs_info, owner_name } while the owner's gate is not passed
   const [reload, setReload] = useState(0);
+  const [confirm, setConfirm] = useState(null); // { owner_name, one_time, single_person, access_minutes } until the visitor presses "Open"
+  const [cBusy, setCBusy] = useState(false);
+  const [cErr, setCErr] = useState('');
   const [away, setAway] = useState(() => typeof document !== 'undefined' && !document.hasFocus());
   const [shot, setShot] = useState(false);
   const shotT = useRef(0);
@@ -232,11 +280,12 @@ export default function SharedItem() {
     if (locked) return undefined;
     let live = true;
     setLoading(true);
-    sharedApi.view(token, nodeId).then((d) => { if (live) { setData(d); setErr(null); setGate(null); } })
+    sharedApi.view(token, nodeId).then((d) => { if (live) { setData(d); setErr(null); setGate(null); setConfirm(null); } })
       .catch((e) => {
         if (!live) return;
         const g = e?.status === 423 && e?.payload?.errors?.code === 'share_gate' ? e.payload.errors : null;
-        if (g) { shareSession.clear(token); setData(null); setErr(null); setGate(g); return; }
+        if (g) { shareSession.clear(token); setData(null); setErr(null); setConfirm(null); setGate(g); return; }
+        if (e?.status === 423 && e?.payload?.errors?.code === 'share_confirm') { setData(null); setErr(null); setGate(null); setConfirm(e.payload.errors); return; }
         setErr({ status: e?.status || 0, message: errorMessage(e), code: e?.payload?.errors?.code || '', owner: e?.payload?.errors?.owner_name || '' });
       })
       .finally(() => { if (live) setLoading(false); });
@@ -291,6 +340,16 @@ export default function SharedItem() {
   };
 
   const dead = err && !err.soft && !data;
+  // the visitor read the warning and pressed "Open it now": this is the request that binds the link to this browser
+  const openNow = async () => {
+    setCBusy(true); setCErr('');
+    try { const d = await sharedApi.view(token, null, { confirm: true }); setConfirm(null); setData(d); setErr(null); }
+    catch (e) {
+      const c = e?.payload?.errors?.code;
+      if (c === 'share_claimed' || c === 'share_consumed' || c === 'share_revoked' || c === 'share_expired' || c === 'share_paused') { setConfirm(null); setErr({ status: e?.status || 0, message: errorMessage(e), code: c, owner: e?.payload?.errors?.owner_name || '' }); }
+      else setCErr(errorMessage(e));
+    } finally { setCBusy(false); }
+  };
   const fmtDate = (v) => { const d = new Date(String(v).replace(' ', 'T')); return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString(ar ? 'ar-EG' : undefined, { day: 'numeric', month: 'short', year: 'numeric' }); };
   const owner = share?.owner_name || '';
   const wmStyle = { '--shp-mark': `url("data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='360' height='200'><text x='180' y='100' transform='rotate(-22 180 100)' text-anchor='middle' font-family='sans-serif' font-size='14' font-weight='600' fill='#6b7280' fill-opacity='.16'>${mark.replace(/[<>&'"]/g, '')}</text></svg>`)}")` };
@@ -333,9 +392,11 @@ export default function SharedItem() {
       </header>
 
       <main className="shp__main">
+        {confirm && !data && !gate && <ConfirmOpen info={confirm} t={t} busy={cBusy} error={cErr} onOpen={openNow} />}
+
         {gate && !data && <GateForm gate={gate} token={token} t={t} ar={ar} onDone={() => { setGate(null); setLoading(true); setReload((n) => n + 1); }} />}
 
-        {loading && !data && !gate && <div className="shp__state"><span className="lp2-spinner" aria-hidden="true" /><p>{t('Loading…', 'جارِ التحميل…')}</p></div>}
+        {loading && !data && !gate && !confirm && <div className="shp__state"><span className="lp2-spinner" aria-hidden="true" /><p>{t('Loading…', 'جارِ التحميل…')}</p></div>}
 
         {dead && <LinkUnavailable err={err} t={t} checking={loading} onRetry={() => { setLoading(true); setReload((n) => n + 1); }} />}
 

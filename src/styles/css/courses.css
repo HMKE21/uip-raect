@@ -42,7 +42,7 @@
 .cm { display: flex; flex-direction: column; gap: 12px; }
 .cm-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .cm-bar .ex-search { flex: 1; min-width: 180px; }
-.cm-kinds { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.cm-kinds { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; }
 .cm-kind { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 7px 12px; border-radius: 999px; border: 1.5px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-secondary); font-size: 13px; font-weight: 700; cursor: var(--cur-pointer, pointer); }
 .cm-kind small { padding: 1px 7px; border-radius: 999px; background: var(--bg-muted); font-size: 11px; }
 .cm-kind.is-active { border-color: var(--color-primary); background: rgba(var(--color-primary-rgb), .1); color: var(--color-primary); }

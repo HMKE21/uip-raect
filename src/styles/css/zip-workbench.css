@@ -69,7 +69,7 @@
 .zb-search input { width: 100%; box-sizing: border-box; height: 28px; padding: 0 26px 0 9px; border: 1px solid transparent; border-radius: 5px; background: var(--zb-input); color: var(--zb-text); font: inherit; font-size: 12.5px; outline: none; }
 .zb-search input:focus { border-color: var(--zb-accent); }
 .zb-search button { position: absolute; right: 16px; top: 6px; border: 0; background: none; color: var(--zb-muted); cursor: var(--cur-pointer, pointer); display: grid; padding: 2px; }
-.zb-side__scroll { flex: 1; min-height: 0; overflow: auto; padding-bottom: 12px; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--zb-muted) 45%, transparent) transparent; }
+.zb-side__scroll { flex: 1; min-height: 0; overflow: auto; padding-bottom: 12px; }
 .zb-hint { margin: 14px; color: var(--zb-muted); font-size: 12.5px; }
 .zb-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px 16px; color: var(--zb-muted); text-align: center; }
 .zb-empty p { margin: 0; }
@@ -304,7 +304,7 @@ a.zb-ibtn { display: inline-grid; place-items: center; text-decoration: none; co
 .zb-run__tab.is-on { background: var(--zb-term); }
 .zb-run__body { background: var(--zb-term); }
 .zb-run__console { background: var(--zb-term); }
-.zb-run__log { padding: 12px 16px; font-size: 13px; line-height: 1.6; scrollbar-width: thin; scrollbar-color: var(--zb-line) transparent; }
+.zb-run__log { padding: 12px 16px; font-size: 13px; line-height: 1.6; }
 .zb-run__log::-webkit-scrollbar { width: 10px; } .zb-run__log::-webkit-scrollbar-thumb { background: var(--zb-line); border-radius: 10px; border: 2px solid var(--zb-term); }
 .zb-log--stdout { color: var(--zb-text); }
 .zb-log--stderr, .zb-log--error { padding-inline-start: 10px; border-left: 2px solid var(--zb-danger); background: color-mix(in srgb, var(--zb-danger) 9%, transparent); border-radius: 0 4px 4px 0; margin: 2px 0; }
@@ -341,7 +341,7 @@ a.zb-ibtn { display: inline-grid; place-items: center; text-decoration: none; co
 /* ---------- sandbox (real terminal) panel ---------- */
 .zb-sbx__term { background: #0d1117; }
 .zb-sbx__xterm { padding: 10px 6px 4px 14px; }
-.zb-sbx__xterm .xterm-viewport { scrollbar-width: thin; scrollbar-color: #30363d transparent; }
+.zb-sbx__xterm .xterm-viewport { }
 .zb-sbx__intro { gap: 8px; color: #8b949e; background: radial-gradient(55% 60% at 50% 40%, rgba(56, 139, 253, .10), transparent 70%); }
 .zb-sbx__intro-ico { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 14px; color: #58a6ff; background: rgba(56, 139, 253, .12); box-shadow: 0 0 0 1px rgba(56, 139, 253, .35), 0 12px 30px -12px rgba(56, 139, 253, .6); margin-bottom: 4px; }
 .zb-sbx__intro strong { color: #e6edf3; font-size: 15px; font-weight: 650; font-family: 'Segoe UI', system-ui, sans-serif; }
@@ -406,7 +406,7 @@ a.zb-ibtn { display: inline-grid; place-items: center; text-decoration: none; co
 .zb .zb-pick__pop.is-down { top: calc(100% + 6px); }
 .zb .zb-pick__q { display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 38px; border-bottom: 1px solid var(--zb-line); color: var(--zb-muted); flex: none; }
 .zb .zb-pick__q input { flex: 1; min-width: 0; height: 100%; border: 0; outline: none !important; background: transparent; color: var(--zb-strong); font: inherit; font-size: 13px; }
-.zb .zb-pick__list { overflow: auto; padding: 4px 6px 6px; scrollbar-width: thin; scrollbar-color: var(--zb-line) transparent; }
+.zb .zb-pick__list { overflow: auto; padding: 4px 6px 6px; }
 .zb .zb-pick__g { display: flex; align-items: center; gap: 8px; padding: 9px 8px 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--zb-muted); }
 .zb .zb-pick__g b { font-weight: 600; letter-spacing: 0; padding: 0 6px; border-radius: 8px; background: var(--zb-hover); }
 .zb .zb-pick__o { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 8px; background: none; color: var(--zb-text); font: inherit; text-align: start; cursor: var(--cur-pointer, pointer); }

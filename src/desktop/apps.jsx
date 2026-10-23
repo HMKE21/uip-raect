@@ -7,6 +7,7 @@ import { AppGlyph } from './OsIcons';
 import { desktopApi, lockError } from './desktopApi';
 import { CloudPanel } from './CloudSettings';
 import SecuritySettings from './SecuritySettings';
+import { SharedLinksPanel } from '../components/MySharedLinks';
 import { wipeLocalData } from '../lib/wipeLocalData';
 import { fetchBackupAll } from '../lib/driveApi';
 import { saveBlob } from '../lib/exporter';
@@ -242,6 +243,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
   const tabs = [
     ['personalize', 'palette', tt('Personalization', 'التخصيص')],
     ['cloud', 'cloud', tt('Storage & backup', 'التخزين والنسخ')],
+    ['links', 'link', tt('Shared links', 'الروابط المشاركة')],
     ['security', 'shield', tt('Security & devices', 'الأمان والأجهزة')],
     ['lock', 'lock', tt('Lock password', 'باسورد القفل')],
     ['system', 'monitor', tt('System', 'النظام')],
@@ -324,6 +326,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
           </>
         )}
         {tab === 'cloud' && <CloudPanel tt={tt} usage={usage} />}
+        {tab === 'links' && <SharedLinksPanel ar={ar} locale={ar ? 'ar' : 'en'} embedded />}
         {tab === 'security' && sec && <SecuritySettings tt={tt} ar={ar} sec={sec} onSec={onSec} lockEnabled={lockEnabled} onLockNow={onLockNow} onSleepNow={onSleepNow} onSelfLogout={onSelfLogout} onOpenLockTab={() => setTab('lock')} />}
         {tab === 'lock' && <LockSettings tt={tt} lockEnabled={lockEnabled} onLockChanged={onLockChanged} />}
         {tab === 'system' && (

@@ -197,7 +197,7 @@ button.qb-chip--removable svg { opacity: 0.7; }
 .qb-vsc__tab-x:hover { background: rgba(255, 255, 255, 0.14); }
 .qb-vsc__tab-spin { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #3C3C3C; border-top-color: #007ACC; animation: qb-vsc-spin 0.7s linear infinite; }
 @keyframes qb-vsc-spin { to { transform: rotate(360deg); } }
-.qb-vsc__tablist { display: flex; align-items: stretch; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: thin; scrollbar-color: #424242 transparent; }
+.qb-vsc__tablist { display: flex; align-items: stretch; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
 .qb-vsc__new { flex: 0 0 auto; display: inline-grid; place-items: center; width: 34px; border: 0; background: transparent; color: #A0A0A0; cursor: var(--cur-pointer, pointer); }
 .qb-vsc__new:hover { color: #FFFFFF; background: rgba(255, 255, 255, 0.08); }
 .qb-vsc__empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 240px; padding: 32px 20px; text-align: center; font-family: var(--font-body, system-ui, sans-serif); }
