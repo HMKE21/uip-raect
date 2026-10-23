@@ -1,5 +1,6 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, memo, useMemo, useState } from 'react';
 import Icon from '../../Icon';
+import { highlight } from '../mdHighlight';
 
 /**
  * Safe markdown for the AI answers. Everything becomes React elements — the text is never injected as HTML, so nothing the
@@ -73,6 +74,7 @@ export function parseMarkdown(src) {
     }
     blocks.push({ k: 'p', text: para.join('\n') });
   }
+  blocks.forEach((b) => { b.sig = JSON.stringify(b); }); // lets <Block> skip re-rendering blocks that did not change while the answer streams
   return blocks;
 }
 
@@ -151,13 +153,16 @@ export function guessBlockName(lang, code, path) {
   return `file.${EXT[lang] || 'txt'}`;
 }
 
+const HL_LIVE_MAX = 6000; // while a block is still streaming, only highlight it while it is small
+
 function CodeBlock({ b, tt, onNewFile, streaming }) {
   const [copied, setCopied] = useState(false);
   const [wrap, setWrap] = useState(true);
+  const live = streaming && !b.closed;
+  const toks = useMemo(() => (live && b.code.length > HL_LIVE_MAX ? [{ c: '', v: b.code }] : highlight(b.lang, b.code)), [b.lang, b.code, live]);
   const copy = async () => {
     try { await navigator.clipboard.writeText(b.code); setCopied(true); window.setTimeout(() => setCopied(false), 1400); } catch { /* clipboard blocked */ }
   };
-  const live = streaming && !b.closed;
   return (
     <div className="zb-ai__block">
       <div className="zb-ai__blockbar" dir="ltr">
@@ -168,33 +173,40 @@ function CodeBlock({ b, tt, onNewFile, streaming }) {
           {!live && onNewFile && <button type="button" className="zb-ai__mini" onClick={() => onNewFile(b.code, guessBlockName(b.lang, b.code, b.path))}><Icon name="file-plus" size={12} /> {tt('New file', 'ملف جديد')}</button>}
         </span>
       </div>
-      <pre className={`zb-ai__code${wrap ? ' is-wrap' : ''}`} dir="ltr"><code>{b.code}</code></pre>
+      <pre className={`zb-ai__code${wrap ? ' is-wrap' : ''}`} dir="ltr"><code>{toks.map((t, i) => (t.c ? <span key={i} className={`zb-tk zb-tk--${t.c}`}>{t.v}</span> : t.v))}</code></pre>
     </div>
   );
 }
 
+const Table = ({ b }) => (
+  <div className="zb-aimd__tablewrap">
+    <table className="zb-aimd__table" dir="auto">
+      <thead><tr>{b.head.map((c, n) => <th key={n}><Inline text={c} /></th>)}</tr></thead>
+      <tbody>{b.rows.map((r, n) => <tr key={n}>{b.head.map((_, c) => <td key={c}><Inline text={r[c] || ''} /></td>)}</tr>)}</tbody>
+    </table>
+  </div>
+);
+
+/** One block of the answer. Memoised on its content, so while the text streams only the LAST block re-renders. */
+const Block = memo(function Block({ b, tt, onNewFile, streaming }) {
+  switch (b.k) {
+    case 'code': return <CodeBlock b={b} tt={tt} onNewFile={onNewFile} streaming={streaming} />;
+    case 'h': { const H = `h${Math.min(6, b.level + 2)}`; return <H className="zb-aimd__h" dir="auto"><Inline text={b.text} /></H>; }
+    case 'hr': return <hr className="zb-aimd__hr" />;
+    case 'quote': return <blockquote className="zb-aimd__quote" dir="auto">{withBreaks(b.text)}</blockquote>;
+    case 'table': return <Table b={b} />;
+    case 'list': return <List items={b.items} />;
+    default: return <p dir="auto">{withBreaks(b.text)}</p>;
+  }
+}, (a, c) => a.b.sig === c.b.sig && a.tt === c.tt && a.onNewFile === c.onNewFile && (a.b.k !== 'code' || a.streaming === c.streaming));
+
+// NB: the class is `zb-aimd`, NOT `zb-md` — `.zb-md` is the full-size Markdown *preview* pane of the workbench
+// (position:absolute; inset:0; overflow:hidden) and used to cover and clip the whole chat panel.
 export default function Markdown({ text, tt, onNewFile, streaming }) {
   const blocks = useMemo(() => parseMarkdown(text), [text]);
   return (
-    <div className="zb-ai__answer zb-md">
-      {blocks.map((b, i) => {
-        switch (b.k) {
-          case 'code': return <CodeBlock key={i} b={b} tt={tt} onNewFile={onNewFile} streaming={streaming} />;
-          case 'h': { const H = `h${Math.min(6, b.level + 2)}`; return <H key={i} className="zb-md__h" dir="auto"><Inline text={b.text} /></H>; }
-          case 'hr': return <hr key={i} className="zb-md__hr" />;
-          case 'quote': return <blockquote key={i} className="zb-md__quote" dir="auto">{withBreaks(b.text)}</blockquote>;
-          case 'table': return (
-            <div key={i} className="zb-md__tablewrap">
-              <table className="zb-md__table" dir="auto">
-                <thead><tr>{b.head.map((c, n) => <th key={n}><Inline text={c} /></th>)}</tr></thead>
-                <tbody>{b.rows.map((r, n) => <tr key={n}>{b.head.map((_, c) => <td key={c}><Inline text={r[c] || ''} /></td>)}</tr>)}</tbody>
-              </table>
-            </div>
-          );
-          case 'list': return <List key={i} items={b.items} />;
-          default: return <p key={i} dir="auto">{withBreaks(b.text)}</p>;
-        }
-      })}
+    <div className="zb-ai__answer zb-aimd">
+      {blocks.map((b, i) => <Block key={i} b={b} tt={tt} onNewFile={onNewFile} streaming={streaming} />)}
     </div>
   );
 }

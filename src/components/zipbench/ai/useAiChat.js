@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { api } from '../../../api/client';
 import { streamPost, aiLocale } from './sse';
 
 const URL = '/api/v1/ai-code/chat';
 const CHATS = '/api/v1/ai-code/chats';
-const FLUSH_MS = 40;     // batch streamed tokens into one render
+const FLUSH_MS = 90;     // batch streamed tokens into one render (fewer renders = no UI jank)
 const HISTORY = 12;      // messages sent back to the server (it keeps the last 10 anyway)
 const SAVE_MS = 700;     // debounce for saving the conversation to the account
 
@@ -39,12 +39,36 @@ function editsNote(m) {
 const unwrap = (res) => (res && res.data) || res || {};
 
 /**
+ * A tiny external store. The streaming state lives HERE, not in React state of the workbench: ZipWorkbench is a ~1700 line
+ * component (editor, explorer, terminal, search...) and re-rendering all of it for every streamed token was what froze the
+ * page. Only the panel subscribes (see useAiChatState), so a token re-renders the chat and nothing else.
+ */
+function createStore() {
+  let state = { messages: [], chatId: null, chats: null, listError: false, saveState: 'idle' }; // saveState: idle | saving | saved | error
+  const subs = new Set();
+  return {
+    get: () => state,
+    set(patch) {
+      const next = typeof patch === 'function' ? patch(state) : patch;
+      state = { ...state, ...next };
+      subs.forEach((f) => f());
+    },
+    subscribe(f) { subs.add(f); return () => { subs.delete(f); }; },
+  };
+}
+
+/** Subscribe a component (the chat panel) to the chat state: { messages, chatId, chats, listError, saveState }. */
+export function useAiChatState(chat) {
+  return useSyncExternalStore(chat.store.subscribe, chat.store.get, chat.store.get);
+}
+
+/**
  * Side-panel chat state, saved on the student's account.
  *
  *   const chat = useAiChat({ tt, scope, label });
  *   chat.send({ text, mode, buildRequest })   // buildRequest() -> { active_path, files, tree, sel_from, sel_to, error } (read at send time)
- *   chat.messages  // [{ id, role: 'user'|'assistant', content, phase?: 'streaming'|'done'|'error'|'stopped', edits?: [{…, id, state}], error? }]
- *   chat.chats     // saved conversations [{ id, title, message_count, updated_at, label }] (null until loaded)
+ *   useAiChatState(chat).messages  // (read inside the panel only — the workbench itself does not re-render per token) [{ id, role: 'user'|'assistant', content, phase?: 'streaming'|'done'|'error'|'stopped', edits?: [{…, id, state}], error? }]
+ *   useAiChatState(chat).chats     // saved conversations [{ id, title, message_count, updated_at, label }] (null until loaded)
  *   chat.newChat() / chat.openChat(id) / chat.renameChat(id, title) / chat.deleteChat(id) / chat.clearAll()
  *
  * The context (open file, selection, terminal output, other tabs) is rebuilt on EVERY send and only the question text is
@@ -52,15 +76,16 @@ const unwrap = (res) => (res && res.data) || res || {};
  * question and re-saved (debounced) whenever it changes — including when the student applies or rejects a suggested change.
  */
 export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
-  const [messages, setMessages] = useState([]);
-  const [chatId, setChatId] = useState(null);
-  const [chats, setChats] = useState(null);
-  const [listError, setListError] = useState(false);
-  const [saveState, setSaveState] = useState('idle'); // idle | saving | saved | error
-  const msgsRef = useRef([]);
-  msgsRef.current = messages;
+  const storeRef = useRef(null);
+  if (!storeRef.current) storeRef.current = createStore();
+  const store = storeRef.current;
+  const setMessages = useCallback((v) => store.set((cur) => ({ messages: typeof v === 'function' ? v(cur.messages) : v })), [store]);
+  const setChats = useCallback((v) => store.set((cur) => ({ chats: typeof v === 'function' ? v(cur.chats) : v })), [store]);
+  const setChatId = useCallback((chatId) => store.set({ chatId }), [store]);
+  const setListError = useCallback((listError) => store.set({ listError }), [store]);
+  const setSaveState = useCallback((saveState) => store.set({ saveState }), [store]);
+  const getMessages = useCallback(() => store.get().messages, [store]);
   const idRef = useRef(null);
-  idRef.current = chatId;
   const modeRef = useRef(null);
   const dirty = useRef(false);   // the messages changed by the student's action (not by loading a saved chat)
   const saveT = useRef(0);
@@ -86,16 +111,16 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
       setChats(Array.isArray(d.chats) ? d.chats : []);
       setListError(false);
     } catch { setListError(true); setChats((c) => c || []); }
-  }, [enabled]);
+  }, [enabled, setChats, setListError]);
 
   const upsertSummary = useCallback((s) => {
     setChats((cur) => [s, ...(cur || []).filter((c) => c.id !== s.id)]);
-  }, []);
+  }, [setChats]);
 
   const saveNow = useCallback(async () => {
     clearTimeout(saveT.current);
     const id = idRef.current;
-    const msgs = msgsRef.current;
+    const msgs = store.get().messages;
     if (!enabled || !id || !dirty.current || !msgs.length || msgs.some((m) => m.phase === 'streaming')) return;
     dirty.current = false;
     setSaveState('saving');
@@ -115,15 +140,21 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
       dirty.current = true; // try again on the next change / retry
       setSaveState('error');
     }
-  }, [enabled, upsertSummary]);
+  }, [enabled, upsertSummary, store, setSaveState]);
 
   // debounce: save a moment after the last change, never while a reply is streaming
   useEffect(() => {
-    if (!dirty.current || !chatId || !messages.length || messages.some((m) => m.phase === 'streaming')) return undefined;
-    clearTimeout(saveT.current);
-    saveT.current = setTimeout(saveNow, SAVE_MS);
-    return () => clearTimeout(saveT.current);
-  }, [messages, chatId, saveNow]);
+    let prev = store.get().messages;
+    const off = store.subscribe(() => {
+      const cur = store.get().messages;
+      if (cur === prev) return;
+      prev = cur;
+      if (!dirty.current || !idRef.current || !cur.length || cur.some((m) => m.phase === 'streaming')) return;
+      clearTimeout(saveT.current);
+      saveT.current = setTimeout(saveNow, SAVE_MS);
+    });
+    return () => { off(); clearTimeout(saveT.current); };
+  }, [store, saveNow]);
   // leaving the page / closing the panel must not lose the last answer
   useEffect(() => () => { saveNow(); }, [saveNow]);
 
@@ -174,24 +205,24 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
     } finally {
       if (abortRef.current === ctrl) abortRef.current = null;
     }
-  }, [abort]);
+  }, [abort, setMessages, setChatId]);
 
   const send = useCallback(({ text, mode, buildRequest }) => {
     const q = String(text || '').trim();
     if (!q) return;
-    run({ history: [...msgsRef.current, { id: nextId(), role: 'user', content: q }], mode, buildRequest });
-  }, [run]);
+    run({ history: [...store.get().messages, { id: nextId(), role: 'user', content: q }], mode, buildRequest });
+  }, [run, store]);
 
   /** Ask the last question again (after an error, a stop, or when the mode was switched). */
   const retry = useCallback(({ mode, buildRequest }) => {
-    const cur = msgsRef.current;
+    const cur = store.get().messages;
     let i = cur.length - 1;
     while (i >= 0 && cur[i].role !== 'user') i -= 1;
     if (i < 0) return;
     run({ history: cur.slice(0, i + 1), mode, buildRequest });
-  }, [run]);
+  }, [run, store]);
 
-  const stop = useCallback(() => { abort(); dirty.current = true; setMessages((cur) => cur.map((m) => (m.phase === 'streaming' ? { ...m, phase: 'stopped' } : m))); }, [abort]);
+  const stop = useCallback(() => { abort(); dirty.current = true; setMessages((cur) => cur.map((m) => (m.phase === 'streaming' ? { ...m, phase: 'stopped' } : m))); }, [abort, setMessages]);
 
   /** Start an empty conversation (the old one stays saved in the list). */
   const newChat = useCallback(() => {
@@ -253,10 +284,10 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
   }, []);
 
   return {
-    messages, send, retry, stop, mark,
-    chatId, chats, listError, loadChats, newChat, openChat, renameChat, deleteChat, clearAll,
-    saveState, retrySave: saveNow,
-    busy: messages.some((m) => m.phase === 'streaming'),
+    store, getMessages,
+    send, retry, stop, mark,
+    loadChats, newChat, openChat, renameChat, deleteChat, clearAll,
+    retrySave: saveNow,
     /** kept for callers that used the old name */
     clear: newChat,
   };

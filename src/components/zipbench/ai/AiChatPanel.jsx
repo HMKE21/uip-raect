@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../Icon';
 import Markdown from './AiMarkdown';
 import { Diff } from './AiFixPanel';
+import { useAiChatState } from './useAiChat';
 import '../../../styles/css/zip-ai-fix.css';
 
 const WIDTH_KEY = 'zb-ai-w';
@@ -70,7 +71,7 @@ function EditCard({ e, tt, onApply, onReject, onOpen }) {
   );
 }
 
-function Message({ m, prevUser, tt, canSwitch, onApply, onApplyAll, onReject, onOpen, onRetry, onSwitchAndRetry, onNewFile, isLast, busy }) {
+const Message = memo(function Message({ m, prevUser, tt, canSwitch, onApply, onApplyAll, onReject, onOpen, onRetry, onSwitchAndRetry, onNewFile, isLast, busy }) {
   const [copied, setCopied] = useState(false);
   if (m.role === 'user') return <div className="zb-chat__user" dir="auto">{m.content}</div>;
   const streaming = m.phase === 'streaming';
@@ -81,6 +82,8 @@ function Message({ m, prevUser, tt, canSwitch, onApply, onApplyAll, onReject, on
   const copy = async () => { try { await navigator.clipboard.writeText(m.content); setCopied(true); window.setTimeout(() => setCopied(false), 1400); } catch { /* clipboard blocked */ } };
   return (
     <div className="zb-chat__bot">
+      <span className="zb-chat__avatar" aria-hidden="true"><Icon name="sparkles" size={13} /></span>
+      <div className="zb-chat__botbody">
       {streaming && !m.content && <div className="zb-ai__wait"><span className="zb-ai__dots" aria-hidden="true"><i /><i /><i /></span>{tt('Reading your code…', 'بقرأ الكود…')}</div>}
       {m.content && <Markdown text={m.content} tt={tt} streaming={streaming} onNewFile={onNewFile} />}
       {streaming && m.content && <span className="zb-ai__cursor" aria-hidden="true" />}
@@ -121,9 +124,10 @@ function Message({ m, prevUser, tt, canSwitch, onApply, onApplyAll, onReject, on
           {isLast && <button type="button" className="zb-ai__mini" onClick={onRetry} disabled={busy}><Icon name="refresh" size={12} /> {tt('Regenerate', 'إعادة توليد')}</button>}
         </div>
       )}
+      </div>
     </div>
   );
-}
+});
 
 function when(iso, tt) {
   const d = new Date(iso);
@@ -220,9 +224,19 @@ function HistoryView({ tt, h, busy, onDone }) {
  * Conversations are saved on the account (History); the panel can be dragged wider / maximised.
  */
 export default function AiChatPanel({
-  tt, messages, busy, modes, mode, canSwitchMode, onMode, chips, onChip, suggestions, onSend, onStop, onRetry, onSwitchAndRetry, onClose,
-  onApply, onApplyAll, onReject, onOpen, onNewFile, activeLabel, history, saveState, onRetrySave,
+  tt, chat, modes, mode, canSwitchMode, onMode, chips, onChip, suggestions, onSend, onRetry, onSwitchAndRetry, onClose,
+  onApply, onApplyAll, onReject, onOpen, onNewFile, activeLabel,
 }) {
+  // The chat state is read HERE (external store) so streamed tokens re-render only this panel, not the whole workbench.
+  const st = useAiChatState(chat);
+  const { messages, saveState } = st;
+  const busy = useMemo(() => messages.some((m) => m.phase === 'streaming'), [messages]);
+  const onStop = chat.stop;
+  const onRetrySave = chat.retrySave;
+  const history = useMemo(() => ({
+    chats: st.chats, listError: st.listError, activeId: st.chatId,
+    onLoad: chat.loadChats, onNew: chat.newChat, onOpen: chat.openChat, onRename: chat.renameChat, onDelete: chat.deleteChat, onClearAll: chat.clearAll,
+  }), [st.chats, st.listError, st.chatId, chat]);
   const [text, setText] = useState('');
   const [view, setView] = useState('chat'); // chat | history
   const [width, setWidth] = useState(readWidth);
@@ -232,7 +246,11 @@ export default function AiChatPanel({
   const stick = useRef(true);
   const boxRef = useRef(null);
 
-  useEffect(() => { const el = bodyRef.current; if (el && stick.current) el.scrollTop = el.scrollHeight; }, [messages, view]);
+  useEffect(() => {
+    const el = bodyRef.current; if (!el || !stick.current) return undefined;
+    const raf = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
+    return () => cancelAnimationFrame(raf);
+  }, [messages, view]);
   const onScroll = () => { const el = bodyRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; };
   useEffect(() => { if (view === 'chat') boxRef.current?.focus(); }, [view]);
   useEffect(() => { history.onLoad(); }, []); // eslint-disable-line react-hooks/exhaustive-deps

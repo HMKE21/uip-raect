@@ -1182,7 +1182,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     return { ok: true };
   };
   const applyChatEdits = (msgId, ids) => {
-    const m = chat.messages.find((x) => x.id === msgId); if (!m) return;
+    const m = chat.getMessages().find((x) => x.id === msgId); if (!m) return;
     const texts = new Map();
     (m.edits || []).filter((e) => ids.includes(e.id) && e.state === 'pending').forEach((e) => {
       const r = chatApplyOne(e, texts);
@@ -1549,8 +1549,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
         {chatOpen && ai.chatAvailable && (
           <AiChatPanel
             tt={tt}
-            messages={chat.messages}
-            busy={chat.busy}
+            chat={chat}
             modes={ai.modes}
             mode={chatModeNow}
             canSwitchMode={ai.modes.length > 1}
@@ -1559,16 +1558,12 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
             onChip={(k) => setChatCtx((c) => ({ ...c, [k]: !c[k] }))}
             suggestions={chatSuggestions}
             onSend={sendChat}
-            onStop={chat.stop}
             onRetry={retryChat}
             onSwitchAndRetry={switchAndRetryChat}
             onNewFile={chatNewFile}
-            history={{ chats: chat.chats, listError: chat.listError, activeId: chat.chatId, onLoad: chat.loadChats, onNew: chat.newChat, onOpen: chat.openChat, onRename: chat.renameChat, onDelete: chat.deleteChat, onClearAll: chat.clearAll }}
-            saveState={chat.saveState}
-            onRetrySave={chat.retrySave}
             onClose={closeChat}
             onApply={(msgId, id) => applyChatEdits(msgId, [id])}
-            onApplyAll={(msgId) => applyChatEdits(msgId, (chat.messages.find((x) => x.id === msgId)?.edits || []).map((e) => e.id))}
+            onApplyAll={(msgId) => applyChatEdits(msgId, (chat.getMessages().find((x) => x.id === msgId)?.edits || []).map((e) => e.id))}
             onReject={(msgId, id) => chat.mark(msgId, id, 'rejected')}
             onOpen={openChatFile}
             activeLabel={chatActive() ? baseName(chatActive()) : ''}
