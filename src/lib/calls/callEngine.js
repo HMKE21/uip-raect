@@ -172,6 +172,11 @@ export function createCallEngine(deps) {
     const res = await api.get(`${base}/ice`);
     const d = (res && res.data) || {};
     iceCache = { servers: d.ice_servers || [], at: now(), video: !!d.video_enabled };
+    try {
+      const urls = iceCache.servers.flatMap((x) => [].concat(x.urls || []));
+      // eslint-disable-next-line no-console
+      console.info('[call] ice config', { turn: !!d.turn, servers: iceCache.servers.length, hasTurnUrl: urls.some((u) => /^turns?:/i.test(u)), urls: urls.map((u) => String(u).split('?')[0]) });
+    } catch { /* diagnostics only */ }
     if (st.videoEnabled !== iceCache.video) set({ videoEnabled: iceCache.video });
     return iceCache;
   }
@@ -208,6 +213,10 @@ export function createCallEngine(deps) {
     if (localStream) localStream.getTracks().forEach((t) => conn.addTrack(t, localStream));
     conn.onicecandidate = (e) => {
       if (pc !== conn || !e.candidate) return;
+      try {
+        // eslint-disable-next-line no-console
+        console.info('[call] local candidate', e.candidate.type || (/ typ (\w+)/.exec(e.candidate.candidate || '') || [])[1]);
+      } catch { /* diagnostics only */ }
       sendSignal('ice', e.candidate.toJSON ? e.candidate.toJSON() : e.candidate);
     };
     conn.ontrack = (e) => {
@@ -230,6 +239,10 @@ export function createCallEngine(deps) {
 
   function onConnState(conn) {
     const s = conn.connectionState && conn.connectionState !== 'new' ? conn.connectionState : conn.iceConnectionState;
+    try {
+      // eslint-disable-next-line no-console
+      console.info('[call] state', { conn: conn.connectionState, ice: conn.iceConnectionState, gathering: conn.iceGatheringState, phase: st.phase });
+    } catch { /* diagnostics only */ }
     if (s === 'connected' || s === 'completed') {
       if (disconnectTimer) { timers.clearTimeout(disconnectTimer); disconnectTimer = 0; }
       if (restartTimer) { timers.clearTimeout(restartTimer); restartTimer = 0; }
