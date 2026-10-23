@@ -366,6 +366,7 @@ export function createCallEngine(deps) {
         st.startedAt = now();
         st.phase = 'active';
         startStats(conn);
+        tuneVideoSender(conn);
         sendState();
       }
       st.reconnecting = false;
@@ -425,6 +426,19 @@ export function createCallEngine(deps) {
     set({ quality: 'poor' });
     if (isCaller()) restartIce(recoveries >= 2);
     else sendSignal('state', { muted: st.muted, cam: st.camOn, sharing: st.sharing, restart: true, attempt: recoveries });
+  }
+
+  /** Keep video light enough for phones / weak links: cap the bitrate and drop resolution (not smoothness) when the link is tight. */
+  async function tuneVideoSender(conn) {
+    try {
+      const vt = conn.getTransceivers ? conn.getTransceivers().find((t) => t.receiver && t.receiver.track && t.receiver.track.kind === 'video') : null;
+      if (!vt || !vt.sender || !vt.sender.getParameters || !vt.sender.setParameters) return;
+      const params = vt.sender.getParameters();
+      if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+      params.encodings[0].maxBitrate = 900000;
+      params.degradationPreference = 'maintain-framerate';
+      await vt.sender.setParameters(params);
+    } catch { /* optional tuning */ }
   }
 
   function startStats(conn) {
