@@ -199,6 +199,12 @@ export function AuthProvider({ children }) {
     return adoptGoogleResult(json.data);
   }, [adoptGoogleResult]);
 
+  /** POST /api/v1/auth/microsoft — same as loginWithGoogle, with a Microsoft ID token. Details / restore reuse the /auth/google/* endpoints. */
+  const loginWithMicrosoft = useCallback(async (idToken) => {
+    const json = await api.post('/api/v1/auth/microsoft', { id_token: idToken });
+    return adoptGoogleResult(json.data);
+  }, [adoptGoogleResult]);
+
   /** POST /api/v1/auth/google/complete — creates the student account from the Google profile + the details they filled in. */
   const completeGoogleSignup = useCallback(async (payload) => {
     const json = await api.post('/api/v1/auth/google/complete', payload);
@@ -377,8 +383,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, status, login, loginWithGoogle, completeGoogleSignup, restoreGoogleDeleted, completeTwoFactor, cancelTwoFactor, adoptSession, logout, updateUser, can, permissionsReady: permissions !== null, isJoker: jokerRoles.length > 0, availableRoles: jokerRoles, switchRole }),
-    [user, status, login, loginWithGoogle, completeGoogleSignup, restoreGoogleDeleted, completeTwoFactor, cancelTwoFactor, adoptSession, logout, updateUser, can, permissions, jokerRoles, switchRole]
+    () => ({ user, status, login, loginWithGoogle, loginWithMicrosoft, completeGoogleSignup, restoreGoogleDeleted, completeTwoFactor, cancelTwoFactor, adoptSession, logout, updateUser, can, permissionsReady: permissions !== null, isJoker: jokerRoles.length > 0, availableRoles: jokerRoles, switchRole }),
+    [user, status, login, loginWithGoogle, loginWithMicrosoft, completeGoogleSignup, restoreGoogleDeleted, completeTwoFactor, cancelTwoFactor, adoptSession, logout, updateUser, can, permissions, jokerRoles, switchRole]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

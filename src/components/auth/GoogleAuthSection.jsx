@@ -6,6 +6,7 @@ import { roleHome } from '../../config/roleHome';
 import { useLanguage } from '../../context/LanguageContext';
 import { getGoogleConfig } from '../../lib/googleAuth';
 import GoogleSignInButton from './GoogleSignInButton';
+import MicrosoftSignInButton from './MicrosoftSignInButton';
 
 /**
  * The "or continue with Google" block used on Login and Register.
@@ -14,11 +15,12 @@ import GoogleSignInButton from './GoogleSignInButton';
  * Renders nothing when Google sign-in isn't configured.
  */
 export default function GoogleAuthSection({ onError, placement = 'after' }) {
-  const { loginWithGoogle } = useAuth();
+  const { loginWithGoogle, loginWithMicrosoft } = useAuth();
   const { locale } = useLanguage();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [enabled, setEnabled] = useState(false);
+  const [msEnabled, setMsEnabled] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -26,11 +28,11 @@ export default function GoogleAuthSection({ onError, placement = 'after' }) {
     return () => { alive = false; };
   }, []);
 
-  async function handleToken(idToken) {
+  async function handleToken(idToken, provider = 'google') {
     onError?.(null);
     setBusy(true);
     try {
-      const r = await loginWithGoogle(idToken);
+      const r = await (provider === 'microsoft' ? loginWithMicrosoft : loginWithGoogle)(idToken);
       if (r.needsRegistration) {
         navigate('/auth/google/complete', { state: { registration: r } });
       } else if (r.requiresTwoFactor) {
@@ -45,16 +47,17 @@ export default function GoogleAuthSection({ onError, placement = 'after' }) {
     }
   }
 
-  if (!enabled) return null;
+  const any = enabled || msEnabled;
 
   const divider = (
     <div className="auth-divider" role="separator"><span>{locale === 'ar' ? 'أو' : 'or'}</span></div>
   );
   return (
-    <div className={`auth-google-section auth-google-section--${placement}`}>
-      {placement === 'after' && divider}
-      <GoogleSignInButton onToken={handleToken} onError={onError} disabled={busy} />
-      {placement === 'before' && divider}
+    <div className={`auth-google-section auth-google-section--${placement}`} hidden={!any}>
+      {any && placement === 'after' && divider}
+      <GoogleSignInButton onToken={(t) => handleToken(t, 'google')} onError={onError} disabled={busy} />
+      <MicrosoftSignInButton onToken={(t) => handleToken(t, 'microsoft')} onError={onError} disabled={busy} onAvailable={setMsEnabled} />
+      {any && placement === 'before' && divider}
     </div>
   );
 }

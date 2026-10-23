@@ -422,6 +422,8 @@ button.auth-role { width: 100%; font: inherit; text-align: start; cursor: var(--
 .auth-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: var(--a-muted); font-size: 0.8125rem; font-weight: 700; }
 .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--a-line); }
 .auth-google-section--before .auth-divider { margin-bottom: 22px; }
+.auth-google-section > .auth-microsoft { margin-top: 10px; }
+.auth-google-section[hidden] { display: none; }
 .auth-google {
   display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; height: 52px; padding: 0 22px;
   border-radius: 14px; border: 1px solid var(--a-line); background: var(--a-field); color: var(--a-ink);

@@ -104,7 +104,7 @@ export default function GoogleComplete() {
         <div className="auth-profile__text">
           <strong>{profile.name || profile.email}</strong>
           <span dir="ltr">{profile.email}</span>
-          <small><Icon name="shield" size={13} /> {L('Verified by Google', 'متأكد منه جوجل')}</small>
+          <small><Icon name="shield" size={13} /> {profile.provider === 'microsoft' ? L('Verified by Microsoft', 'متأكد منه مايكروسوفت') : L('Verified by Google', 'متأكد منه جوجل')}</small>
         </div>
       </div>
 

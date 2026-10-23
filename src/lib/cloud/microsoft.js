@@ -36,13 +36,13 @@ let cancelPrev = null;
  * So neither is trusted — the result comes back over a same-origin BroadcastChannel (postMessage kept as a fallback), and the only
  * "gave up" signals are an explicit error from Microsoft or a time-out.
  */
-function popupCode(cfg) {
+function popupCode(cfg, scope = SCOPE) {
   if (cancelPrev) cancelPrev(); // a second click replaces the first attempt instead of leaving it waiting
   const verifier = rand(48);
   const stateNonce = rand(16);
   return crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)).then((h) => new Promise((resolve, reject) => {
     const url = `${cfg.authority.replace(/\/+$/, '')}/oauth2/v2.0/authorize?${new URLSearchParams({
-      client_id: cfg.client_id, response_type: 'code', redirect_uri: redirectUri(), response_mode: 'query', scope: SCOPE,
+      client_id: cfg.client_id, response_type: 'code', redirect_uri: redirectUri(), response_mode: 'query', scope,
       state: stateNonce, code_challenge: b64url(h), code_challenge_method: 'S256', prompt: 'select_account',
     })}`;
     const w = window.open(url, 'uip-ms-auth', 'width=520,height=680');
@@ -154,3 +154,21 @@ export const microsoft = {
     return inFolder(parentRemoteId, () => withRetry(() => (blob.size <= SMALL ? putSmall(tok, path, blob) : putLarge(tok, path, blob)), 7));
   },
 };
+
+/**
+ * "Continue with Microsoft" on the login / register pages. Same pop-up + PKCE flow as the OneDrive link, but with the identity scopes only
+ * (no file access): it returns the ID token, which the API verifies itself (POST /api/v1/auth/microsoft). Nothing is stored in the browser.
+ */
+export async function microsoftIdToken(cfg) {
+  const idScope = 'openid profile email';
+  const { code, verifier } = await popupCode(cfg, idScope);
+  let res;
+  try {
+    res = await fetch(tokenUrl(cfg), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({
+      client_id: cfg.client_id, scope: idScope, grant_type: 'authorization_code', code, redirect_uri: redirectUri(), code_verifier: verifier,
+    }) });
+  } catch { throw new CloudRetryError('Network problem.', 0); }
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.id_token) throw new CloudAuthError(j.error_description?.split('\r')[0] || 'Microsoft sign-in failed.', j.error || 'denied');
+  return j.id_token;
+}
