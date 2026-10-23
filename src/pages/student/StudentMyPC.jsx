@@ -770,7 +770,8 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
   const clickItem = (e, n) => {
     e.stopPropagation();
     cursorRef.current = n.id;
-    setLimit((l) => Math.max(l, idx + 60)); // make sure the target row is drawn
+    const idx = items.findIndex((x) => x.id === n.id); // -1 for disk cards (they are drawn in their own section)
+    if (idx >= 0) setLimit((l) => Math.max(l, idx + 60)); // make sure the target row is drawn
     if (e.shiftKey && anchor != null) {
       const a = items.findIndex((x) => x.id === anchor); const b = items.findIndex((x) => x.id === n.id);
       const [lo, hi] = a < b ? [a, b] : [b, a];
