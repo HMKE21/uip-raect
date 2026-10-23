@@ -12,7 +12,8 @@ import { FileGlyph, FolderGlyph } from '../desktop/OsIcons';
 import ProtectedFile, { kindOfName } from '../components/shared/ProtectedFile';
 import '../styles/css/drive-share.css';
 import '../styles/css/drive-share-responsive.css';
-import '../styles/css/drive-share-pro.css'; // professional visual layer — must stay last
+import '../styles/css/drive-share-pro.css'; // professional visual layer
+import '../styles/css/drive-share-fix.css'; // header stacking + file viewer (code LTR, phone master/detail) — must stay last
 
 const BIG_PREVIEW_BYTES = 80 * 1024 * 1024; // non-media files above this are not previewed in the browser
 

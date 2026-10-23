@@ -1,0 +1,64 @@
+/* ==========================================================================
+   Shared-link page — fixes (loaded last)
+   1) Top bar was painted UNDER the page cards (.shp__top z-index was reset to 1 by a later rule).
+   2) Code / archive viewer: always LTR (Arabic page direction scrambled punctuation + line numbers),
+      compact toolbar, and a phone-friendly "file list → file" flow for ZIPs.
+   ========================================================================== */
+
+/* ---------- 1. top bar always above content ---------- */
+.shp__bubbles { z-index: 0; }
+.shp__main { position: relative; z-index: 1; }
+.shp__top {
+  position: sticky; top: 0; z-index: 50;
+  background: color-mix(in srgb, var(--bg-surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+}
+.shp__top .shp__who { min-width: 0; flex: 1 1 auto; }
+.shp__top .shp__who-txt { min-width: 0; }
+.shp__top .shp__who-name { max-width: 100%; }
+@media (max-width: 420px) { .shp__secure span { display: none; } .shp__secure { padding-inline: 9px; } }
+.shp__veil { z-index: 60; }
+
+/* ---------- 2. code viewer ---------- */
+.shp-code, .shp-code .cm-editor, .shp-code .cm-content, .shp-code .cm-gutters { direction: ltr; text-align: left; unicode-bidi: isolate; }
+.shp-code .cm-content, .shp-code .cm-line { font-variant-ligatures: none; }
+.shp-code__bar { flex-wrap: nowrap; overflow-x: auto; gap: 8px; padding: 6px 10px; scrollbar-width: none; }
+.shp-code__bar::-webkit-scrollbar { display: none; }
+.shp-code__bar > * { flex: 0 0 auto; white-space: nowrap; }
+.shp-code__bar strong { flex: 0 1 auto; min-width: 60px; max-width: 46%; }
+.shp-code__bar i { flex: 1 0 8px; }
+.shp-code__bar button, .shp-code__bar select {
+  width: auto; min-width: 0; height: 30px; min-height: 0; padding: 0 10px; line-height: 1; box-shadow: none; outline-offset: 2px;
+}
+.shp-code__bar select { max-width: 150px; padding-inline-end: 6px; }
+
+/* ---------- 3. archive viewer ---------- */
+.shp-zip__crumb { display: none; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border-subtle); background: var(--bg-surface); flex: 0 0 auto; min-width: 0; }
+.shp-zip__back { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 12px 0 6px; border-radius: 999px; border: 1px solid var(--border-subtle); background: var(--bg-canvas); color: var(--text-primary); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; flex: 0 0 auto; }
+.shp-zip__path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--text-secondary); direction: ltr; }
+.shp-zip__pane { flex-direction: column; }
+.shp-zip__body { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.shp-zip__body > * { flex: 1 1 auto; min-height: 0; }
+.shp-zip__body > .shp-zip__hint { padding: 24px; text-align: center; }
+.shp-zip__tree .zb-row { height: 30px; }
+.shp-zip__head input { width: 100%; min-height: 0; height: 34px; }
+
+@media (max-width: 760px) {
+  .shp-zip { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: min(78dvh, 640px); }
+  .shp-zip__side, .shp-zip__pane { grid-area: 1 / 1; min-height: 0; border-bottom: 0; }
+  .shp-zip.is-tree .shp-zip__pane { display: none; }
+  .shp-zip.is-file .shp-zip__side { display: none; }
+  .shp-zip__crumb { display: flex; }
+  /* finger-friendly rows */
+  .shp-zip__tree .zb-row { height: 44px; padding-right: 12px; }
+  .shp-zip__tree .zb-name { font-size: 14px; }
+  .shp-zip__head { padding: 12px 14px; }
+  .shp-zip__head input { height: 40px; font-size: 14px; }
+}
+@media (max-width: 760px) and (orientation: landscape) and (max-height: 520px) {
+  .shp-zip { height: min(86dvh, 460px); }
+  .shp-zip__tree .zb-row { height: 36px; }
+}
+.shp__preview.has-file > .shp-zip { height: var(--shp-view-h); }
+@media (max-width: 760px) { .shp__preview.has-file > .shp-zip { height: min(78dvh, 640px); } }
+@media (min-width: 761px) { .shp-zip__crumb { display: none; } }

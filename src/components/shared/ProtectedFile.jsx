@@ -100,7 +100,7 @@ function ProtectedCode({ name, text, cut, tt }) {
   const [size, setSize] = useState(13.5);
   const lines = useMemo(() => (text.match(/\n/g) || []).length + 1, [text]);
   return (
-    <div className="shp-code" style={themeVars(theme)}>
+    <div className="shp-code" style={themeVars(theme)} dir="ltr">
       <div className="shp-code__bar">
         <strong title={name}>{name.split('/').pop()}</strong>
         <span>{languageName(name)} · {lines.toLocaleString()} {tt('lines', 'سطر')}</span>
@@ -229,6 +229,7 @@ function ProtectedZip({ name, blob, mark, tt, rtl, depth }) {
   const [sel, setSel] = useState(null);
   const [entry, setEntry] = useState(null); // { path, blob?, error?, big? }
   const [q, setQ] = useState('');
+  const [view, setView] = useState('tree'); // phones: 'tree' (file list) | 'file' (viewer) — desktop shows both
   const bytes = useRef(null);
 
   useEffect(() => {
@@ -274,6 +275,7 @@ function ProtectedZip({ name, blob, mark, tt, rtl, depth }) {
     return () => { live = false; clearTimeout(id); };
   }, [sel, state]);
 
+  const pickFile = (p) => { setSel(p); setView('file'); };
   const toggle = (p) => setOpen((s) => { const n = new Set(s); if (n.has(p)) n.delete(p); else n.add(p); return n; });
   if (state.status === 'loading') return <Spin />;
   if (state.status === 'error') return <Note>{state.big ? tt('This archive is too large to preview.', 'الأرشيف كبير على المعاينة.') : tt('Could not open this archive (it may be encrypted or damaged).', 'تعذّر فتح الأرشيف (ممكن يكون مشفّر أو تالف).')}</Note>;
@@ -281,7 +283,7 @@ function ProtectedZip({ name, blob, mark, tt, rtl, depth }) {
   const needle = q.trim().toLowerCase();
   const hits = needle ? state.files.filter((f) => f.name.toLowerCase().includes(needle)).slice(0, 300) : null;
   return (
-    <div className="shp-zip" style={themeVars(siteT)} dir="ltr">
+    <div className={`shp-zip is-${view}`} style={themeVars(siteT)} dir="ltr">
       <aside className="shp-zip__side">
         <div className="shp-zip__head">
           <span className="shp-zip__title" title={name}><Icon name="folder" size={14} />{name.split('/').pop()}</span>
@@ -293,21 +295,27 @@ function ProtectedZip({ name, blob, mark, tt, rtl, depth }) {
             hits.length ? hits.map((f) => {
               const [label, color] = badgeOf(f.name);
               return (
-                <div key={f.name} role="button" tabIndex={0} className={`zb-row${sel === f.name ? ' is-active' : ''}`} title={f.name} onClick={() => setSel(f.name)}
-                  onKeyDown={(ev) => { if (ev.key === 'Enter') setSel(f.name); }}>
+                <div key={f.name} role="button" tabIndex={0} className={`zb-row${sel === f.name ? ' is-active' : ''}`} title={f.name} onClick={() => pickFile(f.name)}
+                  onKeyDown={(ev) => { if (ev.key === 'Enter') pickFile(f.name); }}>
                   <div className="zb-row__main"><span className="zb-badge" style={{ '--k': color }}>{label}</span><span className="zb-name">{f.name}</span></div>
                 </div>
               );
             }) : <p className="shp-zip__empty">{tt('No matches.', 'مفيش نتائج.')}</p>
-          ) : <TreeRows node={state.tree} depth={0} open={open} toggle={toggle} sel={sel} pick={setSel} />}
+          ) : <TreeRows node={state.tree} depth={0} open={open} toggle={toggle} sel={sel} pick={pickFile} />}
         </div>
       </aside>
       <section className="shp-zip__pane" dir={rtl ? 'rtl' : 'ltr'}>
+        <div className="shp-zip__crumb" dir="ltr">
+          <button type="button" className="shp-zip__back" onClick={() => setView('tree')}><Icon name="chevron-left" size={16} /><span>{tt('Files', 'الملفات')}</span></button>
+          <span className="shp-zip__path" title={sel || ''}>{sel ? sel.split('/').slice(-2).join(' / ') : ''}</span>
+        </div>
+        <div className="shp-zip__body">
         {!sel && <div className="shp-zip__hint"><Icon name="file" size={28} /><p>{tt('Select a file to preview it.', 'اختار ملف عشان تعاينه.')}</p></div>}
         {sel && (!entry || entry.path !== sel || entry.loading) && <Spin />}
         {sel && entry?.path === sel && entry.big && <Note>{tt('This file is too large to preview.', 'الملف كبير على المعاينة.')}</Note>}
         {sel && entry?.path === sel && entry.error && <Note>{tt('Could not read this file (it may be encrypted).', 'تعذّر قراءة الملف (ممكن يكون مشفّر).')}</Note>}
         {sel && entry?.path === sel && entry.blob && <ProtectedFile key={entry.path} name={entry.path} blob={entry.blob} mark={mark} tt={tt} rtl={rtl} depth={depth + 1} />}
+        </div>
       </section>
     </div>
   );
