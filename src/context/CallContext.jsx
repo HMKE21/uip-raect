@@ -51,10 +51,10 @@ function getUserMedia(opts = {}) {
     voiceIsolation: { ideal: noise },
     channelCount: { ideal: 1 },
   };
-  // phones/tablets: 640x480 @ ≤20 fps keeps encoding cheap (720p made weaker devices stutter/freeze)
+  // phones/tablets: 960x540 @ ≤20 fps keeps encoding affordable; desktops get 720p
   const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test((typeof navigator !== 'undefined' && navigator.userAgent) || '');
   const video = opts.video ? {
-    width: { ideal: mobile ? 640 : 1280 }, height: { ideal: mobile ? 480 : 720 }, frameRate: mobile ? { ideal: 20, max: 24 } : { ideal: 24, max: 30 },
+    width: { ideal: mobile ? 960 : 1280 }, height: { ideal: mobile ? 540 : 720 }, frameRate: mobile ? { ideal: 20, max: 24 } : { ideal: 24, max: 30 },
     facingMode: { ideal: opts.facing === 'environment' ? 'environment' : 'user' },
   } : false;
   return navigator.mediaDevices.getUserMedia({ audio, video });
@@ -165,6 +165,7 @@ export function CallProvider({ children }) {
       countCameras,
       createFx: createVideoFx,
       makeStream: (tracks) => new MediaStream(tracks),
+      videoMaxBitrate: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ? 1500000 : 2500000,
       setLocalVideo: (stream) => setMedia((m) => (m.local === stream ? m : { ...m, local: stream })),
       setRemoteVideo: (stream) => setMedia((m) => (m.remote === stream ? m : { ...m, remote: stream })),
       initialNoise: readNoisePref(),

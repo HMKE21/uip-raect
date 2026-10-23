@@ -33,7 +33,7 @@ export function createCallEngine(deps) {
     isHidden = () => false, notify = () => () => {}, vibrate = () => {}, now = () => Date.now(),
     // video-only helpers (all optional, so voice-only hosts/tests keep working)
     setLocalVideo = () => {}, setRemoteVideo = () => {}, makeStream = (tracks) => ({ getTracks: () => tracks }),
-    createFx = null, getDisplayMedia = null, countCameras = async () => 1, onPref = () => {}, initialNoise = true,
+    videoMaxBitrate = 2500000, createFx = null, getDisplayMedia = null, countCameras = async () => 1, onPref = () => {}, initialNoise = true,
     base = '/api/v1/messaging/calls',
     timers = {
       setTimeout: (...a) => setTimeout(...a), clearTimeout: (...a) => clearTimeout(...a),
@@ -464,15 +464,15 @@ export function createCallEngine(deps) {
     else sendSignal('state', { muted: st.muted, cam: st.camOn, sharing: st.sharing, restart: true, attempt: recoveries });
   }
 
-  /** Keep video light enough for phones / weak links: cap the bitrate and drop resolution (not smoothness) when the link is tight. */
+  /** Set the video bitrate ceiling (a generous one: the browser still adapts down by itself when the link is weak). */
   async function tuneVideoSender(conn) {
     try {
       const vt = conn.getTransceivers ? conn.getTransceivers().find((t) => t.receiver && t.receiver.track && t.receiver.track.kind === 'video') : null;
       if (!vt || !vt.sender || !vt.sender.getParameters || !vt.sender.setParameters) return;
       const params = vt.sender.getParameters();
       if (!params.encodings || !params.encodings.length) params.encodings = [{}];
-      params.encodings[0].maxBitrate = 900000;
-      params.degradationPreference = 'maintain-framerate';
+      params.encodings[0].maxBitrate = videoMaxBitrate;
+      params.degradationPreference = 'balanced';
       await vt.sender.setParameters(params);
     } catch { /* optional tuning */ }
   }

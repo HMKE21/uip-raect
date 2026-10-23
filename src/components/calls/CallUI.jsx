@@ -71,7 +71,7 @@ function StreamVideo({ stream, className }) {
       if (el.paused) { play(); return; }
       if (el.currentTime === last) still += 1; else still = 0;
       last = el.currentTime;
-      if (still >= 2) {
+      if (still >= 3) {
         still = 0;
         try { el.srcObject = null; el.srcObject = stream; } catch { /* ignore */ }
         play();
