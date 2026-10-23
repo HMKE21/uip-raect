@@ -6,7 +6,8 @@ import ChatFile from './ChatFile';
 import PollBubble from './PollBubble';
 import MsgIcon from './msgIcons';
 import { Avatar } from './ConversationRail';
-import { fmtTime, fmtDayLabel, fmtBytes, fmtDuration, fmtClock, peerLabel, renderBody, attachmentUrl, roleLabel } from './format';
+import { fmtTime, fmtDayLabel, fmtBytes, fmtDuration, fmtClock, peerLabel, renderBody, attachmentUrl, roleLabel, avatarUrl } from './format';
+import { bgCss } from './stories/storyUtils';
 import { parseServerDate } from '../../utils/serverDate';
 import { useLanguage } from '../../context/LanguageContext';
 import MediaEditorModal, { isEditableMedia } from './MediaEditorModal';
@@ -25,6 +26,24 @@ import { LocationBubble, LiveLocationBubble, LocationShareModal } from './Locati
 import '../../styles/css/messaging-pro.css';
 
 /** Sent / delivered / read ticks (WhatsApp style): ✓ grey, ✓✓ grey, ✓✓ blue. */
+
+/** Small card above a reply that was sent from someone's story (metadata.story_reply from the stories API). */
+function StoryReplyCard({ info, ar }) {
+  const thumb = info.thumb ? avatarUrl(info.thumb) : null;
+  const kind = info.type === 'video' ? (ar ? 'فيديو' : 'Video') : info.type === 'image' ? (ar ? 'صورة' : 'Photo') : (ar ? 'نص' : 'Text');
+  return (
+    <div className="msg-story-card">
+      <span className="msg-story-card__thumb" style={info.type === 'text' && info.bg ? { background: bgCss(info.bg) } : undefined}>
+        {thumb ? <img src={thumb} alt="" loading="lazy" /> : <span aria-hidden="true">{info.type === 'text' ? 'Aa' : '▶'}</span>}
+      </span>
+      <span className="msg-story-card__tx">
+        <strong>{ar ? 'ردّ على استوري' : 'Replied to a story'} · {kind}</strong>
+        {info.snippet ? <span>{info.snippet}</span> : null}
+      </span>
+    </div>
+  );
+}
+
 function Ticks({ status }) {
   if (!status) return null;
   const read = status === 'read';
@@ -301,6 +320,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onOpenVideo, onRetryUp
             <span>{(m.parent_body || t('Attachment', 'مرفق')).slice(0, 80)}</span>
           </div>
         )}
+        {m.metadata?.story_reply && <StoryReplyCard info={m.metadata.story_reply} ar={t('a', 'b') === 'b'} />}
         {m.forwarded_from_id && (
           <div className="msg-forward-tag">
             <MsgIcon name="forward" size={11} /> {t('Forwarded', 'معاد توجيهها')}

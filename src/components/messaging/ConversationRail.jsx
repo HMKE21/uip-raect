@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { initials, fmtTime, peerLabel, avatarUrl, previewLabel } from './format';
 import { systemLine } from './groupText';
 import { useLanguage } from '../../context/LanguageContext';
+import StoriesStrip from './stories/StoriesStrip';
 
 const FILTERS = [
   { key: 'all', label: 'All', ar: 'الكل' },
@@ -222,6 +223,8 @@ export default function ConversationRail({
           )}
         </label>
       </header>
+
+      {!(searchOpen && searchQuery) && !selecting && <StoriesStrip />}
 
       {searchOpen && searchQuery && (
         <div className="msg-search-results" data-search-results>
