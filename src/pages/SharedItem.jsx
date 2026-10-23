@@ -241,6 +241,10 @@ export default function SharedItem() {
   const [err, setErr] = useState(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [viewOpen, setViewOpen] = useState(true);   // the file viewer can be folded away so the page stays short
+  const [listOpen, setListOpen] = useState(true);   // ... and so can the list of items
+  const [viewMode, setViewMode] = useState('list'); // list | grid
+  const [q, setQ] = useState('');                   // filter box (shown once there are many items)
   const [preview, setPreview] = useState(null); // { id, name, kind, blob?, url?, text?, loading?, failed? }
   const [locked, setLocked] = useState(false);
   const [gate, setGate] = useState(null); // { needs_password, needs_info, owner_name } while the owner's gate is not passed
@@ -312,9 +316,14 @@ export default function SharedItem() {
   const share = data?.share;
   const canDl = !!share?.can_download;
   const isFolder = node?.type === 'folder';
+  const items = data?.items || [];
+  const shown = q.trim() ? items.filter((it) => it.name.toLowerCase().includes(q.trim().toLowerCase())) : items;
+  const nFolders = items.filter((it) => it.type === 'folder').length;
+  const nFiles = items.length - nFolders;
 
   const openPreview = useCallback(async (file) => {
     clearPreview();
+    setViewOpen(true);
     const kind = kindOfName(file.name);
     const media = kind === 'video' || kind === 'audio';
     if (kind === 'none') { setPreview({ id: file.id, name: file.name, none: true }); return; }
@@ -330,7 +339,7 @@ export default function SharedItem() {
     if (node && node.type === 'file' && nodeId === null) openPreview(node);
   }, [node?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const go = (id) => { clearPreview(); setNodeId(id && id !== share?.root?.id ? id : null); };
+  const go = (id) => { clearPreview(); setQ(''); setNodeId(id && id !== share?.root?.id ? id : null); };
 
   const download = async (file) => {
     setBusy(true);
@@ -417,7 +426,7 @@ export default function SharedItem() {
                 <div className="shp__chips">
                   {!isFolder && node.size_human && <span className="shp__chip">{node.size_human}</span>}
                   {share.expires_at && <span className="shp__chip"><Icon name="clock" size={12} />{t('Available until ', 'متاح لحد ')}{fmtDate(share.expires_at)}</span>}
-                  {isFolder && <span className="shp__chip">{data.items.length} {t('items', 'عنصر')}</span>}
+                  {isFolder && <span className="shp__chip">{items.length} {t('items', 'عنصر')}{nFolders > 0 && nFiles > 0 ? ` · ${nFolders} ${t('folders', 'مجلد')} · ${nFiles} ${t('files', 'ملف')}` : ''}</span>}
                   {canDl
                     ? <span className="shp__chip shp__chip--ok"><Icon name="download" size={12} />{t('Download allowed', 'التنزيل متاح')}</span>
                     : <span className="shp__chip shp__chip--lock"><Icon name="eye" size={12} />{t('View only', 'عرض فقط')}</span>}
@@ -434,48 +443,75 @@ export default function SharedItem() {
             </section>
 
             {isFolder && (
-              <section className="shp__card">
-                <nav className="shp__crumbs" aria-label={t('Path', 'المسار')}>
-                  {data.breadcrumb.map((c, i) => (
-                    <span key={c.id}>
-                      {i > 0 && <span aria-hidden="true"> / </span>}
-                      <button type="button" disabled={i === data.breadcrumb.length - 1} onClick={() => go(c.id)}>{c.name}</button>
-                    </span>
-                  ))}
-                </nav>
-                {data.items.length === 0 ? <p className="shp__note">{t('This folder is empty.', 'المجلد فاضي.')}</p> : (
-                  <ul className="shp__list">
-                    {data.items.map((it) => (
+              <section className="shp__card shp__browser">
+                <div className="shp__bar">
+                  <nav className="shp__crumbs" aria-label={t('Path', 'المسار')}>
+                    {data.breadcrumb.map((c, i) => (
+                      <span key={c.id}>
+                        {i > 0 && <span aria-hidden="true"> / </span>}
+                        <button type="button" disabled={i === data.breadcrumb.length - 1} onClick={() => go(c.id)}>{c.name}</button>
+                      </span>
+                    ))}
+                  </nav>
+                  <div className="shp__bar-tools">
+                    {listOpen && items.length > 6 && (
+                      <label className="shp__find">
+                        <Icon name="search" size={14} />
+                        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('Filter…', 'بحث في العناصر…')} aria-label={t('Filter items', 'بحث في العناصر')} />
+                      </label>
+                    )}
+                    {listOpen && items.length > 0 && (
+                      <div className="shp__seg" role="group" aria-label={t('View', 'طريقة العرض')}>
+                        <button type="button" className={viewMode === 'list' ? 'is-on' : ''} aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')} title={t('List', 'قائمة')}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+                        </button>
+                        <button type="button" className={viewMode === 'grid' ? 'is-on' : ''} aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')} title={t('Grid', 'شبكة')}>
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="7" height="7" rx="1.5" /><rect x="14" y="14" width="7" height="7" rx="1.5" /></svg>
+                        </button>
+                      </div>
+                    )}
+                    <button type="button" className="shp__fold" aria-expanded={listOpen} onClick={() => setListOpen((v) => !v)}>
+                      <Icon name={listOpen ? 'chevron-up' : 'chevron-down'} size={14} />
+                      <span>{listOpen ? t('Hide list', 'إخفاء القائمة') : t('Show list', 'إظهار القائمة')}</span>
+                    </button>
+                  </div>
+                </div>
+                {listOpen && (items.length === 0 ? <p className="shp__note">{t('This folder is empty.', 'المجلد فاضي.')}</p> : shown.length === 0 ? <p className="shp__note">{t('No matches.', 'مفيش نتائج.')}</p> : (
+                  <ul className={`shp__list${viewMode === 'grid' ? ' shp__list--grid' : ''}`}>
+                    {shown.map((it) => (
                       <li key={it.id}>
                         <button type="button" className={`shp__item${preview?.id === it.id ? ' is-on' : ''}`} onClick={() => (it.type === 'folder' ? go(it.id) : openPreview(it))}>
-                          {it.type === 'folder' ? <FolderGlyph size={28} /> : <FileGlyph size={28} label={it.extension} />}
+                          {it.type === 'folder' ? <FolderGlyph size={viewMode === 'grid' ? 44 : 28} /> : <FileGlyph size={viewMode === 'grid' ? 44 : 28} label={it.extension} />}
                           <span className="shp__item-name">{it.name}</span>
                           {it.type === 'file' && <span className="shp__item-size">{it.size_human}</span>}
                         </button>
                       </li>
                     ))}
                   </ul>
-                )}
+                ))}
               </section>
             )}
 
             {preview && (
-              <section className="shp__card shp__viewer">
-                {isFolder && (
-                  <div className="shp__head">
-                    <strong className="shp__vtitle">{preview.name}</strong>
-                    <div className="shp__actions">
-                      {canDl && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => download({ id: preview.id, name: preview.name })}><Icon name="download" size={14} /><span>{t('Download', 'تنزيل')}</span></button>}
-                      <button type="button" className="btn btn-ghost" onClick={clearPreview}><Icon name="x" size={14} /><span>{t('Close', 'إغلاق')}</span></button>
-                    </div>
+              <section className={`shp__card shp__viewer${viewOpen ? '' : ' is-folded'}`}>
+                <div className="shp__head">
+                  <strong className="shp__vtitle" title={preview.name}>{preview.name}</strong>
+                  <div className="shp__actions">
+                    <button type="button" className="btn btn-ghost" aria-expanded={viewOpen} onClick={() => setViewOpen((v) => !v)}>
+                      <Icon name={viewOpen ? 'chevron-up' : 'chevron-down'} size={14} /><span>{viewOpen ? t('Hide preview', 'إخفاء العرض') : t('Show preview', 'إظهار العرض')}</span>
+                    </button>
+                    {isFolder && canDl && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => download({ id: preview.id, name: preview.name })}><Icon name="download" size={14} /><span>{t('Download', 'تنزيل')}</span></button>}
+                    {isFolder && <button type="button" className="btn btn-ghost" onClick={clearPreview}><Icon name="x" size={14} /><span>{t('Close', 'إغلاق')}</span></button>}
                   </div>
-                )}
-                <div className={`shp__preview${preview.blob ? " has-file" : ""}`} style={wmStyle}>
-                  {preview.loading && <span className="lp2-spinner" aria-hidden="true" />}
-                  {preview.failed && <p className="shp__note">{t('Could not load the preview.', 'تعذّر تحميل المعاينة.')}</p>}
-                  {preview.big && <p className="shp__note">{canDl ? t('This file is too large to preview — download it to open it.', 'الملف كبير على المعاينة — نزّله عشان تفتحه.') : t('This file is too large to preview.', 'الملف كبير على المعاينة.')}</p>}
-                  {preview.none && <p className="shp__note">{canDl ? t('No preview for this file type — download it to open it.', 'مفيش معاينة لنوع الملف ده — نزّله عشان تفتحه.') : t('No preview is available for this file type.', 'مفيش معاينة متاحة لنوع الملف ده.')}</p>}
-                  {preview.blob && <ProtectedFile key={preview.id} name={preview.name} blob={preview.blob} mark={mark} tt={t} rtl={ar} onFail={() => setPreview((p) => p && { ...p, blob: null, failed: true })} />}
+                </div>
+                <div className="shp__viewer-body" hidden={!viewOpen}>
+                  <div className={`shp__preview${preview.blob ? " has-file" : ""}`} style={wmStyle}>
+                    {preview.loading && <span className="lp2-spinner" aria-hidden="true" />}
+                    {preview.failed && <p className="shp__note">{t('Could not load the preview.', 'تعذّر تحميل المعاينة.')}</p>}
+                    {preview.big && <p className="shp__note">{canDl ? t('This file is too large to preview — download it to open it.', 'الملف كبير على المعاينة — نزّله عشان تفتحه.') : t('This file is too large to preview.', 'الملف كبير على المعاينة.')}</p>}
+                    {preview.none && <p className="shp__note">{canDl ? t('No preview for this file type — download it to open it.', 'مفيش معاينة لنوع الملف ده — نزّله عشان تفتحه.') : t('No preview is available for this file type.', 'مفيش معاينة متاحة لنوع الملف ده.')}</p>}
+                    {preview.blob && <ProtectedFile key={preview.id} name={preview.name} blob={preview.blob} mark={mark} tt={t} rtl={ar} onFail={() => setPreview((p) => p && { ...p, blob: null, failed: true })} />}
+                  </div>
                 </div>
               </section>
             )}

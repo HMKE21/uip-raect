@@ -155,6 +155,12 @@ export const drive = {
     expiry, can_download: !!canDownload, require_visitor_info: !!requireInfo, single_person: !!singlePerson, one_time: !!oneTime,
     ...(oneTime && access ? { access } : {}), ...(password ? { password } : {}),
   }).then(unwrap),
+  /** One link for several files / folders: POST /drive/shares/bundle. ids = My PC node ids, title = name the visitor sees (optional). */
+  createBundleShare: (ids, { title, expiry, canDownload, requireInfo, password, singlePerson, oneTime, access }) => api.post(`${B}/shares/bundle`, {
+    node_ids: ids, ...(title ? { title } : {}),
+    expiry, can_download: !!canDownload, require_visitor_info: !!requireInfo, single_person: !!singlePerson, one_time: !!oneTime,
+    ...(oneTime && access ? { access } : {}), ...(password ? { password } : {}),
+  }).then(unwrap),
   /** patch: { expiry?, can_download?, require_visitor_info?, single_person?, one_time?, access? ('10m' | '2h' | '1d'), password?, remove_password? } */
   updateShare: (shareId, patch) => api.patch(`${B}/shares/${shareId}`, patch).then(unwrap),
   revokeShare: (shareId) => api.del(`${B}/shares/${shareId}`),

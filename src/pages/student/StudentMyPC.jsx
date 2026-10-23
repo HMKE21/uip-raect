@@ -948,7 +948,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     if (one && one.type === 'file' && extOf(one.name) === 'zip') out.push({ icon: 'archive', label: tt('Extract here', 'فك الضغط هنا'), run: () => extract(one) });
     if (group.length) {
       out.push({ icon: 'download', label: tt('Download', 'تنزيل'), run: () => group.forEach(download), disabled: group.length > 1 });
-      if (one) out.push({ icon: 'share', label: tt('Share', 'مشاركة'), run: () => setDlg({ type: 'share', node: one }) });
+      out.push({ icon: 'share', label: group.length > 1 ? tt(`Share ${group.length} items in one link`, `مشاركة ${group.length} عناصر في رابط واحد`) : tt('Share', 'مشاركة'), run: () => setDlg({ type: 'share', nodes: group }) });
       if (!inTrash) {
         const allFav = group.every((x) => marks.isFav(x.id));
         out.push({ icon: 'star', label: allFav ? tt('Remove from favorites', 'إزالة من المفضلة') : tt('Add to favorites', 'إضافة للمفضلة'), run: () => marks.setFav(group.map((x) => x.id), !allFav) });
@@ -1074,7 +1074,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
             <button type="button" className="mp-ib" disabled={!selected.length} onClick={() => setClip({ ids: selected.map((n) => n.id), mode: 'cut' })} title={tt('Cut (Ctrl+X)', 'قص (Ctrl+X)')} aria-label={tt('Cut', 'قص')}><Icon name="ed-crop" size={16} /></button>
             <button type="button" className="mp-ib" disabled={!clip} onClick={() => paste()} title={tt('Paste (Ctrl+V)', 'لصق (Ctrl+V)')} aria-label={tt('Paste', 'لصق')}><Icon name="file-plus" size={16} /></button>
             <button type="button" className="mp-ib" disabled={selected.length !== 1} onClick={() => rename(selected[0])} title={tt('Rename (F2)', 'إعادة تسمية (F2)')} aria-label={tt('Rename', 'إعادة تسمية')}><Icon name="edit" size={16} /></button>
-            <button type="button" className="mp-ib" disabled={selected.length !== 1} onClick={() => setDlg({ type: 'share', node: selected[0] })} title={tt('Share', 'مشاركة')} aria-label={tt('Share', 'مشاركة')}><Icon name="share" size={16} /></button>
+            <button type="button" className="mp-ib" disabled={!selected.length} onClick={() => setDlg({ type: 'share', nodes: selected })} title={selected.length > 1 ? tt('Share the selected items in one link', 'مشاركة المحدد في رابط واحد') : tt('Share', 'مشاركة')} aria-label={tt('Share', 'مشاركة')}><Icon name="share" size={16} /></button>
             <button type="button" className="mp-ib" disabled={!selected.length} onClick={() => zipSelected(selected)} title={tt('Compress to ZIP', 'ضغط إلى ZIP')} aria-label={tt('Compress to ZIP', 'ضغط إلى ZIP')}><Icon name="archive" size={16} /></button>
             <button type="button" className="mp-ib mp-danger" disabled={!selected.length} onClick={() => doDelete(selected)} title={tt('Delete (Del)', 'حذف (Del)')} aria-label={tt('Delete', 'حذف')}><Icon name="trash" size={16} /></button>
           </>
@@ -1317,7 +1317,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
           onRestored={() => { reload({ quiet: true }); window.dispatchEvent(new Event('uip-drive-changed')); }} />
       )}
       {dlg?.type === 'storage' && <StorageDialog ar={ar} locale={locale} onClose={() => setDlg(null)} onOpenFolder={openFolder} />}
-      {dlg?.type === 'share' && <ShareDialog node={dlg.node} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} onManage={() => setDlg({ type: 'mylinks' })} />}
+      {dlg?.type === 'share' && <ShareDialog nodes={dlg.nodes || [dlg.node]} ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} onManage={() => setDlg({ type: 'mylinks' })} />}
       {dlg?.type === 'mylinks' && <MySharedLinks ar={ar} locale={locale} onClose={() => setDlg(null)} onToast={flash} />}
       {dlg?.type === 'name' && <NameDialog dlg={dlg} tt={tt} onClose={() => setDlg(null)} />}
       {dlg?.type === 'tags' && <TagsDialog node={dlg.node} marks={marks} tt={tt} onClose={() => setDlg(null)} />}

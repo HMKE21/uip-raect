@@ -95,6 +95,17 @@ function useSiteTheme() {
 
 /** Read-only code view: the platform's CodeMirror (highlighting, folding, line numbers, search) with a theme picker. */
 /** Theme picker as a real menu (the browser's own <select> popup cannot be styled and has the default scrollbar). */
+/** Tiny preview of a theme: its editor background with three "code lines" in its keyword / string / function colours. */
+function ThemeSwatch({ th }) {
+  return (
+    <span className="shp-swatch" aria-hidden="true" style={{ background: th.ed.bg, borderColor: th.ui.line }}>
+      <i style={{ background: th.ed.keyword, width: '46%' }} />
+      <i style={{ background: th.ed.string, width: '72%' }} />
+      <i style={{ background: th.ed.fn, width: '58%' }} />
+    </span>
+  );
+}
+
 function ThemeMenu({ value, onChange, label }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
@@ -127,14 +138,14 @@ function ThemeMenu({ value, onChange, label }) {
   return (
     <>
       <button ref={btn} type="button" className={`shp-theme${open ? ' is-open' : ''}`} aria-haspopup="listbox" aria-expanded={open} aria-label={label} onClick={() => setOpen((o) => !o)}>
-        <span>{cur.name}</span><Icon name="chevron-down" size={13} />
+        <ThemeSwatch th={cur} /><span>{cur.name}</span><Icon name="chevron-down" size={13} />
       </button>
       {open && pos && createPortal(
         <div ref={list} className="shp-theme__menu" role="listbox" aria-label={label} dir="ltr"
           style={{ ...themeVars(value), position: 'fixed', left: pos.left, top: pos.top, bottom: pos.bottom, width: pos.width, maxHeight: pos.maxH }}>
           {THEMES.map((th) => (
-            <button key={th.id} type="button" role="option" aria-selected={th.id === value} className={th.id === value ? 'is-on' : ''} onClick={() => { onChange(th.id); setOpen(false); }}>
-              <span>{th.name}</span>{th.id === value && <Icon name="check" size={14} />}
+            <button key={th.id} type="button" role="option" title={th.hint} aria-selected={th.id === value} className={th.id === value ? 'is-on' : ''} onClick={() => { onChange(th.id); setOpen(false); }}>
+              <ThemeSwatch th={th} /><span className="shp-theme__name">{th.name}</span>{th.id === value && <Icon name="check" size={14} />}
             </button>
           ))}
         </div>, document.body)}

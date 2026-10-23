@@ -447,10 +447,11 @@ export function SharedLinksPanel({ ar, locale, onToast: onToastProp, embedded = 
                 <label className="mp-sl__pick" title={tt('Select', 'تحديد')}>
                   <input type="checkbox" checked={on} onChange={() => toggle(l.id)} disabled={busy} aria-label={tt('Select this link', 'تحديد الرابط ده')} />
                 </label>
-                <span className="mp-share__file-ico"><Icon name={l.node?.type === 'folder' ? 'folder' : 'file'} size={18} /></span>
+                <span className="mp-share__file-ico"><Icon name={l.node?.type === 'folder' || l.node?.type === 'bundle' ? 'folder' : 'file'} size={18} /></span>
                 <div className="mp-sl__title">
                   <strong title={l.node?.name}>{l.node_deleted ? tt('Deleted item', 'عنصر محذوف') : l.node?.name}</strong>
                   <div className="mp-share__top">
+                    {l.is_bundle && !l.node_deleted && <span className="mp-badge mp-badge--soft"><Icon name="folder" size={11} />{l.node?.count ?? ''} {tt('items', 'عناصر')}</span>}
                     {l.node_deleted && <span className="mp-badge is-off">{tt('Item deleted — link is dead', 'العنصر اتحذف — الرابط مات')}</span>}
                     <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
                     {l.has_password && <span className="mp-badge mp-badge--soft"><Icon name="lock" size={11} />{tt('Password', 'باسورد')}</span>}

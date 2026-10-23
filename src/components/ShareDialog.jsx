@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from './Icon';
 import { StModal, timeAgo } from './student/stUi';
 import { errorMessage } from '../api/client';
@@ -139,9 +139,18 @@ export async function copyText(text) {
   } catch { return false; }
 }
 
-/** "Share" dialog for a My PC file / folder: create, copy, edit and turn off public links. */
-export default function ShareDialog({ node, ar, locale, onClose, onToast, onManage }) {
+/**
+ * "Share" dialog for My PC: one file / folder, or several of them in ONE link (`nodes` with 2+ items).
+ * A multi-item link opens for the visitor as a single folder that holds the selected items, in the order they see them in My PC.
+ */
+export default function ShareDialog({ nodes, node: nodeProp, ar, locale, onClose, onToast, onManage }) {
   const tt = useCallback((en, a) => (ar ? a : en), [ar]);
+  const list = useMemo(() => (nodes && nodes.length ? nodes : [nodeProp]).filter(Boolean), [nodes, nodeProp]);
+  const multi = list.length > 1;
+  const node = list[0];
+  const defaultTitle = ar ? `${list.length} عناصر مشتركة` : `${list.length} shared items`;
+  const [groupName, setGroupName] = useState('');
+  const [createdIds, setCreatedIds] = useState([]); // links made from this dialog (a multi-item link has no per-node list to load)
   const [links, setLinks] = useState(null);
   const [expiry, setExpiry] = useState('7d');
   const [customN, setCustomN] = useState('5');
@@ -162,8 +171,14 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast, onMana
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
-    try { setLinks((await drive.shares(node.id))?.items || []); } catch (e) { setError(errorMessage(e)); setLinks([]); }
-  }, [node.id]);
+    try {
+      if (multi) {
+        if (!createdIds.length) { setLinks([]); return; }
+        const all = (await drive.mySharedLinks())?.items || [];
+        setLinks(all.filter((l) => createdIds.includes(l.id)));
+      } else setLinks((await drive.shares(node.id))?.items || []);
+    } catch (e) { setError(errorMessage(e)); setLinks([]); }
+  }, [node.id, multi, createdIds]);
   useEffect(() => { load(); }, [load]);
 
   const act = async (fn, okMsg) => {
@@ -207,12 +222,30 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast, onMana
     >
       <div className="mp-share">
         <div className="mp-share__file">
-          <span className="mp-share__file-ico"><Icon name={isFolder ? 'folder' : 'file'} size={20} /></span>
+          <span className="mp-share__file-ico"><Icon name={isFolder || multi ? 'folder' : 'file'} size={20} /></span>
           <div>
-            <strong title={node.name}>{node.name}</strong>
+            <strong title={multi ? list.map((x) => x.name).join('\n') : node.name}>{multi ? tt(`${list.length} items in one link`, `${list.length} عناصر في رابط واحد`) : node.name}</strong>
             <small>{tt('Anyone with the link can open it — no sign-in. Turn it off any time.', 'أي شخص معه الرابط يقدر يفتحه — من غير تسجيل دخول. وتقدر توقفه في أي وقت.')}</small>
           </div>
         </div>
+        {multi && (
+          <div className="mp-share__bundle">
+            <ul className="mp-share__bundle-list" aria-label={tt('Items in this link', 'العناصر داخل الرابط')}>
+              {list.slice(0, 6).map((x) => (
+                <li key={x.id} title={x.name}><Icon name={x.type === 'folder' ? 'folder' : 'file'} size={14} /><span>{x.name}</span></li>
+              ))}
+              {list.length > 6 && <li className="is-more">{tt(`+${list.length - 6} more`, `+${list.length - 6} عنصر كمان`)}</li>}
+            </ul>
+            <label className="mp-share__group mp-share__group--full">
+              <span className="mp-share__lbl">{tt('Name shown to the visitor (optional)', 'الاسم اللي هيظهر للمستلم (اختياري)')}</span>
+              <input
+                type="text" value={groupName} maxLength={120} disabled={busy} placeholder={defaultTitle}
+                onChange={(e) => setGroupName(e.target.value)} aria-label={tt('Link name', 'اسم الرابط')}
+              />
+            </label>
+            <small className="mp-share__hint">{tt('The visitor sees one organized folder with these items — folders open with everything inside.', 'المستلم هيشوف مجلد واحد منظم فيه العناصر دي — والمجلدات بتتفتح بكل اللي جواها.')}</small>
+          </div>
+        )}
 
         <section className="mp-share__new">
           <div className="mp-share__group">
@@ -270,7 +303,11 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast, onMana
             type="button" className="btn btn-primary mp-share__create" disabled={busy || !newExpiry || pwBad || (usePw && !pw) || (mode === 'once' && !access)}
             title={newExpiry ? undefined : tt('Enter a whole number: 1 minute to 365 days', 'اكتب رقم صحيح: من دقيقة لـ 365 يوم')}
             onClick={() => act(async () => {
-              const l = await drive.createShare(node.id, { expiry: newExpiry, canDownload, requireInfo, password: usePw ? pw : '', singlePerson: mode === 'single', oneTime: mode === 'once', access: mode === 'once' ? access : undefined });
+              const opts = { expiry: newExpiry, canDownload, requireInfo, password: usePw ? pw : '', singlePerson: mode === 'single', oneTime: mode === 'once', access: mode === 'once' ? access : undefined };
+              const l = multi
+                ? await drive.createBundleShare(list.map((x) => x.id), { ...opts, title: groupName.trim() || defaultTitle })
+                : await drive.createShare(node.id, opts);
+              if (l?.id && multi) setCreatedIds((ids) => [...ids, l.id]);
               if (l?.token) await copyText(shareUrl(l.token));
               setPw(''); setUsePw(false); setShowPw(false);
             }, usePw ? tt('Link created and copied — remember the password, it can’t be shown again.', 'تم إنشاء الرابط ونسخه — افتكر الباسورد، مش هيتعرض تاني.') : tt('Link created and copied.', 'تم إنشاء الرابط ونسخه.'))}
@@ -286,12 +323,13 @@ export default function ShareDialog({ node, ar, locale, onClose, onToast, onMana
 
         <div className="mp-share__list">
           {links === null && <div className="mp-share__empty">{tt('Loading…', 'جارِ التحميل…')}</div>}
-          {links && links.length === 0 && <div className="mp-share__empty"><Icon name="link" size={20} /><span>{tt('No links yet — create one above.', 'مفيش روابط لسه — اعمل واحد من فوق.')}</span></div>}
+          {links && links.length === 0 && <div className="mp-share__empty"><Icon name="link" size={20} /><span>{multi ? tt('Create the link above — it will show up here.', 'اعمل الرابط من فوق — وهيظهر هنا.') : tt('No links yet — create one above.', 'مفيش روابط لسه — اعمل واحد من فوق.')}</span></div>}
           {links && links.map((l) => (
             <article key={l.id} className={`mp-share__row${l.expired ? ' is-expired' : ''}`}>
               <div className="mp-share__top">
                 <span className={`mp-badge ${l.paused ? 'is-warn' : l.expired ? 'is-off' : 'is-on'}`}>{l.paused ? tt('Paused', 'موقوف مؤقتًا') : l.expired ? tt('Expired', 'منتهي') : tt('Active', 'شغّال')}</span>
                 <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
+                {l.is_bundle && <span className="mp-badge mp-badge--soft"><Icon name="folder" size={11} />{l.node?.count ?? ''} {tt('items', 'عناصر')}</span>}
                 {l.has_password && <span className="mp-badge mp-badge--soft"><Icon name="lock" size={11} />{tt('Password', 'باسورد')}</span>}
                 {l.require_visitor_info && <span className="mp-badge mp-badge--soft"><Icon name="users" size={11} />{tt('Visitor details', 'بيانات الزائر')}</span>}
                 {l.one_time && <span className="mp-badge mp-badge--soft"><Icon name="clock" size={11} />{tt('One time', 'مرة واحدة')} · {accessText(l.access_minutes, ar)}</span>}
