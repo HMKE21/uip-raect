@@ -93,6 +93,40 @@ import { createMeetingEcho, presenceChannelName, personalChannelName, signalingA
  * RecordingsPanel doesn't offer them a stop button (see its own
  * docblock).
  */
+const dbg = (...a) => { try { console.info('[meeting]', ...a); } catch { /* no console */ } };
+
+/** Keep video offers small: Chrome lists AV1/VP9/H264/VP8 + rtx/red/ulpfec variants, which can push an SDP past a signaling server's message limit. VP8/H264 are enough. */
+function preferLightCodecs(pc) {
+  try {
+    const caps = RTCRtpReceiver.getCapabilities && RTCRtpReceiver.getCapabilities('video');
+    if (!caps) return;
+    const keep = ['video/vp8', 'video/h264', 'video/rtx', 'video/red', 'video/ulpfec'];
+    const light = caps.codecs.filter((c) => keep.includes(c.mimeType.toLowerCase()));
+    if (!light.some((c) => c.mimeType.toLowerCase() === 'video/vp8')) return;
+    light.sort((a, b) => (b.mimeType.toLowerCase() === 'video/vp8') - (a.mimeType.toLowerCase() === 'video/vp8'));
+    pc.getTransceivers().forEach((t) => {
+      if (t.receiver && t.receiver.track && t.receiver.track.kind === 'video' && t.setCodecPreferences) t.setCodecPreferences(light);
+    });
+  } catch (e) { dbg('codec preferences skipped', e?.message); }
+}
+
+/** Single place that sends a signaling message, so size and delivery can be seen in the console. */
+function sendSignal(channel, to, from, kind, data) {
+  const payload = { to, from, kind, data };
+  try {
+    const size = JSON.stringify(payload).length;
+    dbg('send', kind, 'to', to, `${size}B`);
+    if (size > 9000) dbg('WARNING: signaling message is large; raise REVERB_APP_MAX_MESSAGE_SIZE on the Reverb service');
+  } catch { /* ignore */ }
+  channel?.whisper('signal', payload);
+}
+
+/** Echo gives presence callbacks the `user_info` object itself ({id, name, role, is_guest}) — not {id, info}. Accept both shapes. */
+function normMember(m) {
+  const info = (m && typeof m.info === 'object' && m.info) || m || {};
+  return { id: m?.id ?? info.id ?? null, name: info.name || '', role: info.role || 'participant', isGuest: !!info.is_guest };
+}
+
 export function useMeetingRoom({
   meetingUuid, guestToken = null, myKey, myDisplayName, deviceDefaults,
   isHost = false, screenSharingLockedInitial = false, chatEnabledInitial = true, meetingLockedInitial = false,
@@ -421,11 +455,13 @@ export function useMeetingRoom({
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
-        channelRef.current?.whisper('signal', { to: key, from: myKey, kind: 'ice', data: e.candidate.toJSON() });
+        sendSignal(channelRef.current, key, myKey, 'ice', e.candidate.toJSON());
       }
     };
 
+    pc.oniceconnectionstatechange = () => dbg('ice', key, pc.iceConnectionState);
     pc.ontrack = (e) => {
+      dbg('track', key, e.track.kind);
       // One MediaStream per peer, whatever the browser hands us (some give an empty `streams`): keep adding tracks to it.
       let stream = e.streams && e.streams[0];
       if (!stream) {
@@ -439,6 +475,7 @@ export function useMeetingRoom({
     };
 
     pc.onconnectionstatechange = () => {
+      dbg('pc', key, pc.connectionState);
       const mapped = { connected: 'connected', connecting: 'connecting', new: 'connecting', disconnected: 'reconnecting', failed: 'disconnected', closed: 'disconnected' }[pc.connectionState] || 'connecting';
       patchParticipant(key, { connectionState: mapped });
       if (pc.connectionState === 'failed') {
@@ -457,14 +494,16 @@ export function useMeetingRoom({
     offeredRef.current[key] = true;
     closePeer(key);
     const pc = createPeer(key);
+    preferLightCodecs(pc);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    channelRef.current?.whisper('signal', { to: key, from: myKey, kind: 'offer', data: offer });
+    sendSignal(channelRef.current, key, myKey, 'offer', { type: offer.type, sdp: offer.sdp });
   }, [createPeer, closePeer, myKey]);
   offerToRef.current = offerTo;
 
   const handleSignal = useCallback(async ({ to, from, kind, data }) => {
     if (to !== myKey || from === myKey) return;
+    dbg('recv', kind, 'from', from);
 
     if (kind === 'offer') {
       // a new offer == that person (re)joined or restarted: never reuse an old, possibly dead, connection
@@ -477,9 +516,10 @@ export function useMeetingRoom({
       const queued = pendingCandidatesRef.current[from] || [];
       pendingCandidatesRef.current[from] = [];
       for (const cand of queued) await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+      preferLightCodecs(pc);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      channelRef.current?.whisper('signal', { to: from, from: myKey, kind: 'answer', data: answer });
+      sendSignal(channelRef.current, from, myKey, 'answer', { type: answer.type, sdp: answer.sdp });
     } else if (kind === 'answer') {
       const pc = peersRef.current[from];
       if (!pc) return;
@@ -518,9 +558,11 @@ export function useMeetingRoom({
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         stream.getVideoTracks().forEach((t) => { t.enabled = cameraEnabled; });
         stream.getAudioTracks().forEach((t) => { t.enabled = micEnabled; });
+        dbg('local media', stream.getTracks().map((t) => t.kind).join('+') || 'none');
         localStreamRef.current = stream;
         setLocalStream(stream);
-      } catch {
+      } catch (gumErr) {
+        dbg('getUserMedia failed', gumErr?.name, gumErr?.message);
         signalingApi.reportFailure(meetingUuid, guestToken, 'camera', 'getUserMedia failed in the meeting room.').catch(() => {});
         // Still proceed audio/video-less — a participant with devices
         // denied should still be able to see + hear everyone else.
@@ -601,41 +643,48 @@ export function useMeetingRoom({
         .here((members) => {
           setStatus('connected');
           // The roster is a DB snapshot (can include people who closed their tab without leaving); the presence list is the truth.
-          const presentIds = new Set(members.map((m) => m.id));
-          setParticipants((prev) => {
-            const next = {};
-            Object.keys(prev).forEach((k) => { if (presentIds.has(k)) next[k] = prev[k]; });
-            return next;
-          });
-          members.forEach((m) => {
+          const present = members.map(normMember).filter((m) => m.id);
+          dbg('presence here', present.map((m) => m.id).join(', ') || '(none with id)', 'me =', myKey);
+          const presentIds = new Set(present.map((m) => m.id));
+          if (presentIds.size > 0) {
+            setParticipants((prev) => {
+              const next = {};
+              Object.keys(prev).forEach((k) => { if (presentIds.has(k)) next[k] = prev[k]; });
+              return next;
+            });
+          }
+          present.forEach((m) => {
             if (m.id === myKey) return;
             setParticipants((prev) => ({
               ...prev,
               [m.id]: prev[m.id] || {
-                displayName: m.info?.name || m.id, role: m.info?.role || 'participant', isHost: m.info?.role === 'host',
-                isGuest: !!m.info?.is_guest, micEnabled: true, cameraEnabled: true, screenSharing: false, handRaised: false,
+                displayName: m.name || m.id, role: m.role, isHost: m.role === 'host',
+                isGuest: m.isGuest, micEnabled: true, cameraEnabled: true, screenSharing: false, handRaised: false,
                 screenShareAllowed: null, connectionState: 'connecting', connectionQuality: 'good', remoteStream: null,
               },
             }));
             offerTo(m.id);
           });
         })
-        .joining((m) => {
-          if (m.id === myKey) return;
+        .joining((raw) => {
+          const m = normMember(raw);
+          if (!m.id || m.id === myKey) return;
           closePeer(m.id); // same person rejoining (refresh / second tab): drop the old connection, their new offer is coming
           setParticipants((prev) => ({
             ...prev,
             [m.id]: prev[m.id]
               ? { ...prev[m.id], remoteStream: null, connectionState: 'connecting' }
               : {
-                displayName: m.info?.name || m.id, role: m.info?.role || 'participant', isHost: m.info?.role === 'host',
-                isGuest: !!m.info?.is_guest, micEnabled: true, cameraEnabled: true, screenSharing: false, handRaised: false,
+                displayName: m.name || m.id, role: m.role, isHost: m.role === 'host',
+                isGuest: m.isGuest, micEnabled: true, cameraEnabled: true, screenSharing: false, handRaised: false,
                 screenShareAllowed: null, connectionState: 'connecting', connectionQuality: 'good', remoteStream: null,
               },
           }));
           // They initiate — we just wait for their offer (see docblock).
         })
-        .leaving((m) => {
+        .leaving((raw) => {
+          const m = normMember(raw);
+          if (!m.id) return;
           closePeer(m.id);
           setParticipants((prev) => {
             const next = { ...prev };

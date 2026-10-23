@@ -104,6 +104,20 @@ body.meeting-room-active .app-shell { overflow: hidden; }
   justify-content: center;
   font-weight: 800;
 }
+.meeting-tile__status {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fbbf24;
+  font-size: var(--text-caption);
+  font-weight: 600;
+  white-space: nowrap;
+}
 .meeting-tile__enable-audio {
   position: absolute;
   top: 50%;

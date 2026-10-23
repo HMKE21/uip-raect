@@ -323,6 +323,8 @@ export default {
   'Files Shared': 'ملفات مشارَكة',
   'Failed Connections': 'محاولات اتصال فاشلة',
   'Tap to enable sound': 'اضغط لتشغيل الصوت',
+  'Reconnecting…': 'جاري إعادة الاتصال…',
+  'Connection failed': 'فشل الاتصال',
   'Pinned': 'مثبّت',
   'Pin': 'تثبيت',
   'Unpin': 'إلغاء التثبيت',

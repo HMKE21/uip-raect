@@ -126,6 +126,12 @@ export default function ParticipantTile({
         )}
       </div>
 
+      {!isLocal && connectionState && connectionState !== 'connected' && (
+        <span className="meeting-tile__status">
+          {connectionState === 'connecting' ? t('Connecting…') : connectionState === 'reconnecting' ? t('Reconnecting…') : t('Connection failed')}
+        </span>
+      )}
+
       <span
         title={connectionQuality}
         style={{
