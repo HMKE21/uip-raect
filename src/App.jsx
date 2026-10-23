@@ -7,6 +7,7 @@ import { STAFF_LOGIN_PATH } from './config/staffPortal';
 import StaffGate from './components/staff/StaffGate';
 import { ThemeProvider } from './context/ThemeContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { CallProvider } from './context/CallContext';
 import SaveCenterHost from './components/savecenter/SaveCenterHost';
 import ProtectedRoute from './components/ProtectedRoute';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -280,6 +281,8 @@ export default function App() {
           <SaveCenterHost />
           {/* MFA requirements policy: a role that must have 2FA (grace period over) sees the setup page instead of the app. */}
           <MfaGate>
+          {/* Voice calls: rings on every page, owns the single active call. */}
+          <CallProvider>
           <ErrorBoundary>
           <Suspense fallback={<PageLoading />}>
           <Routes>
@@ -739,6 +742,7 @@ export default function App() {
           </Routes>
           </Suspense>
           </ErrorBoundary>
+          </CallProvider>
           </MfaGate>
         </AuthProvider>
         </DeviceGate>

@@ -3,6 +3,7 @@ import MsgIcon from './msgIcons';
 import { useEffect, useRef, useState } from 'react';
 import { initials, fmtTime, peerLabel, avatarUrl, previewLabel } from './format';
 import { systemLine } from './groupText';
+import { callLine } from '../../lib/calls/callText';
 import { useLanguage } from '../../context/LanguageContext';
 import StoriesStrip from './stories/StoriesStrip';
 
@@ -365,7 +366,7 @@ export default function ConversationRail({
                       <span className="msg-conv__time">{fmtTime(c.time)}</span>
                     </span>
                     <span className="msg-conv__row2">
-                      <span className={`msg-conv__preview${!c.preview && c.preview_kind ? ' is-media' : ''}`}>{(c.preview_type === 'system' && c.preview_meta ? systemLine(c.preview_meta, myUserId) : previewLabel(c, locale)) || t('No messages yet', 'لا توجد رسائل بعد')}</span>
+                      <span className={`msg-conv__preview${!c.preview && c.preview_kind ? ' is-media' : ''}`}>{(c.preview_type === 'system' && c.preview_meta ? systemLine(c.preview_meta, myUserId) : c.preview_type === 'call' && c.preview_meta ? callLine(c.preview_meta, myUserId, locale === 'ar').text : previewLabel(c, locale)) || t('No messages yet', 'لا توجد رسائل بعد')}</span>
                       <span className="msg-conv__badges">{badges}</span>
                     </span>
                   </span>

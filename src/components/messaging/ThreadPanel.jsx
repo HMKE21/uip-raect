@@ -18,6 +18,8 @@ import { saveAttachmentsToPhone, isAutoSaveOn } from '../../lib/autoSaveMedia';
 import { useCachedVideo } from '../../lib/mediaCache';
 import { isNative, canCacheNatively } from '../../native';
 import { systemLine, fileKind, typeLabel } from './groupText';
+import CallBubble from '../calls/CallBubble';
+import { useCall } from '../../context/callCtx';
 import EmojiPicker from './EmojiPicker';
 import AttachMenu from './AttachMenu';
 import CameraCaptureModal from './CameraCaptureModal';
@@ -195,7 +197,7 @@ function FloatingPanel({ anchorRef, onClose, className, children }) {
   );
 }
 
-function MessageBubble({ m, myUserId, showAvatar, others, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit }) {
+function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit }) {
   const t = useT();
   const [showReactPicker, setShowReactPicker] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -295,7 +297,9 @@ function MessageBubble({ m, myUserId, showAvatar, others, onOpenVideo, onRetryUp
     && m.attachments.every((a) => a.kind === 'image' || (a.kind === 'video' && !isVoiceAttachment(a)));
   let isMedia = false;
   let body = null;
-  if (m.message_type === 'poll' && m.metadata) {
+  if (m.message_type === 'call' && m.metadata) {
+    body = <CallBubble m={m} myUserId={myUserId} onCallBack={onCallBack} canCall={!!onCallBack} />;
+  } else if (m.message_type === 'poll' && m.metadata) {
     body = <PollBubble m={m} onVote={onVote} />;
   } else if (m.message_type === 'location' && m.metadata) {
     isMedia = true;
@@ -868,6 +872,7 @@ export default function ThreadPanel({
   myUserId,
 }) {
   const [text, setText] = useState('');
+  const call = useCall(); // before the `if (!conversation)` early return below (hook order)
   const [showEmoji, setShowEmoji] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -1013,6 +1018,14 @@ export default function ThreadPanel({
   // Direct chat where one side blocked the other: 'blocked_by_me' (can unblock here) / 'blocked_by_peer' (generic notice).
   const dmBlock = conversation && !conversation.is_group && (conversation.send_block === 'blocked_by_me' || conversation.send_block === 'blocked_by_peer') ? conversation.send_block : null;
   const canSend = peerDeleted || dmBlock ? false : (!grp || grp.can_send !== false);
+  // Voice calls: direct chats only, and not with a deleted account or when either side blocked the other.
+  const canCall = !!conversation && !conversation.is_group && !peerDeleted && !dmBlock && call.available;
+  const callBusy = call.phase !== 'idle';
+  const startCall = () => {
+    if (!canCall || callBusy) return;
+    call.startCall(conversation.id, { id: conversation.peer_id || others[0]?.id || null, name: peerLabel(conversation), avatar: peerDeleted ? null : others[0]?.avatar_path });
+  };
+  const callBack = canCall && !callBusy ? startCall : undefined;
   const allowedTypes = grp && Array.isArray(grp.allowed_types) ? grp.allowed_types : null;
   const typeOk = (k) => !allowedTypes || allowedTypes.includes(k);
   const canAttach = typeOk('image') || typeOk('video') || typeOk('file');
@@ -1225,6 +1238,13 @@ export default function ThreadPanel({
             {onToggleFull && <button type="button" className="msg-icon-btn msg-full-btn" title={fullView ? t('Exit full screen', 'الخروج من ملء الشاشة') : t('Full screen', 'ملء الشاشة')} aria-label={fullView ? t('Exit full screen', 'الخروج من ملء الشاشة') : t('Full screen', 'ملء الشاشة')} aria-pressed={!!fullView} onClick={onToggleFull}>
             <Icon name={fullView ? 'collapse' : 'maximize'} size={18} />
           </button>}
+            {canCall && (
+              <button type="button" className="msg-icon-btn msg-call-btn" onClick={startCall} disabled={callBusy}
+                title={callBusy ? t('You are already in a call', 'أنت في مكالمة بالفعل') : t('Voice call', 'مكالمة صوتية')}
+                aria-label={t('Voice call', 'مكالمة صوتية')}>
+                <Icon name="phone" size={18} />
+              </button>
+            )}
             <button type="button" className="msg-icon-btn" title={t('Pinned messages', 'الرسائل المثبّتة')} aria-label={t('Pinned messages', 'الرسائل المثبّتة')} onClick={onShowPinned}>
               <Icon name="pin" size={18} />
             </button>
@@ -1289,6 +1309,7 @@ export default function ThreadPanel({
                     onUndoSend={onUndoSend}
                     others={others}
                     onReply={onSetReply}
+                    onCallBack={callBack}
                     onDelete={onDeleteMessage}
                     onReact={onReact}
                     onPin={onPin}

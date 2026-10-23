@@ -243,7 +243,7 @@ async function fetchWithRetry(method, path, url, opts) {
   throw lastErr;
 }
 
-async function rawRequest(method, path, { params, body, formData, headers, asResponse } = {}) {
+async function rawRequest(method, path, { params, body, formData, headers, asResponse, silent } = {}) {
   // While an export runs, the language picked in the export menu wins over the UI language.
   const exportLang = getExportLang();
   const url = buildUrl(path, exportLang ? { ...params, lang: exportLang } : params);
@@ -301,7 +301,7 @@ async function rawRequest(method, path, { params, body, formData, headers, asRes
     }
     throw new ApiError(json.message || msg('Request failed.', 'فشل الطلب.'), response.status, json);
   }
-  if (method !== 'GET' && method !== 'HEAD' && typeof window !== 'undefined') {
+  if (!silent && method !== 'GET' && method !== 'HEAD' && typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(MUTATION_EVENT, { detail: { method, path } }));
   }
   return json;
@@ -619,6 +619,8 @@ export const api = {
   /** GET a file. Same Bearer + refresh-on-401 path as every other call; returns the Response. */
   blob: (path, params, headers) => request('GET', path, { params, asResponse: true, headers: { Accept: '*/*', ...(headers || {}) } }),
   post: (path, body, headers) => request('POST', path, { body, ...(headers ? { headers } : {}) }),
+  /** POST that does NOT fire MUTATION_EVENT (high-frequency background traffic such as call signaling: no page should refetch for it). */
+  postQuiet: (path, body) => request('POST', path, { body, silent: true }),
   put: (path, body) => request('PUT', path, { body }),
   patch: (path, body) => request('PATCH', path, { body }),
   postForm: (path, formData) => request('POST', path, { formData }),

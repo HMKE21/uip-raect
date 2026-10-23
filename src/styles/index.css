@@ -24,6 +24,7 @@
 @import './css/components/tables.css';
 @import './css/components/charts.css';
 @import './css/components/skeleton.css';
+@import './css/calls.css';
 @import './css/components/empty-state.css';
 @import './css/components/error-state.css';
 @import './css/components/notifications.css';
