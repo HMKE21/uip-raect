@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, errorMessage } from '../../api/client';
-import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
+import { AcPage, AcHead, AcAlerts, AcPanel, AcTable, AcField } from './acKit';
 
 /**
  * إدارة التسجيل الأكاديمي (الجامعة / الكلية): فترات التسجيل + سياسة القواعد (فترة / متطلبات / ساعات / تعارض)
@@ -66,92 +66,93 @@ export default function RegistrationManager() {
   };
   const savePre = () => run(() => api.put(`/api/v1/registration/courses/${courseId}/prerequisites`, { prerequisite_ids: pre.map(Number), locale }));
 
-  if (!data && !error) return <div className="ex-page"><Skeleton h={100} count={3} /></div>;
+  if (!data && !error) return <AcPage><Skeleton h={100} count={3} /></AcPage>;
 
   return (
-    <div className="ex-page">
-      <div>
-        <h1 style={{ margin: 0, fontSize: 24 }}>{ar ? 'التسجيل الأكاديمي' : 'Academic Registration'}</h1>
-        <p className="is-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
-          {ar ? 'حدّد فترات التسجيل وقواعده. موافقتك على طلب طالب بتعدّي القواعد دي.' : 'Set registration periods and rules. Approving a student request overrides these rules.'}
-        </p>
-      </div>
-      {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
-      {notice && <div className="st-alert st-alert--success"><Icon name="check-circle" size={16} /><span>{notice}</span></div>}
+    <AcPage>
+      <AcHead
+        title={ar ? 'التسجيل الأكاديمي' : 'Academic Registration'}
+        text={ar ? 'حدّد فترات التسجيل وقواعده. موافقتك على طلب طالب بتعدّي القواعد دي.' : 'Set registration periods and rules. Approving a student request overrides these rules.'}
+      />
+      <AcAlerts error={error} notice={notice} />
 
       {data && (
         <>
-          <div className="ex-card">
-            <b>{ar ? 'فترات التسجيل' : 'Registration periods'}</b>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 8, margin: '10px 0' }}>
-              <input className="input" placeholder={ar ? 'اسم الفترة' : 'Name'} value={period.name} onChange={(e) => setPeriod({ ...period, name: e.target.value })} />
-              <select className="input" value={period.kind} onChange={(e) => setPeriod({ ...period, kind: e.target.value })}>
-                {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{ar ? v[0] : v[1]}</option>)}
-              </select>
-              <input className="input" type="datetime-local" value={period.opens_at} onChange={(e) => setPeriod({ ...period, opens_at: e.target.value })} />
-              <input className="input" type="datetime-local" value={period.closes_at} onChange={(e) => setPeriod({ ...period, closes_at: e.target.value })} />
-              <button type="button" className="btn btn-primary" disabled={busy || !period.name || !period.opens_at || !period.closes_at} onClick={savePeriod}>
-                {editId ? (ar ? 'حفظ التعديل' : 'Save') : (ar ? 'إضافة فترة' : 'Add period')}
-              </button>
-            </div>
-            {data.periods.length === 0 ? <EmptyState icon="calendar" title={ar ? 'لا توجد فترات' : 'No periods yet'} /> : (
-              <div className="ex-table-wrap"><table className="ex-table">
+          <AcPanel title={ar ? 'فترات التسجيل' : 'Registration periods'} sub={editId ? (ar ? 'بتعدّل فترة موجودة' : 'Editing an existing period') : undefined} flush>
+            <form className="acx-form" style={{ borderTop: 0 }} onSubmit={(e) => { e.preventDefault(); savePeriod(); }}>
+              <div className="acx-form__grid">
+                <AcField label={ar ? 'اسم الفترة' : 'Name'}><input className="acx-input" value={period.name} onChange={(e) => setPeriod({ ...period, name: e.target.value })} /></AcField>
+                <AcField label={ar ? 'النوع' : 'Type'}>
+                  <select className="acx-input" value={period.kind} onChange={(e) => setPeriod({ ...period, kind: e.target.value })}>
+                    {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{ar ? v[0] : v[1]}</option>)}
+                  </select>
+                </AcField>
+                <AcField label={ar ? 'تبدأ' : 'Opens'}><input className="acx-input" type="datetime-local" value={period.opens_at} onChange={(e) => setPeriod({ ...period, opens_at: e.target.value })} /></AcField>
+                <AcField label={ar ? 'تنتهي' : 'Closes'}><input className="acx-input" type="datetime-local" value={period.closes_at} onChange={(e) => setPeriod({ ...period, closes_at: e.target.value })} /></AcField>
+              </div>
+              <div className="acx-form__actions">
+                <button type="submit" className="btn btn-primary btn-sm" disabled={busy || !period.name || !period.opens_at || !period.closes_at}>
+                  {editId ? (ar ? 'حفظ التعديل' : 'Save') : (ar ? 'إضافة فترة' : 'Add period')}
+                </button>
+                {editId && <button type="button" className="btn btn-outline btn-sm" onClick={() => { setEditId(null); setPeriod({ name: '', kind: 'both', opens_at: '', closes_at: '' }); }}>{ar ? 'إلغاء' : 'Cancel'}</button>}
+              </div>
+            </form>
+            {data.periods.length === 0 ? <div className="acx-empty"><EmptyState icon="calendar" title={ar ? 'لا توجد فترات' : 'No periods yet'} /></div> : (
+              <AcTable>
                 <thead><tr><th>{ar ? 'الاسم' : 'Name'}</th><th>{ar ? 'النوع' : 'Type'}</th><th>{ar ? 'من' : 'From'}</th><th>{ar ? 'إلى' : 'To'}</th><th /></tr></thead>
                 <tbody>{data.periods.map((p) => (
                   <tr key={p.id}>
-                    <td>{p.name}</td><td>{ar ? KINDS[p.kind][0] : KINDS[p.kind][1]}</td>
-                    <td>{String(p.opens_at).slice(0, 16)}</td><td>{String(p.closes_at).slice(0, 16)}</td>
-                    <td style={{ textAlign: 'end' }}>
-                      <button type="button" className="btn btn-outline btn-sm" onClick={() => { setEditId(p.id); setPeriod({ name: p.name, kind: p.kind, opens_at: toInput(p.opens_at), closes_at: toInput(p.closes_at) }); }}>{ar ? 'تعديل' : 'Edit'}</button>{' '}
-                      <button type="button" className="btn btn-outline btn-sm" onClick={() => delPeriod(p.id)}>{ar ? 'حذف' : 'Delete'}</button>
+                    <td><b>{p.name}</b></td>
+                    <td><span className="st-pill">{ar ? KINDS[p.kind][0] : KINDS[p.kind][1]}</span></td>
+                    <td className="is-num">{String(p.opens_at).slice(0, 16)}</td><td className="is-num">{String(p.closes_at).slice(0, 16)}</td>
+                    <td className="is-end">
+                      <div className="acx-actions" style={{ justifyContent: 'flex-end' }}>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => { setEditId(p.id); setPeriod({ name: p.name, kind: p.kind, opens_at: toInput(p.opens_at), closes_at: toInput(p.closes_at) }); }}>{ar ? 'تعديل' : 'Edit'}</button>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => delPeriod(p.id)}>{ar ? 'حذف' : 'Delete'}</button>
+                      </div>
                     </td>
                   </tr>))}</tbody>
-              </table></div>
+              </AcTable>
             )}
-          </div>
+          </AcPanel>
 
-          <div className="ex-card">
-            <b>{ar ? 'قواعد التسجيل' : 'Registration rules'}</b>
-            <p className="is-muted" style={{ fontSize: 12, margin: '4px 0 10px' }}>{ar ? '"موروث" = بياخد قيمة المستوى الأعلى أو الافتراضي.' : '"Inherit" uses the higher level or the default.'}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+          <AcPanel title={ar ? 'قواعد التسجيل' : 'Registration rules'} sub={ar ? '"موروث" = بياخد قيمة المستوى الأعلى أو الافتراضي.' : '"Inherit" uses the higher level or the default.'}
+            foot={<button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={savePolicy}>{ar ? 'حفظ القواعد' : 'Save rules'}</button>}>
+            <div className="acx-form__grid">
               {FLAGS.map(([k, a, e]) => (
-                <label key={k} style={{ display: 'grid', gap: 4, fontSize: 13 }}>{ar ? a : e}
-                  <select className="input" value={policy[k] === null || policy[k] === undefined ? '' : policy[k] ? '1' : '0'}
+                <AcField key={k} label={ar ? a : e}>
+                  <select className="acx-input" value={policy[k] === null || policy[k] === undefined ? '' : policy[k] ? '1' : '0'}
                     onChange={(ev) => setPolicy({ ...policy, [k]: ev.target.value === '' ? null : ev.target.value === '1' })}>
                     <option value="">{ar ? `موروث (${data.effective_policy[k] ? 'مفعّل' : 'متوقف'})` : `Inherit (${data.effective_policy[k] ? 'on' : 'off'})`}</option>
                     <option value="1">{ar ? 'مفعّل' : 'On'}</option><option value="0">{ar ? 'متوقف' : 'Off'}</option>
                   </select>
-                </label>
+                </AcField>
               ))}
               {NUMS.map(([k, a, e]) => (
-                <label key={k} style={{ display: 'grid', gap: 4, fontSize: 13 }}>{ar ? a : e}
-                  <input className="input" type="number" step={k.includes('threshold') ? '0.1' : '1'} value={policy[k] ?? ''}
+                <AcField key={k} label={ar ? a : e}>
+                  <input className="acx-input" type="number" step={k.includes('threshold') ? '0.1' : '1'} value={policy[k] ?? ''}
                     placeholder={String(data.effective_policy[k])} onChange={(ev) => setPolicy({ ...policy, [k]: ev.target.value === '' ? null : ev.target.value })} />
-                </label>
+                </AcField>
               ))}
             </div>
-            <div style={{ marginTop: 12 }}><button type="button" className="btn btn-primary" disabled={busy} onClick={savePolicy}>{ar ? 'حفظ القواعد' : 'Save rules'}</button></div>
-          </div>
+          </AcPanel>
 
-          <div className="ex-card">
-            <b>{ar ? 'المتطلبات السابقة للمواد' : 'Course prerequisites'}</b>
-            <div style={{ display: 'grid', gap: 8, margin: '10px 0' }}>
-              <select className="input" value={courseId} onChange={(e) => pickCourse(e.target.value)}>
+          <AcPanel title={ar ? 'المتطلبات السابقة للمواد' : 'Course prerequisites'} sub={ar ? 'اختار المادة وبعدها المواد اللي لازم تتنجح قبلها (Ctrl/⌘ لاختيار أكتر من مادة).' : 'Pick a course, then the courses that must be passed first (Ctrl/⌘ to select several).'}
+            foot={courseId ? <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={savePre}>{ar ? 'حفظ المتطلبات' : 'Save prerequisites'}</button> : undefined}>
+            <div className="acx-stack">
+              <select className="acx-input" value={courseId} onChange={(e) => pickCourse(e.target.value)}>
                 <option value="">{ar ? 'اختار المادة…' : 'Choose a course…'}</option>
                 {courses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
               </select>
               {courseId && (
-                <>
-                  <select className="input" multiple size={Math.min(8, Math.max(3, courses.length))} value={pre} onChange={(e) => setPre(Array.from(e.target.selectedOptions).map((o) => o.value))}>
-                    {courses.filter((c) => String(c.id) !== String(courseId)).map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
-                  </select>
-                  <div><button type="button" className="btn btn-primary" disabled={busy} onClick={savePre}>{ar ? 'حفظ المتطلبات' : 'Save prerequisites'}</button></div>
-                </>
+                <select className="acx-input" multiple size={Math.min(8, Math.max(3, courses.length))} value={pre} onChange={(e) => setPre(Array.from(e.target.selectedOptions).map((o) => o.value))}>
+                  {courses.filter((c) => String(c.id) !== String(courseId)).map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
+                </select>
               )}
             </div>
-          </div>
+          </AcPanel>
         </>
       )}
-    </div>
+    </AcPage>
   );
 }

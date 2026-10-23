@@ -3,6 +3,7 @@ import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
+import { AcPage, AcHead, AcAlerts, AcPanel, AcField } from './acKit';
 
 /**
  * التقويم الأكاديمي (كل الأدوار): أحداث الجامعة وكليتك + فترات التسجيل والفصول الصيفية (تلقائي).
@@ -70,71 +71,75 @@ export default function AcademicCalendar() {
   const remove = (e) => { if (window.confirm(ar ? `حذف "${e.title}"؟` : `Delete "${e.title}"?`)) run(() => api.delete(`/api/v1/academic-calendar/${e.id}`, { locale })); };
 
   return (
-    <div className="ex-page">
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24 }}>{ar ? 'التقويم الأكاديمي' : 'Academic calendar'}</h1>
-          <p className="is-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
-            {ar ? 'مواعيد الدراسة والامتحانات والإجازات والمواعيد النهائية، مع فترات التسجيل والفصول الصيفية.' : 'Term dates, exams, holidays and deadlines, plus registration periods and summer terms.'}
-          </p>
-        </div>
+    <AcPage>
+      <AcHead
+        title={ar ? 'التقويم الأكاديمي' : 'Academic calendar'}
+        text={ar ? 'مواعيد الدراسة والامتحانات والإجازات والمواعيد النهائية، مع فترات التسجيل والفصول الصيفية.' : 'Term dates, exams, holidays and deadlines, plus registration periods and summer terms.'}
+      >
         {data?.can_manage && <button type="button" className="btn btn-primary btn-sm" onClick={() => start(null)}><Icon name="plus" size={14} /> {ar ? 'حدث جديد' : 'New event'}</button>}
-      </div>
-      {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
-      {notice && <div className="st-alert st-alert--success"><Icon name="check-circle" size={16} /><span>{notice}</span></div>}
+      </AcHead>
+      <AcAlerts error={error} notice={notice} />
 
       {data?.can_manage && editing !== null && (
-        <form className="ex-card" onSubmit={save} style={{ display: 'grid', gap: 10 }}>
-          <b>{editing === 'new' ? (ar ? 'حدث جديد' : 'New event') : (ar ? 'تعديل الحدث' : 'Edit event')}</b>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-            <input className="input" required maxLength={160} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder={ar ? 'العنوان' : 'Title'} />
-            <select className="input" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
-              {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{ar ? v[0] : v[1]}</option>)}
-            </select>
-            <input className="input" type="date" required value={form.starts_on} onChange={(e) => setForm({ ...form, starts_on: e.target.value })} aria-label={ar ? 'من' : 'From'} />
-            <input className="input" type="date" min={form.starts_on || undefined} value={form.ends_on} onChange={(e) => setForm({ ...form, ends_on: e.target.value })} aria-label={ar ? 'إلى (اختياري)' : 'To (optional)'} />
-            {editing === 'new' && data.faculties.length > 0 && (
-              <select className="input" value={form.faculty_id} onChange={(e) => setForm({ ...form, faculty_id: e.target.value })}>
-                <option value="">{ar ? 'الجامعة كلها' : 'Whole university'}</option>
-                {data.faculties.map((f) => <option key={f.id} value={f.id}>{ar ? f.name_ar : f.name_en}</option>)}
-              </select>
-            )}
-          </div>
-          <textarea className="input" rows={2} maxLength={500} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder={ar ? 'ملاحظة (اختياري)' : 'Note (optional)'} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{ar ? 'حفظ' : 'Save'}</button>
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(null)}>{ar ? 'إلغاء' : 'Cancel'}</button>
-          </div>
-        </form>
+        <AcPanel title={editing === 'new' ? (ar ? 'حدث جديد' : 'New event') : (ar ? 'تعديل الحدث' : 'Edit event')} flush>
+          <form className="acx-form" style={{ borderTop: 0 }} onSubmit={save}>
+            <div className="acx-form__grid">
+              <AcField label={ar ? 'العنوان' : 'Title'}><input className="acx-input" required maxLength={160} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></AcField>
+              <AcField label={ar ? 'النوع' : 'Type'}>
+                <select className="acx-input" value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value })}>
+                  {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{ar ? v[0] : v[1]}</option>)}
+                </select>
+              </AcField>
+              <AcField label={ar ? 'من' : 'From'}><input className="acx-input" type="date" required value={form.starts_on} onChange={(e) => setForm({ ...form, starts_on: e.target.value })} /></AcField>
+              <AcField label={ar ? 'إلى (اختياري)' : 'To (optional)'}><input className="acx-input" type="date" min={form.starts_on || undefined} value={form.ends_on} onChange={(e) => setForm({ ...form, ends_on: e.target.value })} /></AcField>
+              {editing === 'new' && data.faculties.length > 0 && (
+                <AcField label={ar ? 'النطاق' : 'Scope'}>
+                  <select className="acx-input" value={form.faculty_id} onChange={(e) => setForm({ ...form, faculty_id: e.target.value })}>
+                    <option value="">{ar ? 'الجامعة كلها' : 'Whole university'}</option>
+                    {data.faculties.map((f) => <option key={f.id} value={f.id}>{ar ? f.name_ar : f.name_en}</option>)}
+                  </select>
+                </AcField>
+              )}
+            </div>
+            <AcField label={ar ? 'ملاحظة (اختياري)' : 'Note (optional)'}><textarea className="acx-input" rows={2} maxLength={500} value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></AcField>
+            <div className="acx-form__actions">
+              <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>{ar ? 'حفظ' : 'Save'}</button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setEditing(null)}>{ar ? 'إلغاء' : 'Cancel'}</button>
+            </div>
+          </form>
+        </AcPanel>
       )}
 
-      <div className="ex-card">
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
-          <select className="input" style={{ width: 'auto' }} value={kind} onChange={(e) => setKind(e.target.value)}>
+      <AcPanel flush>
+        <div className="acx-toolbar">
+          <select className="acx-input" style={{ flex: '0 1 200px' }} value={kind} onChange={(e) => setKind(e.target.value)}>
             <option value="">{ar ? 'كل الأنواع' : 'All types'}</option>
             {Object.entries(KINDS).map(([k, v]) => <option key={k} value={k}>{ar ? v[0] : v[1]}</option>)}
           </select>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}><input type="checkbox" checked={showPast} onChange={(e) => setShowPast(e.target.checked)} /> {ar ? 'إظهار المنتهية' : 'Show past events'}</label>
+          <label className="acx-check"><input type="checkbox" checked={showPast} onChange={(e) => setShowPast(e.target.checked)} /> {ar ? 'إظهار المنتهية' : 'Show past events'}</label>
         </div>
 
-        {!data && !error ? <Skeleton h={50} count={4} /> : groups.length === 0 ? <EmptyState icon="calendar" title={ar ? 'لا توجد أحداث' : 'No events'} /> : (
-          <div style={{ display: 'grid', gap: 16 }}>
+        {!data && !error ? <div className="acx-panel__body"><Skeleton h={50} count={4} /></div> : groups.length === 0 ? <div className="acx-empty"><EmptyState icon="calendar" title={ar ? 'لا توجد أحداث' : 'No events'} /></div> : (
+          <div>
             {groups.map((g) => (
               <section key={g.key}>
-                <h3 style={{ margin: '0 0 8px', fontSize: 14 }}>{monthLabel(g.key)}</h3>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {g.items.map((e) => {
-                    const k = KINDS[e.kind] || KINDS.other;
-                    const ongoing = e.starts_on <= t && (e.ends_on || e.starts_on) >= t;
-                    return (
-                      <div key={e.id} style={{ border: '1px solid var(--border-subtle, #e5e7eb)', borderRadius: 10, padding: '10px 12px', display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                        <div>
-                          <b>{e.title}</b>
-                          <div className="is-muted" style={{ fontSize: 12 }} dir="ltr">{range(e)}</div>
-                          {e.note && <div className="is-muted" style={{ fontSize: 12 }}>{e.note}</div>}
-                          {e.faculty_id && <div className="is-muted" style={{ fontSize: 11 }}>{facultyName(e.faculty_id)}</div>}
+                <div className="acx-panel__head" style={{ background: 'var(--bg-canvas)', padding: '9px 18px' }}>
+                  <div className="acx-panel__title"><b style={{ fontSize: 13 }}>{monthLabel(g.key)}</b></div>
+                  <span className="acx-muted">{g.items.length}</span>
+                </div>
+                {g.items.map((e) => {
+                  const k = KINDS[e.kind] || KINDS.other;
+                  const ongoing = e.starts_on <= t && (e.ends_on || e.starts_on) >= t;
+                  return (
+                    <article key={e.id} className="acx-item">
+                      <div className="acx-item__head">
+                        <div style={{ minWidth: 0 }}>
+                          <div className="acx-item__title">{e.title}</div>
+                          <div className="acx-muted" dir="ltr" style={{ textAlign: 'start' }}>{range(e)}</div>
+                          {e.note && <div className="acx-muted">{e.note}</div>}
+                          {e.faculty_id && <div className="acx-muted">{facultyName(e.faculty_id)}</div>}
                         </div>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                        <div className="acx-actions">
                           {ongoing && <span className="st-pill st-pill--success">{ar ? 'جارٍ الآن' : 'Ongoing'}</span>}
                           <span className={`st-pill${k[2] ? ` st-pill--${k[2]}` : ''}`}>{ar ? k[0] : k[1]}</span>
                           {e.editable && <>
@@ -143,14 +148,14 @@ export default function AcademicCalendar() {
                           </>}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
+                    </article>
+                  );
+                })}
               </section>
             ))}
           </div>
         )}
-      </div>
-    </div>
+      </AcPanel>
+    </AcPage>
   );
 }

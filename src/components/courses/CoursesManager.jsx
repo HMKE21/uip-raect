@@ -6,10 +6,9 @@ import { CourseGradebook } from './CourseGradebook';
 import CourseMaterials from './CourseMaterials';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
-import { PersonAvatar, StaffHead } from '../staff/stfUi';
-import { ExKpi } from '../exam/examUi';
+import { PersonAvatar } from '../staff/stfUi';
+import { AcPage, AcHead, AcAlerts, AcKpis, AcPanel, AcTable } from './acKit';
 import { Field, FieldGrid, FormModal, FormSection } from '../people/formUi';
-import { Alert, Empty, Pill, SearchField, Skeletons, Stat, hueOf, initialOf } from '../university/umUi';
 
 /**
  * Courses (المواد) management — one component for three portals:
@@ -96,236 +95,109 @@ export default function CoursesManager({ role }) {
   }
 
 
-  if (isStaff) {
-    const modals = (
-      <>
-        {editing && (
-          <CourseFormModal
-            role={role}
-            course={editing === 'new' ? null : editing}
-            meta={meta}
-            onClose={() => setEditing(null)}
-            onDone={(msg) => { setEditing(null); setNotice(msg); load(); }}
-          />
-        )}
-        {managing && (
-          <CourseManageModal
-            course={managing}
-            initialTab={manageTab}
-            canAssign={canAssign}
-            onClose={() => { setManaging(null); load(); }}
-          />
-        )}
-      </>
-    );
-    const myCount = courses.filter((c) => c.can_manage).length;
-    return (
-      <div className="ex-page">
-        <StaffHead
-          eyebrow={ar ? 'مساحة التدريس' : 'Teaching workspace'}
-          title={ar ? 'المواد' : 'Courses'}
-          subtitle={ar ? 'أضف موادك وشاهد الطلاب المسجّلين في كل مادة.' : 'Add your courses and see exactly which students are enrolled in each.'}
-          actions={(
-            <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
-              <Icon name="plus" size={16} /> {ar ? 'إضافة مادة' : 'Add course'}
-            </button>
-          )}
-        />
+  const courseName = (c) => (ar ? (c.name_ar || c.name_en) : c.name_en);
+  const facultyName = (f) => (ar ? (f.name_ar || f.name_en) : f.name_en);
+  const myCount = courses.filter((c) => c.can_manage).length;
 
-        <div className="ex-kpis">
-          <ExKpi label={ar ? 'إجمالي المواد' : 'Total courses'} value={kpis.total} sub={status === 'active' ? (ar ? 'مواد نشطة' : 'Active courses') : (ar ? 'مواد مؤرشفة' : 'Archived courses')} icon="file" />
-          <ExKpi label={ar ? 'موادي' : 'My courses'} value={myCount} sub={ar ? 'يمكنك إدارتها' : 'You can manage'} icon="check-circle" tone="good" />
-          <ExKpi label={ar ? 'تسجيلات الطلاب' : 'Student enrolments'} value={kpis.students} sub={ar ? 'عبر كل المواد' : 'Across all courses'} icon="users" />
-          <ExKpi label={ar ? 'بلا مدرّس' : 'No teacher yet'} value={kpis.noTeacher} sub={ar ? 'تحتاج تعيين' : 'Need an assignment'} icon="alert-triangle" tone={kpis.noTeacher ? 'warn' : ''} />
-        </div>
+  const kpiItems = [
+    { label: status === 'active' ? (ar ? 'مواد نشطة' : 'Active courses') : (ar ? 'مواد مؤرشفة' : 'Archived courses'), value: kpis.total, icon: 'file' },
+    ...(isStaff ? [{ label: ar ? 'موادي' : 'My courses', value: myCount, icon: 'check-circle', tone: 'good' }] : []),
+    { label: ar ? 'تسجيلات الطلاب' : 'Student enrolments', value: kpis.students, icon: 'users' },
+    { label: ar ? 'بلا مدرّس' : 'No teacher yet', value: kpis.noTeacher, icon: 'alert-triangle', tone: kpis.noTeacher ? 'warn' : 'good' },
+  ];
 
-        {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
-        {notice && <div className="st-alert st-alert--success"><Icon name="check-circle" size={16} /><span>{notice}</span></div>}
+  return (
+    <AcPage>
+      <AcHead
+        title={ar ? 'المواد' : 'Courses'}
+        text={isStaff
+          ? (ar ? 'أضف موادك وشاهد الطلاب المسجّلين في كل مادة.' : 'Add your courses and see exactly which students are enrolled in each.')
+          : (ar ? 'أضف المواد وعيّن مدرّسيها ليسجّل الطلاب فيها من لوحاتهم.' : 'Add courses and assign their teachers — students enrol from their own dashboard.')}
+      >
+        <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}><Icon name="plus" size={14} /> {ar ? 'إضافة مادة' : 'Add course'}</button>
+      </AcHead>
 
-        <div className="st-tabs" role="tablist">
+      <AcKpis items={kpiItems} />
+      <AcAlerts error={error} notice={notice} />
+
+      <AcPanel flush>
+        <div className="acx-tabs" role="tablist">
           {[['active', ar ? 'النشطة' : 'Active'], ['archived', ar ? 'المؤرشفة' : 'Archived']].map(([k, label]) => (
-            <button key={k} type="button" role="tab" aria-selected={status === k} className={`st-tab${status === k ? ' is-active' : ''}`} onClick={() => setStatus(k)}>{label}</button>
+            <button key={k} type="button" role="tab" aria-selected={status === k} className={status === k ? 'is-on' : ''} onClick={() => setStatus(k)}>{label}</button>
           ))}
         </div>
-
-        <div className="st-toolbar xc-toolbar">
-          <label className="st-search">
-            <Icon name="search" size={16} />
-            <input className="form-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={ar ? 'ابحث بالكود أو اسم المادة…' : 'Search by code or course name…'} aria-label={ar ? 'بحث' : 'Search'} />
-          </label>
-          <label className="text-small" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <input type="checkbox" className="ex-check-input" checked={mine} onChange={(e) => setMine(e.target.checked)} />
-            {ar ? 'موادي فقط' : 'My courses only'}
-          </label>
+        <div className="acx-toolbar">
+          <input className="acx-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={ar ? 'ابحث بالكود أو اسم المادة…' : 'Search by code or course name…'} aria-label={ar ? 'بحث' : 'Search'} />
+          {isUni && (
+            <select className="acx-input" style={{ width: 'auto', flex: '0 1 220px' }} value={facultyFilter} onChange={(e) => setFacultyFilter(e.target.value)} aria-label={ar ? 'الكلية' : 'Faculty'}>
+              <option value="">{ar ? 'كل الكليات' : 'All faculties'}</option>
+              {faculties.map((f) => <option key={f.id} value={f.id}>{facultyName(f)}</option>)}
+            </select>
+          )}
+          {isStaff && <label className="acx-check"><input type="checkbox" checked={mine} onChange={(e) => setMine(e.target.checked)} />{ar ? 'موادي فقط' : 'My courses only'}</label>}
+          <span className="acx-muted">{ar ? `${courses.length} مادة` : `${courses.length} ${courses.length === 1 ? 'course' : 'courses'}`}</span>
         </div>
 
         {loading ? (
-          <Skeleton h={120} count={3} />
+          <div className="acx-panel__body"><Skeleton h={120} count={3} /></div>
         ) : courses.length === 0 ? (
-          <EmptyState icon="file" title={q ? (ar ? 'لا توجد مواد مطابقة' : 'No courses match') : (ar ? 'لا توجد مواد بعد' : 'No courses yet')} text={q ? undefined : (ar ? 'أضف أول مادة ليتمكن الطلاب من التسجيل فيها.' : 'Add the first course so students can enrol.')}>
-            {!q && status === 'active' && (
-              <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> {ar ? 'إضافة مادة' : 'Add course'}</button>
-            )}
-          </EmptyState>
+          <div className="acx-empty">
+            <EmptyState icon="file" title={q ? (ar ? 'لا توجد مواد مطابقة' : 'No courses match') : (ar ? 'لا توجد مواد بعد' : 'No courses yet')} text={q ? (ar ? 'جرّب كلمات بحث مختلفة.' : 'Try a different search.') : (ar ? 'أضف أول مادة ليتمكن الطلاب من التسجيل فيها.' : 'Add the first course so students can enrol.')}>
+              {!q && status === 'active' && <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}><Icon name="plus" size={14} /> {ar ? 'إضافة مادة' : 'Add course'}</button>}
+            </EmptyState>
+          </div>
         ) : (
-          <div className="st-cards st-ecards xc-grid">
-            {courses.map((c) => {
-              const meta2 = [
-                c.credit_hours != null ? `${c.credit_hours} ${ar ? 'ساعات' : 'cr.'}` : null,
-                c.academic_year ? (ar ? `السنة ${c.academic_year}` : `Year ${c.academic_year}`) : null,
-                c.semester ? (ar ? `الفصل ${c.semester}` : `Sem ${c.semester}`) : null,
-              ].filter(Boolean).join(' · ');
-              const teachers = c.staff || [];
-              return (
-                <article key={c.id} className={`st-pcard st-ecard xc-card xc-card--${c.status === 'active' ? 'completed' : 'archived'}`}>
-                  <div className="st-pcard__top">
-                    <span className="xc-course-code">{c.code}</span>
-                    {c.can_manage
-                      ? <span className="ex-status ex-status--live">{ar ? 'موادي' : 'Mine'}</span>
-                      : <span className="ex-status ex-status--idle">{ar ? 'عرض فقط' : 'View only'}</span>}
-                  </div>
-                  <div>
-                    <h3>{ar ? (c.name_ar || c.name_en) : c.name_en}</h3>
-                    <div className="xc-sub">{meta2 || '—'}</div>
-                  </div>
-                  <ul className="st-ecard__facts">
-                    <li><Icon name="building" size={14} /><span>{c.faculty_name || (ar ? 'كل الجامعة' : 'Whole university')}{c.department_name ? ` · ${c.department_name}` : ''}</span></li>
-                    <li><Icon name="users" size={14} /><span>{c.students_count} {ar ? 'طالب مسجّل' : 'enrolled students'}</span></li>
-                  </ul>
-                  <div className="xc-staff">
-                    {teachers.length === 0
-                      ? <span>{ar ? 'لم يُعيَّن مدرّس بعد' : 'No teacher assigned'}</span>
-                      : teachers.slice(0, 3).map((s) => <span key={s.id ?? s.full_name} className="ex-inline"><PersonAvatar name={s.full_name} /> {s.full_name}</span>)}
-                    {teachers.length > 3 && <span>+{teachers.length - 3}</span>}
-                  </div>
-                  <div className="st-pcard__actions xc-actions">
-                    {c.can_manage ? (
-                      <>
-                        <button type="button" className="btn btn-primary btn-sm" onClick={() => openManage(c, 'content')}><Icon name="folder" size={14} /> {ar ? 'المحتوى' : 'Content'}</button>
-                        <button type="button" className="btn btn-outline btn-sm" onClick={() => openManage(c, 'students')}>{ar ? 'الطلاب' : 'Students'}</button>
-                        <span className="xc-tools">
-                          <button type="button" className="ex-icon-btn" title={ar ? 'تعديل' : 'Edit'} aria-label={ar ? 'تعديل' : 'Edit'} onClick={() => setEditing(c)}><Icon name="edit" size={15} /></button>
-                          <button type="button" className="ex-icon-btn" disabled={busyId === c.id} title={c.status === 'active' ? (ar ? 'أرشفة' : 'Archive') : (ar ? 'استعادة' : 'Restore')} aria-label={c.status === 'active' ? (ar ? 'أرشفة' : 'Archive') : (ar ? 'استعادة' : 'Restore')} onClick={() => toggleArchive(c)}>
-                            <Icon name={c.status === 'active' ? 'archive' : 'refresh'} size={15} />
-                          </button>
-                        </span>
-                      </>
-                    ) : <span className="is-muted" style={{ fontSize: 12 }}>{ar ? 'ليس لديك صلاحية إدارة هذه المادة' : 'You cannot manage this course'}</span>}
-                  </div>
-                </article>
-              );
-            })}
+          <div className="acx-panel__body">
+            <div className="acx-courses acx-courses--wide">
+              {courses.map((c) => {
+                const facts = [
+                  c.credit_hours != null ? `${c.credit_hours} ${ar ? 'ساعات' : 'cr.'}` : null,
+                  c.academic_year ? (ar ? `السنة ${c.academic_year}` : `Year ${c.academic_year}`) : null,
+                  c.semester ? (ar ? `الفصل ${c.semester}` : `Sem ${c.semester}`) : null,
+                ].filter(Boolean);
+                const teachers = c.staff || [];
+                const archived = c.status !== 'active';
+                return (
+                  <article key={c.id} className={`acx-course${archived ? ' is-archived' : ''}`}>
+                    <div className="acx-item__head">
+                      <div style={{ minWidth: 0 }}>
+                        <span className="acx-code" dir="ltr">{c.code}</span>
+                        <div className="acx-course__name">{courseName(c)}</div>
+                      </div>
+                      {archived
+                        ? <span className="st-pill st-pill--warning">{ar ? 'مؤرشفة' : 'Archived'}</span>
+                        : isStaff && (c.can_manage ? <span className="st-pill st-pill--success">{ar ? 'موادي' : 'Mine'}</span> : <span className="st-pill st-pill--neutral">{ar ? 'عرض فقط' : 'View only'}</span>)}
+                    </div>
+                    {facts.length > 0 && <div className="acx-pills">{facts.map((f) => <span key={f} className="st-pill st-pill--neutral">{f}</span>)}</div>}
+                    <ul className="acx-facts">
+                      <li><Icon name="building" size={14} /><span>{c.faculty_name || (ar ? 'كل الجامعة' : 'Whole university')}{c.department_name ? ` · ${c.department_name}` : ''}</span></li>
+                      <li><Icon name="users" size={14} /><span>{c.students_count} {ar ? 'طالب مسجّل' : 'enrolled students'}</span></li>
+                      <li className={teachers.length ? '' : 'is-warn'}>
+                        <Icon name="user" size={14} />
+                        <span>{teachers.length === 0 ? (ar ? 'لم يُعيَّن مدرّس بعد' : 'No teacher assigned') : teachers.map((t) => t.full_name).join(ar ? '، ' : ', ')}</span>
+                      </li>
+                    </ul>
+                    <div className="acx-actions">
+                      {c.can_manage ? (
+                        <>
+                          <button type="button" className="btn btn-primary btn-sm" onClick={() => openManage(c, 'content')}><Icon name="folder" size={13} /> {ar ? 'المحتوى' : 'Content'}</button>
+                          <button type="button" className="btn btn-outline btn-sm" onClick={() => openManage(c, 'students')}><Icon name="users" size={13} /> {canAssign ? (ar ? 'الطلاب والمدرّسون' : 'Students & teachers') : (ar ? 'الطلاب' : 'Students')}</button>
+                          <span style={{ marginInlineStart: 'auto', display: 'inline-flex', gap: 2 }}>
+                            <button type="button" className="btn btn-ghost btn-sm" title={ar ? 'تعديل' : 'Edit'} aria-label={ar ? 'تعديل' : 'Edit'} onClick={() => setEditing(c)}><Icon name="edit" size={14} /></button>
+                            <button type="button" className="btn btn-ghost btn-sm" disabled={busyId === c.id} title={archived ? (ar ? 'استعادة' : 'Restore') : (ar ? 'أرشفة' : 'Archive')} aria-label={archived ? (ar ? 'استعادة' : 'Restore') : (ar ? 'أرشفة' : 'Archive')} onClick={() => toggleArchive(c)}>
+                              <Icon name={archived ? 'refresh' : 'archive'} size={14} />
+                            </button>
+                          </span>
+                        </>
+                      ) : <span className="acx-muted"><Icon name="lock" size={13} /> {ar ? 'ليس لديك صلاحية إدارة هذه المادة' : 'You cannot manage this course'}</span>}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           </div>
         )}
-        {modals}
-      </div>
-    );
-  }
-
-  const courseName = (c) => (ar ? (c.name_ar || c.name_en) : c.name_en);
-  const facultyName = (f) => (ar ? (f.name_ar || f.name_en) : f.name_en);
-
-  return (
-    <div className="um-page animate-rise-in">
-      <header className="um-head">
-        <div className="um-head__text">
-          <h1>{ar ? 'المواد' : 'Courses'}</h1>
-          <p>{ar ? 'أضف المواد وعيّن مدرّسيها ليسجّل الطلاب فيها من لوحاتهم.' : 'Add courses and assign their teachers — students enrol from their own dashboard.'}</p>
-        </div>
-        <div className="um-head__act">
-          <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>
-            <Icon name="plus" size={16} /> {ar ? 'إضافة مادة' : 'Add course'}
-          </button>
-        </div>
-      </header>
-
-      <div className="um-stats" style={{ '--n': 3 }} data-scroll="">
-        <Stat icon="file" tone="primary" value={kpis.total} label={status === 'active' ? (ar ? 'مواد نشطة' : 'Active courses') : (ar ? 'مواد مؤرشفة' : 'Archived courses')} />
-        <Stat icon="users" tone="success" value={kpis.students} label={ar ? 'تسجيلات الطلاب' : 'Student enrolments'} />
-        <Stat icon="alert-triangle" tone={kpis.noTeacher ? 'warning' : 'muted'} value={kpis.noTeacher} label={ar ? 'بلا مدرّس — تحتاج تعيين' : 'No teacher — needs assignment'} />
-      </div>
-
-      {error && <Alert>{error}</Alert>}
-      {notice && <Alert tone="ok">{notice}</Alert>}
-
-      <div className="um-bar">
-        <div className="um-tabs" role="tablist">
-          {[['active', ar ? 'النشطة' : 'Active'], ['archived', ar ? 'المؤرشفة' : 'Archived']].map(([k, label]) => (
-            <button key={k} type="button" role="tab" aria-selected={status === k} className={`um-tab${status === k ? ' is-active' : ''}`} onClick={() => setStatus(k)}>{label}</button>
-          ))}
-        </div>
-        <SearchField value={q} onChange={setQ} placeholder={ar ? 'ابحث بالكود أو اسم المادة…' : 'Search by code or course name…'} />
-        {isUni && (
-          <select className="form-input cs-select" value={facultyFilter} onChange={(e) => setFacultyFilter(e.target.value)} aria-label={ar ? 'الكلية' : 'Faculty'}>
-            <option value="">{ar ? 'كل الكليات' : 'All faculties'}</option>
-            {faculties.map((f) => <option key={f.id} value={f.id}>{facultyName(f)}</option>)}
-          </select>
-        )}
-        <span className="um-count">{ar ? `${courses.length} مادة` : `${courses.length} ${courses.length === 1 ? 'course' : 'courses'}`}</span>
-      </div>
-
-      {loading ? (
-        <Skeletons n={3} h={96} />
-      ) : courses.length === 0 ? (
-        <Empty icon="file" title={q ? (ar ? 'لا توجد مواد مطابقة' : 'No courses match') : (ar ? 'لا توجد مواد بعد' : 'No courses yet')}
-          text={q ? (ar ? 'جرّب كلمات بحث مختلفة.' : 'Try a different search.') : (ar ? 'أضف أول مادة ليتمكن الطلاب من التسجيل فيها.' : 'Add the first course so students can enrol.')}>
-          {!q && status === 'active' && (
-            <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}><Icon name="plus" size={16} /> {ar ? 'إضافة مادة' : 'Add course'}</button>
-          )}
-        </Empty>
-      ) : (
-        <div className="um-cards cs-grid">
-          {courses.map((c) => {
-            const facts = [
-              c.credit_hours != null ? `${c.credit_hours} ${ar ? 'ساعات' : 'cr.'}` : null,
-              c.academic_year ? (ar ? `السنة ${c.academic_year}` : `Year ${c.academic_year}`) : null,
-              c.semester ? (ar ? `الفصل ${c.semester}` : `Sem ${c.semester}`) : null,
-            ].filter(Boolean);
-            const teachers = c.staff || [];
-            const archived = c.status !== 'active';
-            return (
-              <article key={c.id} className={`um-fcard cs-card${archived ? ' is-archived' : ''}`} data-hue={hueOf(c.id)}>
-                <div className="um-fcard__top">
-                  <span className="um-mono um-mono--sm cs-code" data-hue={hueOf(c.id)} title={c.code}>{String(c.code || '').slice(0, 4) || initialOf(courseName(c))}</span>
-                  <div className="um-fcard__text">
-                    <h3 className="um-fcard__name">{courseName(c)}</h3>
-                    <p className="um-fcard__meta"><span className="um-fact um-fact--mono">{c.code}</span></p>
-                  </div>
-                </div>
-                <div className="um-fcard__pills">
-                  {facts.map((f) => <Pill key={f} tone="muted" dot={false}>{f}</Pill>)}
-                  {archived && <Pill tone="warning">{ar ? 'مؤرشفة' : 'Archived'}</Pill>}
-                </div>
-                <ul className="cs-facts">
-                  <li><Icon name="building" size={14} /><span>{c.faculty_name || (ar ? 'كل الجامعة' : 'Whole university')}{c.department_name ? ` · ${c.department_name}` : ''}</span></li>
-                  <li><Icon name="users" size={14} /><span>{c.students_count} {ar ? 'طالب مسجّل' : 'enrolled students'}</span></li>
-                  <li className={teachers.length ? '' : 'is-warn'}>
-                    <Icon name="user" size={14} />
-                    <span>{teachers.length === 0 ? (ar ? 'لم يُعيَّن مدرّس بعد' : 'No teacher assigned') : teachers.map((s) => s.full_name).join(ar ? '، ' : ', ')}</span>
-                  </li>
-                </ul>
-                <div className="um-fcard__acts">
-                  {c.can_manage ? (
-                    <>
-                      <button type="button" className="btn btn-primary" onClick={() => openManage(c, 'content')}>
-                        <Icon name="folder" size={15} /> {ar ? 'المحتوى' : 'Content'}
-                      </button>
-                      <button type="button" className="btn btn-outline" onClick={() => openManage(c, 'students')}>
-                        <Icon name="users" size={15} /> {ar ? 'الطلاب والمدرّسون' : (canAssign ? 'Students & teachers' : 'Students')}
-                      </button>
-                      <span className="um-spacer" />
-                      <button type="button" className="btn btn-ghost" title={ar ? 'تعديل' : 'Edit'} aria-label={ar ? 'تعديل' : 'Edit'} onClick={() => setEditing(c)}><Icon name="edit" size={15} /></button>
-                      <button type="button" className="btn btn-ghost" disabled={busyId === c.id} title={archived ? (ar ? 'استعادة' : 'Restore') : (ar ? 'أرشفة' : 'Archive')} aria-label={archived ? (ar ? 'استعادة' : 'Restore') : (ar ? 'أرشفة' : 'Archive')} onClick={() => toggleArchive(c)}>
-                        <Icon name={archived ? 'refresh' : 'archive'} size={15} />
-                      </button>
-                    </>
-                  ) : <span className="um-fact"><Icon name="lock" size={14} /> {ar ? 'عرض فقط' : 'View only'}</span>}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
+      </AcPanel>
 
       {editing && (
         <CourseFormModal
@@ -344,7 +216,7 @@ export default function CoursesManager({ role }) {
           onClose={() => { setManaging(null); load(); }}
         />
       )}
-    </div>
+    </AcPage>
   );
 }
 
@@ -520,11 +392,11 @@ function CourseManageModal({ course, canAssign, initialTab = 'students', onClose
           <button type="button" className="pf-x" onClick={onClose} aria-label={ar ? 'إغلاق' : 'Close'}><Icon name="x" size={18} /></button>
         </header>
 
-        <div className="ex-tabs" role="tablist" style={{ padding: '0 16px' }}>
-          <button type="button" role="tab" aria-selected={tab === 'students'} className={`ex-tab${tab === 'students' ? ' is-active' : ''}`} onClick={() => setTab('students')}>{ar ? 'الطلاب' : 'Students'}<small>({roster.length})</small></button>
-          <button type="button" role="tab" aria-selected={tab === 'content'} className={`ex-tab${tab === 'content' ? ' is-active' : ''}`} onClick={() => setTab('content')}>{ar ? 'المحتوى' : 'Content'}</button>
-          <button type="button" role="tab" aria-selected={tab === 'grades'} className={`ex-tab${tab === 'grades' ? ' is-active' : ''}`} onClick={() => setTab('grades')}>{ar ? 'الدرجات' : 'Grades'}</button>
-          {canAssign && <button type="button" role="tab" aria-selected={tab === 'teachers'} className={`ex-tab${tab === 'teachers' ? ' is-active' : ''}`} onClick={() => setTab('teachers')}>{ar ? 'المدرّسون' : 'Teachers'}<small>({staff.length})</small></button>}
+        <div className="acx-tabs" role="tablist">
+          <button type="button" role="tab" aria-selected={tab === 'students'} className={tab === 'students' ? 'is-on' : ''} onClick={() => setTab('students')}>{ar ? 'الطلاب' : 'Students'}<small>{roster.length}</small></button>
+          <button type="button" role="tab" aria-selected={tab === 'content'} className={tab === 'content' ? 'is-on' : ''} onClick={() => setTab('content')}>{ar ? 'المحتوى' : 'Content'}</button>
+          <button type="button" role="tab" aria-selected={tab === 'grades'} className={tab === 'grades' ? 'is-on' : ''} onClick={() => setTab('grades')}>{ar ? 'الدرجات' : 'Grades'}</button>
+          {canAssign && <button type="button" role="tab" aria-selected={tab === 'teachers'} className={tab === 'teachers' ? 'is-on' : ''} onClick={() => setTab('teachers')}>{ar ? 'المدرّسون' : 'Teachers'}<small>{staff.length}</small></button>}
         </div>
 
         <div className="pf-body" style={{ paddingTop: 16 }}>
@@ -540,8 +412,7 @@ function CourseManageModal({ course, canAssign, initialTab = 'students', onClose
               {loading ? <Skeleton h={44} count={3} /> : roster.length === 0 ? (
                 <EmptyState icon="users" title={ar ? 'لا يوجد طلاب مسجّلون بعد' : 'No students enrolled yet'} text={ar ? 'سيظهر هنا كل طالب يختار هذه المادة من لوحته.' : 'Every student who picks this course from their dashboard will appear here.'} />
               ) : (
-                <div className="ex-table-wrap">
-                  <table className="ex-table">
+                <AcTable>
                     <thead><tr><th>{ar ? 'الطالب' : 'Student'}</th><th>{ar ? 'الرقم الجامعي' : 'Student ID'}</th><th>{ar ? 'القسم' : 'Department'}</th><th>{ar ? 'المصدر' : 'Source'}</th><th /></tr></thead>
                     <tbody>
                       {roster.map((s) => (
@@ -554,8 +425,7 @@ function CourseManageModal({ course, canAssign, initialTab = 'students', onClose
                         </tr>
                       ))}
                     </tbody>
-                  </table>
-                </div>
+                </AcTable>
               )}
             </>
           )}
@@ -650,15 +520,13 @@ function AddStudentsModal({ course, onClose, onDone }) {
       submitLabel={ar ? `إضافة (${picked.size})` : `Add (${picked.size})`}
       error={error}
     >
-      <div className="ex-search" style={{ marginBottom: 12 }}>
-        <Icon name="search" size={15} />
-        <input className="ex-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={ar ? 'ابحث بالاسم أو الرقم الجامعي' : 'Search by name or student ID'} autoFocus />
+      <div style={{ marginBottom: 12 }}>
+        <input className="acx-input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={ar ? 'ابحث بالاسم أو الرقم الجامعي' : 'Search by name or student ID'} autoFocus />
       </div>
       {loading ? <Skeleton h={40} count={3} /> : rows.length === 0 ? (
         <p className="text-small" style={{ textAlign: 'center', padding: 20 }}>{ar ? 'لا يوجد طلاب متاحون للإضافة.' : 'No students available to add.'}</p>
       ) : (
-        <div className="ex-table-wrap">
-          <table className="ex-table">
+        <AcTable>
             <tbody>
               {rows.map((s) => (
                 <tr key={s.id} onClick={() => toggle(s.id)} style={{ cursor: 'pointer' }}>
@@ -669,8 +537,7 @@ function AddStudentsModal({ course, onClose, onDone }) {
                 </tr>
               ))}
             </tbody>
-          </table>
-        </div>
+        </AcTable>
       )}
     </FormModal>
   );

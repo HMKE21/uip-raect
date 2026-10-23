@@ -3,7 +3,7 @@ import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
-import { ExKpi } from '../exam/examUi';
+import { AcPage, AcHead, AcAlerts, AcKpis, AcPanel, AcNums, AcTable } from './acKit';
 import { Field, FormModal, FormSection } from '../people/formUi';
 import { downloadAuthed } from '../../lib/download';
 import { fmtDate, fmtSize } from './StudentAssignments';
@@ -14,6 +14,8 @@ import { fmtDate, fmtSize } from './StudentAssignments';
  * Backend: /api/v1/assignments/courses/{id}[/{aid}[/submissions[/{sid}/grade]]].
  */
 
+const TONE = { late: 'warning', absent: 'danger', excused: '', present: 'success', neutral: 'neutral' };
+const pill = (t) => `st-pill${TONE[t] ? ` st-pill--${TONE[t]}` : ''}`;
 const toInput = (s) => (s ? String(s).slice(0, 16).replace(' ', 'T') : '');
 
 export default function StaffAssignments() {
@@ -52,65 +54,63 @@ export default function StaffAssignments() {
   const toGrade = rows.reduce((n, a) => n + (a.stats?.to_grade || 0), 0);
 
   return (
-    <div className="ex-page">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24 }}>{ar ? 'التكليفات والتسليمات' : 'Assignments'}</h1>
-          <p className="is-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>{ar ? 'أنشئ تكليفات بموعد ودرجة، وتابع تسليمات الطلاب وصحّحها.' : 'Create assignments with a deadline and score, then review and grade submissions.'}</p>
-        </div>
-        <button type="button" className="btn btn-primary" disabled={!courseId} onClick={() => { setNotice(null); setDialog({}); }}><Icon name="plus" size={14} /> {ar ? 'تكليف جديد' : 'New assignment'}</button>
-      </div>
+    <AcPage>
+      <AcHead
+        title={ar ? 'التكليفات والتسليمات' : 'Assignments'}
+        text={ar ? 'أنشئ تكليفات بموعد ودرجة، وتابع تسليمات الطلاب وصحّحها.' : 'Create assignments with a deadline and score, then review and grade submissions.'}
+      >
+        <button type="button" className="btn btn-primary btn-sm" disabled={!courseId} onClick={() => { setNotice(null); setDialog({}); }}><Icon name="plus" size={14} /> {ar ? 'تكليف جديد' : 'New assignment'}</button>
+      </AcHead>
 
-      {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
-      {notice && <div className="st-alert"><Icon name="check-circle" size={16} /><span>{notice}</span></div>}
+      <AcAlerts error={error} notice={notice} />
 
       {loading ? <Skeleton h={100} count={2} /> : courses.length === 0 ? (
-        <div className="ex-card"><EmptyState icon="layers" title={ar ? 'لا توجد مواد تديرها' : 'No courses to manage'} /></div>
+        <AcPanel><EmptyState icon="layers" title={ar ? 'لا توجد مواد تديرها' : 'No courses to manage'} /></AcPanel>
       ) : (
         <>
-          <div className="ex-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            <ExKpi label={ar ? 'التكليفات' : 'Assignments'} value={rows.length} icon="file" />
-            <ExKpi label={ar ? 'في انتظار التصحيح' : 'To grade'} value={toGrade} icon="edit" tone={toGrade ? 'bad' : 'good'} />
-          </div>
-          <div className="ex-card">
-            <div className="att-row">
-              <select className="ex-select" value={courseId} onChange={(e) => setCourseId(e.target.value)} aria-label={ar ? 'المادة' : 'Course'}>
+          <AcKpis items={[
+            { label: ar ? 'التكليفات' : 'Assignments', value: rows.length, icon: 'file' },
+            { label: ar ? 'في انتظار التصحيح' : 'To grade', value: toGrade, icon: 'edit', tone: toGrade ? 'bad' : 'good' },
+          ]} />
+          <AcPanel flush>
+            <div className="acx-toolbar">
+              <select className="acx-input" value={courseId} onChange={(e) => setCourseId(e.target.value)} aria-label={ar ? 'المادة' : 'Course'}>
                 {courses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
               </select>
             </div>
-            {rows.length === 0 ? <EmptyState icon="file" title={ar ? 'لا توجد تكليفات بعد' : 'No assignments yet'} /> : (
-              <div className="as-list">
+            {rows.length === 0 ? <div className="acx-empty"><EmptyState icon="file" title={ar ? 'لا توجد تكليفات بعد' : 'No assignments yet'} /></div> : (
+              <div>
                 {rows.map((a) => (
-                  <div key={a.id} className="as-card">
-                    <div className="as-card__head">
-                      <div>
-                        <div className="att-course__name">{a.title}</div>
-                        <small className="is-muted">{ar ? 'الموعد' : 'Due'}: {fmtDate(a.due_at)} · {ar ? 'الدرجة' : 'Max'} {a.max_score}{a.weight != null ? ` · ${a.weight}%` : ''}{a.allow_late ? '' : (ar ? ' · لا تسليم متأخر' : ' · no late')}</small>
+                  <article key={a.id} className="acx-item">
+                    <div className="acx-item__head">
+                      <div style={{ minWidth: 0 }}>
+                        <div className="acx-item__title">{a.title}</div>
+                        <div className="acx-muted">{ar ? 'الموعد' : 'Due'}: {fmtDate(a.due_at)} · {ar ? 'الدرجة' : 'Max'} {a.max_score}{a.weight != null ? ` · ${a.weight}%` : ''}{a.allow_late ? '' : (ar ? ' · لا تسليم متأخر' : ' · no late')}</div>
                       </div>
-                      <span className={`att-pill att-pill--${a.status === 'draft' ? 'pending' : 'present'}`}>{a.status === 'draft' ? (ar ? 'مسودة' : 'Draft') : (ar ? 'منشور' : 'Published')}</span>
+                      <span className={pill(a.status === 'draft' ? 'neutral' : 'present')}>{a.status === 'draft' ? (ar ? 'مسودة' : 'Draft') : (ar ? 'منشور' : 'Published')}</span>
                     </div>
-                    <div className="att-nums">
-                      <span>{ar ? 'سلّموا' : 'Submitted'} <b>{a.stats?.submitted}/{a.stats?.enrolled}</b></span>
-                      <span>{ar ? 'اتصحّح' : 'Graded'} <b>{a.stats?.graded}</b></span>
-                      <span>{ar ? 'ينتظر التصحيح' : 'To grade'} <b>{a.stats?.to_grade}</b></span>
-                    </div>
-                    <div className="as-actions">
+                    <AcNums inline items={[
+                      [ar ? 'سلّموا' : 'Submitted', `${a.stats?.submitted}/${a.stats?.enrolled}`],
+                      [ar ? 'اتصحّح' : 'Graded', a.stats?.graded],
+                      [ar ? 'ينتظر التصحيح' : 'To grade', a.stats?.to_grade],
+                    ]} />
+                    <div className="acx-actions">
                       <button type="button" className="btn btn-primary btn-sm" onClick={() => setSubs(subs === a.id ? null : a.id)}><Icon name="users" size={13} /> {ar ? 'التسليمات' : 'Submissions'}</button>
                       <button type="button" className="btn btn-outline btn-sm" onClick={() => { setNotice(null); setDialog({ assignment: a }); }}><Icon name="edit" size={13} /> {ar ? 'تعديل' : 'Edit'}</button>
-                      {a.has_file && <button type="button" className="btn btn-ghost btn-sm" onClick={() => downloadAuthed(`/api/v1/assignments/courses/${a.course_id}/${a.id}/file`, a.file_name).catch((e) => setError(errorMessage(e)))}><Icon name="download" size={13} /> {a.file_name}</button>}
+                      {a.has_file && <button type="button" className="btn btn-outline btn-sm" onClick={() => downloadAuthed(`/api/v1/assignments/courses/${a.course_id}/${a.id}/file`, a.file_name).catch((e) => setError(errorMessage(e)))}><Icon name="download" size={13} /> {a.file_name}</button>}
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => remove(a)}><Icon name="trash" size={13} /> {ar ? 'حذف' : 'Delete'}</button>
                     </div>
                     {subs === a.id && <Submissions a={a} ar={ar} locale={locale} setError={setError} onChanged={load} />}
-                  </div>
+                  </article>
                 ))}
               </div>
             )}
-          </div>
+          </AcPanel>
         </>
       )}
 
       {dialog && <AssignmentDialog courseId={courseId} assignment={dialog.assignment} ar={ar} locale={locale} onClose={() => setDialog(null)} onDone={(m) => { setDialog(null); setNotice(m); load().catch(() => {}); }} />}
-    </div>
+    </AcPage>
   );
 }
 
@@ -188,33 +188,38 @@ function Submissions({ a, ar, locale, setError, onChanged }) {
   const S = { submitted: ar ? 'مسلّم' : 'Submitted', graded: ar ? 'مصحّح' : 'Graded', returned: ar ? 'مُرجَع' : 'Returned' };
   const cls = { submitted: 'excused', graded: 'present', returned: 'late' };
   return (
-    <>
-      <div className="att-nums">
-        <span>{ar ? 'لم يسلّم' : 'Missing'} <b>{data.stats.missing}</b></span>
-        <span>{ar ? 'متأخر' : 'Late'} <b>{data.stats.late}</b></span>
-        <span>{ar ? 'مصحّح' : 'Graded'} <b>{data.stats.graded}</b></span>
-      </div>
-      <div className="ex-table-wrap">
-        <table className="ex-table">
+    <div className="acx-stack" style={{ paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+      <AcNums inline items={[
+        [ar ? 'لم يسلّم' : 'Missing', data.stats.missing],
+        [ar ? 'متأخر' : 'Late', data.stats.late],
+        [ar ? 'مصحّح' : 'Graded', data.stats.graded],
+      ]} />
+      <div style={{ border: '1px solid var(--border-subtle)', borderRadius: 10, overflow: 'hidden' }}>
+        <AcTable>
           <thead><tr><th>{ar ? 'الطالب' : 'Student'}</th><th>{ar ? 'الرقم' : 'No.'}</th><th>{ar ? 'الحالة' : 'Status'}</th><th>{ar ? 'التسليم' : 'Submitted'}</th><th>{ar ? 'الدرجة' : 'Score'}</th><th /></tr></thead>
           <tbody>
             {data.students.map((r) => {
               const s = r.submission;
               return (
                 <tr key={r.student_id}>
-                  <td>{r.full_name || '—'}</td><td dir="ltr">{r.student_number || '—'}</td>
-                  <td>{s ? <span className={`att-pill att-pill--${cls[s.status]}`}>{S[s.status]}</span> : <span className="att-pill att-pill--absent">{ar ? 'لم يسلّم' : 'Missing'}</span>}{s?.is_late ? <span className="att-pill att-pill--late" style={{ marginInlineStart: 4 }}>{ar ? 'متأخر' : 'Late'}</span> : null}</td>
-                  <td dir="ltr">{s ? fmtDate(s.submitted_at) : '—'}</td>
-                  <td>{s?.score != null ? `${s.score} / ${a.max_score}` : '—'}</td>
-                  <td>{s && <button type="button" className="btn btn-primary btn-sm" onClick={() => setOpen(r)}>{s.status === 'graded' ? (ar ? 'مراجعة' : 'Review') : (ar ? 'تصحيح' : 'Grade')}</button>}</td>
+                  <td>{r.full_name || '—'}</td><td dir="ltr" style={{ textAlign: 'start' }}>{r.student_number || '—'}</td>
+                  <td>
+                    <div className="acx-pills">
+                      {s ? <span className={pill(cls[s.status])}>{S[s.status]}</span> : <span className={pill('absent')}>{ar ? 'لم يسلّم' : 'Missing'}</span>}
+                      {s?.is_late ? <span className={pill('late')}>{ar ? 'متأخر' : 'Late'}</span> : null}
+                    </div>
+                  </td>
+                  <td dir="ltr" style={{ textAlign: 'start' }} className="is-num">{s ? fmtDate(s.submitted_at) : '—'}</td>
+                  <td className="is-num">{s?.score != null ? `${s.score} / ${a.max_score}` : '—'}</td>
+                  <td className="is-end">{s && <button type="button" className="btn btn-primary btn-sm" onClick={() => setOpen(r)}>{s.status === 'graded' ? (ar ? 'مراجعة' : 'Review') : (ar ? 'تصحيح' : 'Grade')}</button>}</td>
                 </tr>
               );
             })}
           </tbody>
-        </table>
+        </AcTable>
       </div>
       {open && <GradeDialog a={a} row={open} ar={ar} locale={locale} onClose={() => setOpen(null)} onDone={() => { setOpen(null); load(); onChanged(); }} />}
-    </>
+    </div>
   );
 }
 

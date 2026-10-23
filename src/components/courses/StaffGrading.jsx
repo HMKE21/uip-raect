@@ -3,7 +3,7 @@ import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
-import { ExKpi } from '../exam/examUi';
+import { AcPage, AcHead, AcAlerts, AcKpis, AcPanel, AcNums, AcTable } from './acKit';
 import { Field, FormModal, FormSection } from '../people/formUi';
 import { downloadAuthed } from '../../lib/download';
 
@@ -15,6 +15,8 @@ import { downloadAuthed } from '../../lib/download';
 
 const KIND = { assignment: ['تكليف', 'Assignment'], attendance: ['حضور', 'Attendance'], manual: ['درجة يدوية', 'Manual'] };
 const STATUS = { none: ['لم تُحسب', 'Not calculated', 'excused'], draft: ['مسودة', 'Draft', 'late'], submitted: ['بانتظار الاعتماد', 'Awaiting approval', 'excused'], published: ['منشورة', 'Published', 'present'] };
+const TONE = { late: 'warning', absent: 'danger', excused: '', present: 'success' };
+const pill = (t) => `st-pill${TONE[t] ? ` st-pill--${TONE[t]}` : ''}`;
 const base = (id) => `/api/v1/grading/courses/${id}`;
 
 export default function StaffGrading() {
@@ -69,75 +71,77 @@ export default function StaffGrading() {
   const s = sheet?.summary;
 
   return (
-    <div className="ex-page">
-      <div>
-        <h1 style={{ margin: 0, fontSize: 24 }}>{ar ? 'التقييم والنتائج النهائية' : 'Grading & final results'}</h1>
-        <p className="is-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>{ar ? 'اربط الامتحانات والتكليفات والحضور بدرجة المادة، احسب التقدير حسب نظام الدرجات، وانشر للطلاب.' : 'Combine exams, assignments and attendance into the course grade, apply the grading scale, and publish.'}</p>
-      </div>
-      {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
-      {notice && <div className="st-alert"><Icon name="check-circle" size={16} /><span>{notice}</span></div>}
+    <AcPage>
+      <AcHead
+        title={ar ? 'التقييم والنتائج النهائية' : 'Grading & final results'}
+        text={ar ? 'اربط الامتحانات والتكليفات والحضور بدرجة المادة، احسب التقدير حسب نظام الدرجات، وانشر للطلاب.' : 'Combine exams, assignments and attendance into the course grade, apply the grading scale, and publish.'}
+      />
+      <AcAlerts error={error} notice={notice} />
 
       {loading ? <Skeleton h={100} count={2} /> : courses.length === 0 ? (
-        <div className="ex-card"><EmptyState icon="layers" title={ar ? 'لا توجد مواد تديرها' : 'No courses to manage'} /></div>
+        <AcPanel><EmptyState icon="layers" title={ar ? 'لا توجد مواد تديرها' : 'No courses to manage'} /></AcPanel>
       ) : (
-        <div className="ex-card">
-          <div className="att-row" style={{ gap: 12, flexWrap: 'wrap' }}>
-            <select className="ex-select" value={courseId} onChange={(e) => setCourseId(e.target.value)} aria-label={ar ? 'المادة' : 'Course'}>
+        <AcPanel flush>
+          <div className="acx-toolbar">
+            <select className="acx-input" style={{ flex: '1 1 260px' }} value={courseId} onChange={(e) => setCourseId(e.target.value)} aria-label={ar ? 'المادة' : 'Course'}>
               {courses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
             </select>
-            {sheet && <span className={`att-pill att-pill--${st[2]}`}>{st[ar ? 0 : 1]}</span>}
-            {sheet && sheet.course.credit_hours == null && <small className="is-muted">{ar ? '⚠ المادة بدون ساعات معتمدة — مش هتدخل في الـ GPA' : '⚠ No credit hours — excluded from GPA'}</small>}
+            {sheet && <span className={pill(st[2])}>{st[ar ? 0 : 1]}</span>}
+            {sheet && sheet.course.credit_hours == null && <span className="acx-muted">{ar ? '⚠ المادة بدون ساعات معتمدة — مش هتدخل في الـ GPA' : '⚠ No credit hours — excluded from GPA'}</span>}
           </div>
-          <div className="att-tabs">
-            <button type="button" className={tab === 'setup' ? 'is-on' : ''} onClick={() => setTab('setup')}>{ar ? 'المكوّنات والأوزان' : 'Components'}</button>
-            <button type="button" className={tab === 'results' ? 'is-on' : ''} onClick={() => setTab('results')}>{ar ? 'النتائج' : 'Results'}</button>
+          <div className="acx-tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={tab === 'setup'} className={tab === 'setup' ? 'is-on' : ''} onClick={() => setTab('setup')}>{ar ? 'المكوّنات والأوزان' : 'Components'}</button>
+            <button type="button" role="tab" aria-selected={tab === 'results'} className={tab === 'results' ? 'is-on' : ''} onClick={() => setTab('results')}>{ar ? 'النتائج' : 'Results'}{sheet?.rows?.length ? <small>{sheet.rows.length}</small> : null}</button>
           </div>
 
-          {!setup || !sheet ? <Skeleton h={80} count={2} /> : tab === 'setup' ? (
+          {!setup || !sheet ? <div className="acx-panel__body"><Skeleton h={80} count={2} /></div> : tab === 'setup' ? (
             <>
-              <div className="ex-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
-                <ExKpi label={ar ? 'أوزان الامتحانات' : 'Exam weights'} value={`${setup.exam_weight}%`} icon="file" />
-                <ExKpi label={ar ? 'أوزان المكوّنات' : 'Components'} value={`${Math.round(compW * 100) / 100}%`} icon="layers" />
-                <ExKpi label={ar ? 'المجموع' : 'Total'} value={`${Math.round(total * 100) / 100}%`} icon="award" tone={total > 100 ? 'bad' : total === 100 ? 'good' : ''} />
+              <div className="acx-panel__body acx-stack">
+                <AcKpis items={[
+                  { label: ar ? 'أوزان الامتحانات' : 'Exam weights', value: `${setup.exam_weight}%`, icon: 'file' },
+                  { label: ar ? 'أوزان المكوّنات' : 'Components', value: `${Math.round(compW * 100) / 100}%`, icon: 'layers' },
+                  { label: ar ? 'المجموع' : 'Total', value: `${Math.round(total * 100) / 100}%`, icon: 'award', tone: total > 100 ? 'bad' : total === 100 ? 'good' : '' },
+                ]} />
+                <p className="acx-note">{ar ? 'أوزان الامتحانات بتتحدد من دفتر درجات المادة. المجموع مش لازم يكون 100 — النسبة = النقاط ÷ المجموع.' : 'Exam weights come from the course gradebook. The total need not be 100 — percentage = points ÷ total.'}</p>
               </div>
-              <small className="is-muted">{ar ? 'أوزان الامتحانات بتتحدد من دفتر درجات المادة. المجموع مش لازم يكون 100 — النسبة = النقاط ÷ المجموع.' : 'Exam weights come from the course gradebook. The total need not be 100 — percentage = points ÷ total.'}</small>
 
-              <div className="ex-table-wrap">
-                <table className="ex-table">
-                  <thead><tr><th>{ar ? 'النوع' : 'Type'}</th><th>{ar ? 'الاسم' : 'Title'}</th><th>{ar ? 'الوزن' : 'Weight'}</th><th>{ar ? 'الدرجة العظمى' : 'Max'}</th><th /></tr></thead>
-                  <tbody>
-                    {comps.length === 0 && <tr><td colSpan={5}><small className="is-muted">{ar ? 'لا مكوّنات — الدرجة من الامتحانات فقط.' : 'No components — grade comes from exams only.'}</small></td></tr>}
-                    {comps.map((c, i) => (
-                      <tr key={c.id || `n${i}`}>
-                        <td>{KIND[c.kind][ar ? 0 : 1]}{c.kind === 'assignment' && c.assignment_exists === false && <small className="is-muted"> ({ar ? 'محذوف' : 'deleted'})</small>}</td>
-                        <td>{c.kind === 'manual' ? <input className="form-input" maxLength={200} value={c.title} disabled={locked} onChange={(e) => setC(i, 'title', e.target.value)} /> : c.title}</td>
-                        <td><input className="form-input" style={{ width: 90 }} type="number" min="0.5" max="100" step="0.5" value={c.weight} disabled={locked} onChange={(e) => setC(i, 'weight', e.target.value)} /></td>
-                        <td>{c.kind === 'manual' ? <input className="form-input" style={{ width: 90 }} type="number" min="1" value={c.max_score ?? ''} disabled={locked} onChange={(e) => setC(i, 'max_score', e.target.value)} /> : '—'}</td>
-                        <td style={{ whiteSpace: 'nowrap' }}>
+              <AcTable>
+                <thead><tr><th>{ar ? 'النوع' : 'Type'}</th><th>{ar ? 'الاسم' : 'Title'}</th><th>{ar ? 'الوزن' : 'Weight'}</th><th>{ar ? 'الدرجة العظمى' : 'Max'}</th><th /></tr></thead>
+                <tbody>
+                  {comps.length === 0 && <tr><td colSpan={5}><span className="acx-muted">{ar ? 'لا مكوّنات — الدرجة من الامتحانات فقط.' : 'No components — grade comes from exams only.'}</span></td></tr>}
+                  {comps.map((c, i) => (
+                    <tr key={c.id || `n${i}`}>
+                      <td><span className="st-pill">{KIND[c.kind][ar ? 0 : 1]}</span>{c.kind === 'assignment' && c.assignment_exists === false && <span className="acx-sub">{ar ? 'محذوف' : 'deleted'}</span>}</td>
+                      <td>{c.kind === 'manual' ? <input className="acx-input" maxLength={200} value={c.title} disabled={locked} onChange={(e) => setC(i, 'title', e.target.value)} /> : c.title}</td>
+                      <td><input className="acx-input" style={{ width: 90 }} type="number" min="0.5" max="100" step="0.5" value={c.weight} disabled={locked} onChange={(e) => setC(i, 'weight', e.target.value)} /></td>
+                      <td>{c.kind === 'manual' ? <input className="acx-input" style={{ width: 90 }} type="number" min="1" value={c.max_score ?? ''} disabled={locked} onChange={(e) => setC(i, 'max_score', e.target.value)} /> : '—'}</td>
+                      <td className="is-end">
+                        <div className="acx-actions" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
                           {c.kind === 'manual' && c.id && <button type="button" className="btn btn-outline btn-sm" onClick={() => setScores(c)}><Icon name="edit" size={13} /> {ar ? 'رصد الدرجات' : 'Enter scores'}</button>}
-                          {!locked && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setComps((l) => l.filter((_, j) => j !== i))}><Icon name="trash" size={13} /></button>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {!locked && (
-                <div className="as-actions">
-                  {!comps.some((c) => c.kind === 'attendance') && <button type="button" className="btn btn-outline btn-sm" onClick={addAttendance}><Icon name="plus" size={13} /> {ar ? 'الحضور' : 'Attendance'}</button>}
-                  <button type="button" className="btn btn-outline btn-sm" onClick={addManual}><Icon name="plus" size={13} /> {ar ? 'درجة يدوية (أعمال فصلية/شفوي…)' : 'Manual (coursework/oral…)'}</button>
-                  {setup.available_assignments.filter((a) => !comps.some((c) => c.kind === 'assignment' && c.ref_id === a.id)).map((a) => (
-                    <button key={a.id} type="button" className="btn btn-ghost btn-sm" onClick={() => addAssignment(a)}><Icon name="plus" size={13} /> {a.title}</button>
+                          {!locked && <button type="button" className="btn btn-ghost btn-sm" aria-label={ar ? 'حذف' : 'Remove'} onClick={() => setComps((l) => l.filter((_, j) => j !== i))}><Icon name="trash" size={13} /></button>}
+                        </div>
+                      </td>
+                    </tr>
                   ))}
-                  <button type="button" className="btn btn-primary btn-sm" disabled={busy || !unsaved} onClick={saveComps}><Icon name="check" size={13} /> {ar ? 'حفظ المكوّنات' : 'Save components'}</button>
-                </div>
-              )}
-              {locked && <small className="is-muted">{ar ? 'النتيجة منشورة — الغي النشر من تبويب النتائج للتعديل.' : 'Published — unpublish from Results to edit.'}</small>}
+                </tbody>
+              </AcTable>
+
+              <div className="acx-panel__foot">
+                {!locked ? (
+                  <div className="acx-actions">
+                    {!comps.some((c) => c.kind === 'attendance') && <button type="button" className="btn btn-outline btn-sm" onClick={addAttendance}><Icon name="plus" size={13} /> {ar ? 'الحضور' : 'Attendance'}</button>}
+                    <button type="button" className="btn btn-outline btn-sm" onClick={addManual}><Icon name="plus" size={13} /> {ar ? 'درجة يدوية (أعمال فصلية/شفوي…)' : 'Manual (coursework/oral…)'}</button>
+                    {setup.available_assignments.filter((a) => !comps.some((c) => c.kind === 'assignment' && c.ref_id === a.id)).map((a) => (
+                      <button key={a.id} type="button" className="btn btn-ghost btn-sm" onClick={() => addAssignment(a)}><Icon name="plus" size={13} /> {a.title}</button>
+                    ))}
+                    <button type="button" className="btn btn-primary btn-sm" style={{ marginInlineStart: 'auto' }} disabled={busy || !unsaved} onClick={saveComps}><Icon name="check" size={13} /> {ar ? 'حفظ المكوّنات' : 'Save components'}</button>
+                  </div>
+                ) : <span className="acx-muted">{ar ? 'النتيجة منشورة — الغي النشر من تبويب النتائج للتعديل.' : 'Published — unpublish from Results to edit.'}</span>}
+              </div>
             </>
           ) : (
             <>
-              <div className="as-actions">
+              <div className="acx-toolbar">
                 <button type="button" className="btn btn-primary btn-sm" disabled={busy || locked || unsaved} onClick={() => act(() => api.post(`${base(courseId)}/calculate`, { locale }))}><Icon name="refresh" size={13} /> {sheet.rows.length ? (ar ? 'إعادة الحساب' : 'Recalculate') : (ar ? 'احسب النتائج' : 'Calculate')}</button>
                 {sheet.rows.length > 0 && sheet.status !== 'published' && sheet.status !== 'submitted' && (
                   <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => window.confirm(ar ? 'نشر النتائج للطلاب؟' : 'Publish results to students?') && act(() => api.post(`${base(courseId)}/publish`, { locale }))}>
@@ -147,42 +151,42 @@ export default function StaffGrading() {
                 {sheet.status === 'submitted' && sheet.can_publish_directly && <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => act(() => api.post(`${base(courseId)}/publish`, { locale }))}><Icon name="check" size={13} /> {ar ? 'اعتماد ونشر' : 'Approve & publish'}</button>}
                 {(sheet.status === 'published' || sheet.status === 'submitted') && <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => act(() => api.post(`${base(courseId)}/unpublish`, { locale }))}>{ar ? 'إلغاء النشر / سحب' : 'Unpublish / withdraw'}</button>}
                 {sheet.rows.length > 0 && <button type="button" className="btn btn-ghost btn-sm" onClick={() => downloadAuthed(`${base(courseId)}/export`, 'grades.csv').catch((e) => setError(errorMessage(e)))}><Icon name="download" size={13} /> CSV</button>}
+                {unsaved && <span className="acx-muted">{ar ? 'فيه تعديلات غير محفوظة في المكوّنات.' : 'Unsaved component changes.'}</span>}
               </div>
-              {unsaved && <small className="is-muted">{ar ? 'فيه تعديلات غير محفوظة في المكوّنات.' : 'Unsaved component changes.'}</small>}
 
-              {sheet.rows.length === 0 ? <EmptyState icon="award" title={ar ? 'لم تُحسب النتائج بعد' : 'Not calculated yet'} /> : (
+              {sheet.rows.length === 0 ? <div className="acx-empty"><EmptyState icon="award" title={ar ? 'لم تُحسب النتائج بعد' : 'Not calculated yet'} /></div> : (
                 <>
-                  <div className="att-nums">
-                    <span>{ar ? 'المتوسط' : 'Average'} <b>{s.average_pct}%</b></span><span>{ar ? 'الأعلى' : 'Highest'} <b>{s.highest_pct}%</b></span><span>{ar ? 'الأقل' : 'Lowest'} <b>{s.lowest_pct}%</b></span>
-                    <span>{ar ? 'ناجح' : 'Passed'} <b>{s.passed}</b></span><span>{ar ? 'راسب' : 'Failed'} <b>{s.failed}</b></span><span>{ar ? 'محروم' : 'Deprived'} <b>{s.deprived}</b></span>
-                    {Object.entries(s.distribution).map(([k, v]) => <span key={k}>{k}: <b>{v}</b></span>)}
+                  <div className="acx-panel__body">
+                    <AcNums items={[
+                      [ar ? 'المتوسط' : 'Average', `${s.average_pct}%`], [ar ? 'الأعلى' : 'Highest', `${s.highest_pct}%`], [ar ? 'الأقل' : 'Lowest', `${s.lowest_pct}%`],
+                      [ar ? 'ناجح' : 'Passed', s.passed], [ar ? 'راسب' : 'Failed', s.failed], [ar ? 'محروم' : 'Deprived', s.deprived],
+                      ...Object.entries(s.distribution).map(([k, v]) => [k, v]),
+                    ]} />
                   </div>
-                  <div className="ex-table-wrap">
-                    <table className="ex-table">
-                      <thead><tr><th>{ar ? 'الطالب' : 'Student'}</th><th>{ar ? 'الرقم' : 'No.'}</th><th>{ar ? 'النقاط' : 'Points'}</th><th>%</th><th>{ar ? 'التقدير' : 'Grade'}</th><th>GPA</th><th /></tr></thead>
-                      <tbody>
-                        {sheet.rows.map((r) => (
-                          <tr key={r.student_id}>
-                            <td>{r.full_name || '—'}</td><td dir="ltr">{r.student_number || '—'}</td>
-                            <td>{r.points_earned} / {r.points_total}</td><td>{r.percentage}</td>
-                            <td><span className={`att-pill att-pill--${r.is_fail ? 'absent' : 'present'}`}>{r.letter}</span>{r.deprived && <small className="is-muted"> {ar ? 'محروم' : 'deprived'}</small>}{r.overridden && <small className="is-muted" title={r.override_reason}> ✎</small>}</td>
-                            <td>{r.grade_points?.toFixed(2)}</td>
-                            <td>{!locked && <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOvr(r)}>{ar ? 'تعديل' : 'Override'}</button>}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <AcTable>
+                    <thead><tr><th>{ar ? 'الطالب' : 'Student'}</th><th>{ar ? 'الرقم' : 'No.'}</th><th>{ar ? 'النقاط' : 'Points'}</th><th>%</th><th>{ar ? 'التقدير' : 'Grade'}</th><th>GPA</th><th /></tr></thead>
+                    <tbody>
+                      {sheet.rows.map((r) => (
+                        <tr key={r.student_id}>
+                          <td>{r.full_name || '—'}</td><td dir="ltr" style={{ textAlign: 'start' }}>{r.student_number || '—'}</td>
+                          <td className="is-num">{r.points_earned} / {r.points_total}</td><td className="is-num">{r.percentage}</td>
+                          <td><span className={pill(r.is_fail ? 'absent' : 'present')}>{r.letter}</span>{r.deprived && <span className="acx-sub">{ar ? 'محروم' : 'deprived'}</span>}{r.overridden && <span className="acx-sub" title={r.override_reason}>✎ {ar ? 'معدّل يدويًا' : 'overridden'}</span>}</td>
+                          <td className="is-num">{r.grade_points?.toFixed(2)}</td>
+                          <td className="is-end">{!locked && <button type="button" className="btn btn-outline btn-sm" onClick={() => setOvr(r)}>{ar ? 'تعديل' : 'Override'}</button>}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </AcTable>
                 </>
               )}
             </>
           )}
-        </div>
+        </AcPanel>
       )}
 
       {scores && <ScoresDialog courseId={courseId} comp={scores} ar={ar} locale={locale} onClose={() => setScores(null)} onDone={(m) => { setScores(null); setNotice(m); }} />}
       {ovr && <OverrideDialog courseId={courseId} row={ovr} scale={sheet.scale} ar={ar} locale={locale} onClose={() => setOvr(null)} onDone={(m) => { setOvr(null); setNotice(m); load().catch(() => {}); }} />}
-    </div>
+    </AcPage>
   );
 }
 

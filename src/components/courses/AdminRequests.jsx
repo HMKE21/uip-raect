@@ -3,6 +3,7 @@ import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
+import { AcPage, AcHead, AcAlerts, AcPanel, AcField } from './acKit';
 import { downloadAuthed } from '../../lib/download';
 
 /**
@@ -62,72 +63,73 @@ export default function AdminRequests({ role = 'student' }) {
   const download = (r) => downloadAuthed(`/api/v1/admin-requests/${r.id}/document`, `${r.ref_no}.pdf`, { locale }).catch((e) => setError(errorMessage(e)));
 
   return (
-    <div className="ex-page">
-      <div>
-        <h1 style={{ margin: 0, fontSize: 24 }}>{ar ? 'الطلبات الإدارية' : 'Administrative requests'}</h1>
-        <p className="is-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
-          {student
-            ? (ar ? 'اطلب شهادة قيد أو بيان درجات أو إفادة. الطلب بيعدّي على الكلية ثم الجامعة، وبعد الاعتماد تحمّل المستند.' : 'Request an enrollment certificate, grade statement or letter. It goes to your faculty, then the university; download the document once approved.')
-            : (ar ? 'طلبات الطلاب. الكلية بتوافق وتحوّل للجامعة، والجامعة بتعتمد.' : 'Student requests. The faculty approves and forwards; the university gives final approval.')}
-        </p>
-      </div>
-
-      {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
-      {notice && <div className="st-alert st-alert--success"><Icon name="check-circle" size={16} /><span>{notice}</span></div>}
+    <AcPage>
+      <AcHead
+        title={ar ? 'الطلبات الإدارية' : 'Administrative requests'}
+        text={student
+          ? (ar ? 'اطلب شهادة قيد أو بيان درجات أو إفادة. الطلب بيعدّي على الكلية ثم الجامعة، وبعد الاعتماد تحمّل المستند.' : 'Request an enrollment certificate, grade statement or letter. It goes to your faculty, then the university; download the document once approved.')
+          : (ar ? 'طلبات الطلاب. الكلية بتوافق وتحوّل للجامعة، والجامعة بتعتمد.' : 'Student requests. The faculty approves and forwards; the university gives final approval.')}
+      />
+      <AcAlerts error={error} notice={notice} />
 
       {student && (
-        <form className="ex-card" onSubmit={submit} style={{ display: 'grid', gap: 10 }}>
-          <b>{ar ? 'طلب جديد' : 'New request'}</b>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
-            <select className="input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              {Object.entries(TYPES).map(([k, v]) => <option key={k} value={k}>{ar ? v[0] : v[1]}</option>)}
-            </select>
-            <input className="input" value={form.purpose} maxLength={200} onChange={(e) => setForm({ ...form, purpose: e.target.value })}
-              placeholder={form.type === 'statement' ? (ar ? 'الجهة / الغرض (مطلوب)' : 'Addressed to / purpose (required)') : (ar ? 'الجهة الموجّه لها (اختياري)' : 'Addressed to (optional)')} />
-          </div>
-          <textarea className="input" rows={2} maxLength={2000} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder={ar ? 'ملاحظات (اختياري)' : 'Notes (optional)'} />
-          <div><button type="submit" className="btn btn-primary" disabled={busy || (form.type === 'statement' && !form.purpose.trim())}>{ar ? 'إرسال الطلب' : 'Submit request'}</button></div>
-        </form>
+        <AcPanel title={ar ? 'طلب جديد' : 'New request'} flush>
+          <form className="acx-form" style={{ borderTop: 0 }} onSubmit={submit}>
+            <div className="acx-form__grid">
+              <AcField label={ar ? 'نوع المستند' : 'Document type'}>
+                <select className="acx-input" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                  {Object.entries(TYPES).map(([k, v]) => <option key={k} value={k}>{ar ? v[0] : v[1]}</option>)}
+                </select>
+              </AcField>
+              <AcField label={form.type === 'statement' ? (ar ? 'الجهة / الغرض (مطلوب)' : 'Addressed to / purpose (required)') : (ar ? 'الجهة الموجّه لها (اختياري)' : 'Addressed to (optional)')}>
+                <input className="acx-input" value={form.purpose} maxLength={200} onChange={(e) => setForm({ ...form, purpose: e.target.value })} />
+              </AcField>
+            </div>
+            <AcField label={ar ? 'ملاحظات (اختياري)' : 'Notes (optional)'}><textarea className="acx-input" rows={2} maxLength={2000} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} /></AcField>
+            <div className="acx-form__actions"><button type="submit" className="btn btn-primary btn-sm" disabled={busy || (form.type === 'statement' && !form.purpose.trim())}>{ar ? 'إرسال الطلب' : 'Submit request'}</button></div>
+          </form>
+        </AcPanel>
       )}
 
-      <div className="ex-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-          <b>{student ? (ar ? 'طلباتي' : 'My requests') : (ar ? 'الطلبات' : 'Requests')}</b>
-          <select className="input" style={{ width: 'auto' }} value={status} onChange={(e) => setStatus(e.target.value)}>
+      <AcPanel title={student ? (ar ? 'طلباتي' : 'My requests') : (ar ? 'الطلبات' : 'Requests')} flush
+        tools={(
+          <select className="acx-input" style={{ width: 'auto' }} value={status} onChange={(e) => setStatus(e.target.value)}>
             <option value="">{ar ? 'كل الحالات' : 'All statuses'}</option>
             {Object.entries(STATUS).map(([k, v]) => <option key={k} value={k}>{ar ? v[0] : v[1]}</option>)}
           </select>
-        </div>
-
-        {!rows && !error ? <Skeleton h={60} count={3} /> : rows && rows.length === 0 ? <EmptyState icon="file" title={ar ? 'لا توجد طلبات' : 'No requests'} /> : rows && (
-          <div style={{ display: 'grid', gap: 10 }}>
+        )}>
+        {!rows && !error ? <div className="acx-panel__body"><Skeleton h={60} count={3} /></div> : rows && rows.length === 0 ? <div className="acx-empty"><EmptyState icon="file" title={ar ? 'لا توجد طلبات' : 'No requests'} /></div> : rows && (
+          <div>
             {rows.map((r) => {
               const st = STATUS[r.status] || STATUS.pending;
               const where = r.status === 'pending' ? (r.stage === 'faculty' ? (ar ? 'عند الكلية' : 'With faculty') : (ar ? 'عند الجامعة' : 'With university')) : null;
               return (
-                <div key={r.id} style={{ border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div>
-                      <b>{ar ? TYPES[r.type]?.[0] : TYPES[r.type]?.[1]}</b>
-                      <span className="is-muted" style={{ fontSize: 12, marginInlineStart: 8 }}>{r.ref_no} · {fmt(r.created_at)}</span>
-                      {!student && <div style={{ fontSize: 13 }}>{r.student.name} <span className="is-muted">({r.student.number})</span></div>}
-                      {r.purpose && <div className="is-muted" style={{ fontSize: 12 }}>{ar ? 'الجهة/الغرض: ' : 'For: '}{r.purpose}</div>}
-                      {r.message && <div className="is-muted" style={{ fontSize: 12 }}>{r.message}</div>}
+                <article key={r.id} className="acx-item">
+                  <div className="acx-item__head">
+                    <div style={{ minWidth: 0 }}>
+                      <span className="acx-code" dir="ltr">{r.ref_no}</span>
+                      <div className="acx-item__title">{ar ? TYPES[r.type]?.[0] : TYPES[r.type]?.[1]}</div>
+                      {!student && <div className="acx-muted">{r.student.name} ({r.student.number})</div>}
+                      <div className="acx-muted">{fmt(r.created_at)}</div>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div className="acx-actions">
                       <span className={`st-pill${st[2] ? ` st-pill--${st[2]}` : ''}`}>{ar ? st[0] : st[1]}</span>
-                      {where && <span className="is-muted" style={{ fontSize: 12 }}>{where}</span>}
-                      {r.document_ready && <button type="button" className="btn btn-primary btn-sm" onClick={() => download(r)}><Icon name="download" size={14} /> {ar ? 'تحميل PDF' : 'Download PDF'}</button>}
-                      {r.can_cancel && <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => run(() => api.post(`/api/v1/admin-requests/${r.id}/cancel`, { locale }))}>{ar ? 'إلغاء' : 'Cancel'}</button>}
-                      <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpen(open === r.id ? null : r.id)}>{ar ? 'السجل' : 'History'}</button>
+                      {where && <span className="acx-muted">{where}</span>}
                     </div>
                   </div>
+                  {r.purpose && <div className="acx-muted">{ar ? 'الجهة/الغرض: ' : 'For: '}{r.purpose}</div>}
+                  {r.message && <p className="acx-item__body">{r.message}</p>}
+                  {r.decision_note && r.status !== 'pending' && <div className="st-alert"><Icon name="info" size={15} /><span>{ar ? 'ملاحظة: ' : 'Note: '}{r.decision_note}</span></div>}
 
-                  {r.decision_note && r.status !== 'pending' && <div style={{ fontSize: 12, marginTop: 6 }}>{ar ? 'ملاحظة: ' : 'Note: '}{r.decision_note}</div>}
+                  <div className="acx-actions">
+                    {r.document_ready && <button type="button" className="btn btn-primary btn-sm" onClick={() => download(r)}><Icon name="download" size={14} /> {ar ? 'تحميل PDF' : 'Download PDF'}</button>}
+                    {r.can_cancel && <button type="button" className="btn btn-outline btn-sm" disabled={busy} onClick={() => run(() => api.post(`/api/v1/admin-requests/${r.id}/cancel`, { locale }))}>{ar ? 'إلغاء' : 'Cancel'}</button>}
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setOpen(open === r.id ? null : r.id)}>{ar ? 'السجل' : 'History'}</button>
+                  </div>
 
                   {r.can_act && (
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-                      <input className="input" style={{ flex: '1 1 220px' }} value={notes[r.id] || ''} onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })} placeholder={ar ? 'ملاحظة (إلزامية عند الرفض)' : 'Note (required when rejecting)'} />
+                    <div className="acx-actions">
+                      <input className="acx-input" style={{ flex: '1 1 220px', width: 'auto' }} value={notes[r.id] || ''} onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })} placeholder={ar ? 'ملاحظة (إلزامية عند الرفض)' : 'Note (required when rejecting)'} />
                       <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => act(r.id, 'approve')}>
                         {role === 'faculty' ? (ar ? 'موافقة وتحويل للجامعة' : 'Approve & forward') : (ar ? 'اعتماد' : 'Approve')}
                       </button>
@@ -136,18 +138,18 @@ export default function AdminRequests({ role = 'student' }) {
                   )}
 
                   {open === r.id && (
-                    <ul style={{ margin: '10px 0 0', paddingInlineStart: 18, fontSize: 12 }}>
+                    <ul className="acx-muted" style={{ margin: 0, paddingInlineStart: 18 }}>
                       {r.events.map((e, i) => (
                         <li key={i}>{fmt(e.at)} — {ar ? ACTION[e.action]?.[0] : ACTION[e.action]?.[1]} ({ar ? ROLE[e.role]?.[0] : ROLE[e.role]?.[1]}{e.by ? `: ${e.by}` : ''}){e.note ? ` — ${e.note}` : ''}</li>
                       ))}
                     </ul>
                   )}
-                </div>
+                </article>
               );
             })}
           </div>
         )}
-      </div>
-    </div>
+      </AcPanel>
+    </AcPage>
   );
 }

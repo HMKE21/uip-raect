@@ -113,3 +113,18 @@ textarea.acx-input { min-height: 72px; resize: vertical; line-height: 1.55; }
 .acx-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--color-success); }
 .acx-course.is-warning .acx-bar > i { background: var(--color-warning); }
 .acx-course.is-deprived .acx-bar > i { background: var(--color-danger); }
+
+/* ---- live attendance QR (staff) ---- */
+.acx-qr { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 18px; text-align: center; border-bottom: 1px solid var(--border-subtle); }
+.acx-qr img { width: min(100%, 320px); height: auto; padding: 10px; border-radius: var(--st-radius, 14px); background: #fff; border: 1px solid var(--border-subtle); }
+.acx-qr__count { font-size: 34px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.acx-qr__count small { font-size: 16px; font-weight: 600; color: var(--text-secondary); }
+
+/* ---- course cards (courses manager, all roles) ---- */
+.acx-courses--wide { grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.acx-course.is-archived { opacity: .78; }
+.acx-facts { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; font-size: 12.5px; color: var(--text-secondary); }
+.acx-facts li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.acx-facts li svg { flex: none; margin-top: 2px; }
+.acx-facts li span { min-width: 0; overflow-wrap: anywhere; }
+.acx-facts li.is-warn { color: var(--color-warning); }
