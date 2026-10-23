@@ -45,5 +45,9 @@ export async function cloudFetch(url, init) {
   }
   if (res.status === 507) throw new CloudQuotaError();
   if (res.status === 429 || res.status >= 500) throw new CloudRetryError(`Cloud error ${res.status}.`, res.status);
-  throw Object.assign(new Error(`Cloud error ${res.status}.`), { status: res.status });
+  // keep the provider's own explanation (Graph / Drive send { error: { code, message } }) so "Cloud error 400" says WHY
+  let why = '';
+  try { const j = JSON.parse(await res.clone().text()); why = [j?.error?.code, j?.error?.message].filter((x) => typeof x === 'string').join(' — '); } catch { /* not JSON */ }
+  try { console.warn('[cloud]', res.status, (init?.method || 'GET'), String(url).split('?')[0], why); } catch { /* ignore */ }
+  throw Object.assign(new Error(`Cloud error ${res.status}.${why ? ` ${why.slice(0, 160)}` : ''}`), { status: res.status, detail: why });
 }

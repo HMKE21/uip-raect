@@ -116,7 +116,9 @@ async function makeFolder(tok, parentPath, name) {
     try {
       await cloudFetch(url, { method: 'POST', headers: authed(tok, { 'Content-Type': 'application/json' }), body: JSON.stringify({ name, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }) });
     } catch (e) {
-      if (e?.status === 409) return; // nameAlreadyExists: the folder is already there
+      // 409 = nameAlreadyExists (already there). Any other 4xx here is not fatal either: the upload itself creates a missing folder by path
+      // (and a clash on that is retried), so a refused "create folder" call must not stop the backup.
+      if (e?.status === 409 || (e?.status >= 400 && e?.status < 500 && e?.status !== 401 && e?.status !== 403 && e?.status !== 429)) return;
       throw e;
     }
   });
