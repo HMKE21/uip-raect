@@ -3,6 +3,7 @@ import Icon from '../../Icon';
 import Markdown from './AiMarkdown';
 import { Diff } from './AiFixPanel';
 import { useAiChatState } from './useAiChat';
+import { joinQuote, splitQuote, MAX_QUOTE } from './quote';
 import '../../../styles/css/zip-ai-fix.css';
 import '../../../styles/css/zip-ai-uip.css';
 
@@ -100,7 +101,7 @@ const Message = memo(function Message({ m, prevUser, tt, canSwitch, onApply, onA
       <div className="zb-chat__ubox">
         <div className="zb-chat__user" dir="auto">
           {Array.isArray(m.refs) && m.refs.length > 0 && <div className="zb-chat__refs">{m.refs.map((r, i) => <RefCard key={i} r={r} tt={tt} onGoto={onGoto} />)}</div>}
-          {m.content}
+          {(() => { const { text, quote } = splitQuote(m.content); return (<>{quote && <blockquote className="zb-chat__uquote" dir="auto">{quote}</blockquote>}{text}</>); })()}
         </div>
         {isLastUser && !busy && <button type="button" className="zb-ai__mini zb-chat__edit" onClick={() => onEdit(m)}><Icon name="edit" size={12} /> {tt('Edit', 'تعديل')}</button>}
       </div>
@@ -180,13 +181,39 @@ function HistoryView({ tt, h, busy, onDone }) {
   const [q, setQ] = useState('');
   const [renaming, setRenaming] = useState(null); // id
   const [draft, setDraft] = useState('');
-  const [confirm, setConfirm] = useState(null);   // id | 'all'
+  const [confirm, setConfirm] = useState(null);   // id | 'all' | 'many'
+  const [selecting, setSelecting] = useState(false); // multi-select mode
+  const [picked, setPicked] = useState(() => new Set());
+  const anchor = useRef(null);
+  const [bulkErr, setBulkErr] = useState('');
   const list = useMemo(() => {
     const t = q.trim().toLowerCase();
     return (h.chats || []).filter((c) => !t || (c.title || '').toLowerCase().includes(t));
   }, [h.chats, q]);
 
   const open = async (id) => { if (busy) return; if (await h.onOpen(id)) onDone(); };
+  const pickedIds = [...picked].filter((id) => (h.chats || []).some((c) => c.id === id));
+  const exitSelect = () => { setSelecting(false); setPicked(new Set()); setConfirm(null); setBulkErr(''); anchor.current = null; };
+  const toggle = (id, e) => {
+    setBulkErr('');
+    setPicked((cur) => {
+      const next = new Set(cur);
+      if (e?.shiftKey && anchor.current != null) {
+        const a = list.findIndex((c) => c.id === anchor.current); const b = list.findIndex((c) => c.id === id);
+        if (a >= 0 && b >= 0) { const [lo, hi] = a < b ? [a, b] : [b, a]; list.slice(lo, hi + 1).forEach((c) => next.add(c.id)); return next; }
+      }
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+    anchor.current = id;
+  };
+  const allShown = list.length > 0 && list.every((c) => picked.has(c.id));
+  const toggleAll = () => setPicked(allShown ? new Set() : new Set(list.map((c) => c.id)));
+  const deleteSelected = async () => {
+    setConfirm(null);
+    const { failed } = await h.onDeleteMany(pickedIds);
+    if (failed.length) { setPicked(new Set(failed)); setBulkErr(tt(`${failed.length} could not be deleted — try again.`, `${failed.length} محادثة معرفتش أحذفها — جرّب تاني.`)); } else exitSelect();
+  };
   const commitRename = async () => { const id = renaming; setRenaming(null); if (id && draft.trim()) await h.onRename(id, draft); };
 
   return (
@@ -199,6 +226,34 @@ function HistoryView({ tt, h, busy, onDone }) {
         <button type="button" className="zb-btn zb-btn--primary" onClick={() => { h.onNew(); onDone(); }} disabled={busy}><Icon name="plus" size={14} /> <span>{tt('New chat', 'محادثة جديدة')}</span></button>
       </div>
 
+      {(h.chats || []).length > 0 && (
+        <div className="zb-hist__tools">
+          {!selecting
+            ? <button type="button" className="zb-ai__mini" onClick={() => setSelecting(true)} disabled={busy}><Icon name="check" size={12} /> {tt('Select', 'تحديد')}</button>
+            : (
+              <>
+                <label className="zb-hist__all"><input type="checkbox" checked={allShown} onChange={toggleAll} /> <span>{allShown ? tt('Clear selection', 'إلغاء التحديد') : tt('Select all', 'تحديد الكل')}</span></label>
+                <span className="zb-hist__count" aria-live="polite">{tt(`${pickedIds.length} selected`, `${pickedIds.length} محدد`)}</span>
+                {confirm === 'many'
+                  ? (
+                    <span className="zb-hist__confirm">
+                      <span>{tt(`Delete ${pickedIds.length}?`, `حذف ${pickedIds.length}؟`)}</span>
+                      <button type="button" className="zb-btn zb-btn--danger" onClick={deleteSelected}>{tt('Delete', 'حذف')}</button>
+                      <button type="button" className="zb-btn" onClick={() => setConfirm(null)}>{tt('Cancel', 'إلغاء')}</button>
+                    </span>
+                  )
+                  : (
+                    <>
+                      <button type="button" className="zb-btn zb-btn--danger" disabled={!pickedIds.length} onClick={() => setConfirm('many')}><Icon name="trash" size={13} /> <span>{tt('Delete selected', 'حذف المحدد')}</span></button>
+                      <button type="button" className="zb-btn" onClick={exitSelect}>{tt('Done', 'تم')}</button>
+                    </>
+                  )}
+              </>
+            )}
+          {bulkErr && <span className="zb-hist__err" role="alert">{bulkErr}</span>}
+        </div>
+      )}
+
       <div className="zb-hist__list">
         {h.chats === null && <div className="zb-ai__wait"><span className="zb-ai__dots" aria-hidden="true"><i /><i /><i /></span>{tt('Loading…', 'بحمّل…')}</div>}
         {h.listError && (
@@ -206,17 +261,18 @@ function HistoryView({ tt, h, busy, onDone }) {
         )}
         {h.chats && !h.listError && list.length === 0 && <p className="zb-hist__empty" dir="auto">{q ? tt('No conversation matches your search.', 'مفيش محادثة مطابقة للبحث.') : tt('No saved conversations yet. They are saved automatically when you start chatting.', 'مفيش محادثات محفوظة لسه. بتتحفظ تلقائيًا أول ما تبدأ تتكلم.')}</p>}
         {list.map((c) => (
-          <div key={c.id} className={`zb-hist__item${c.id === h.activeId ? ' is-on' : ''}`}>
+          <div key={c.id} className={`zb-hist__item${c.id === h.activeId ? ' is-on' : ''}${selecting && picked.has(c.id) ? ' is-picked' : ''}`}>
+            {selecting && <input type="checkbox" className="zb-hist__chk" checked={picked.has(c.id)} onChange={() => {}} onClick={(e) => toggle(c.id, e)} aria-label={tt('Select this conversation', 'تحديد المحادثة دي')} />}
             {renaming === c.id ? (
               <input className="zb-hist__rename" autoFocus value={draft} maxLength={120} dir="auto" onChange={(e) => setDraft(e.target.value)} onBlur={commitRename}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commitRename(); } else if (e.key === 'Escape') { e.stopPropagation(); setRenaming(null); } }} aria-label={tt('Conversation title', 'عنوان المحادثة')} />
             ) : (
-              <button type="button" className="zb-hist__open" onClick={() => open(c.id)} disabled={busy}>
+              <button type="button" className="zb-hist__open" onClick={(e) => (selecting ? toggle(c.id, e) : open(c.id))} disabled={busy && !selecting}>
                 <strong dir="auto">{c.title || tt('New chat', 'محادثة جديدة')}</strong>
                 <small>{when(c.updated_at, tt)} · {tt(`${c.message_count} messages`, `${c.message_count} رسالة`)}{c.label ? ` · ${c.label}` : ''}</small>
               </button>
             )}
-            {renaming !== c.id && confirm !== c.id && (
+            {!selecting && renaming !== c.id && confirm !== c.id && (
               <span className="zb-hist__acts">
                 <button type="button" className="zb-ibtn" onClick={() => { setRenaming(c.id); setDraft(c.title || ''); }} title={tt('Rename', 'إعادة تسمية')} aria-label={tt('Rename', 'إعادة تسمية')}><Icon name="edit" size={13} /></button>
                 <button type="button" className="zb-ibtn" onClick={() => setConfirm(c.id)} title={tt('Delete', 'حذف')} aria-label={tt('Delete', 'حذف')}><Icon name="trash" size={13} /></button>
@@ -233,7 +289,7 @@ function HistoryView({ tt, h, busy, onDone }) {
         ))}
       </div>
 
-      {(h.chats || []).length > 1 && (
+      {!selecting && (h.chats || []).length > 1 && (
         <div className="zb-hist__foot">
           {confirm === 'all'
             ? (
@@ -269,9 +325,11 @@ export default function AiChatPanel({
   const onRetrySave = chat.retrySave;
   const history = useMemo(() => ({
     chats: st.chats, listError: st.listError, activeId: st.chatId,
-    onLoad: chat.loadChats, onNew: chat.newChat, onOpen: chat.openChat, onRename: chat.renameChat, onDelete: chat.deleteChat, onClearAll: chat.clearAll,
+    onLoad: chat.loadChats, onNew: chat.newChat, onOpen: chat.openChat, onRename: chat.renameChat, onDelete: chat.deleteChat, onDeleteMany: chat.deleteMany, onClearAll: chat.clearAll,
   }), [st.chats, st.listError, st.chatId, chat]);
   const [text, setText] = useState('');
+  const [quote, setQuote] = useState('');   // a part of an earlier answer the next question is about
+  const [ask, setAsk] = useState(null);     // floating "Ask about this" button: { x, y, text }
   const [view, setView] = useState('chat'); // chat | history
   const [width, setWidth] = useState(readWidth);
   const [maxed, setMaxed] = useState(false);
@@ -285,7 +343,39 @@ export default function AiChatPanel({
     const raf = requestAnimationFrame(() => { el.scrollTop = el.scrollHeight; });
     return () => cancelAnimationFrame(raf);
   }, [messages, view]);
-  const onScroll = () => { const el = bodyRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; };
+  const onScroll = () => { const el = bodyRef.current; if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60; setAsk(null); };
+
+  // ---- select a part of an answer -> "Ask about this" (like Claude / ChatGPT) ----------------------------------------------
+  const readSelection = () => {
+    const sel = window.getSelection?.();
+    const body = bodyRef.current;
+    if (!sel || sel.isCollapsed || !sel.rangeCount || !body) { setAsk(null); return; }
+    const inBot = (n) => { const el = n && (n.nodeType === 1 ? n : n.parentElement); return !!el && !!el.closest('.zb-chat__botbody') && body.contains(el); };
+    if (!inBot(sel.anchorNode) || !inBot(sel.focusNode)) { setAsk(null); return; }
+    const t = sel.toString().replace(/ /g, ' ').trim();
+    if (t.length < 2) { setAsk(null); return; }
+    const r = sel.getRangeAt(0).getBoundingClientRect();
+    if (!r.width && !r.height) { setAsk(null); return; }
+    const a = asideRef.current?.getBoundingClientRect();
+    if (!a) { setAsk(null); return; }
+    // position relative to the panel (an ancestor window may be transformed, which breaks position: fixed)
+    const below = r.top - a.top <= 52;
+    setAsk({ x: Math.min(Math.max(r.left + r.width / 2 - a.left, 70), a.width - 70), y: (below ? r.bottom : r.top) - a.top + (below ? 8 : -8), below, text: t });
+  };
+  useEffect(() => {
+    // a selection made with the mouse is read on mouse-up; keyboard / touch selections on selectionchange (debounced)
+    let t = 0;
+    const onChange = () => { clearTimeout(t); t = setTimeout(() => { const sel = window.getSelection?.(); if (!sel || sel.isCollapsed) setAsk(null); else readSelection(); }, 180); };
+    document.addEventListener('selectionchange', onChange);
+    return () => { clearTimeout(t); document.removeEventListener('selectionchange', onChange); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const takeQuote = () => {
+    if (!ask) return;
+    setQuote(ask.text.slice(0, MAX_QUOTE));
+    setAsk(null);
+    try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ }
+    setTimeout(() => boxRef.current?.focus(), 0);
+  };
   useEffect(() => { if (view === 'chat') boxRef.current?.focus(); }, [view]);
   useEffect(() => { history.onLoad(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === 'history') history.onLoad(); }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -333,14 +423,16 @@ export default function AiChatPanel({
   const resetWidth = () => { setWidth(null); saveWidth(null); setMaxed(false); };
 
   const lastUserId = useMemo(() => { for (let k = messages.length - 1; k >= 0; k -= 1) if (messages[k].role === 'user') return messages[k].id; return null; }, [messages]);
-  const editLast = (m) => { chat.rewind(m.id); setText(m.content); setTimeout(() => boxRef.current?.focus(), 0); };
+  const editLast = (m) => { const p = splitQuote(m.content); chat.rewind(m.id); setText(p.text); setQuote(p.quote); setTimeout(() => boxRef.current?.focus(), 0); };
   const submit = (q) => {
-    const v = String(q ?? text).trim();
-    if (!v || busy) return;
+    let v = String(q ?? text).trim();
+    if ((!v && !quote) || busy) return;
+    if (!v) v = tt('Explain this part.', 'اشرحلي الجزء ده.');
     stick.current = true;
     setView('chat');
-    onSend(v);
+    onSend(joinQuote(v, quote));
     setText('');
+    setQuote('');
   };
   const onKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit(); }
@@ -422,6 +514,13 @@ export default function AiChatPanel({
           </div>
 
           <div className="zb-chat__composer">
+            {quote && (
+              <div className="zb-chat__qchip">
+                <Icon name="message" size={13} />
+                <span dir="auto">{quote}</span>
+                <button type="button" onClick={() => setQuote('')} title={tt('Remove the quote', 'شيل الاقتباس')} aria-label={tt('Remove the quote', 'شيل الاقتباس')}><Icon name="x" size={13} /></button>
+              </div>
+            )}
             {(refs.length > 0 || liveSel) && (
               <div className="zb-chat__quotes">
                 {refs.map((r) => <RefCard key={r.id} r={r} tt={tt} onGoto={onGoto} onRemove={() => onUnpin(r.id)} />)}
@@ -449,10 +548,10 @@ export default function AiChatPanel({
             )}
             <div className="zb-chat__row">
               <textarea ref={boxRef} className="zb-chat__input" rows={1} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} dir="auto" maxLength={6000}
-                placeholder={refs.length || liveSel ? tt('Ask about this code…', 'اسأل عن الكود ده…') : tt('Ask UIP AI…  (Enter to send, Shift+Enter for a new line)', 'اسأل UIP AI…  (Enter للإرسال، Shift+Enter لسطر جديد)')} aria-label={tt('Message', 'الرسالة')} />
+                placeholder={quote ? tt('Ask about the quoted part…', 'اسأل عن الجزء المقتبس…') : refs.length || liveSel ? tt('Ask about this code…', 'اسأل عن الكود ده…') : tt('Ask UIP AI…  (Enter to send, Shift+Enter for a new line)', 'اسأل UIP AI…  (Enter للإرسال، Shift+Enter لسطر جديد)')} aria-label={tt('Message', 'الرسالة')} />
               {busy
                 ? <button type="button" className="zb-btn zb-btn--primary zb-chat__send" onClick={onStop} title={tt('Stop', 'إيقاف')} aria-label={tt('Stop', 'إيقاف')}><Icon name="stop" size={15} /></button>
-                : <button type="button" className="zb-btn zb-btn--primary zb-chat__send" onClick={() => submit()} disabled={!text.trim()} title={tt('Send', 'إرسال')} aria-label={tt('Send', 'إرسال')}><Icon name="send" size={15} /></button>}
+                : <button type="button" className="zb-btn zb-btn--primary zb-chat__send" onClick={() => submit()} disabled={!text.trim() && !quote} title={tt('Send', 'إرسال')} aria-label={tt('Send', 'إرسال')}><Icon name="send" size={15} /></button>}
             </div>
             <small className="zb-chat__note">
               {tt('UIP AI can make mistakes — check the answer before relying on it.', 'UIP AI ممكن يغلط — راجع الإجابة قبل ما تعتمد عليها.')}
@@ -462,6 +561,12 @@ export default function AiChatPanel({
             </small>
           </div>
         </>
+      )}
+      {ask && (
+        <button type="button" className="zb-ask-float" style={{ left: ask.x, top: ask.y, transform: ask.below ? 'translate(-50%, 0)' : 'translate(-50%, -100%)' }}
+          onMouseDown={(e) => e.preventDefault()} onClick={takeQuote}>
+          <Icon name="message" size={13} /> <span>{tt('Ask about this', 'اسأل عن ده')}</span>
+        </button>
       )}
     </aside>
   );

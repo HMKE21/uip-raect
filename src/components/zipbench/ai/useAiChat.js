@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import { api } from '../../../api/client';
 import { streamPost, aiLocale } from './sse';
+import { wireText } from './quote';
 
 const URL = '/api/v1/ai-code/chat';
 const CHATS = '/api/v1/ai-code/chats';
@@ -202,7 +203,7 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
     const wire = history
       .filter((m) => m.content && m.phase !== 'error')
       .slice(-HISTORY)
-      .map((m) => ({ role: m.role, content: m.role === 'assistant' ? `${m.content}${editsNote(m)}` : (m !== lastUser ? `${m.content}${refsNote(m)}` : m.content) }));
+      .map((m) => ({ role: m.role, content: m.role === 'assistant' ? `${m.content}${editsNote(m)}` : (m !== lastUser ? `${wireText(m.content)}${refsNote(m)}` : wireText(m.content)) }));
 
     try {
       await streamPost(URL, { ...buildRequest(), ...(refs.length ? { refs } : {}), messages: wire, mode, locale: aiLocale() }, { signal: ctrl.signal, onEvent });
@@ -294,6 +295,22 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
     return true;
   }, [abort]);
 
+  /** Delete several saved conversations at once. Resolves { deleted, failed } (ids). A 404 counts as deleted (already gone). */
+  const deleteMany = useCallback(async (ids) => {
+    const list = [...new Set(ids)];
+    const results = await Promise.all(list.map(async (id) => {
+      try { await api.del(`${CHATS}/${id}`); return [id, true]; } catch (e) { return [id, !!e && e.status === 404]; }
+    }));
+    const deleted = results.filter(([, ok]) => ok).map(([id]) => id);
+    const failed = results.filter(([, ok]) => !ok).map(([id]) => id);
+    if (deleted.length) {
+      const gone = new Set(deleted);
+      setChats((cur) => (cur || []).filter((c) => !gone.has(c.id)));
+      if (idRef.current && gone.has(idRef.current)) { abort(); dirty.current = false; idRef.current = null; setChatId(null); setMessages([]); }
+    }
+    return { deleted, failed };
+  }, [abort]);
+
   const clearAll = useCallback(async () => {
     try { await api.del(CHATS); } catch { return false; }
     abort(); dirty.current = false; idRef.current = null; setChatId(null); setMessages([]); setChats([]);
@@ -308,7 +325,7 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
   return {
     store, getMessages,
     send, retry, stop, mark, rewind,
-    loadChats, newChat, openChat, renameChat, deleteChat, clearAll,
+    loadChats, newChat, openChat, renameChat, deleteChat, deleteMany, clearAll,
     retrySave: saveNow,
     /** kept for callers that used the old name */
     clear: newChat,
