@@ -45,11 +45,14 @@ function getUserMedia(opts = {}) {
   }
   const noise = opts.noise !== false;
   const audio = opts.audio === false ? false : {
-    echoCancellation: { ideal: true },
-    noiseSuppression: { ideal: noise },
-    autoGainControl: { ideal: noise },
+    // echo cancellation is what stops the whistle/feedback: always on, and not merely "ideal" (a hard true, so the browser can't quietly skip it)
+    echoCancellation: true,
+    noiseSuppression: noise,
+    // auto-gain keeps raising a quiet mic, which feeds speaker->mic howl when two devices are close: only with the noise switch on
+    autoGainControl: noise,
     voiceIsolation: { ideal: noise },
     channelCount: { ideal: 1 },
+    sampleRate: { ideal: 48000 },
   };
   // phones/tablets: 960x540 @ ≤20 fps keeps encoding affordable; desktops get 720p
   const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test((typeof navigator !== 'undefined' && navigator.userAgent) || '');
