@@ -30,6 +30,59 @@ function SenderAvatar({ name, src }) {
   );
 }
 
+/** Full-page screen for a link that cannot be opened right now: paused (temporary) / expired / turned off / item gone / not found. */
+function LinkUnavailable({ err, t, onRetry, checking }) {
+  const kind = err.code === 'share_paused' ? 'paused'
+    : err.code === 'share_expired' ? 'expired'
+      : err.code === 'share_revoked' ? 'off'
+        : err.code === 'share_gone' ? 'gone'
+          : err.status === 404 ? 'missing' : 'other';
+  const V = {
+    paused: { icon: 'pause', tone: 'warn', badge: t('Temporarily paused', 'موقوف مؤقتًا'),
+      title: t('This link is paused for now', 'الرابط ده موقوف مؤقتًا'),
+      text: t('The owner has paused sharing. Nothing was deleted — the link will work again as soon as they resume it.', 'صاحب الملف أوقف المشاركة مؤقتًا. مفيش حاجة اتحذفت — الرابط هيشتغل تاني أول ما يستأنفه.'),
+      tips: [[ 'clock', t('Try again a bit later', 'جرّب تاني بعد شوية')], ['link', t('Keep this same link — it won’t change', 'احتفظ بنفس الرابط — مش هيتغيّر')], ['user', t('Need it now? Ask the person who sent it', 'محتاجه دلوقتي؟ كلّم اللي بعتهولك')]] },
+    expired: { icon: 'clock', tone: 'muted', badge: t('Expired', 'منتهي'),
+      title: t('This link has expired', 'الرابط ده انتهت صلاحيته'),
+      text: t('Its validity period is over. Ask the owner to send you a new link.', 'مدة صلاحيته خلصت. اطلب من صاحب الملف يبعتلك رابط جديد.'), tips: [] },
+    off: { icon: 'lock', tone: 'danger', badge: t('Turned off', 'متوقف'),
+      title: t('This link was turned off', 'الرابط ده اتقفل'),
+      text: t('The owner stopped sharing this item permanently. Ask them to send you a new link if you still need it.', 'صاحب الملف وقّف مشاركته نهائيًا. اطلب منه رابط جديد لو لسه محتاجه.'), tips: [] },
+    gone: { icon: 'file', tone: 'muted', badge: t('Not available', 'مش متاح'),
+      title: t('This item is no longer available', 'العنصر ده مبقاش متاح'),
+      text: t('The file or folder was moved or deleted by its owner.', 'الملف أو المجلد اتنقل أو اتحذف من صاحبه.'), tips: [] },
+    missing: { icon: 'search', tone: 'muted', badge: t('Not found', 'مش موجود'),
+      title: t('Link not found', 'الرابط مش موجود'),
+      text: t('Check that the address is complete and copied correctly.', 'اتأكد إن العنوان كامل ومنسوخ صح.'), tips: [] },
+    other: { icon: 'alert', tone: 'danger', badge: t('Error', 'خطأ'),
+      title: t('Something went wrong', 'حصل خطأ'), text: err.message || '', tips: [] },
+  }[kind];
+  return (
+    <section className={`shp__gone shp__gone--${V.tone}`} role="alert" aria-labelledby="shp-gone-h">
+      <div className="shp__gone-art" aria-hidden="true">
+        <i /><i /><i />
+        <span><Icon name={V.icon} size={34} /></span>
+      </div>
+      <span className="shp__gone-badge">{V.badge}</span>
+      <h1 id="shp-gone-h">{V.title}</h1>
+      <p>{V.text}</p>
+      {err.owner && kind !== 'missing' && <div className="shp__gone-owner"><Icon name="user" size={14} /><span>{t('Shared by', 'صاحب الرابط')}: <b>{err.owner}</b></span></div>}
+      {V.tips.length > 0 && (
+        <ul className="shp__gone-tips">
+          {V.tips.map(([ic, tx]) => <li key={tx}><Icon name={ic} size={15} /><span>{tx}</span></li>)}
+        </ul>
+      )}
+      <div className="shp__gone-acts">
+        {(kind === 'paused' || kind === 'other') && (
+          <button type="button" className="btn btn-primary" onClick={onRetry} disabled={checking}>
+            <Icon name="refresh" size={15} /><span>{checking ? t('Checking…', 'جارِ التحقق…') : t('Check again', 'جرّب تاني')}</span>
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** Gate shown before the content when the owner asked for the visitor's details and/or a password. */
 function GateForm({ gate, token, t, ar, onDone }) {
   const [f, setF] = useState({ name: '', email: '', phone: '', password: '' });
@@ -183,7 +236,7 @@ export default function SharedItem() {
         if (!live) return;
         const g = e?.status === 423 && e?.payload?.errors?.code === 'share_gate' ? e.payload.errors : null;
         if (g) { shareSession.clear(token); setData(null); setErr(null); setGate(g); return; }
-        setErr({ status: e?.status || 0, message: errorMessage(e) });
+        setErr({ status: e?.status || 0, message: errorMessage(e), code: e?.payload?.errors?.code || '', owner: e?.payload?.errors?.owner_name || '' });
       })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
@@ -283,13 +336,7 @@ export default function SharedItem() {
 
         {loading && !data && !gate && <div className="shp__state"><span className="lp2-spinner" aria-hidden="true" /><p>{t('Loading…', 'جارِ التحميل…')}</p></div>}
 
-        {dead && (
-          <div className="shp__state" role="alert">
-            <span className="shp__state-ico"><Icon name={err.status === 410 ? 'clock' : 'lock'} size={30} /></span>
-            <h1>{err.status === 410 ? t('This link is no longer available', 'الرابط ده مبقاش متاح') : t('Link not found', 'الرابط مش موجود')}</h1>
-            <p>{err.message}</p>
-          </div>
-        )}
+        {dead && <LinkUnavailable err={err} t={t} checking={loading} onRetry={() => { setLoading(true); setReload((n) => n + 1); }} />}
 
         {data && (
           <>

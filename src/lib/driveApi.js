@@ -162,6 +162,8 @@ export const drive = {
   /** Who opened one link: { share, summary, visitors, events }. */
   shareActivity: (shareId) => api.get(`${B}/shares/${shareId}/activity`).then(unwrap),
   clearShareActivity: (shareId) => api.del(`${B}/shares/${shareId}/activity`),
+  /** Bulk on my links: action 'pause' | 'resume' | 'delete', with ids: number[] or all: true -> { done, skipped }. */
+  bulkShares: (action, { ids = [], all = false } = {}) => api.post(`${B}/shares/bulk`, { action, ids, all }).then(unwrap),
   pauseShare: (shareId) => api.post(`${B}/shares/${shareId}/pause`, {}).then(unwrap),
   resumeShare: (shareId) => api.post(`${B}/shares/${shareId}/resume`, {}).then(unwrap),
   /** Delete the link and its whole log for good. */

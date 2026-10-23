@@ -89,7 +89,7 @@ function CtxMenu({ x, y, rtl, children }) {
 
 /** Toolbar drop-down (New / Sort). Rendered in a portal with fixed positioning measured from its button, so the toolbar's own
  *  overflow (it scrolls sideways on phones) can never clip it. Flips above the button when there is no room below. */
-function Pop({ anchor, end, rtl, children }) {
+function Pop({ anchor, end, rtl, className = '', children }) {
   const ref = useRef(null);
   const [pos, setPos] = useState({ left: 8, top: 8, maxHeight: 400, ready: false });
   useLayoutEffect(() => {
@@ -107,7 +107,7 @@ function Pop({ anchor, end, rtl, children }) {
     setPos({ left, top, maxHeight: room, ready: true });
   }, [anchor, end, rtl]);
   return createPortal(
-    <div ref={ref} className={`mp-pop mp-pop--fixed${end ? ' mp-pop--end' : ''}`} dir={rtl ? 'rtl' : 'ltr'} role="menu"
+    <div ref={ref} className={`mp-pop mp-pop--fixed${end ? ' mp-pop--end' : ''}${className ? ` ${className}` : ''}`} dir={rtl ? 'rtl' : 'ltr'} role="menu"
       style={{ left: pos.left, top: pos.top, maxHeight: pos.maxHeight, visibility: pos.ready ? 'visible' : 'hidden' }}
       onClick={(e) => e.stopPropagation()} onContextMenu={(e) => e.preventDefault()} onKeyDown={(e) => e.stopPropagation()}>
       {children}
@@ -968,17 +968,19 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                 <Icon name="plus" size={16} /> <span>{tt('New', 'جديد')}</span> <Icon name="chevron-down" size={12} />
               </button>
               {newMenu && (
-                <Pop anchor={newMenu} rtl={ar}>
-                  {!folderParam && <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newDisk(); }}><Icon name="hard-drive" size={16} />{tt('Disk', 'قرص')}</button>}
-                  <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFolder(); }}><Icon name="folder-plus" size={16} />{tt('Folder', 'مجلد')}</button>
-                  <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFile(); }}><Icon name="file-plus" size={16} />{tt('Text file', 'ملف نصي')}</button>
-                  <div className="mp-ctx__sep" role="separator" />
-                  {[['docx', 'Word document', 'مستند Word'], ['xlsx', 'Excel workbook', 'جدول Excel'], ['pptx', 'PowerPoint', 'عرض PowerPoint'], ['pdf', 'PDF document', 'ملف PDF']].map(([k, en, arb]) => (
-                    <button key={k} type="button" role="menuitem" onClick={() => { setNewMenu(false); newDoc(k); }}><Icon name="file" size={16} />{tt(en, arb)}</button>
+                <Pop anchor={newMenu} rtl={ar} className="mp-pop--new">
+                  <div className="mp-nm__label">{tt('Create', 'إنشاء')}</div>
+                  {!folderParam && <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newDisk(); }}><span className="mp-nm__ico mp-nm__ico--disk"><Icon name="hard-drive" size={16} /></span><span className="mp-nm__txt"><b>{tt('Disk', 'قرص')}</b><small>{tt('A new top-level drive', 'قرص جديد في الجذر')}</small></span></button>}
+                  <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFolder(); }}><span className="mp-nm__ico mp-nm__ico--folder"><Icon name="folder-plus" size={16} /></span><span className="mp-nm__txt"><b>{tt('Folder', 'مجلد')}</b><small>{tt('Organise your files', 'نظّم ملفاتك')}</small></span></button>
+                  <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newFile(); }}><span className="mp-nm__ico mp-nm__ico--text"><Icon name="file-plus" size={16} /></span><span className="mp-nm__txt"><b>{tt('Text file', 'ملف نصي')}</b><small>{tt('Plain text, code, notes', 'نص، كود، ملاحظات')}</small></span></button>
+                  <div className="mp-nm__sep" role="separator" />
+                  <div className="mp-nm__label">{tt('Documents', 'مستندات')}</div>
+                  {[['docx', 'Word document', 'مستند Word', 'word'], ['xlsx', 'Excel workbook', 'جدول Excel', 'excel'], ['pptx', 'PowerPoint', 'عرض PowerPoint', 'ppt'], ['pdf', 'PDF document', 'ملف PDF', 'pdf']].map(([k, en, arb, tone]) => (
+                    <button key={k} type="button" role="menuitem" onClick={() => { setNewMenu(false); newDoc(k); }}><span className={`mp-nm__ico mp-nm__ico--${tone}`}><Icon name="file" size={16} /></span><span className="mp-nm__txt"><b>{tt(en, arb)}</b></span><span className="mp-nm__ext">.{k}</span></button>
                   ))}
-                  <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newDoc('docx'); }}><Icon name="more-horizontal" size={16} />{tt('More file types…', 'أنواع ملفات أخرى…')}</button>
-                  <div className="mp-ctx__sep" role="separator" />
-                  <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newProject(); }}><Icon name="terminal" size={16} />{tt('Project', 'مشروع')}</button>
+                  <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newDoc('docx'); }}><span className="mp-nm__ico mp-nm__ico--more"><Icon name="more-horizontal" size={16} /></span><span className="mp-nm__txt"><b>{tt('More file types…', 'أنواع ملفات أخرى…')}</b></span></button>
+                  <div className="mp-nm__sep" role="separator" />
+                  <button type="button" role="menuitem" onClick={() => { setNewMenu(false); newProject(); }}><span className="mp-nm__ico mp-nm__ico--proj"><Icon name="terminal" size={16} /></span><span className="mp-nm__txt"><b>{tt('Project', 'مشروع')}</b><small>{tt('Code workspace with a terminal', 'مساحة كود مع تيرمنال')}</small></span></button>
                 </Pop>
               )}
             </div>

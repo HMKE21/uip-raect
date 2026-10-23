@@ -6,6 +6,7 @@ import { drive } from '../lib/driveApi';
 import { CustomDuration, EXPIRIES, copyText, customKey, genPassword, shareUrl } from './ShareDialog';
 import '../styles/css/drive-share.css'; // must load before the dialog refinements below
 import '../styles/css/drive-share-dialogs.css';
+import '../styles/css/shared-links-manager.css';
 
 const STATUS = {
   active: { en: 'Active', ar: 'شغّال', cls: 'is-on' },
@@ -209,8 +210,12 @@ function Settings({ l, ar, tt, busy, act }) {
   );
 }
 
-/** "My shared links": every link I shared — pause / resume / delete, edit the gate, and see who opened it. */
-export default function MySharedLinks({ ar, locale, onClose, onToast }) {
+/**
+ * "My shared links" manager — used inside Settings (embedded) and in the My PC dialog.
+ * Every link I shared: select several (or all) to pause / resume / delete in one go, or act on a single link;
+ * edit its gate, and see who opened it.
+ */
+export function SharedLinksPanel({ ar, locale, onToast, embedded = false }) {
   const tt = useCallback((en, a) => (ar ? a : en), [ar]);
   const [items, setItems] = useState(null);
   const [error, setError] = useState('');
@@ -220,11 +225,18 @@ export default function MySharedLinks({ ar, locale, onClose, onToast }) {
   const [open, setOpen] = useState(null); // link id whose settings are open
   const [del, setDel] = useState(null);   // link id waiting for delete confirmation
   const [detail, setDetail] = useState(null);
+  const [sel, setSel] = useState(() => new Set());
+  const [bulk, setBulk] = useState(null); // { action: 'delete'|'pause'|'resume', all: bool } waiting for confirmation
 
   const load = useCallback(async () => {
     try { setItems((await drive.manageShares())?.items || []); setError(''); } catch (e) { setError(errorMessage(e)); setItems([]); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  // forget selected ids that no longer exist
+  useEffect(() => {
+    if (!items) return;
+    setSel((cur) => { const ids = new Set(items.map((l) => l.id)); const next = new Set([...cur].filter((id) => ids.has(id))); return next.size === cur.size ? cur : next; });
+  }, [items]);
 
   const act = async (fn, okMsg) => {
     setBusy(true); setError('');
@@ -245,6 +257,28 @@ export default function MySharedLinks({ ar, locale, onClose, onToast }) {
     return true;
   }), [items, tab, q]);
 
+  const picked = useMemo(() => (items || []).filter((l) => sel.has(l.id)), [items, sel]);
+  const allShownOn = shown.length > 0 && shown.every((l) => sel.has(l.id));
+  const toggle = (id) => setSel((cur) => { const n = new Set(cur); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleShown = () => setSel((cur) => { const n = new Set(cur); if (allShownOn) shown.forEach((l) => n.delete(l.id)); else shown.forEach((l) => n.add(l.id)); return n; });
+
+  const runBulk = async () => {
+    if (!bulk) return;
+    const { action, all } = bulk;
+    const ids = all ? [] : picked.map((l) => l.id);
+    setBusy(true); setError('');
+    try {
+      const r = await drive.bulkShares(action, { ids, all });
+      const n = r?.done ?? 0;
+      const msg = action === 'delete' ? tt(`${n} link(s) deleted.`, `تم حذف ${n} رابط.`)
+        : action === 'pause' ? tt(`${n} link(s) paused.`, `تم إيقاف ${n} رابط مؤقتًا.`)
+          : tt(`${n} link(s) resumed.`, `تم استئناف ${n} رابط.`);
+      onToast?.(msg);
+      setBulk(null); setSel(new Set());
+      await load();
+    } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
+  };
+
   const copy = async (token) => {
     const ok = await copyText(shareUrl(token));
     onToast?.(ok ? tt('Link copied.', 'تم نسخ الرابط.') : tt('Could not copy — select the link and copy it.', 'تعذّر النسخ — حدد الرابط وانسخه يدويًا.'), ok ? undefined : 'error');
@@ -263,87 +297,144 @@ export default function MySharedLinks({ ar, locale, onClose, onToast }) {
   ];
 
   if (detail) {
-    return (
-      <StModal wide title={tt('Who opened this link', 'مين فتح الرابط ده')} onClose={onClose} actions={<button type="button" className="btn btn-primary" onClick={onClose}>{tt('Done', 'تم')}</button>}>
-        <Activity share={detail} ar={ar} locale={locale} tt={tt} onBack={() => setDetail(null)} onToast={onToast} onChanged={load} />
-      </StModal>
-    );
+    return <Activity share={detail} ar={ar} locale={locale} tt={tt} onBack={() => setDetail(null)} onToast={onToast} onChanged={load} />;
   }
 
+  const total = items?.length || 0;
+  const pickedActive = picked.filter((l) => l.status === 'active').length;
+  const pickedPaused = picked.filter((l) => l.status === 'paused').length;
+  const bulkText = bulk && (() => {
+    const n = bulk.all ? total : picked.length;
+    if (bulk.action === 'delete') return bulk.all
+      ? tt(`Delete ALL ${n} links and their logs for good? This can’t be undone.`, `تمسح كل الروابط (${n}) وسجلاتها نهائيًا؟ مش هينفع ترجّعهم.`)
+      : tt(`Delete ${n} selected link(s) and their logs for good?`, `تمسح ${n} رابط محدد وسجلاتهم نهائيًا؟`);
+    if (bulk.action === 'pause') return bulk.all
+      ? tt(`Pause all your active links? Visitors will see a “paused” page until you resume them.`, 'توقّف كل الروابط الشغّالة؟ الزوار هيشوفوا صفحة "موقوف" لحد ما تستأنفها.')
+      : tt(`Pause ${n} selected link(s)?`, `توقّف ${n} رابط محدد مؤقتًا؟`);
+    return bulk.all ? tt('Resume all paused links?', 'تستأنف كل الروابط الموقوفة؟') : tt(`Resume ${n} selected link(s)?`, `تستأنف ${n} رابط محدد؟`);
+  })();
+
+  return (
+    <div className={`mp-sl${embedded ? ' mp-sl--embedded' : ''}`}>
+      <div className="mp-sl__tools">
+        <div className="mp-seg mp-seg--wrap" role="tablist">
+          {TABS.map((x) => (
+            <button key={x.k} type="button" role="tab" aria-selected={tab === x.k} className={tab === x.k ? 'is-on' : ''} onClick={() => setTab(x.k)}>
+              {ar ? x.ar : x.en}<b className="mp-sl__count">{counts[x.k]}</b>
+            </button>
+          ))}
+        </div>
+        <input className="mp-sl__search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tt('Search by file name…', 'ابحث باسم الملف…')} aria-label={tt('Search', 'بحث')} />
+      </div>
+
+      {items && total > 0 && (
+        <div className={`mp-bulk${picked.length ? ' is-on' : ''}`} role="toolbar" aria-label={tt('Bulk actions', 'إجراءات جماعية')}>
+          <label className="mp-bulk__all">
+            <input type="checkbox" checked={allShownOn} onChange={toggleShown} disabled={busy || shown.length === 0} aria-label={tt('Select all shown', 'تحديد كل المعروض')} />
+            <span>{picked.length ? tt(`${picked.length} selected`, `${picked.length} محدد`) : tt('Select all', 'تحديد الكل')}</span>
+          </label>
+          {picked.length > 0 ? (
+            <div className="mp-bulk__acts">
+              {pickedActive > 0 && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setBulk({ action: 'pause', all: false })}><Icon name="stop" size={14} /><span>{tt('Pause', 'إيقاف')}</span></button>}
+              {pickedPaused > 0 && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setBulk({ action: 'resume', all: false })}><Icon name="play" size={14} /><span>{tt('Resume', 'استئناف')}</span></button>}
+              <button type="button" className="btn btn-ghost mp-sl__danger" disabled={busy} onClick={() => setBulk({ action: 'delete', all: false })}><Icon name="trash" size={14} /><span>{tt('Delete selected', 'حذف المحدد')}</span></button>
+              <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setSel(new Set())}><span>{tt('Clear', 'إلغاء التحديد')}</span></button>
+            </div>
+          ) : (
+            <div className="mp-bulk__acts">
+              {counts.active > 0 && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setBulk({ action: 'pause', all: true })}><Icon name="stop" size={14} /><span>{tt('Pause all', 'إيقاف الكل')}</span></button>}
+              {counts.paused > 0 && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setBulk({ action: 'resume', all: true })}><Icon name="play" size={14} /><span>{tt('Resume all', 'استئناف الكل')}</span></button>}
+              <button type="button" className="btn btn-ghost mp-sl__danger" disabled={busy} onClick={() => setBulk({ action: 'delete', all: true })}><Icon name="trash" size={14} /><span>{tt('Delete all', 'حذف الكل')}</span></button>
+            </div>
+          )}
+        </div>
+      )}
+      {bulk && (
+        <div className={`mp-bulk__confirm${bulk.action === 'delete' ? ' is-danger' : ''}`} role="alertdialog" aria-live="polite">
+          <Icon name={bulk.action === 'delete' ? 'trash' : bulk.action === 'pause' ? 'stop' : 'play'} size={18} />
+          <span>{bulkText}</span>
+          <div>
+            <button type="button" className={`btn btn-primary${bulk.action === 'delete' ? ' mp-sl__dangerfill' : ''}`} disabled={busy} onClick={runBulk}>
+              {busy ? tt('Working…', 'جارِ التنفيذ…') : bulk.action === 'delete' ? tt('Yes, delete', 'أيوه، احذف') : bulk.action === 'pause' ? tt('Pause', 'إيقاف') : tt('Resume', 'استئناف')}
+            </button>
+            <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setBulk(null)}>{tt('Cancel', 'إلغاء')}</button>
+          </div>
+        </div>
+      )}
+      {error && <div className="mp-share__err" role="alert">{error}</div>}
+
+      <div className="mp-sl__list">
+        {items === null && <div className="mp-share__empty">{tt('Loading…', 'جارِ التحميل…')}</div>}
+        {items && items.length === 0 && <div className="mp-share__empty"><Icon name="link" size={20} /><span>{tt('You haven’t shared anything yet. Select a file in My PC and press Share.', 'لسه ما شاركتش حاجة. اختار ملف في جهازي واضغط مشاركة.')}</span></div>}
+        {items && items.length > 0 && shown.length === 0 && <div className="mp-share__empty"><span>{tt('No links match.', 'مفيش روابط مطابقة.')}</span></div>}
+        {shown.map((l) => {
+          const st = STATUS[l.status] || STATUS.active;
+          const live = l.status === 'active' || l.status === 'paused';
+          const on = sel.has(l.id);
+          return (
+            <article key={l.id} className={`mp-share__row mp-sl__card${live ? '' : ' is-expired'}${on ? ' is-picked' : ''}${l.status === 'paused' ? ' is-paused' : ''}`}>
+              <div className="mp-sl__head">
+                <label className="mp-sl__pick" title={tt('Select', 'تحديد')}>
+                  <input type="checkbox" checked={on} onChange={() => toggle(l.id)} disabled={busy} aria-label={tt('Select this link', 'تحديد الرابط ده')} />
+                </label>
+                <span className="mp-share__file-ico"><Icon name={l.node?.type === 'folder' ? 'folder' : 'file'} size={18} /></span>
+                <div className="mp-sl__title">
+                  <strong title={l.node?.name}>{l.node_deleted ? tt('Deleted item', 'عنصر محذوف') : l.node?.name}</strong>
+                  <div className="mp-share__top">
+                    <span className={`mp-badge ${st.cls}`}>{ar ? st.ar : st.en}</span>
+                    {l.node_deleted && <span className="mp-badge is-off">{tt('Item deleted — link is dead', 'العنصر اتحذف — الرابط مات')}</span>}
+                    <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
+                    {l.has_password && <span className="mp-badge mp-badge--soft"><Icon name="lock" size={11} />{tt('Password', 'باسورد')}</span>}
+                    {l.require_visitor_info && <span className="mp-badge mp-badge--soft"><Icon name="users" size={11} />{tt('Visitor details', 'بيانات الزائر')}</span>}
+                  </div>
+                </div>
+              </div>
+
+              {live && (
+                <div className="mp-share__url">
+                  <input readOnly dir="ltr" value={shareUrl(l.token)} onFocus={(e) => e.target.select()} aria-label={tt('Share link', 'رابط المشاركة')} />
+                  <button type="button" className="mp-share__copy" onClick={() => copy(l.token)} disabled={l.expired}><Icon name="copy" size={14} /><span>{tt('Copy', 'نسخ')}</span></button>
+                </div>
+              )}
+
+              <div className="mp-share__meta">
+                <span><Icon name="clock" size={12} /> {expiryText(l)}</span>
+                <span title={tt('Opens', 'مرات الفتح')}><Icon name="eye" size={12} /> {l.views}</span>
+                <span title={tt('Different visitors', 'زوار مختلفين')}><Icon name="users" size={12} /> {l.unique_visitors}</span>
+                <span title={tt('Downloads', 'التنزيلات')}><Icon name="download" size={12} /> {l.downloads}</span>
+                <span>{l.last_used_at ? tt('Last opened ', 'آخر فتح ') + timeAgo(l.last_used_at, locale) : tt('Never opened', 'لسه محدش فتحه')}</span>
+              </div>
+
+              <div className="mp-sl__actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setDetail(l)}><Icon name="users" size={14} /><span>{tt('Who opened it', 'مين فتحه')}</span></button>
+                {l.status === 'active' && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act(() => drive.pauseShare(l.id), tt('Link paused.', 'تم إيقاف الرابط مؤقتًا.'))}><Icon name="stop" size={14} /><span>{tt('Pause', 'إيقاف')}</span></button>}
+                {l.status === 'paused' && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act(() => drive.resumeShare(l.id), tt('Link resumed.', 'تم استئناف الرابط.'))}><Icon name="play" size={14} /><span>{tt('Resume', 'استئناف')}</span></button>}
+                {live && <button type="button" className={`btn btn-ghost${open === l.id ? ' is-on' : ''}`} onClick={() => setOpen(open === l.id ? null : l.id)}><Icon name="settings" size={14} /><span>{tt('Settings', 'الإعدادات')}</span></button>}
+                {del === l.id ? (
+                  <span className="mp-sl__confirm">
+                    {tt('Delete the link and its log for good?', 'تمسح الرابط وسجله نهائيًا؟')}
+                    <button type="button" className="btn btn-primary mp-sl__dangerfill" disabled={busy} onClick={() => act(async () => { await drive.deleteShare(l.id); setDel(null); }, tt('Link deleted.', 'تم حذف الرابط.'))}>{tt('Delete', 'حذف')}</button>
+                    <button type="button" className="btn btn-ghost" onClick={() => setDel(null)}>{tt('Cancel', 'إلغاء')}</button>
+                  </span>
+                ) : (
+                  <button type="button" className="btn btn-ghost mp-sl__danger" disabled={busy} onClick={() => setDel(l.id)}><Icon name="trash" size={14} /><span>{tt('Delete', 'حذف')}</span></button>
+                )}
+              </div>
+              {open === l.id && live && <Settings l={l} ar={ar} tt={tt} busy={busy} act={act} />}
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** Dialog wrapper (opened from My PC's sidebar / the Share dialog). The same panel also lives in Settings → Shared links. */
+export default function MySharedLinks({ ar, locale, onClose, onToast }) {
+  const tt = (en, a) => (ar ? a : en);
   return (
     <StModal wide title={tt('My shared links', 'روابطي المشاركة')} onClose={onClose} actions={<button type="button" className="btn btn-primary" onClick={onClose}>{tt('Done', 'تم')}</button>}>
-      <div className="mp-sl">
-        <div className="mp-sl__tools">
-          <div className="mp-seg mp-seg--wrap" role="tablist">
-            {TABS.map((x) => (
-              <button key={x.k} type="button" role="tab" aria-selected={tab === x.k} className={tab === x.k ? 'is-on' : ''} onClick={() => setTab(x.k)}>
-                {ar ? x.ar : x.en}<b className="mp-sl__count">{counts[x.k]}</b>
-              </button>
-            ))}
-          </div>
-          <input className="mp-sl__search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tt('Search by file name…', 'ابحث باسم الملف…')} aria-label={tt('Search', 'بحث')} />
-        </div>
-        {error && <div className="mp-share__err" role="alert">{error}</div>}
-
-        <div className="mp-sl__list">
-          {items === null && <div className="mp-share__empty">{tt('Loading…', 'جارِ التحميل…')}</div>}
-          {items && items.length === 0 && <div className="mp-share__empty"><Icon name="link" size={20} /><span>{tt('You haven’t shared anything yet. Select a file and press Share.', 'لسه ما شاركتش حاجة. اختار ملف واضغط مشاركة.')}</span></div>}
-          {items && items.length > 0 && shown.length === 0 && <div className="mp-share__empty"><span>{tt('No links match.', 'مفيش روابط مطابقة.')}</span></div>}
-          {shown.map((l) => {
-            const st = STATUS[l.status] || STATUS.active;
-            const live = l.status === 'active' || l.status === 'paused';
-            return (
-              <article key={l.id} className={`mp-share__row mp-sl__card${live ? '' : ' is-expired'}`}>
-                <div className="mp-sl__head">
-                  <span className="mp-share__file-ico"><Icon name={l.node?.type === 'folder' ? 'folder' : 'file'} size={18} /></span>
-                  <div className="mp-sl__title">
-                    <strong title={l.node?.name}>{l.node_deleted ? tt('Deleted item', 'عنصر محذوف') : l.node?.name}</strong>
-                    <div className="mp-share__top">
-                      <span className={`mp-badge ${st.cls}`}>{ar ? st.ar : st.en}</span>
-                      {l.node_deleted && <span className="mp-badge is-off">{tt('Item deleted — link is dead', 'العنصر اتحذف — الرابط مات')}</span>}
-                      <span className="mp-badge mp-badge--soft"><Icon name={l.can_download ? 'download' : 'eye'} size={11} />{l.can_download ? tt('Download allowed', 'التنزيل مسموح') : tt('View only', 'عرض فقط')}</span>
-                      {l.has_password && <span className="mp-badge mp-badge--soft"><Icon name="lock" size={11} />{tt('Password', 'باسورد')}</span>}
-                      {l.require_visitor_info && <span className="mp-badge mp-badge--soft"><Icon name="users" size={11} />{tt('Visitor details', 'بيانات الزائر')}</span>}
-                    </div>
-                  </div>
-                </div>
-
-                {live && (
-                  <div className="mp-share__url">
-                    <input readOnly dir="ltr" value={shareUrl(l.token)} onFocus={(e) => e.target.select()} aria-label={tt('Share link', 'رابط المشاركة')} />
-                    <button type="button" className="mp-share__copy" onClick={() => copy(l.token)} disabled={l.expired}><Icon name="copy" size={14} /><span>{tt('Copy', 'نسخ')}</span></button>
-                  </div>
-                )}
-
-                <div className="mp-share__meta">
-                  <span><Icon name="clock" size={12} /> {expiryText(l)}</span>
-                  <span title={tt('Opens', 'مرات الفتح')}><Icon name="eye" size={12} /> {l.views}</span>
-                  <span title={tt('Different visitors', 'زوار مختلفين')}><Icon name="users" size={12} /> {l.unique_visitors}</span>
-                  <span title={tt('Downloads', 'التنزيلات')}><Icon name="download" size={12} /> {l.downloads}</span>
-                  <span>{l.last_used_at ? tt('Last opened ', 'آخر فتح ') + timeAgo(l.last_used_at, locale) : tt('Never opened', 'لسه محدش فتحه')}</span>
-                </div>
-
-                <div className="mp-sl__actions">
-                  <button type="button" className="btn btn-ghost" onClick={() => setDetail(l)}><Icon name="users" size={14} /><span>{tt('Who opened it', 'مين فتحه')}</span></button>
-                  {l.status === 'active' && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act(() => drive.pauseShare(l.id), tt('Link paused.', 'تم إيقاف الرابط مؤقتًا.'))}><Icon name="stop" size={14} /><span>{tt('Pause', 'إيقاف')}</span></button>}
-                  {l.status === 'paused' && <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => act(() => drive.resumeShare(l.id), tt('Link resumed.', 'تم استئناف الرابط.'))}><Icon name="play" size={14} /><span>{tt('Resume', 'استئناف')}</span></button>}
-                  {live && <button type="button" className={`btn btn-ghost${open === l.id ? ' is-on' : ''}`} onClick={() => setOpen(open === l.id ? null : l.id)}><Icon name="settings" size={14} /><span>{tt('Settings', 'الإعدادات')}</span></button>}
-                  {del === l.id ? (
-                    <span className="mp-sl__confirm">
-                      {tt('Delete the link and its log for good?', 'تمسح الرابط وسجله نهائيًا؟')}
-                      <button type="button" className="btn btn-primary mp-sl__dangerfill" disabled={busy} onClick={() => act(async () => { await drive.deleteShare(l.id); setDel(null); }, tt('Link deleted.', 'تم حذف الرابط.'))}>{tt('Delete', 'حذف')}</button>
-                      <button type="button" className="btn btn-ghost" onClick={() => setDel(null)}>{tt('Cancel', 'إلغاء')}</button>
-                    </span>
-                  ) : (
-                    <button type="button" className="btn btn-ghost mp-sl__danger" disabled={busy} onClick={() => setDel(l.id)}><Icon name="trash" size={14} /><span>{tt('Delete', 'حذف')}</span></button>
-                  )}
-                </div>
-                {open === l.id && live && <Settings l={l} ar={ar} tt={tt} busy={busy} act={act} />}
-              </article>
-            );
-          })}
-        </div>
-      </div>
+      <SharedLinksPanel ar={ar} locale={locale} onToast={onToast} />
     </StModal>
   );
 }

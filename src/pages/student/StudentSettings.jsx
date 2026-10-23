@@ -4,6 +4,7 @@ import Icon from '../../components/Icon';
 import { PersonProfile, useTr } from '../../components/settings/IdentityProfile';
 import DeleteAccountCard from '../../components/settings/DeleteAccountCard';
 import SettingsShell from '../../components/settings/SettingsShell';
+import SharedLinksCard from '../../components/settings/SharedLinksCard';
 import { ROW_BETWEEN, SavedBadge, NotificationsCard, PasswordCard, TwoFactorCard, AppearanceCard, LanguageCard, EmailToggleCard } from '../settings/shared';
 import { useTheme } from '../../context/ThemeContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -63,6 +64,7 @@ export default function StudentSettings() {
     },
     { key: 'appearance', label: { en: 'Appearance', ar: 'المظهر' }, icon: 'palette', content: <AppearanceCard persist={(theme) => savePrefs({ theme_preference: theme })} /> },
     { key: 'language', label: { en: 'Language', ar: 'اللغة' }, icon: 'globe', content: <LanguageCard persist={(lang) => savePrefs({ preferred_language: lang })} /> },
+    { key: 'shared-links', label: { en: 'Shared links', ar: 'الروابط المشاركة' }, icon: 'link', content: <SharedLinksCard /> },
     {
       key: 'notifications', label: { en: 'Notification Preferences', ar: 'تفضيلات الإشعارات' }, icon: 'bell',
       content: (
