@@ -1,0 +1,72 @@
+/* academic-ui.css — shared look for the academic pages (courses, fees, grades, attendance, timetable...).
+   Built on the portal's st-* design (student-portal.css), so every role that shares the shell gets the same look.
+   Prefix: acx-. Token driven: works in light/dark, LTR/RTL. */
+
+.acx-page { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.acx-page > * { min-width: 0; }
+
+/* page header */
+.acx-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.acx-head__text { min-width: 0; flex: 1 1 320px; }
+.acx-head h1 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -.01em; line-height: 1.25; color: var(--text-primary); }
+.acx-head p { margin: 6px 0 0; max-width: 680px; font-size: 13px; line-height: 1.65; color: var(--text-secondary); }
+.acx-head__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* KPI row (uses .st-kpi) */
+.acx-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.acx-kpi { position: relative; padding-inline-start: 62px; min-height: 84px; justify-content: center; }
+.acx-kpi__ic { position: absolute; inset-inline-start: 16px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: var(--st-tint, rgba(var(--color-primary-rgb), .09)); color: var(--color-primary); }
+.acx-kpi--good .acx-kpi__ic { background: rgba(var(--color-success-rgb), .14); color: var(--color-success); }
+.acx-kpi--warn .acx-kpi__ic { background: rgba(var(--color-warning-rgb), .16); color: var(--color-warning); }
+.acx-kpi--bad .acx-kpi__ic { background: rgba(var(--color-danger-rgb), .14); color: var(--color-danger); }
+.acx-kpi .st-kpi__value { font-size: 24px; }
+
+/* panel with a title row */
+.acx-panel { background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--st-radius, 14px); box-shadow: var(--st-shadow, none); min-width: 0; overflow: hidden; }
+.acx-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--border-subtle); }
+.acx-panel__title { min-width: 0; }
+.acx-panel__title b { display: block; font-size: 15px; font-weight: 700; color: var(--text-primary); overflow-wrap: anywhere; }
+.acx-panel__title small { display: block; margin-top: 2px; font-size: 12px; color: var(--text-secondary); }
+.acx-panel__tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acx-panel__body { padding: 16px 18px; }
+.acx-panel__foot { padding: 12px 18px; border-top: 1px solid var(--border-subtle); background: var(--bg-canvas); }
+
+/* label / value numbers row */
+.acx-nums { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0; padding: 0; list-style: none; }
+.acx-nums > * { display: flex; flex-direction: column; gap: 1px; font-size: 12px; color: var(--text-secondary); }
+.acx-nums b { font-size: 15px; font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.acx-nums--inline > * { flex-direction: row; align-items: baseline; gap: 6px; }
+.acx-nums--inline b { font-size: 13px; }
+
+/* tables */
+.acx-table-wrap { overflow-x: auto; }
+.acx-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.acx-table th { text-align: start; padding: 10px 18px; font-size: 12px; font-weight: 600; color: var(--text-secondary); background: var(--bg-canvas); white-space: nowrap; }
+.acx-table td { padding: 13px 18px; border-top: 1px solid var(--border-subtle); vertical-align: middle; color: var(--text-primary); }
+.acx-table tbody tr:hover { background: color-mix(in srgb, var(--bg-canvas) 55%, transparent); }
+.acx-table td.is-end, .acx-table th.is-end { text-align: end; }
+.acx-table td.is-num { font-variant-numeric: tabular-nums; }
+.acx-table .acx-sub { display: block; margin-top: 2px; font-size: 11.5px; color: var(--text-secondary); }
+.acx-table tr.is-detail > td { background: var(--bg-canvas); }
+
+/* forms */
+.acx-form { display: grid; gap: 12px; padding: 16px 18px; border-top: 1px solid var(--border-subtle); background: var(--bg-canvas); }
+.acx-form__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.acx-form__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.acx-field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.acx-field > span { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.acx-input { width: 100%; min-height: 38px; padding: 8px 12px; border: 1px solid var(--border-strong, var(--border-subtle)); border-radius: var(--st-radius-sm, 10px); background: var(--bg-surface); color: var(--text-primary); font: inherit; font-size: 13.5px; }
+textarea.acx-input { min-height: 72px; resize: vertical; line-height: 1.55; }
+.acx-input::placeholder { color: var(--text-secondary); opacity: .7; }
+.acx-input:focus { outline: none; border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), .14); }
+
+/* list cards */
+.acx-list { display: flex; flex-direction: column; gap: 14px; }
+.acx-note { margin: 0; font-size: 12.5px; color: var(--text-secondary); line-height: 1.6; }
+
+@media (max-width: 640px) {
+  .acx-head h1 { font-size: 20px; }
+  .acx-panel__head, .acx-panel__body, .acx-form, .acx-panel__foot { padding-inline: 14px; }
+  .acx-table th, .acx-table td { padding-inline: 12px; }
+  .acx-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+}
