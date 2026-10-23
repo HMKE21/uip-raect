@@ -58,7 +58,7 @@ function CreateMeetingModal({ onClose, onCreated }) {
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [maxParticipants, setMaxParticipants] = useState('');
   const [waitingRoomEnabled, setWaitingRoomEnabled] = useState(true);
-  const [allowGuests, setAllowGuests] = useState(false);
+  const [allowGuests, setAllowGuests] = useState(true); // link-first: anyone with the link can join without an account
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);

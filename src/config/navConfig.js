@@ -5,6 +5,7 @@
  */
 
 const COMMON_ACCOUNT_ITEMS = [
+  { key: 'meetings', en: 'Meetings', ar: 'الاجتماعات', icon: 'video', built: true },
   { key: 'messages', en: 'Messages', ar: 'الرسائل', icon: 'message', perm: 'messaging.use', built: true },
   { key: 'notifications', en: 'Notifications', ar: 'الإشعارات', icon: 'bell', built: true },
   { key: 'settings', en: 'Settings', ar: 'الإعدادات', icon: 'settings', built: true },

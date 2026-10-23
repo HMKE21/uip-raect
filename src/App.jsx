@@ -262,6 +262,13 @@ const FacultyGraduationCertificate = lazy(() => import('./pages/faculty/FacultyG
 const Messages = lazy(() => import('./pages/Messages'));
 const MessagesRoute = lazy(() => import('./pages/MessagesRoute'));
 const JoinGroup = lazy(() => import('./pages/JoinGroup'));
+// Video meetings (multi-participant, shareable link, guests without an account).
+const MeetingPreJoin = lazy(() => import('./pages/meetings/MeetingPreJoin'));
+const MyMeetings = lazy(() => import('./pages/meetings/MyMeetings'));
+const MeetingCalendar = lazy(() => import('./pages/meetings/MeetingCalendar'));
+const MeetingDetails = lazy(() => import('./pages/meetings/MeetingDetails'));
+const MeetingRoom = lazy(() => import('./pages/meetings/MeetingRoom'));
+const MEETING_PORTALS = ['student', 'university', 'faculty', 'admin', 'academic-staff', 'supervisor', 'data-analysis', 'security'];
 const Notifications = lazy(() => import('./pages/Notifications'));
 
 export default function App() {
@@ -297,6 +304,8 @@ export default function App() {
             <Route path="/p/:uuid" element={<PublicPortfolio />} />
             <Route path="/u/:uuid" element={<PublicUniversityProfile />} />
             <Route path="/universities/:universitySlug/faculties/:facultySlug" element={<PublicFacultyProfile />} />
+            {/* Meeting invite link: public, no account needed (guests type a name; signed-in users are recognised automatically). */}
+            <Route path="/join/:joinToken" element={<MeetingPreJoin />} />
             <Route path="/403" element={<Forbidden />} />
             <Route path="/500" element={<ServerError />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -707,6 +716,14 @@ export default function App() {
                     gets its own route per navConfig.js's COMMON_ACCOUNT_ITEMS
                     (`/${role}/messages`), all pointing at the same component —
                     do NOT fork this per portal. */}
+
+                {/* Video meetings, same pages in every portal: /<portal>/meetings[...] */}
+                {MEETING_PORTALS.flatMap((p) => [
+                  <Route key={`${p}-m`} path={`/${p}/meetings`} element={<MyMeetings />} />,
+                  <Route key={`${p}-mc`} path={`/${p}/meetings/calendar`} element={<MeetingCalendar />} />,
+                  <Route key={`${p}-md`} path={`/${p}/meetings/:uuid`} element={<MeetingDetails />} />,
+                  <Route key={`${p}-mr`} path={`/${p}/meetings/:uuid/room`} element={<MeetingRoom />} />,
+                ])}
                 <Route path="/student/messages" element={<Messages />} />
                 <Route path="/student/messages/:conversationId" element={<MessagesRoute />} />
                 <Route path="/university/messages" element={<Messages />} />
