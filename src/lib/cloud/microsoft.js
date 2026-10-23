@@ -27,7 +27,17 @@ async function tokenCall(cfg, params) {
   return { tok: { accessToken: j.access_token, expiresAt: Date.now() + (Number(j.expires_in) || 3600) * 1000 - 60000 }, refreshToken: j.refresh_token || null };
 }
 
+let cancelPrev = null;
+
+/**
+ * Opens Microsoft's sign-in in a pop-up and waits for /ms-auth.html to report the code.
+ * Microsoft's login pages send a Cross-Origin-Opener-Policy header, which cuts the link between this window and the pop-up:
+ * `popup.closed` then reads TRUE while the person is still typing their password, and `window.opener` is null inside the pop-up.
+ * So neither is trusted — the result comes back over a same-origin BroadcastChannel (postMessage kept as a fallback), and the only
+ * "gave up" signals are an explicit error from Microsoft or a time-out.
+ */
 function popupCode(cfg) {
+  if (cancelPrev) cancelPrev(); // a second click replaces the first attempt instead of leaving it waiting
   const verifier = rand(48);
   const stateNonce = rand(16);
   return crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)).then((h) => new Promise((resolve, reject) => {
@@ -37,16 +47,27 @@ function popupCode(cfg) {
     })}`;
     const w = window.open(url, 'uip-ms-auth', 'width=520,height=680');
     if (!w) { reject(new CloudAuthError('The sign-in window was blocked. Allow pop-ups and try again.', 'popup')); return; }
-    const done = (fn, v) => { window.removeEventListener('message', onMsg); clearInterval(timer); try { w.close(); } catch { /* already closed */ } fn(v); };
-    const onMsg = (e) => {
-      if (e.origin !== window.location.origin || e.data?.type !== 'uip-ms-auth') return;
-      const p = new URLSearchParams(e.data.search || '');
+    let chan = null;
+    try { chan = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('uip-ms-auth') : null; } catch { chan = null; }
+    let finished = false;
+    const done = (fn, v) => {
+      if (finished) return; finished = true; cancelPrev = null;
+      window.removeEventListener('message', onMsg); clearTimeout(timer);
+      try { chan?.close(); } catch { /* ignore */ }
+      try { w.close(); } catch { /* COOP: cannot reach it, the redirect page closes itself */ }
+      fn(v);
+    };
+    const handle = (search) => {
+      const p = new URLSearchParams(search || '');
       if (p.get('state') !== stateNonce) return;
       if (p.get('code')) done(resolve, { code: p.get('code'), verifier });
       else done(reject, new CloudAuthError(p.get('error_description') || 'Microsoft sign-in was cancelled.', p.get('error') || 'denied'));
     };
+    function onMsg(e) { if (e.origin === window.location.origin && e.data?.type === 'uip-ms-auth') handle(e.data.search); }
     window.addEventListener('message', onMsg);
-    const timer = setInterval(() => { if (w.closed) done(reject, new CloudAuthError('The sign-in window was closed.', 'popup')); }, 600);
+    if (chan) chan.onmessage = (e) => { if (e.data?.type === 'uip-ms-auth') handle(e.data.search); };
+    const timer = setTimeout(() => done(reject, new CloudAuthError('The sign-in took too long or the window was closed. Try again.', 'popup_closed')), 4 * 60 * 1000);
+    cancelPrev = () => done(reject, new CloudAuthError('Sign-in restarted.', 'popup_closed'));
   }));
 }
 
