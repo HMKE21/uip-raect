@@ -19,7 +19,9 @@ const KIND_NOTE = {
  * The project runs inside an isolated container on the uip-sandbox gateway; this panel shows its terminal (xterm.js)
  * and the live preview (an iframe on the sandbox's own preview domain — never on the UIP origin).
  */
-export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect, onRun, onClose, expanded, onToggleExpand, ai }) {
+export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect, onRun, onClose, expanded, onToggleExpand, ai, fontSize = 13.5 }) {
+  const fsRef = useRef(fontSize);
+  fsRef.current = fontSize;
   const [tab, setTab] = useState('terminal');
   const [frameKey, setFrameKey] = useState(0);
   const { panelRef, height, setHeight, onGripDown } = useResizeGrip();
@@ -38,7 +40,7 @@ export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect
     (async () => {
       const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit'), import('@xterm/xterm/css/xterm.css')]);
       if (disposed || !hostRef.current) return;
-      term = new Terminal({ fontFamily: "'Cascadia Code', Consolas, 'SF Mono', Menlo, monospace", fontSize: 13, cursorBlink: true, convertEol: false, scrollback: 5000, lineHeight: 1.3, cursorStyle: 'bar', cursorWidth: 2, theme: {
+      term = new Terminal({ fontFamily: "'JetBrains Mono', 'Cascadia Code', Consolas, 'SF Mono', Menlo, 'Cairo', 'Noto Sans Arabic', monospace", fontSize: Math.round(fsRef.current - 0.5), cursorBlink: true, convertEol: false, scrollback: 5000, lineHeight: 1.45, letterSpacing: 0, cursorStyle: 'bar', cursorWidth: 2, theme: {
         background: '#0d1117', foreground: '#e6edf3', cursor: '#58a6ff', cursorAccent: '#0d1117', selectionBackground: 'rgba(88,166,255,.3)',
         black: '#484f58', red: '#ff7b72', green: '#3fb950', yellow: '#d29922', blue: '#58a6ff', magenta: '#bc8cff', cyan: '#39c5cf', white: '#b1bac4',
         brightBlack: '#6e7681', brightRed: '#ffa198', brightGreen: '#56d364', brightYellow: '#e3b341', brightBlue: '#79c0ff', brightMagenta: '#d2a8ff', brightCyan: '#56d4dd', brightWhite: '#f0f6fc',
@@ -55,6 +57,9 @@ export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect
     })().catch(() => { /* chunk failed to load: the panel still shows status + preview */ });
     return () => { disposed = true; ro?.disconnect(); sandboxRef.current.attach(null); term?.dispose(); termRef.current = null; fitRef.current = null; };
   }, []);
+
+  // A− / A+ in the toolbar also resizes the real terminal
+  useEffect(() => { const t = termRef.current; if (!t) return; t.options.fontSize = Math.round(fontSize - 0.5); try { fitRef.current?.fit(); } catch { /* hidden */ } }, [fontSize]);
 
   const size = useCallback(() => ({ cols: termRef.current?.cols || 100, rows: termRef.current?.rows || 28 }), []);
   const run = () => { setTab('terminal'); onRun(size()); };

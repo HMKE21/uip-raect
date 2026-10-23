@@ -15,6 +15,33 @@ const STATE_LABEL = {
   input: ['Waiting for input', 'في انتظار إدخال'], done: ['Finished', 'انتهى'], error: ['Failed', 'فشل'], stopped: ['Stopped', 'اتوقف'],
 };
 
+const TB_HEAD = /^Traceback \(most recent call last\):/;
+const TB_FILE = /^(\s*)File "(.*)", line (\d+)(.*)$/;
+const TB_ERR = /^([A-Za-z_][\w.]*(?:Error|Exception|Warning|Interrupt|Exit))(:?)(.*)$/;
+
+/** One console entry. Python tracebacks (stderr) get a readable structure: header, file/line, the code line, and a bold error name. */
+function LogLine({ l }) {
+  const plain = <div className={`zb-log zb-log--${l.level}`}>{l.text}</div>;
+  if (l.level !== 'stderr' && l.level !== 'error') return plain;
+  const lines = String(l.text).replace(/\n$/, '').split('\n');
+  if (!lines.some((s) => TB_HEAD.test(s) || TB_FILE.test(s))) return plain;
+  let prev = '';
+  return (
+    <>
+      {lines.map((s, i) => {
+        let kind = 'plain'; let body = s;
+        const f = TB_FILE.exec(s); const e = TB_ERR.exec(s);
+        if (TB_HEAD.test(s)) kind = 'head';
+        else if (f) { kind = 'file'; body = <>{f[1]}File “{f[2]}”, line <b>{f[3]}</b>{f[4]}</>; }
+        else if (e && !/^\s/.test(s)) { kind = 'err'; body = <>{e[1]}{e[2]}<i>{e[3]}</i></>; }
+        else if (/^\s+\S/.test(s) && (prev === 'file' || prev === 'code')) kind = 'code';
+        prev = kind;
+        return <div key={i} className={`zb-log zb-log--${l.level}${kind === 'plain' ? '' : ` zb-log--tb-${kind}`}`}>{body}{'\n'}</div>;
+      })}
+    </>
+  );
+}
+
 /** Bottom panel of the workbench: pick what to run, Run / Stop, live preview (web) and console (stdout, stderr, errors). */
 export default function RunPanel({ tt, runner, apps, app, onSelect, onRun, onClose, expanded, onToggleExpand, ai }) {
   const [tab, setTab] = useState('console');
@@ -108,7 +135,7 @@ export default function RunPanel({ tt, runner, apps, app, onSelect, onRun, onClo
                 {logs.length === 0 && canRun && state === 'idle' && (
                   <div className="zb-run__empty"><Icon name="terminal" size={26} /><strong>{tt('Ready when you are', 'جاهز للتشغيل')}</strong><span>{tt('Press Run — the output appears here.', 'اضغط تشغيل — النتيجة هتظهر هنا.')}</span></div>
                 )}
-                {logs.map((l, i) => <div key={i} className={`zb-log zb-log--${l.level}`}>{l.text}</div>)}
+                {logs.map((l, i) => <LogLine key={i} l={l} />)}
               </div>
               {state === 'input' && (
                 <form className="zb-run__prompt" onSubmit={(e) => { e.preventDefault(); const v = line; setLine(''); runner.submitInput(v); }}>

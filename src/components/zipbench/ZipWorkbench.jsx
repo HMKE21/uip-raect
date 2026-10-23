@@ -35,6 +35,7 @@ import '../../styles/css/zip-markdown.css';
 const CodeEditor = lazy(() => import('./CodeEditor'));
 const NO_GHOST_EXT = new Set(['md', 'txt', 'csv', 'tsv', 'log']); // prose / data files: no AI autocomplete
 import { isEditableJson } from './jsonCheck';
+import '../../styles/css/zip-polish.css'; // unified type scale + AI chat / console / terminal polish (must stay the last stylesheet import)
 const CsvGrid = lazy(() => import('./CsvGrid'));
 const JsonEdit = lazy(() => import('./JsonEdit'));
 const isGridPath = (p) => /\.(csv|tsv)$/i.test(p || '');
@@ -1336,7 +1337,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
       className="zb"
       dir="ltr"
       data-theme={theme}
-      style={themeVars(theme)}
+      style={{ ...themeVars(theme), '--zb-fs': fontSize }}
       onKeyDown={onKeyDown}
     >
       <input ref={fileInput} type="file" multiple hidden onChange={(e) => onPicked(e, false)} />
@@ -1619,6 +1620,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
           expanded={runBig}
           onToggleExpand={() => setRunBig((v) => !v)}
           ai={aiBtn}
+          fontSize={fontSize}
         />
       )}
       {runOpen && runApp?.kind !== 'sandbox' && (
