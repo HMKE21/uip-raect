@@ -322,4 +322,10 @@ export default {
   'Chat Messages': 'رسائل الشات',
   'Files Shared': 'ملفات مشارَكة',
   'Failed Connections': 'محاولات اتصال فاشلة',
+  'Tap to enable sound': 'اضغط لتشغيل الصوت',
+  'Pinned': 'مثبّت',
+  'Pin': 'تثبيت',
+  'Unpin': 'إلغاء التثبيت',
+  'No TURN server is configured — audio/video may not reach people on other networks.': 'مفيش سيرفر TURN متظبط — الصوت والفيديو ممكن ما يوصلوش لناس على شبكات تانية.',
+  'More': 'المزيد',
 };

@@ -34,11 +34,13 @@ export default function ParticipantTile({
   // co-host); canPrimaryManage (primary host only, and never for a
   // guest) unlocks remove-a-co-host/promote/demote/make-host.
   role, canPrimaryManage, onMute, onDisableCamera, onRemove, onPromote, onDemote, onMakeHost,
+  onPin, pinned,
 }) {
   const videoRef = useRef(null);
   const vb = useVolumeBoost(videoRef, { stream });   // louder remote participants (never for your own mic)
   const t = useTranslations(translations);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(false); // browser refused autoplay-with-sound until the user interacts
 
   const initial = (displayName || '?').trim().charAt(0).toUpperCase() || '?';
   const showVideo = stream && cameraEnabled !== false;
@@ -53,13 +55,17 @@ export default function ParticipantTile({
     el.muted = !!isLocal;
     if (!stream || isLocal) return undefined;
     el.volume = 1;
-    const play = () => { const p = el.play(); if (p && p.catch) p.catch(() => {}); };
+    const play = () => {
+      const p = el.play();
+      if (p && p.then) p.then(() => setAudioBlocked(false)).catch(() => setAudioBlocked(true));
+    };
     play();
     // autoplay refused (no gesture yet) -> retry on the next tap/key anywhere, and whenever a track starts flowing
     window.addEventListener('pointerdown', play, { once: true, capture: true });
     window.addEventListener('keydown', play, { once: true, capture: true });
     stream.addEventListener && stream.addEventListener('addtrack', play);
     return () => {
+      setAudioBlocked(false);
       window.removeEventListener('pointerdown', play, true);
       window.removeEventListener('keydown', play, true);
       stream.removeEventListener && stream.removeEventListener('addtrack', play);
@@ -67,29 +73,33 @@ export default function ParticipantTile({
   }, [stream, isLocal]);
 
   return (
-    <div
-      className="meeting-tile"
-      style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 'var(--radius-md)', overflow: 'hidden', background: '#1b1c22' }}
-    >
+    <div className={`meeting-tile ${pinned ? 'is-pinned' : ''} ${showVideo ? '' : 'is-no-video'}`}>
+      {/* Always mounted (it also plays this person's VOICE). Hidden with opacity, not display:none, so browsers keep playing it. */}
       <video
         ref={videoRef}
+        className="meeting-tile__video"
         autoPlay
         playsInline
         muted={isLocal}
-        style={{ width: '100%', height: '100%', objectFit: 'cover', transform: isLocal && !screenSharing ? 'scaleX(-1)' : 'none', display: showVideo ? 'block' : 'none' }}
+        onDoubleClick={onPin}
+        style={{
+          objectFit: screenSharing ? 'contain' : 'cover',
+          transform: isLocal && !screenSharing ? 'scaleX(-1)' : 'none',
+          opacity: showVideo ? 1 : 0,
+        }}
       />
       {showVideo ? null : (
-        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div
-            style={{
-              width: large ? 96 : 56, height: large ? 96 : 56, borderRadius: '50%', background: 'var(--color-primary)',
-              color: 'var(--color-on-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: large ? 36 : 20, fontWeight: 800,
-            }}
-          >
+        <div className="meeting-tile__avatar-wrap" onDoubleClick={onPin}>
+          <div className="meeting-tile__avatar" style={{ width: large ? 96 : 64, height: large ? 96 : 64, fontSize: large ? 38 : 24 }}>
             {initial}
           </div>
         </div>
+      )}
+
+      {audioBlocked && !isLocal && (
+        <button type="button" className="meeting-tile__enable-audio" onClick={() => { const el = videoRef.current; if (el) el.play().then(() => setAudioBlocked(false)).catch(() => {}); }}>
+          <Icon name="volume" size={14} /> {t('Tap to enable sound')}
+        </button>
       )}
 
       {showVideo && !isLocal && (
@@ -99,6 +109,11 @@ export default function ParticipantTile({
       )}
 
       <div style={{ position: 'absolute', top: 8, insetInlineStart: 8, display: 'flex', gap: 4 }}>
+        {pinned && (
+          <span className="badge" style={{ background: 'rgba(255,255,255,0.18)', color: '#fff' }} title={t('Pinned')}>
+            <Icon name="pin" size={12} />
+          </span>
+        )}
         {screenSharing && (
           <span className="badge badge-primary">
             <Icon name="monitor" size={12} />
@@ -185,7 +200,7 @@ export default function ParticipantTile({
           {isHost && <Icon name="star" size={11} />}
           {isGuest && <span className="badge badge-neutral" style={{ fontSize: 10, padding: '1px 5px' }}>{t('Guest')}</span>}
         </span>
-        {!micEnabled && <Icon name="mic" size={13} style={{ color: '#f87171' }} />}
+        {!micEnabled && <Icon name="mic-off" size={14} style={{ color: '#f87171', flexShrink: 0 }} />}
       </div>
     </div>
   );

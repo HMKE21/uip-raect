@@ -78,6 +78,7 @@ export default function MeetingRoomShell({
 }) {
   const t = useTranslations(translations);
   const [reactionsOpen, setReactionsOpen] = useState(false);
+  const [pinnedKey, setPinnedKey] = useState(null); // double-click a tile to pin it large
   // Round 7 — one slide-in panel open at a time (Chat/Participants/Files/
   // Notes/Polls); replaces the separate per-panel booleans Round 5/6 used,
   // since a 5-way stack over the same stage only makes sense one at a time.
@@ -111,10 +112,13 @@ export default function MeetingRoomShell({
       connectionState: 'connected', connectionQuality: 'excellent', remoteStream: room.localStream, isLocal: true,
     };
     const all = [local, ...remote];
-    const sharer = all.find((p) => p.screenSharing) || local;
-    const rest = all.filter((p) => p.key !== sharer.key);
-    return { spotlight: sharer, rest, all };
-  }, [room.participants, room.localStream, room.micEnabled, room.cameraEnabled, room.screenSharing, room.handRaised, room.myScreenShareAllowed, room.myRole, myDisplayName, guestToken]);
+    // Equal grid by default; a big "spotlight" + side strip only when someone shares their screen or you pinned a tile.
+    const featured = all.length > 1 ? (all.find((p) => p.key === pinnedKey) || all.find((p) => p.screenSharing) || null) : null;
+    const rest = featured ? all.filter((p) => p.key !== featured.key) : all;
+    const n = all.length;
+    const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+    return { spotlight: featured, rest, all, cols, rows: Math.ceil(n / cols) };
+  }, [room.participants, room.localStream, room.micEnabled, room.cameraEnabled, room.screenSharing, room.handRaised, room.myScreenShareAllowed, room.myRole, myDisplayName, guestToken, pinnedKey]);
 
   const recipientOptions = useMemo(
     () => Object.entries(room.participants).map(([key, p]) => ({ key, displayName: p.displayName })),
@@ -155,7 +159,9 @@ export default function MeetingRoomShell({
         connectionQuality={p.connectionQuality}
         connectionState={p.connectionState}
         isLocal={!!p.isLocal}
-        large={p.key === tiles.spotlight.key}
+        large={!!tiles.spotlight && p.key === tiles.spotlight.key}
+        pinned={pinnedKey === p.key}
+        onPin={() => setPinnedKey((k) => (k === p.key ? null : p.key))}
         canManage={room.isManager && !p.isLocal}
         onAllowScreenShare={() => room.setParticipantScreenShareAllowed(p.key, true)}
         onDenyScreenShare={() => room.setParticipantScreenShareAllowed(p.key, false)}
@@ -211,7 +217,7 @@ export default function MeetingRoomShell({
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <strong style={{ fontSize: 'var(--text-body)' }}>{meetingTitle || t('Meeting Room')}</strong>
           <span className="text-caption" style={{ color: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            {room.status === 'connecting' ? t('Connecting…') : `${tiles.rest.length + 1} ${t('participants')}`}
+            {room.status === 'connecting' ? t('Connecting…') : `${tiles.all.length} ${t('participants')}`}
             {room.meetingLocked && <Icon name="lock" size={11} title={t('Meeting locked')} />}
           </span>
         </div>
@@ -229,15 +235,14 @@ export default function MeetingRoomShell({
             <button
               type="button"
               className={`meeting-room__control-btn ${room.screenSharingLocked ? 'is-active' : ''}`}
-              style={{ width: 36, height: 36 }}
               onClick={() => room.setScreenSharingLock(!room.screenSharingLocked)}
               title={room.screenSharingLocked ? t('Allow screen sharing') : t('Disable screen sharing')}
             >
               <Icon name="lock" size={16} />
             </button>
           )}
-          <button type="button" className="meeting-room__control-btn is-leave" onClick={handleLeave} title={t('Leave Meeting')}>
-            <Icon name="logout" size={18} />
+          <button type="button" className="meeting-room__control-btn is-leave meeting-room__topbar-leave" onClick={handleLeave} title={t('Leave Meeting')} aria-label={t('Leave Meeting')}>
+            <Icon name="logout" size={16} />
           </button>
         </div>
       </div>
@@ -258,15 +263,28 @@ export default function MeetingRoomShell({
           {t('This meeting has reached the recommended participant limit — call quality may degrade.')}
         </p>
       )}
+      {room.hasTurn === false && tiles.all.length > 1 && (
+        <p className="text-caption" style={{ background: 'rgba(245,158,11,0.15)', color: '#fbbf24', margin: 0, padding: 'var(--space-2) var(--space-4)' }}>
+          {t('No TURN server is configured — audio/video may not reach people on other networks.')}
+        </p>
+      )}
       {room.error && (
         <p className="text-caption" style={{ background: 'rgba(239,68,68,0.15)', color: '#fca5a5', margin: 0, padding: 'var(--space-2) var(--space-4)' }}>
           {room.error.message || t("Camera/microphone couldn't be accessed — you can still see and hear everyone else.")}
         </p>
       )}
 
-      <div className="meeting-room__stage">
-        <div className="meeting-room__spotlight">{renderTile(tiles.spotlight)}</div>
-        <div className="meeting-room__strip">{tiles.rest.map(renderTile)}</div>
+      <div className="meeting-room__body">
+      <div
+        className={`meeting-room__stage ${tiles.spotlight ? 'has-spotlight' : 'is-grid'}`}
+        style={{ '--cols': tiles.cols, '--rows': tiles.rows }}
+      >
+        {tiles.spotlight ? (
+          <>
+            <div className="meeting-room__spotlight">{renderTile(tiles.spotlight)}</div>
+            <div className="meeting-room__strip">{tiles.rest.map(renderTile)}</div>
+          </>
+        ) : tiles.all.map(renderTile)}
 
         {room.reactions.length > 0 && (
           <div className="meeting-room__reactions-overlay">
@@ -275,121 +293,6 @@ export default function MeetingRoomShell({
             ))}
           </div>
         )}
-      </div>
-
-      <div className="meeting-room__controls">
-        <button
-          type="button"
-          className={`meeting-room__control-btn ${room.micEnabled ? '' : 'is-off'}`}
-          onClick={room.toggleMic}
-          title={room.micEnabled ? t('Mute') : t('Unmute')}
-        >
-          <Icon name={room.micEnabled ? 'mic' : 'mic-off'} size={18} />
-        </button>
-        <button
-          type="button"
-          className={`meeting-room__control-btn ${room.cameraEnabled ? '' : 'is-off'}`}
-          onClick={room.toggleCamera}
-          title={room.cameraEnabled ? t('Turn camera off') : t('Turn camera on')}
-        >
-          <Icon name={room.cameraEnabled ? 'video' : 'video-off'} size={18} />
-        </button>
-        <button
-          type="button"
-          className={`meeting-room__control-btn ${room.screenSharing ? 'is-active' : ''}`}
-          onClick={room.toggleScreenShare}
-          title={room.screenSharing ? t('Stop Sharing') : (room.canShareScreen ? t('Share Screen') : t('Screen sharing is currently locked by the host.'))}
-          disabled={!room.screenSharing && !room.canShareScreen}
-        >
-          <Icon name="monitor" size={18} />
-        </button>
-        <button
-          type="button"
-          className={`meeting-room__control-btn ${room.handRaised ? 'is-active' : ''}`}
-          onClick={room.toggleHand}
-          title={room.handRaised ? t('Lower Hand') : t('Raise Hand')}
-        >
-          <Icon name="hand" size={18} />
-        </button>
-        <div style={{ position: 'relative' }}>
-          <button
-            type="button"
-            className="meeting-room__control-btn"
-            onClick={() => setReactionsOpen((v) => !v)}
-            title={t('Reactions')}
-          >
-            <Icon name="smile" size={18} />
-          </button>
-          {reactionsOpen && (
-            <div className="meeting-room__reactions-popover">
-              {REACTION_TYPES.map((r) => (
-                <button
-                  key={r.type}
-                  type="button"
-                  onClick={() => { room.sendReaction(r.type, r.emoji); setReactionsOpen(false); }}
-                >
-                  {r.emoji}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        <button
-          type="button"
-          className="meeting-room__control-btn"
-          style={{ position: 'relative' }}
-          onClick={() => togglePanel('chat')}
-          title={t('Chat')}
-        >
-          <Icon name="message-square" size={18} />
-          {room.chatUnreadCount > 0 && !chatOpen && (
-            <span className="meeting-room__badge-dot">{room.chatUnreadCount > 9 ? '9+' : room.chatUnreadCount}</span>
-          )}
-        </button>
-        <button
-          type="button"
-          className={`meeting-room__control-btn ${participantsOpen ? 'is-active' : ''}`}
-          onClick={() => togglePanel('participants')}
-          title={t('Participants')}
-        >
-          <Icon name="users" size={18} />
-        </button>
-        <button
-          type="button"
-          className={`meeting-room__control-btn ${filesOpen ? 'is-active' : ''}`}
-          onClick={() => togglePanel('files')}
-          title={t('Files')}
-        >
-          <Icon name="file" size={18} />
-        </button>
-        <button
-          type="button"
-          className={`meeting-room__control-btn ${notesOpen ? 'is-active' : ''}`}
-          onClick={() => togglePanel('notes')}
-          title={t('Notes & Action Items')}
-        >
-          <Icon name="note" size={18} />
-        </button>
-        <button
-          type="button"
-          className={`meeting-room__control-btn ${pollsOpen ? 'is-active' : ''}`}
-          onClick={() => togglePanel('polls')}
-          title={t('Polls')}
-        >
-          <Icon name="bar-chart" size={18} />
-        </button>
-        <button
-          type="button"
-          className={`meeting-room__control-btn ${recordingsOpen ? 'is-active' : ''}`}
-          style={{ position: 'relative' }}
-          onClick={() => togglePanel('recordings')}
-          title={t('Recordings')}
-        >
-          <Icon name="record-dot" size={18} style={room.activeRecording ? { color: '#ef4444' } : undefined} />
-        </button>
-        <button type="button" className="meeting-room__control-btn is-leave" onClick={handleLeave} title={t('Leave Meeting')}>
-          <Icon name="logout" size={18} />
-        </button>
       </div>
 
       <ParticipantsPanel
@@ -468,6 +371,124 @@ export default function MeetingRoomShell({
         onStopLocal={room.stopRecordingLocal}
         onDelete={room.deleteRecording}
       />
+      </div>
+
+      <div className="meeting-room__controls">
+        <button
+          type="button"
+          className={`meeting-room__control-btn ${room.micEnabled ? '' : 'is-off'}`}
+          onClick={room.toggleMic}
+          title={room.micEnabled ? t('Mute') : t('Unmute')}
+        >
+          <Icon name={room.micEnabled ? 'mic' : 'mic-off'} size={18} />
+        </button>
+        <button
+          type="button"
+          className={`meeting-room__control-btn ${room.cameraEnabled ? '' : 'is-off'}`}
+          onClick={room.toggleCamera}
+          title={room.cameraEnabled ? t('Turn camera off') : t('Turn camera on')}
+        >
+          <Icon name={room.cameraEnabled ? 'video' : 'video-off'} size={18} />
+        </button>
+        <button
+          type="button"
+          className={`meeting-room__control-btn ${room.screenSharing ? 'is-active' : ''}`}
+          onClick={room.toggleScreenShare}
+          title={room.screenSharing ? t('Stop Sharing') : (room.canShareScreen ? t('Share Screen') : t('Screen sharing is currently locked by the host.'))}
+          disabled={!room.screenSharing && !room.canShareScreen}
+        >
+          <Icon name="monitor" size={18} />
+        </button>
+        <button
+          type="button"
+          className={`meeting-room__control-btn ${room.handRaised ? 'is-active' : ''}`}
+          onClick={room.toggleHand}
+          title={room.handRaised ? t('Lower Hand') : t('Raise Hand')}
+        >
+          <Icon name="hand" size={18} />
+        </button>
+        <div style={{ position: 'relative' }}>
+          <button
+            type="button"
+            className="meeting-room__control-btn"
+            onClick={() => setReactionsOpen((v) => !v)}
+            title={t('Reactions')}
+          >
+            <Icon name="smile" size={18} />
+          </button>
+          {reactionsOpen && (
+            <div className="meeting-room__reactions-popover">
+              {REACTION_TYPES.map((r) => (
+                <button
+                  key={r.type}
+                  type="button"
+                  onClick={() => { room.sendReaction(r.type, r.emoji); setReactionsOpen(false); }}
+                >
+                  {r.emoji}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <span className="meeting-room__divider" aria-hidden="true" />
+        <button
+          type="button"
+          className="meeting-room__control-btn"
+          style={{ position: 'relative' }}
+          onClick={() => togglePanel('chat')}
+          title={t('Chat')}
+        >
+          <Icon name="message-square" size={18} />
+          {room.chatUnreadCount > 0 && !chatOpen && (
+            <span className="meeting-room__badge-dot">{room.chatUnreadCount > 9 ? '9+' : room.chatUnreadCount}</span>
+          )}
+        </button>
+        <button
+          type="button"
+          className={`meeting-room__control-btn ${participantsOpen ? 'is-active' : ''}`}
+          onClick={() => togglePanel('participants')}
+          title={t('Participants')}
+        >
+          <Icon name="users" size={18} />
+        </button>
+        <button
+          type="button"
+          className={`meeting-room__control-btn ${filesOpen ? 'is-active' : ''}`}
+          onClick={() => togglePanel('files')}
+          title={t('Files')}
+        >
+          <Icon name="file" size={18} />
+        </button>
+        <button
+          type="button"
+          className={`meeting-room__control-btn ${notesOpen ? 'is-active' : ''}`}
+          onClick={() => togglePanel('notes')}
+          title={t('Notes & Action Items')}
+        >
+          <Icon name="note" size={18} />
+        </button>
+        <button
+          type="button"
+          className={`meeting-room__control-btn ${pollsOpen ? 'is-active' : ''}`}
+          onClick={() => togglePanel('polls')}
+          title={t('Polls')}
+        >
+          <Icon name="bar-chart" size={18} />
+        </button>
+        <button
+          type="button"
+          className={`meeting-room__control-btn ${recordingsOpen ? 'is-active' : ''}`}
+          style={{ position: 'relative' }}
+          onClick={() => togglePanel('recordings')}
+          title={t('Recordings')}
+        >
+          <Icon name="record-dot" size={18} style={room.activeRecording ? { color: '#ef4444' } : undefined} />
+        </button>
+        <span className="meeting-room__divider" aria-hidden="true" />
+        <button type="button" className="meeting-room__control-btn is-leave" onClick={handleLeave} title={t('Leave Meeting')} aria-label={t('Leave Meeting')}>
+          <Icon name="logout" size={18} />
+        </button>
+      </div>
     </div>
   );
 }

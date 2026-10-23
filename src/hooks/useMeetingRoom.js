@@ -103,6 +103,7 @@ export function useMeetingRoom({
   const [cameraEnabled, setCameraEnabled] = useState(deviceDefaults?.camera_on_entry ?? true);
   const [screenSharing, setScreenSharing] = useState(false);
   const [meshCapacity, setMeshCapacity] = useState(null);
+  const [hasTurn, setHasTurn] = useState(null); // null = unknown yet; false = server has no TURN relay configured
   const [status, setStatus] = useState('connecting'); // connecting | connected | error
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null); // transient toast-style message (e.g. "the host stopped your screen share")
@@ -159,6 +160,9 @@ export function useMeetingRoom({
   const localStreamRef = useRef(null);
   const cameraTrackSendersRef = useRef({}); // key -> RTCRtpSender, for screen-share track swapping
   const iceServersRef = useRef([]);
+  const remoteStreamsRef = useRef({}); // key -> MediaStream (fallback when ontrack gives no stream)
+  const offeredRef = useRef({}); // key -> true when WE sent the offer for that pair (only the offerer retries)
+  const offerToRef = useRef(null);
   const leftRef = useRef(false);
   const seenChatIdsRef = useRef(new Set()); // dedupe — the sender gets their own message from the REST response, but also rides the same broadcast as everyone else on the presence channel (Round 5's ChatMessageSent doesn't use toOthers())
   const reactionSeqRef = useRef(0);
@@ -393,19 +397,27 @@ export function useMeetingRoom({
     delete peersRef.current[key];
     delete pendingCandidatesRef.current[key];
     delete cameraTrackSendersRef.current[key];
+    delete remoteStreamsRef.current[key];
+    delete offeredRef.current[key];
   }, []);
 
   const createPeer = useCallback((key) => {
     const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
     peersRef.current[key] = pc;
-    pendingCandidatesRef.current[key] = [];
+    pendingCandidatesRef.current[key] = pendingCandidatesRef.current[key] || []; // keep candidates that raced ahead of the offer
 
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach((track) => {
-        const sender = pc.addTrack(track, localStreamRef.current);
+    const local = localStreamRef.current;
+    const hasKind = (kind) => !!local && local.getTracks().some((t) => t.kind === kind);
+    if (local) {
+      local.getTracks().forEach((track) => {
+        const sender = pc.addTrack(track, local);
         if (track.kind === 'video') cameraTrackSendersRef.current[key] = sender;
       });
     }
+    // No camera/mic here (denied, or none attached)? We must still RECEIVE everyone else — an offer/answer with no media
+    // sections would silently carry nothing in either direction.
+    if (!hasKind('audio')) pc.addTransceiver('audio', { direction: 'recvonly' });
+    if (!hasKind('video')) pc.addTransceiver('video', { direction: 'recvonly' });
 
     pc.onicecandidate = (e) => {
       if (e.candidate) {
@@ -414,7 +426,16 @@ export function useMeetingRoom({
     };
 
     pc.ontrack = (e) => {
-      patchParticipant(key, { remoteStream: e.streams[0] || null });
+      // One MediaStream per peer, whatever the browser hands us (some give an empty `streams`): keep adding tracks to it.
+      let stream = e.streams && e.streams[0];
+      if (!stream) {
+        stream = remoteStreamsRef.current[key] || new MediaStream();
+        if (!stream.getTracks().includes(e.track)) stream.addTrack(e.track);
+      }
+      remoteStreamsRef.current[key] = stream;
+      patchParticipant(key, { remoteStream: stream });
+      // a track can be muted at first and unmute when media starts flowing — nudge React so tiles re-bind
+      e.track.onunmute = () => patchParticipant(key, { remoteStream: stream });
     };
 
     pc.onconnectionstatechange = () => {
@@ -422,6 +443,10 @@ export function useMeetingRoom({
       patchParticipant(key, { connectionState: mapped });
       if (pc.connectionState === 'failed') {
         signalingApi.reportFailure(meetingUuid, guestToken, 'webrtc', `Peer connection to ${key} failed.`).catch(() => {});
+        // we were the offerer for this pair -> start over with a fresh connection (the other side replaces its peer on any new offer)
+        if (offeredRef.current[key] && !leftRef.current && channelRef.current) {
+          setTimeout(() => { if (peersRef.current[key] === pc && !leftRef.current) offerToRef.current?.(key).catch(() => {}); }, 1500);
+        }
       }
     };
 
@@ -429,17 +454,25 @@ export function useMeetingRoom({
   }, [meetingUuid, guestToken, myKey, patchParticipant]);
 
   const offerTo = useCallback(async (key) => {
+    offeredRef.current[key] = true;
+    closePeer(key);
     const pc = createPeer(key);
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     channelRef.current?.whisper('signal', { to: key, from: myKey, kind: 'offer', data: offer });
-  }, [createPeer, myKey]);
+  }, [createPeer, closePeer, myKey]);
+  offerToRef.current = offerTo;
 
   const handleSignal = useCallback(async ({ to, from, kind, data }) => {
     if (to !== myKey || from === myKey) return;
 
     if (kind === 'offer') {
-      const pc = peersRef.current[from] || createPeer(from);
+      // a new offer == that person (re)joined or restarted: never reuse an old, possibly dead, connection
+      const queuedEarly = pendingCandidatesRef.current[from] || [];
+      if (peersRef.current[from]) { peersRef.current[from].close(); delete peersRef.current[from]; }
+      pendingCandidatesRef.current[from] = queuedEarly;
+      delete offeredRef.current[from];
+      const pc = createPeer(from);
       await pc.setRemoteDescription(new RTCSessionDescription(data));
       const queued = pendingCandidatesRef.current[from] || [];
       pendingCandidatesRef.current[from] = [];
@@ -472,11 +505,16 @@ export function useMeetingRoom({
 
     async function setup() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          // echo cancellation + noise suppression are what stop the "voice coming back" echo and the whistle: ask for them explicitly
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } },
-        });
+        // echo cancellation + noise suppression are what stop the "voice coming back" echo and the whistle: ask for them explicitly
+        const audioC = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } };
+        let stream;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: audioC });
+        } catch (firstErr) {
+          // no camera (or it is busy)? still join with the mic — and vice versa — instead of joining with nothing
+          try { stream = await navigator.mediaDevices.getUserMedia({ audio: audioC }); }
+          catch { stream = await navigator.mediaDevices.getUserMedia({ video: true }); }
+        }
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         stream.getVideoTracks().forEach((t) => { t.enabled = cameraEnabled; });
         stream.getAudioTracks().forEach((t) => { t.enabled = micEnabled; });
@@ -501,6 +539,7 @@ export function useMeetingRoom({
         ]);
         if (cancelled) return;
         iceServersRef.current = iceJson.data.ice_servers || [];
+        if (typeof iceJson.data.has_turn === 'boolean') setHasTurn(iceJson.data.has_turn);
         setMeshCapacity(rosterJson.data.mesh_capacity || null);
         setFiles(filesJson.data?.files || []);
         setNotes({
@@ -561,6 +600,13 @@ export function useMeetingRoom({
       channel
         .here((members) => {
           setStatus('connected');
+          // The roster is a DB snapshot (can include people who closed their tab without leaving); the presence list is the truth.
+          const presentIds = new Set(members.map((m) => m.id));
+          setParticipants((prev) => {
+            const next = {};
+            Object.keys(prev).forEach((k) => { if (presentIds.has(k)) next[k] = prev[k]; });
+            return next;
+          });
           members.forEach((m) => {
             if (m.id === myKey) return;
             setParticipants((prev) => ({
@@ -576,13 +622,16 @@ export function useMeetingRoom({
         })
         .joining((m) => {
           if (m.id === myKey) return;
+          closePeer(m.id); // same person rejoining (refresh / second tab): drop the old connection, their new offer is coming
           setParticipants((prev) => ({
             ...prev,
-            [m.id]: prev[m.id] || {
-              displayName: m.info?.name || m.id, role: m.info?.role || 'participant', isHost: m.info?.role === 'host',
-              isGuest: !!m.info?.is_guest, micEnabled: true, cameraEnabled: true, screenSharing: false, handRaised: false,
-              screenShareAllowed: null, connectionState: 'connecting', connectionQuality: 'good', remoteStream: null,
-            },
+            [m.id]: prev[m.id]
+              ? { ...prev[m.id], remoteStream: null, connectionState: 'connecting' }
+              : {
+                displayName: m.info?.name || m.id, role: m.info?.role || 'participant', isHost: m.info?.role === 'host',
+                isGuest: !!m.info?.is_guest, micEnabled: true, cameraEnabled: true, screenSharing: false, handRaised: false,
+                screenShareAllowed: null, connectionState: 'connecting', connectionQuality: 'good', remoteStream: null,
+              },
           }));
           // They initiate — we just wait for their offer (see docblock).
         })
@@ -1043,7 +1092,7 @@ export function useMeetingRoom({
   return {
     status, error, meetingStatus, notice, clearNotice,
     localStream, micEnabled, cameraEnabled, screenSharing, canShareScreen,
-    participants, meshCapacity,
+    participants, meshCapacity, hasTurn,
     toggleMic, toggleCamera, toggleScreenShare, leave,
     myDisplayName, isHost,
 

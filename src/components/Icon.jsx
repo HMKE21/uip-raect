@@ -126,6 +126,7 @@ const PATHS = {
   palette: '<path d="M12 3a9 9 0 1 0 0 18c1.4 0 2.2-1 2.2-2.1 0-.6-.2-1-.5-1.4-.3-.4-.5-.8-.5-1.3 0-1 .9-1.9 2-1.9h1.6A4.2 4.2 0 0 0 21 10.3C21 6.2 16.9 3 12 3Z"/><circle cx="7.5" cy="10.5" r="1.1"/><circle cx="12" cy="7.3" r="1.1"/><circle cx="16.2" cy="10.5" r="1.1"/><circle cx="9" cy="15" r="1.1"/>',
   'more-horizontal': '<circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/>',
   'map-pin': '<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  volume: '<path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
   pin: '<path d="M12 17v5"/><path d="M9 4h6l-1 8h2.5a2.5 2.5 0 0 1 0 5H7.5a2.5 2.5 0 0 1 0-5H10L9 4Z"/>',
   archive: '<rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8"/><path d="M10 13h4"/>',
   // Below: ported 1:1 from app/Helpers/IconHelper.php, added as new student
