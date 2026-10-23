@@ -109,19 +109,16 @@ async function putLarge(tok, path, blob) {
   return id;
 }
 
-/** Creates `name` inside `parentPath` (app folder root when empty). Already existing = fine. */
-async function makeFolder(tok, parentPath, name) {
-  const url = parentPath ? `${approot(parentPath)}:/children` : 'https://graph.microsoft.com/v1.0/me/drive/special/approot/children';
-  await withRetry(async () => {
-    try {
-      await cloudFetch(url, { method: 'POST', headers: authed(tok, { 'Content-Type': 'application/json' }), body: JSON.stringify({ name, folder: {}, '@microsoft.graph.conflictBehavior': 'fail' }) });
-    } catch (e) {
-      // 409 = nameAlreadyExists (already there). Any other 4xx here is not fatal either: the upload itself creates a missing folder by path
-      // (and a clash on that is retried), so a refused "create folder" call must not stop the backup.
-      if (e?.status === 409 || (e?.status >= 400 && e?.status < 500 && e?.status !== 401 && e?.status !== 403 && e?.status !== 429)) return;
-      throw e;
-    }
-  });
+/** Folders are created by OneDrive itself when a file is addressed by path. Two uploads creating the SAME new folder at once clash (409),
+ *  so until a folder holds its first file, uploads into it go one at a time; after that they run in parallel. (A separate
+ *  "create folder" call is avoided on purpose: POST .../special/approot/children answers 400 for some accounts.) */
+const warm = new Set();
+const lane = new Map();
+function inFolder(folder, job) {
+  if (warm.has(folder)) return job();
+  const p = (lane.get(folder) || Promise.resolve()).catch(() => {}).then(async () => { const r = await job(); warm.add(folder); return r; });
+  lane.set(folder, p);
+  return p;
 }
 
 export const microsoft = {
@@ -142,13 +139,11 @@ export const microsoft = {
     return tokenCall(cfg, { grant_type: 'refresh_token', refresh_token: refreshToken });
   },
 
-  // Folders are created explicitly (and idempotently) BEFORE the parallel uploads start. Letting two uploads create the same
-  // folder implicitly by path is what produced "Cloud error 409".
-  async ensureRoot(tok) { await makeFolder(tok, '', ROOT); return ROOT; },
-  async ensureFolder(tok, state, nodeId, name, parentRemoteId) { const n = safeName(name); await makeFolder(tok, parentRemoteId, n); return `${parentRemoteId}/${n}`; },
+  async ensureRoot() { return ROOT; },
+  async ensureFolder(tok, state, nodeId, name, parentRemoteId) { return `${parentRemoteId}/${safeName(name)}`; },
 
   async put(tok, { name, parentRemoteId, blob }) {
     const path = `${parentRemoteId}/${safeName(name)}`;
-    return withRetry(() => (blob.size <= SMALL ? putSmall(tok, path, blob) : putLarge(tok, path, blob)));
+    return inFolder(parentRemoteId, () => withRetry(() => (blob.size <= SMALL ? putSmall(tok, path, blob) : putLarge(tok, path, blob))));
   },
 };
