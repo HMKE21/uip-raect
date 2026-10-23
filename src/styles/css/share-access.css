@@ -10,3 +10,15 @@
 .shp__claim > svg { flex: 0 0 auto; margin-top: 2px; color: #d97706; }
 .shp__claim b { display: block; margin-bottom: 2px; }
 .shp__claim span { font-size: 13px; opacity: .9; }
+
+/* "Who can open it": 3 choices (and the 6 duration presets) must share the row evenly.
+   The generic dialog rule forced 5 columns on tablets/desktop, so three long labels were squeezed into 1/5 of the width and printed on top of each other. */
+.mp-access .mp-seg.mp-seg--wrap,
+.st-modal-overlay .st-modal .mp-access .mp-seg.mp-seg--wrap:not([role="tablist"]) {
+  display: grid; width: 100%; grid-template-columns: repeat(auto-fit, minmax(132px, 1fr)); gap: 4px;
+}
+.mp-access .mp-seg.mp-seg--wrap button,
+.st-modal-overlay .st-modal .mp-access .mp-seg.mp-seg--wrap button {
+  width: auto; min-width: 0; height: auto; min-height: 40px; white-space: normal; text-align: center; line-height: 1.25; padding: 8px 10px; overflow-wrap: anywhere;
+}
+.mp-access .mp-seg.mp-seg--wrap button svg { flex: none; }
