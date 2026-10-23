@@ -83,7 +83,7 @@ async function getToken(id) {
 /** Backs the manifest up to ONE linked cloud. Failures of one cloud never stop the other. */
 async function runOne(id, items) {
   const P = PROVIDERS[id]; const l = S.links[id];
-  let fatal = null; let done = 0; let failed = 0; let firstErr = '';
+  let fatal = null; let done = 0; let failed = 0; let locked = 0; let firstErr = '';
   try {
     setLink(id, 'running', { progress: { done: 0, total: 0 }, lastError: '' });
     const tok = await getToken(id);
@@ -124,6 +124,7 @@ async function runOne(id, items) {
         } catch (e) {
           if (e instanceof CloudAuthError || e instanceof CloudQuotaError) { fatal = e; } else {
             failed += 1;
+            if (e instanceof CloudRetryError && e.status === 409) locked += 1; // the cloud still holds an earlier, unfinished upload of this file
             if (!firstErr) firstErr = e?.message || '';
             if (e?.status === 404) { l.db.rootId = null; l.db.folders = {}; } // the cloud folder was deleted: rebuild it next time
           }
@@ -134,7 +135,8 @@ async function runOne(id, items) {
     await Promise.all(Array.from({ length: Math.min(PARALLEL, todo.length) }, worker));
     persist();
     if (fatal) throw fatal;
-    if (failed) setLink(id, 'error', { lastError: firstErr || 'Some files could not be copied. They will be tried again.' });
+    if (failed && failed === locked) { setLink(id, 'error', { lastError: 'The cloud is still finishing an earlier upload of some files. Trying again in a few minutes.' }); schedule(3 * 60 * 1000); }
+    else if (failed) setLink(id, 'error', { lastError: firstErr || 'Some files could not be copied. They will be tried again.' });
     else { l.lastOk = Date.now(); l.retried = false; persist(); setLink(id, 'idle', { lastError: '' }); }
   } catch (e) {
     if (e instanceof CloudAuthError && e.code === 'expired' && l.server && !l.retried) {

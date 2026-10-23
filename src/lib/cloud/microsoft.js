@@ -95,16 +95,23 @@ async function putLarge(tok, path, blob) {
   const s = await graph(`${approot(path)}:/createUploadSession`, { method: 'POST', headers: authed(tok, { 'Content-Type': 'application/json' }), body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace' } }) });
   const { uploadUrl } = await s.json();
   let id = null;
-  for (let off = 0; off < blob.size; off += CHUNK) {
-    const end = Math.min(blob.size, off + CHUNK);
-    let res;
-    try { res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Range': `bytes ${off}-${end - 1}/${blob.size}` }, body: blob.slice(off, end) }); } catch { throw new CloudRetryError('Network problem.', 0); }
-    if (res.status === 507) throw new CloudQuotaError();
-    if (res.status >= 500 || res.status === 429) throw new CloudRetryError('Microsoft is busy.', res.status);
-    if (res.status === 409) throw new CloudRetryError('OneDrive is busy.', 409);
-    if (res.status === 401) throw new CloudAuthError('Your cloud session expired.', 'expired');
-    if (!res.ok) throw Object.assign(new Error(`Cloud error ${res.status}.`), { status: res.status });
-    if (res.status === 200 || res.status === 201) id = (await res.json()).id;
+  try {
+    for (let off = 0; off < blob.size; off += CHUNK) {
+      const end = Math.min(blob.size, off + CHUNK);
+      let res;
+      try { res = await fetch(uploadUrl, { method: 'PUT', headers: { 'Content-Range': `bytes ${off}-${end - 1}/${blob.size}` }, body: blob.slice(off, end) }); } catch { throw new CloudRetryError('Network problem.', 0); }
+      if (res.status === 507) throw new CloudQuotaError();
+      if (res.status >= 500 || res.status === 429) throw new CloudRetryError('Microsoft is busy.', res.status);
+      if (res.status === 409) throw new CloudRetryError('OneDrive is busy.', 409);
+      if (res.status === 401) throw new CloudAuthError('Your cloud session expired.', 'expired');
+      if (!res.ok) throw Object.assign(new Error(`Cloud error ${res.status}.`), { status: res.status });
+      if (res.status === 200 || res.status === 201) id = (await res.json()).id;
+    }
+  } catch (e) {
+    // An abandoned upload session keeps the file name LOCKED ("A file with the same name is currently being uploaded" — 409) until it expires,
+    // so every retry would clash with our own half-finished attempt. Cancel the session before anything retries.
+    try { await fetch(uploadUrl, { method: 'DELETE' }); } catch { /* best effort */ }
+    throw e;
   }
   return id;
 }
