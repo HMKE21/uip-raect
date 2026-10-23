@@ -74,7 +74,7 @@ const REACTION_TYPES = [
  */
 export default function MeetingRoomShell({
   meetingUuid, meetingTitle, guestToken = null, myKey, myDisplayName, deviceDefaults, onLeave,
-  isHost = false, screenSharingLockedInitial = false, chatEnabledInitial = true,
+  isHost = false, screenSharingLockedInitial = false, chatEnabledInitial = true, meetingLockedInitial = false,
 }) {
   const t = useTranslations(translations);
   const [reactionsOpen, setReactionsOpen] = useState(false);
@@ -99,7 +99,7 @@ export default function MeetingRoomShell({
 
   const room = useMeetingRoom({
     meetingUuid, guestToken, myKey, myDisplayName, deviceDefaults,
-    isHost, screenSharingLockedInitial, chatEnabledInitial,
+    isHost, screenSharingLockedInitial, chatEnabledInitial, meetingLockedInitial,
   });
 
   const tiles = useMemo(() => {
@@ -284,7 +284,7 @@ export default function MeetingRoomShell({
           onClick={room.toggleMic}
           title={room.micEnabled ? t('Mute') : t('Unmute')}
         >
-          <Icon name="mic" size={18} />
+          <Icon name={room.micEnabled ? 'mic' : 'mic-off'} size={18} />
         </button>
         <button
           type="button"
@@ -292,7 +292,7 @@ export default function MeetingRoomShell({
           onClick={room.toggleCamera}
           title={room.cameraEnabled ? t('Turn camera off') : t('Turn camera on')}
         >
-          <Icon name="monitor" size={18} />
+          <Icon name={room.cameraEnabled ? 'video' : 'video-off'} size={18} />
         </button>
         <button
           type="button"
@@ -301,7 +301,7 @@ export default function MeetingRoomShell({
           title={room.screenSharing ? t('Stop Sharing') : (room.canShareScreen ? t('Share Screen') : t('Screen sharing is currently locked by the host.'))}
           disabled={!room.screenSharing && !room.canShareScreen}
         >
-          <Icon name="share" size={18} />
+          <Icon name="monitor" size={18} />
         </button>
         <button
           type="button"

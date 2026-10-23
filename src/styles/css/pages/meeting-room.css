@@ -497,6 +497,6 @@ body.meeting-room-active main.app-shell__main {
   50% { opacity: 0.35; }
 }
 
-/* Guest page (/join/:token) has no app shell: give the room an explicit height under the public top bar. */
+/* Guest page (/join/:token) has no app shell: the room takes the whole screen, like Meet / Zoom. */
 body.meeting-room-active:not(:has(.app-shell)) { overflow: hidden; }
-body.meeting-room-active:not(:has(.app-shell)) .meeting-room { height: calc(100dvh - 72px); min-height: 420px; }
+body.meeting-room-active:not(:has(.app-shell)) .meeting-room { position: fixed; inset: 0; height: 100dvh; z-index: 1000; }

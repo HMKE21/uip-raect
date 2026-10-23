@@ -4,6 +4,7 @@ import { api, errorMessage } from '../../api/client';
 import { useAuth } from '../../context/AuthContext';
 import Icon from '../../components/Icon';
 import PublicTopbar from '../../components/PublicTopbar';
+import MeetingRoomShell from '../../components/meetings/room/MeetingRoomShell';
 import { useTranslations } from '../../context/LanguageContext';
 import { portalPrefix } from '../../config/navConfig';
 import i18nCommon from '../../i18n/common';

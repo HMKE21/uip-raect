@@ -95,7 +95,7 @@ import { createMeetingEcho, presenceChannelName, personalChannelName, signalingA
  */
 export function useMeetingRoom({
   meetingUuid, guestToken = null, myKey, myDisplayName, deviceDefaults,
-  isHost = false, screenSharingLockedInitial = false, chatEnabledInitial = true,
+  isHost = false, screenSharingLockedInitial = false, chatEnabledInitial = true, meetingLockedInitial = false,
 }) {
   const [participants, setParticipants] = useState({}); // key -> {displayName, role, isHost, isGuest, micEnabled, cameraEnabled, screenSharing, handRaised, screenShareAllowed, connectionState, connectionQuality, remoteStream}
   const [localStream, setLocalStream] = useState(null);
@@ -126,7 +126,7 @@ export function useMeetingRoom({
 
   // Round 6 — بند 5 (Host Controls / Participants Panel).
   const [myRole, setMyRole] = useState(isHost ? 'host' : 'participant'); // 'host' | 'co_host' | 'participant' — see docblock above for why co-host isn't seeded here
-  const [meetingLocked, setMeetingLocked] = useState(false); // "Lock meeting" — blocks new joiners; doesn't affect anyone already in
+  const [meetingLocked, setMeetingLocked] = useState(!!meetingLockedInitial); // "Lock meeting" — blocks new joiners; doesn't affect anyone already in
   const [kicked, setKicked] = useState(null); // {byDisplayName} once WE were removed by a host/co-host — MeetingRoomShell renders a dedicated screen for this
 
   // Round 7 — بند 19 (File Sharing).

@@ -72,6 +72,7 @@ export default function MeetingRoom() {
       isHost={meeting.host_user_id === user.id}
       screenSharingLockedInitial={!!meeting.screen_sharing_locked}
       chatEnabledInitial={meeting.settings?.allow_chat ?? true}
+      meetingLockedInitial={!!meeting.locked}
       onLeave={() => navigate(`/${prefix}/meetings/${uuid}`, { replace: true })}
     />
   );
