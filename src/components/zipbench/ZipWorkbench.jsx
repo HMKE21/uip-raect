@@ -126,6 +126,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const ai = useAiFix({ enabled: can('ai.code_assist'), tt, projectId }); // projectId: the supervising doctor may have set this project's AI mode
   const chat = useAiChat({ tt, scope: projectId || '', label: fileName || '', enabled: !!ai.chatAvailable }); // side-panel chat (saved on the account): knows the open file, selection, terminal output and the other open tabs
   const [chatOpen, setChatOpen] = useState(false);
+  const [chatRefs, setChatRefs] = useState([]); // code parts pinned to the next question: [{ id, path, from, to, text }] (max 5)
   const [chatCtx, setChatCtx] = useState({ file: true, selection: true, others: true, output: false }); // what the chat sends as context
   const [chatMode, setChatMode] = useState(null); // null = the server's default mode // "explain / fix this error" (needs the ai.code_assist permission)
 
@@ -1024,7 +1025,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
       const targets = CONVERT_TARGETS.filter((l) => l !== cur && !(cur === 'React JSX' && l === 'JavaScript')).slice(0, 4);
       items.push(
         { sep: true },
-        { label: tt('Ask in chat…', 'اسأل في الشات…'), icon: 'chat', onClick: () => openChat({ selection: true }) },
+        { label: tt('Ask UIP AI…', 'اسأل UIP AI…'), icon: 'chat', onClick: () => openChat({ selection: true }) },
         { label: tt('Explain this code', 'اشرح الكود'), icon: 'sparkles', onClick: () => go('explain') },
         { label: tt('Fix bugs', 'صلّح الأخطاء'), icon: 'wrench', onClick: () => go('fix') },
         { label: tt('Improve', 'حسّن الكود'), icon: 'edit', onClick: () => go('improve') },
@@ -1107,7 +1108,26 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const openChat = (o = {}) => {
     ai.close();
     setChatOpen(true);
-    if (o.selection) setChatCtx((c) => ({ ...c, selection: true }));
+    if (o.selection) { setChatCtx((c) => ({ ...c, selection: true })); const s = chatLiveSel(); if (s) pinChatRef(s); }
+  };
+  // the lines selected in the open file, with their text (what the "Attach selection" card shows)
+  const chatLiveSel = () => {
+    const p = chatActive();
+    if (!p || !cursor.sel) return null;
+    const t = textOf(p);
+    if (t == null) return null;
+    const from = Math.max(1, cursor.sel.from); const to = Math.max(from, cursor.sel.to);
+    const text = t.split('\n').slice(from - 1, to).join('\n').slice(0, 4000);
+    return text.trim() ? { id: `${p}:${from}-${to}`, path: p, from, to, text } : null;
+  };
+  const pinChatRef = (r) => {
+    setChatRefs((cur) => (cur.some((x) => x.path === r.path && x.from === r.from && x.to === r.to) || cur.length >= 5 ? cur : [...cur, r]));
+    setChatCtx((c) => ({ ...c, selection: false })); // it is attached as a quote now: do not send it twice
+  };
+  const gotoChatRef = (path, line) => {
+    if (!path) return;
+    openFile(path);
+    if (line) { revealSeq.current += 1; setReveal({ key: `ai${revealSeq.current}`, path, line, col: 0, len: 0 }); }
   };
   const closeChat = () => { chat.stop(); setChatOpen(false); };
   const CHAT_FILE_MAX = 100000; // never ship more than this per file (the server clips to its own, smaller limits)
@@ -1138,7 +1158,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
       project_id: projectId || undefined,
     };
   };
-  const sendChat = (text) => chat.send({ text, mode: chatModeNow, buildRequest: buildChatRequest });
+  const sendChat = (text) => { chat.send({ text, mode: chatModeNow, buildRequest: buildChatRequest, refs: chatRefs }); setChatRefs([]); setChatCtx((c) => ({ ...c, selection: true })); };
   // "this needs Assistant mode": switch the mode and ask the same question again in it
   const switchAndRetryChat = () => { setChatMode('assistant'); chat.retry({ mode: 'assistant', buildRequest: buildChatRequest }); };
   // a code block of a chat answer becomes a new file (next to the open file unless the block names a folder)
@@ -1154,15 +1174,18 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
   const retryChat = () => chat.retry({ mode: chatModeNow, buildRequest: buildChatRequest });
   const chatChips = (() => {
     const active = chatActive();
-    const sel = active ? cursor.sel : null;
     const others = tabs.filter((p) => p !== active && docs.current.get(p)?.kind === 'text').length;
     const chips = [];
     if (active) chips.push({ key: 'file', label: baseName(active), on: chatCtx.file });
-    if (active && sel) chips.push({ key: 'selection', label: tt(`Lines ${sel.from}–${sel.to}`, `السطور ${sel.from}–${sel.to}`), on: chatCtx.selection && chatCtx.file });
     if (others > 0) chips.push({ key: 'others', label: tt(`${others} other tab${others > 1 ? 's' : ''}`, `${others} تاب تانية`), on: chatCtx.others });
     if (ai.available && runOpen && runOutput().trim()) chips.push({ key: 'output', label: tt('Terminal output', 'ناتج الـ terminal'), on: chatCtx.output });
     return chips;
   })();
+  // one-tap questions about the attached / selected code (the ones that change files only make sense in Assistant mode)
+  const chatQuick = (chatRefs.length || chatLiveSel()) ? [
+    tt('Explain this code', 'اشرح الكود ده'), tt('Find bugs in it', 'دوّر على أخطاء فيه'), tt('How can I improve it?', 'أحسّنه إزاي؟'),
+    ...(chatModeNow === 'assistant' ? [tt('Add comments to it', 'ضيف تعليقات عليه'), tt('Write tests for it', 'اكتب اختبارات ليه')] : []),
+  ] : [];
   const chatSuggestions = chatActive()
     ? [tt('Explain this file', 'اشرح الملف ده'), tt('Find the bug', 'دوّر على الغلط'), tt('How can I improve it?', 'أحسّنه إزاي؟')]
     : [tt('How do I get started?', 'أبدأ منين؟')];
@@ -1558,6 +1581,12 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
             onChip={(k) => setChatCtx((c) => ({ ...c, [k]: !c[k] }))}
             suggestions={chatSuggestions}
             onSend={sendChat}
+            liveSel={chatLiveSel()}
+            refs={chatRefs}
+            onPin={pinChatRef}
+            onUnpin={(id) => setChatRefs((cur) => cur.filter((r) => r.id !== id))}
+            onGoto={gotoChatRef}
+            quick={chatQuick}
             onRetry={retryChat}
             onSwitchAndRetry={switchAndRetryChat}
             onNewFile={chatNewFile}

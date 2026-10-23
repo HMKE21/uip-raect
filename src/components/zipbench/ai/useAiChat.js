@@ -36,7 +36,14 @@ function editsNote(m) {
   return `\n\n[Changes you suggested in this reply: ${eds.map((e) => `${e.kind === 'create' ? 'new file' : e.rewrite ? 'rewrite of' : 'edit of'} ${e.path} (${word[e.state] || e.state})`).join('; ')}]`;
 }
 
-const unwrap = (res) => (res && res.data) || res || {};
+/** Earlier questions that had code pinned to them: keep a short copy of it in the history sent to the model. */
+function refsNote(m) {
+  const rs = Array.isArray(m.refs) ? m.refs : [];
+  if (!rs.length) return '';
+  return `\n\n[Code the student pinned to this question: ${rs.map((r) => `${r.path || 'code'} lines ${r.from}-${r.to}:\n${String(r.text || '').slice(0, 1200)}`).join('\n---\n')}]`;
+}
+
+const unwrap = (res) = (res && res.data) || res || {};
 
 /**
  * A tiny external store. The streaming state lives HERE, not in React state of the workbench: ZipWorkbench is a ~1700 line
@@ -187,13 +194,18 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
       }
     };
 
+    // code parts the student pinned to THIS question travel as `refs`; the ones pinned to earlier questions are folded into
+    // that question's text so a follow-up ("and what about the second one?") still has what it refers to
+    const lastUser = history[history.length - 1];
+    const refs = (lastUser && lastUser.role === 'user' && Array.isArray(lastUser.refs) ? lastUser.refs : [])
+      .map((r) => ({ path: r.path, from: r.from, to: r.to, text: String(r.text || '').slice(0, 4000) }));
     const wire = history
       .filter((m) => m.content && m.phase !== 'error')
       .slice(-HISTORY)
-      .map((m) => ({ role: m.role, content: m.role === 'assistant' ? `${m.content}${editsNote(m)}` : m.content }));
+      .map((m) => ({ role: m.role, content: m.role === 'assistant' ? `${m.content}${editsNote(m)}` : (m !== lastUser ? `${m.content}${refsNote(m)}` : m.content) }));
 
     try {
-      await streamPost(URL, { ...buildRequest(), messages: wire, mode, locale: aiLocale() }, { signal: ctrl.signal, onEvent });
+      await streamPost(URL, { ...buildRequest(), ...(refs.length ? { refs } : {}), messages: wire, mode, locale: aiLocale() }, { signal: ctrl.signal, onEvent });
       clearTimeout(flushT); flush();
       if (!finished) patch({ phase: 'done' }); // the stream ended without done/error: keep what we have
     } catch (err) {
@@ -207,11 +219,21 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
     }
   }, [abort, setMessages, setChatId]);
 
-  const send = useCallback(({ text, mode, buildRequest }) => {
+  const send = useCallback(({ text, mode, buildRequest, refs }) => {
     const q = String(text || '').trim();
     if (!q) return;
-    run({ history: [...store.get().messages, { id: nextId(), role: 'user', content: q }], mode, buildRequest });
+    run({ history: [...store.get().messages, { id: nextId(), role: 'user', content: q, ...(refs && refs.length ? { refs } : {}) }], mode, buildRequest });
   }, [run, store]);
+
+  /** Drop this question and everything after it (the panel puts its text back in the box to edit and send again). */
+  const rewind = useCallback((msgId) => {
+    const cur = store.get().messages;
+    const i = cur.findIndex((m) => m.id === msgId);
+    if (i < 0) return;
+    abort();
+    dirty.current = true;
+    setMessages(cur.slice(0, i));
+  }, [abort, setMessages, store]);
 
   /** Ask the last question again (after an error, a stop, or when the mode was switched). */
   const retry = useCallback(({ mode, buildRequest }) => {
@@ -285,7 +307,7 @@ export function useAiChat({ tt, scope = '', label = '', enabled = true }) {
 
   return {
     store, getMessages,
-    send, retry, stop, mark,
+    send, retry, stop, mark, rewind,
     loadChats, newChat, openChat, renameChat, deleteChat, clearAll,
     retrySave: saveNow,
     /** kept for callers that used the old name */

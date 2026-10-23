@@ -4,6 +4,7 @@ import Markdown from './AiMarkdown';
 import { Diff } from './AiFixPanel';
 import { useAiChatState } from './useAiChat';
 import '../../../styles/css/zip-ai-fix.css';
+import '../../../styles/css/zip-ai-uip.css';
 
 const WIDTH_KEY = 'zb-ai-w';
 const DEF_W = 440;
@@ -31,6 +32,27 @@ function NewFilePreview({ content, tt }) {
         </div>
       ))}
       {lines.length > shown.length && <button type="button" className="zb-ai__more" onClick={() => setAll(true)} dir="auto">{tt(`Show all ${lines.length} lines`, `عرض كل الـ ${lines.length} سطر`)}</button>}
+    </div>
+  );
+}
+
+const BRAND = 'UIP AI';
+const baseOf = (p) => String(p || '').split('/').pop() || '';
+
+/** A quoted part of the code (file + lines + the first lines of it). Used in the composer (removable) and in the sent message. */
+function RefCard({ r, tt, onRemove, onGoto, live }) {
+  const lines = String(r.text || '').split('\n');
+  const shown = lines.slice(0, 3);
+  return (
+    <div className={`zb-ref${live ? ' is-live' : ''}`}>
+      <div className="zb-ref__head">
+        <Icon name={live ? 'edit' : 'paperclip'} size={12} />
+        <button type="button" className="zb-ref__where" dir="ltr" onClick={() => onGoto && onGoto(r.path, r.from)} disabled={!onGoto} title={tt('Go to this code', 'روح للكود ده')}>
+          {baseOf(r.path) || tt('Code', 'كود')} <b>{r.from === r.to ? `L${r.from}` : `L${r.from}–${r.to}`}</b>
+        </button>
+        {onRemove && <button type="button" className="zb-ref__x" onClick={onRemove} aria-label={tt('Remove', 'إزالة')} title={tt('Remove', 'إزالة')}><Icon name="x" size={12} /></button>}
+      </div>
+      <pre className="zb-ref__code" dir="ltr">{shown.join('\n')}{lines.length > shown.length ? '\n…' : ''}</pre>
     </div>
   );
 }
@@ -71,9 +93,19 @@ function EditCard({ e, tt, onApply, onReject, onOpen }) {
   );
 }
 
-const Message = memo(function Message({ m, prevUser, tt, canSwitch, onApply, onApplyAll, onReject, onOpen, onRetry, onSwitchAndRetry, onNewFile, isLast, busy }) {
+const Message = memo(function Message({ m, prevUser, tt, canSwitch, onApply, onApplyAll, onReject, onOpen, onRetry, onSwitchAndRetry, onNewFile, onGoto, onEdit, isLast, isLastUser, busy }) {
   const [copied, setCopied] = useState(false);
-  if (m.role === 'user') return <div className="zb-chat__user" dir="auto">{m.content}</div>;
+  if (m.role === 'user') {
+    return (
+      <div className="zb-chat__ubox">
+        <div className="zb-chat__user" dir="auto">
+          {Array.isArray(m.refs) && m.refs.length > 0 && <div className="zb-chat__refs">{m.refs.map((r, i) => <RefCard key={i} r={r} tt={tt} onGoto={onGoto} />)}</div>}
+          {m.content}
+        </div>
+        {isLastUser && !busy && <button type="button" className="zb-ai__mini zb-chat__edit" onClick={() => onEdit(m)}><Icon name="edit" size={12} /> {tt('Edit', 'تعديل')}</button>}
+      </div>
+    );
+  }
   const streaming = m.phase === 'streaming';
   const edits = m.edits || [];
   const pending = edits.filter((e) => e.state === 'pending');
@@ -84,7 +116,8 @@ const Message = memo(function Message({ m, prevUser, tt, canSwitch, onApply, onA
     <div className="zb-chat__bot">
       <span className="zb-chat__avatar" aria-hidden="true"><Icon name="sparkles" size={13} /></span>
       <div className="zb-chat__botbody">
-      {streaming && !m.content && <div className="zb-ai__wait"><span className="zb-ai__dots" aria-hidden="true"><i /><i /><i /></span>{tt('Reading your code…', 'بقرأ الكود…')}</div>}
+      <span className="zb-chat__who">{BRAND}</span>
+      {streaming && !m.content && <div className="zb-ai__wait"><span className="zb-ai__dots" aria-hidden="true"><i /><i /><i /></span>{tt('UIP AI is reading your code…', 'UIP AI بيقرأ الكود…')}</div>}
       {m.content && <Markdown text={m.content} tt={tt} streaming={streaming} onNewFile={onNewFile} />}
       {streaming && m.content && <span className="zb-ai__cursor" aria-hidden="true" />}
       {m.phase === 'stopped' && <div className="zb-ai__tag">{tt('Stopped', 'اتوقّف')}</div>}
@@ -226,6 +259,7 @@ function HistoryView({ tt, h, busy, onDone }) {
 export default function AiChatPanel({
   tt, chat, modes, mode, canSwitchMode, onMode, chips, onChip, suggestions, onSend, onRetry, onSwitchAndRetry, onClose,
   onApply, onApplyAll, onReject, onOpen, onNewFile, activeLabel,
+  liveSel, refs = [], onPin, onUnpin, onGoto, quick = [],
 }) {
   // The chat state is read HERE (external store) so streamed tokens re-render only this panel, not the whole workbench.
   const st = useAiChatState(chat);
@@ -298,6 +332,8 @@ export default function AiChatPanel({
   };
   const resetWidth = () => { setWidth(null); saveWidth(null); setMaxed(false); };
 
+  const lastUserId = useMemo(() => { for (let k = messages.length - 1; k >= 0; k -= 1) if (messages[k].role === 'user') return messages[k].id; return null; }, [messages]);
+  const editLast = (m) => { chat.rewind(m.id); setText(m.content); setTimeout(() => boxRef.current?.focus(), 0); };
   const submit = (q) => {
     const v = String(q ?? text).trim();
     if (!v || busy) return;
@@ -320,17 +356,17 @@ export default function AiChatPanel({
   const style = maxed ? { width: '78%', maxWidth: 'none' } : (width ? { width: `${width}px` } : undefined);
 
   return (
-    <aside ref={asideRef} className={`zb-ai zb-chat${maxed ? ' is-max' : ''}`} style={style} aria-label={tt('AI chat', 'شات الذكاء الاصطناعي')}>
+    <aside ref={asideRef} className={`zb-ai zb-chat${maxed ? ' is-max' : ''}`} style={style} aria-label={tt('UIP AI chat', 'شات UIP AI')}>
       {!maxed && (
         <div className="zb-chat__grip" role="separator" aria-orientation="vertical" tabIndex={0} aria-label={tt('Resize the chat panel', 'تغيير عرض لوحة الشات')}
           title={tt('Drag to resize — double-click to reset', 'اسحب لتغيير العرض — دبل كليك للرجوع للافتراضي')}
           onPointerDown={onGripDown} onKeyDown={onGripKey} onDoubleClick={resetWidth} />
       )}
       <header className="zb-ai__head">
-        <span className="zb-ai__ico"><Icon name="sparkles" size={15} /></span>
+        <span className="zb-ai__ico zb-ai__brandico"><Icon name="sparkles" size={15} /></span>
         <div className="zb-ai__title">
-          <strong dir="auto">{view === 'history' ? tt('Conversations', 'المحادثات') : (title || tt('AI chat', 'شات الذكاء الاصطناعي'))}</strong>
-          {view === 'chat' && activeLabel && <span className="zb-ai__file" dir="ltr" style={{ cursor: 'default' }}>{activeLabel}</span>}
+          <strong dir="auto">{view === 'history' ? tt('Conversations', 'المحادثات') : (title || BRAND)}</strong>
+          {view === 'chat' && (title ? <span className="zb-ai__file" dir="ltr" style={{ cursor: 'default' }}>{BRAND}{activeLabel ? ` · ${activeLabel}` : ''}</span> : activeLabel && <span className="zb-ai__file" dir="ltr" style={{ cursor: 'default' }}>{activeLabel}</span>)}
         </div>
         {view === 'history'
           ? <button type="button" className="zb-btn zb-ai__back" onClick={() => setView('chat')}><Icon name="arrow-left" size={13} /> <span>{tt('Back', 'رجوع')}</span></button>
@@ -360,7 +396,9 @@ export default function AiChatPanel({
           <div className="zb-ai__body" ref={bodyRef} onScroll={onScroll}>
             {messages.length === 0 && (
               <div className="zb-chat__empty">
-                <p dir="auto">{tt('Ask about your code. I can see the open file, the lines you select and the terminal output.', 'اسأل عن الكود بتاعك. أنا شايف الملف المفتوح والسطور اللي بتحددها وناتج الـ terminal.')}</p>
+                <div className="zb-chat__hello"><span className="zb-chat__bigico"><Icon name="sparkles" size={22} /></span><h3 dir="auto">{tt('Hi, I’m UIP AI', 'أهلًا، أنا UIP AI')}</h3></div>
+                <p dir="auto">{tt('Your coding assistant inside UIP. I can see the open file, the lines you select and the terminal output.', 'مساعد البرمجة بتاعك جوّه UIP. شايف الملف المفتوح والسطور اللي بتحددها وناتج الـ terminal.')}</p>
+                <p dir="auto" className="zb-chat__tip"><Icon name="paperclip" size={12} /> {tt('Select any part of the code and press “Attach selection” to ask about exactly that part. You can attach several parts.', 'حدّد أي جزء من الكود واضغط «إرفاق التحديد» عشان تسأل عن الجزء ده بالظبط. تقدر ترفق كذا جزء.')}</p>
                 {mode === 'assistant' && <p dir="auto">{tt('Try: “create an index.html with a contact form” or “add input validation to this function”.', 'جرّب: «اعمل ملف index.html فيه فورم اتصال» أو «ضيف تحقق من المدخلات للدالة دي».')}</p>}
                 <div className="zb-chat__sugg">
                   {suggestions.map((s) => <button key={s} type="button" className="zb-ai__mini" onClick={() => submit(s)} disabled={busy}>{s}</button>)}
@@ -378,12 +416,28 @@ export default function AiChatPanel({
               </div>
             )}
             {messages.map((m, i) => (
-              <Message key={m.id} m={m} prevUser={lastUserBefore(i)} tt={tt} busy={busy} canSwitch={canSwitchMode && modes.includes('assistant')} isLast={i === messages.length - 1}
+              <Message key={m.id} m={m} prevUser={lastUserBefore(i)} tt={tt} busy={busy} canSwitch={canSwitchMode && modes.includes('assistant')} isLast={i === messages.length - 1} isLastUser={m.id === lastUserId} onGoto={onGoto} onEdit={editLast}
                 onApply={onApply} onApplyAll={onApplyAll} onReject={onReject} onOpen={onOpen} onRetry={onRetry} onSwitchAndRetry={onSwitchAndRetry} onNewFile={onNewFile} />
             ))}
           </div>
 
           <div className="zb-chat__composer">
+            {(refs.length > 0 || liveSel) && (
+              <div className="zb-chat__quotes">
+                {refs.map((r) => <RefCard key={r.id} r={r} tt={tt} onGoto={onGoto} onRemove={() => onUnpin(r.id)} />)}
+                {liveSel && !refs.some((r) => r.path === liveSel.path && r.from === liveSel.from && r.to === liveSel.to) && (
+                  <div className="zb-ref-live">
+                    <RefCard r={liveSel} tt={tt} live onGoto={onGoto} />
+                    <button type="button" className="zb-btn zb-btn--primary" onClick={() => onPin(liveSel)} disabled={refs.length >= 5}><Icon name="paperclip" size={13} /> <span>{tt('Attach selection', 'إرفاق التحديد')}</span></button>
+                  </div>
+                )}
+              </div>
+            )}
+            {quick.length > 0 && !busy && (
+              <div className="zb-chat__quick" role="group" aria-label={tt('Quick actions', 'إجراءات سريعة')}>
+                {quick.map((q) => <button key={q} type="button" className="zb-ai__mini" onClick={() => submit(q)}>{q}</button>)}
+              </div>
+            )}
             {chips.length > 0 && (
               <div className="zb-chat__chips" role="group" aria-label={tt('Context sent with your message', 'السياق اللي بيتبعت مع رسالتك')}>
                 {chips.map((c) => (
@@ -395,13 +449,13 @@ export default function AiChatPanel({
             )}
             <div className="zb-chat__row">
               <textarea ref={boxRef} className="zb-chat__input" rows={1} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey} dir="auto" maxLength={6000}
-                placeholder={tt('Ask a question…  (Enter to send, Shift+Enter for a new line)', 'اكتب سؤالك…  (Enter للإرسال، Shift+Enter لسطر جديد)')} aria-label={tt('Message', 'الرسالة')} />
+                placeholder={refs.length || liveSel ? tt('Ask about this code…', 'اسأل عن الكود ده…') : tt('Ask UIP AI…  (Enter to send, Shift+Enter for a new line)', 'اسأل UIP AI…  (Enter للإرسال، Shift+Enter لسطر جديد)')} aria-label={tt('Message', 'الرسالة')} />
               {busy
                 ? <button type="button" className="zb-btn zb-btn--primary zb-chat__send" onClick={onStop} title={tt('Stop', 'إيقاف')} aria-label={tt('Stop', 'إيقاف')}><Icon name="stop" size={15} /></button>
                 : <button type="button" className="zb-btn zb-btn--primary zb-chat__send" onClick={() => submit()} disabled={!text.trim()} title={tt('Send', 'إرسال')} aria-label={tt('Send', 'إرسال')}><Icon name="send" size={15} /></button>}
             </div>
             <small className="zb-chat__note">
-              {tt('AI can make mistakes — check the answer before relying on it.', 'الذكاء الاصطناعي ممكن يغلط — راجع الإجابة قبل ما تعتمد عليها.')}
+              {tt('UIP AI can make mistakes — check the answer before relying on it.', 'UIP AI ممكن يغلط — راجع الإجابة قبل ما تعتمد عليها.')}
               {saveState === 'saving' && <span className="zb-chat__save"> · {tt('Saving…', 'بيتحفظ…')}</span>}
               {saveState === 'saved' && <span className="zb-chat__save is-ok"> · {tt('Saved', 'اتحفظت')}</span>}
               {saveState === 'error' && <button type="button" className="zb-chat__save is-err" onClick={onRetrySave}> · {tt('Not saved — retry', 'ماتحفظتش — حاول تاني')}</button>}
