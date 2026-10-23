@@ -45,5 +45,9 @@ const unlockedKey = (uid) => `uip_desktop_unlocked_v1_${uid ?? 'anon'}`;
 /** True once the lock password was entered (or none was needed) in THIS browser tab session: a new device/tab starts locked. */
 export function readUnlockedFlag(uid) { try { return sessionStorage.getItem(unlockedKey(uid)) === '1'; } catch { return false; } }
 export function writeUnlockedFlag(uid, on) { try { if (on) sessionStorage.setItem(unlockedKey(uid), '1'); else sessionStorage.removeItem(unlockedKey(uid)); } catch { /* private mode */ } }
+const heldKey = (uid) => `uip_desktop_held_v1_${uid ?? 'anon'}`;
+/** True while the screen was LOCKED in this tab (manual / idle / sleep / remote lock). A reload must never drop it, whatever the local caches say. */
+export function readHeldFlag(uid) { try { return sessionStorage.getItem(heldKey(uid)) === '1' || sessionStorage.getItem(heldKey(undefined)) === '1'; } catch { return false; } }
+export function writeHeldFlag(uid, on) { try { if (on) sessionStorage.setItem(heldKey(uid), '1'); else { sessionStorage.removeItem(heldKey(uid)); sessionStorage.removeItem(heldKey(undefined)); } } catch { /* private mode */ } }
 export function readLockedFlag(uid) { try { return sessionStorage.getItem(lockedKey(uid)) === '1'; } catch { return false; } }
 export function writeLockedFlag(uid, on) { try { if (on) sessionStorage.setItem(lockedKey(uid), '1'); else sessionStorage.removeItem(lockedKey(uid)); } catch { /* private mode */ } }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../components/Icon';
 import { useLanguage } from '../context/LanguageContext';
 import { useTheme } from '../context/ThemeContext';
@@ -11,9 +11,23 @@ import './lock.css';
  * Lock password set (Settings > Lock screen) -> the password is checked on the server; "Forgot password?" sends a
  * 6-digit code to the account's e-mail and lets the student choose a new password with it.
  */
-export function LockScreen({ ar, tt, user, lockEnabled, onUnlock, onPortal, hideDetails }) {
+export function LockScreen({ ar, tt, user, lockEnabled, onUnlock: onUnlockRaw, onLockEnabled, onPortal, hideDetails }) {
   const name = hideDetails ? tt('Locked', 'مقفول') : (user?.full_name || user?.email || '');
   const needPw = lockEnabled !== false; // unknown (offline, first load) is treated as locked: the server answers "no password" if there is none
+  // "No password" is only what this browser remembers: ask the server before unlocking without one (a password may have been set elsewhere).
+  const unlocking = useRef(false);
+  const onUnlock = useCallback(async () => {
+    if (lockEnabled !== false) { onUnlockRaw(); return; } // password flow: LockScreen's own form already verified it
+    if (unlocking.current) return;
+    unlocking.current = true;
+    try {
+      const r = await desktopApi.lockVerify('');
+      if (r?.lockEnabled === false) onUnlockRaw(); else onLockEnabled?.(true);
+    } catch (x) {
+      if (x?.status === 0 || x?.status >= 500 || !x?.status) onUnlockRaw?.(); // offline: nothing to verify against
+      else onLockEnabled?.(true); // the server has a password: show the password form
+    } finally { unlocking.current = false; }
+  }, [lockEnabled, onUnlockRaw, onLockEnabled]);
   const [view, setView] = useState('pw'); // 'pw' | 'reset'
   const [pw, setPw] = useState(''); const [code, setCode] = useState(''); const [np, setNp] = useState(''); const [np2, setNp2] = useState('');
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [info, setInfo] = useState('');

@@ -22,7 +22,7 @@ import { DESK_ICONS, DOCK_ICONS, hiddenList, idList, iconPosKey, loadIconPos, lo
 import { useSharedClip } from '../lib/driveClipboard';
 import { globalActionFor, keyOf } from './shortcuts';
 import { isSystemNode, useDesktopSync } from './sync';
-import { desktopApi, readLockCache, readLockedFlag, writeLockedFlag, readUnlockedFlag, writeUnlockedFlag } from './desktopApi';
+import { desktopApi, readLockCache, readLockedFlag, writeLockedFlag, readUnlockedFlag, writeUnlockedFlag, readHeldFlag, writeHeldFlag } from './desktopApi';
 import { BatteryGlyph, CalendarFlyout, QuickSettings, WifiGlyph, useBattery, useOnline } from './flyouts';
 import { addRecent, clearRecents, loadRecents, removeRecent, RECENTS_EVENT } from './recents';
 import ResetUndoBar from './ResetUndoBar';
@@ -229,14 +229,17 @@ export default function DesktopOS() {
   useEffect(() => { const h = () => setFs(!!document.fullscreenElement); document.addEventListener('fullscreenchange', h); return () => document.removeEventListener('fullscreenchange', h); }, []);
   // A new device / tab starts LOCKED when a lock password is set (or not yet known); a reload in the same tab keeps its state.
   const bootLock = useRef(false);
+  const unverified = useRef(false); // started unlocked only because of the local "no password" cache: the server still has to confirm it
   const [locked, setLockedRaw] = useState(() => {
-    const uid = user?.id; const cached = readLockCache(uid);
-    if (cached === false || readSec(uid).lockOnStart === false) { writeUnlockedFlag(uid, true); return false; } // no password, or the person chose not to start locked
+    const uid = user?.id;
+    if (readHeldFlag(uid)) return true; // the screen was locked in this tab (manual / idle / sleep / remote): a reload (even a hard one) keeps it locked
+    const cached = readLockCache(uid);
+    if (cached === false || readSec(uid).lockOnStart === false) { if (cached === false) unverified.current = true; return false; } // no password (as far as this browser knows), or the person chose not to start locked
     if (readUnlockedFlag(uid)) return readLockedFlag(uid);
     bootLock.current = true; return true;
   });
   const lockOnRef = useRef(null);
-  const setLocked = useCallback((v) => { bootLock.current = false; setLockedRaw(v); writeLockedFlag(uidRef.current, !!v && lockOnRef.current === true); writeUnlockedFlag(uidRef.current, !v); }, []);
+  const setLocked = useCallback((v) => { bootLock.current = false; unverified.current = false; writeHeldFlag(uidRef.current, !!v); setLockedRaw(v); writeLockedFlag(uidRef.current, !!v && lockOnRef.current === true); writeUnlockedFlag(uidRef.current, !v); }, []);
   const [booting, setBooting] = useState(true);
   const [menu, setMenu] = useState(null);
   const [dlg, setDlg] = useState(null);
@@ -532,8 +535,9 @@ export default function DesktopOS() {
   useEffect(() => {
     const startLocked = sec.lockOnStart !== false;
     if ((lockEnabled === false || !startLocked) && bootLock.current) { bootLock.current = false; setLockedRaw(false); writeUnlockedFlag(uidRef.current, true); } // no password set / chose not to start locked: nothing to ask on a new device
-    else if (lockEnabled === true && startLocked && !readUnlockedFlag(uidRef.current)) setLockedRaw(true); // password was set on another device
-  }, [lockEnabled, sec.lockOnStart]);
+    else if (lockEnabled === true && startLocked && (unverified.current || !readUnlockedFlag(uidRef.current))) { unverified.current = false; setLockedRaw(true); writeUnlockedFlag(uidRef.current, false); } // a password exists (set on another device, or the local cache was stale): ask for it
+    if (synced) unverified.current = false;
+  }, [lockEnabled, sec.lockOnStart, synced]);
   // remember where every icon sits (new ones get the first free cell, deleted ones are forgotten)
   useEffect(() => {
     if (!synced || !desk.ready || desk.error || store.key !== posKey || !deskSize.h) return;
@@ -1190,7 +1194,7 @@ export default function DesktopOS() {
       )}
       <DeleteProgressHost />
       {toast && <div className={`os-toast${toast.tone === 'error' ? ' is-error' : ''}`} role="status">{toast.msg}</div>}
-      {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} hideDetails={sec.hideLockDetails} onUnlock={() => setLocked(false)} onPortal={() => navigate(roleHome(user?.role))} />}
+      {locked && <LockScreen ar={ar} tt={tt} user={user} lockEnabled={lockEnabled} hideDetails={sec.hideLockDetails} onUnlock={() => setLocked(false)} onLockEnabled={setLockEnabled} onPortal={() => navigate(roleHome(user?.role))} />}
       {!locked && !asleep && <ResetUndoBar tt={tt} uid={user?.id} />}
       {idleLeft !== null && !asleep && <IdleWarning tt={tt} left={idleLeft} onStay={stay} onSignOut={logout} />}
       {asleep && <SleepScreen ar={ar} tt={tt} dim={sec.sleepDimOnly} onWake={onWake} />}
