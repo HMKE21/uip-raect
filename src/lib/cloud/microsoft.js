@@ -86,13 +86,15 @@ async function graph(url, init) {
 /** OneDrive refuses  " * : < > ? / \ |  and a trailing dot / space in names. */
 const safeName = (n) => String(n).replace(/[\\"*:<>?/|]/g, '_').replace(/[. ]+$/, '') || '_';
 
-async function putSmall(tok, path, blob) {
-  const r = await graph(`${approot(path)}:/content?@microsoft.graph.conflictBehavior=replace`, { method: 'PUT', headers: authed(tok, { 'Content-Type': blob.type || 'application/octet-stream' }), body: blob });
+// `base` addresses the item: by path ("…approot:/UIP-NUB/Code/a.py:") or, for a file already uploaded, by its id ("…/items/<id>").
+// By id there is no name to clash with, and an update can never create a second copy.
+async function putSmall(tok, base, blob, behavior = 'replace') {
+  const r = await graph(`${base}/content?@microsoft.graph.conflictBehavior=${behavior}`, { method: 'PUT', headers: authed(tok, { 'Content-Type': blob.type || 'application/octet-stream' }), body: blob });
   return (await r.json()).id;
 }
 
-async function putLarge(tok, path, blob) {
-  const s = await graph(`${approot(path)}:/createUploadSession`, { method: 'POST', headers: authed(tok, { 'Content-Type': 'application/json' }), body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': 'replace' } }) });
+async function putLarge(tok, base, blob, behavior = 'replace') {
+  const s = await graph(`${base}/createUploadSession`, { method: 'POST', headers: authed(tok, { 'Content-Type': 'application/json' }), body: JSON.stringify({ item: { '@microsoft.graph.conflictBehavior': behavior } }) });
   const { uploadUrl } = await s.json();
   let id = null;
   try {
@@ -149,26 +151,23 @@ export const microsoft = {
   async ensureRoot() { return ROOT; },
   async ensureFolder(tok, state, nodeId, name, parentRemoteId) { return `${parentRemoteId}/${safeName(name)}`; },
 
-  async put(tok, { name, parentRemoteId, blob }) {
+  async put(tok, { name, parentRemoteId, blob, remoteId }) {
     const path = `${parentRemoteId}/${safeName(name)}`;
-    return inFolder(parentRemoteId, () => withRetry(() => (blob.size <= SMALL ? putSmall(tok, path, blob) : putLarge(tok, path, blob)), 7));
+    const send = (base, behavior) => (blob.size <= SMALL ? putSmall(tok, base, blob, behavior) : putLarge(tok, base, blob, behavior));
+    const byPath = `${approot(path)}:`;
+    return inFolder(parentRemoteId, async () => {
+      // 1) a file we already uploaded is updated by its id (no name involved)
+      if (remoteId) {
+        try { return await withRetry(() => send(`https://graph.microsoft.com/v1.0/me/drive/items/${encodeURIComponent(remoteId)}`, 'replace'), 4); } catch (e) {
+          if (e?.status !== 404) throw e; // 404: it was deleted from OneDrive — upload it again by path below
+        }
+      }
+      // 2) by path (creates the folders). A name that OneDrive still holds locked for an earlier, unfinished upload stays 409 for minutes:
+      //    after the retries, save under the next free name ("name 1.ext") instead of failing — later updates then go by id.
+      try { return await withRetry(() => send(byPath, 'replace'), 5); } catch (e) {
+        if (e instanceof CloudRetryError && e.status === 409) return withRetry(() => send(byPath, 'rename'), 3);
+        throw e;
+      }
+    });
   },
 };
-
-/**
- * "Continue with Microsoft" on the login / register pages. Same pop-up + PKCE flow as the OneDrive link, but with the identity scopes only
- * (no file access): it returns the ID token, which the API verifies itself (POST /api/v1/auth/microsoft). Nothing is stored in the browser.
- */
-export async function microsoftIdToken(cfg) {
-  const idScope = 'openid profile email';
-  const { code, verifier } = await popupCode(cfg, idScope);
-  let res;
-  try {
-    res = await fetch(tokenUrl(cfg), { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({
-      client_id: cfg.client_id, scope: idScope, grant_type: 'authorization_code', code, redirect_uri: redirectUri(), code_verifier: verifier,
-    }) });
-  } catch { throw new CloudRetryError('Network problem.', 0); }
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok || !j.id_token) throw new CloudAuthError(j.error_description?.split('\r')[0] || 'Microsoft sign-in failed.', j.error || 'denied');
-  return j.id_token;
-}
