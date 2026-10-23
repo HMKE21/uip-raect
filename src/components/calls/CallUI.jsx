@@ -60,7 +60,25 @@ function StreamVideo({ stream, className }) {
     el.addEventListener('canplay', play);
     const tracks = stream && stream.getVideoTracks ? stream.getVideoTracks() : [];
     tracks.forEach((t) => { try { t.addEventListener('unmute', play); } catch { /* ignore */ } });
+    // Watchdog: a <video> can silently stop painting (decoder hiccup, two windows on one camera) while the track itself is fine.
+    // If the playback clock stands still for ~3 s, or the element got paused, re-attach the stream and play again.
+    let last = -1;
+    let still = 0;
+    const dog = stream ? setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+      const live = tracks.some((t) => t.readyState === 'live');
+      if (!live) return;
+      if (el.paused) { play(); return; }
+      if (el.currentTime === last) still += 1; else still = 0;
+      last = el.currentTime;
+      if (still >= 2) {
+        still = 0;
+        try { el.srcObject = null; el.srcObject = stream; } catch { /* ignore */ }
+        play();
+      }
+    }, 1500) : 0;
     return () => {
+      if (dog) clearInterval(dog);
       el.removeEventListener('loadedmetadata', play);
       el.removeEventListener('canplay', play);
       tracks.forEach((t) => { try { t.removeEventListener('unmute', play); } catch { /* ignore */ } });
