@@ -3,7 +3,7 @@ import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
-import { ExKpi } from '../exam/examUi';
+import { AcPage, AcHead, AcAlerts, AcKpis } from './acKit';
 import { Field, FormModal, FormSection } from '../people/formUi';
 
 /**
@@ -103,50 +103,44 @@ export default function CourseTimetable({ role }) {
   const today = todayIso();
 
   return (
-    <div className="ex-page">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24 }}>{ar ? 'جدول المحاضرات' : 'Study Time Table'}</h1>
-          <p className="is-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
-            {isStudent
-              ? (ar ? 'مواعيد محاضراتك وسكاشنك الأسبوعية للمواد المسجّل بها.' : 'Your weekly lectures and sections for the courses you are enrolled in.')
-              : (ar ? 'الجدول الأسبوعي للمواد التي تديرها. يُمنع تعارض القاعة أو عضو هيئة التدريس.' : 'The weekly schedule of the courses you manage. Room and teacher double-booking is blocked.')}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="btn btn-outline" onClick={() => window.print()}><Icon name="download" size={14} /> {ar ? 'طباعة' : 'Print'}</button>
-          {!isStudent && (
-            <button type="button" className="btn btn-primary" disabled={!courses.length} onClick={() => setDialog({})}>
-              <Icon name="plus" size={14} /> {ar ? 'إضافة حصة' : 'Add session'}
-            </button>
-          )}
-        </div>
-      </div>
+    <AcPage>
+      <AcHead
+        title={ar ? 'جدول المحاضرات' : 'Study Time Table'}
+        text={isStudent
+          ? (ar ? 'مواعيد محاضراتك وسكاشنك الأسبوعية للمواد المسجّل بها.' : 'Your weekly lectures and sections for the courses you are enrolled in.')
+          : (ar ? 'الجدول الأسبوعي للمواد التي تديرها. يُمنع تعارض القاعة أو عضو هيئة التدريس.' : 'The weekly schedule of the courses you manage. Room and teacher double-booking is blocked.')}
+      >
+        <button type="button" className="btn btn-outline" onClick={() => window.print()}><Icon name="download" size={14} /> {ar ? 'طباعة' : 'Print'}</button>
+        {!isStudent && (
+          <button type="button" className="btn btn-primary" disabled={!courses.length} onClick={() => setDialog({})}>
+            <Icon name="plus" size={14} /> {ar ? 'إضافة حصة' : 'Add session'}
+          </button>
+        )}
+      </AcHead>
 
-      {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
-      {notice && <div className="st-alert"><Icon name="check-circle" size={16} /><span>{notice}</span></div>}
+      <AcAlerts error={error} notice={notice} />
 
-      <div className="ex-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        <ExKpi label={ar ? 'عدد الحصص' : 'Sessions'} value={shown.length} sub={ar ? 'في الأسبوع' : 'per week'} icon="calendar" />
-        <ExKpi label={ar ? 'ساعات أسبوعيًا' : 'Hours / week'} value={fmtHours(weeklyMinutes, ar)} icon="clock" tone="good" />
-        <ExKpi label={ar ? 'أيام الدراسة' : 'Study days'} value={activeDays} icon="layers" />
-        {isStudent && <ExKpi label={ar ? 'تعارضات' : 'Clashes'} value={clashCount} sub={clashCount ? (ar ? 'حصص متداخلة' : 'overlapping sessions') : (ar ? 'لا يوجد' : 'none')} icon="alert-triangle" tone={clashCount ? 'bad' : 'good'} />}
-      </div>
+      <AcKpis items={[
+        { label: ar ? 'عدد الحصص' : 'Sessions', value: shown.length, icon: 'calendar', meta: ar ? 'في الأسبوع' : 'per week' },
+        { label: ar ? 'ساعات أسبوعيًا' : 'Hours / week', value: fmtHours(weeklyMinutes, ar), icon: 'clock', tone: 'good' },
+        { label: ar ? 'أيام الدراسة' : 'Study days', value: activeDays, icon: 'layers' },
+        ...(isStudent ? [{ label: ar ? 'تعارضات' : 'Clashes', value: clashCount, icon: 'alert-triangle', tone: clashCount ? 'bad' : 'good', meta: clashCount ? (ar ? 'حصص متداخلة' : 'overlapping sessions') : (ar ? 'لا يوجد' : 'none') }] : []),
+      ]} />
 
-      <div className="ex-card">
-        <div className="tt-toolbar">
-          <select className="ex-select" value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} aria-label={ar ? 'المادة' : 'Course'}>
+      <section className="acx-panel">
+        <div className="acx-toolbar">
+          <select className="acx-input" style={{ flex: '0 1 260px' }} value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)} aria-label={ar ? 'المادة' : 'Course'}>
             <option value="">{ar ? 'كل المواد' : 'All courses'}</option>
             {courseOptions.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.name}</option>)}
           </select>
-          <select className="ex-select" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} aria-label={ar ? 'النوع' : 'Type'}>
+          <select className="acx-input" style={{ flex: '0 1 260px' }} value={kindFilter} onChange={(e) => setKindFilter(e.target.value)} aria-label={ar ? 'النوع' : 'Type'}>
             <option value="">{ar ? 'كل الأنواع' : 'All types'}</option>
             {SESSION_KINDS.map((k) => <option key={k.key} value={k.key}>{ar ? k.ar : k.en}</option>)}
           </select>
         </div>
 
         {loading ? (
-          <div style={{ padding: 16 }}><Skeleton h={120} count={3} /></div>
+          <div className="acx-panel__body"><Skeleton h={120} count={3} /></div>
         ) : !sessions.length ? (
           <EmptyState
             icon="calendar"
@@ -191,7 +185,7 @@ export default function CourseTimetable({ role }) {
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {dialog && (
         <SessionDialog
@@ -202,7 +196,7 @@ export default function CourseTimetable({ role }) {
           onDone={async (msg) => { setDialog(null); setNotice(msg); setError(null); try { await load(); } catch (e) { setError(errorMessage(e)); } }}
         />
       )}
-    </div>
+    </AcPage>
   );
 }
 

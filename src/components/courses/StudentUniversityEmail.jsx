@@ -3,6 +3,7 @@ import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
+import { AcPage, AcHead, AcAlerts, AcKpis, AcPanel, AcNums, AcTable } from './acKit';
 
 /**
  * الإيميل الجامعي (الطالب): العنوان الرسمي اللي ولّدته الجامعة، وبيتحوّل لإيميلك الشخصي. مفيش صندوق وارد على المنصة.
@@ -22,31 +23,31 @@ export default function StudentUniversityEmail() {
   };
 
   return (
-    <div className="ex-page">
-      <div>
-        <h1 style={{ margin: 0, fontSize: 24 }}>{ar ? 'الإيميل الجامعي' : 'University email'}</h1>
-        <p className="is-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
-          {ar ? 'عنوانك الرسمي في الجامعة. الرسائل المرسلة له بتتحوّل لإيميلك الشخصي.' : 'Your official university address. Mail sent to it is forwarded to your personal email.'}
-        </p>
-      </div>
-      {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
+    <AcPage>
+      <AcHead
+        title={ar ? 'الإيميل الجامعي' : 'University email'}
+        text={ar ? 'عنوانك الرسمي في الجامعة. الرسائل المرسلة له بتتحوّل لإيميلك الشخصي.' : 'Your official university address. Mail sent to it is forwarded to your personal email.'}
+      />
+      <AcAlerts error={error} />
       {!data && !error ? <Skeleton h={90} count={1} /> : data && (
-        <div className="ex-card">
-          {!data.address ? (
-            <EmptyState icon="mail" title={ar ? 'لم يتم إنشاء عنوان لك بعد' : 'No address has been created for you yet'} />
-          ) : (
-            <div style={{ display: 'grid', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span dir="ltr" style={{ fontSize: 20, fontWeight: 700 }}>{data.address}</span>
+        !data.address ? (
+          <EmptyState icon="mail" title={ar ? 'لم يتم إنشاء عنوان لك بعد' : 'No address has been created for you yet'} />
+        ) : (
+          <AcPanel
+            title={ar ? 'عنوانك الجامعي' : 'Your university address'}
+            foot={<span className="acx-muted">{ar ? 'لتغيير الإيميل الشخصي اللي بيتحوّل له، حدّثه من إعدادات حسابك.' : 'To change where it forwards, update your personal email in account settings.'}</span>}
+          >
+            <div className="acx-stack">
+              <div className="acx-hero">
+                <span dir="ltr" className="acx-hero__value">{data.address}</span>
                 <button type="button" className="btn btn-outline btn-sm" onClick={copy}><Icon name={copied ? 'check' : 'copy'} size={14} /> {copied ? (ar ? 'تم النسخ' : 'Copied') : (ar ? 'نسخ' : 'Copy')}</button>
               </div>
-              <div className="att-nums"><span>{ar ? 'يتحوّل إلى' : 'Forwards to'} <b dir="ltr">{data.forwards_to}</b></span></div>
-              <div className="is-muted" style={{ fontSize: 12 }}>{ar ? 'تقدر كمان تسجّل الدخول للمنصة بالعنوان ده وبنفس كلمة السر.' : 'You can also sign in to the platform with this address and your usual password.'}</div>
-              <div className="is-muted" style={{ fontSize: 12 }}>{ar ? 'لتغيير الإيميل الشخصي اللي بيتحوّل له، حدّثه من إعدادات حسابك.' : 'To change where it forwards, update your personal email in account settings.'}</div>
+              <AcNums inline items={[[ar ? 'يتحوّل إلى' : 'Forwards to', <bdi dir="ltr" key="f">{data.forwards_to}</bdi>]]} />
+              <div className="st-alert"><Icon name="info" size={15} /><span>{ar ? 'تقدر كمان تسجّل الدخول للمنصة بالعنوان ده وبنفس كلمة السر.' : 'You can also sign in to the platform with this address and your usual password.'}</span></div>
             </div>
-          )}
-        </div>
+          </AcPanel>
+        )
       )}
-    </div>
+    </AcPage>
   );
 }

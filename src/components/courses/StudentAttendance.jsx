@@ -3,7 +3,7 @@ import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
-import { ExKpi } from '../exam/examUi';
+import { AcPage, AcHead, AcAlerts, AcKpis, AcNums } from './acKit';
 import { deviceId, geoErrorText, getPosition } from '../../lib/geo';
 
 /**
@@ -43,71 +43,69 @@ export default function StudentAttendance() {
   const openNow = courses.filter((c) => c.open_now).length;
   const atRisk = courses.filter((c) => c.state !== 'ok').length;
 
+  const REC_TONE = { present: 'success', late: 'warning', absent: 'danger', excused: '' };
+
   return (
-    <div className="ex-page">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 24 }}>{ar ? 'الحضور والغياب' : 'Attendance'}</h1>
-          <p className="is-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>
-            {ar ? 'سجّل حضورك بمسح الـ QR من شاشة الدكتور وانت داخل الكلية، وتابع نسبة غيابك.' : 'Check in by scanning the QR on your instructor’s screen while on campus, and track your absence rate.'}
-          </p>
-        </div>
+    <AcPage>
+      <AcHead
+        title={ar ? 'الحضور والغياب' : 'Attendance'}
+        text={ar ? 'سجّل حضورك بمسح الـ QR من شاشة الدكتور وانت داخل الكلية، وتابع نسبة غيابك.' : 'Check in by scanning the QR on your instructor’s screen while on campus, and track your absence rate.'}
+      >
         <button type="button" className="btn btn-primary" onClick={() => { setNotice(null); setError(null); setScanning(true); }}>
           <Icon name="map-pin" size={14} /> {ar ? 'تسجيل حضور (مسح QR)' : 'Check in (scan QR)'}
         </button>
-      </div>
+      </AcHead>
 
-      {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
-      {notice && <div className="st-alert"><Icon name="check-circle" size={16} /><span>{notice}</span></div>}
+      <AcAlerts error={error} notice={notice} />
 
       {loading ? <Skeleton h={120} count={3} /> : (
         <>
-          <div className="ex-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            <ExKpi label={ar ? 'مواد' : 'Courses'} value={courses.length} icon="layers" />
-            <ExKpi label={ar ? 'تحضير مفتوح الآن' : 'Open now'} value={openNow} icon="clock" tone={openNow ? 'good' : ''} />
-            <ExKpi label={ar ? 'مواد فيها تحذير' : 'At risk'} value={atRisk} sub={ar ? `الحد ${data?.limits?.max_absence_percent}% غياب` : `limit ${data?.limits?.max_absence_percent}% absence`} icon="alert-triangle" tone={atRisk ? 'bad' : 'good'} />
-          </div>
+          <AcKpis items={[
+            { label: ar ? 'مواد' : 'Courses', value: courses.length, icon: 'layers' },
+            { label: ar ? 'تحضير مفتوح الآن' : 'Open now', value: openNow, icon: 'clock', tone: openNow ? 'good' : '' },
+            { label: ar ? 'مواد فيها تحذير' : 'At risk', value: atRisk, icon: 'alert-triangle', tone: atRisk ? 'bad' : 'good', meta: ar ? `الحد ${data?.limits?.max_absence_percent}% غياب` : `limit ${data?.limits?.max_absence_percent}% absence` },
+          ]} />
 
-          <div className="ex-card">
-            {courses.length === 0 ? (
-              <EmptyState icon="check-circle" title={ar ? 'لا توجد مواد مسجّلة' : 'No enrolled courses'} />
-            ) : (
-              <div className="att-grid" style={{ paddingTop: 16 }}>
-                {courses.map((c) => (
-                  <div key={c.course.id} className={`att-course is-${c.state}`}>
-                    <span className="att-course__code">{c.course.code}</span>
-                    <span className="att-course__name">{c.course.name}</span>
-                    {c.open_now && <span className="att-live"><Icon name="clock" size={13} /> {ar ? 'التحضير مفتوح الآن' : 'Attendance open now'}</span>}
-                    <div className="att-bar" aria-hidden><i style={{ width: `${c.percent_attended ?? 100}%` }} /></div>
-                    <div className="att-nums">
-                      <span>{ar ? 'حضور' : 'Attended'} <b>{c.percent_attended ?? '—'}{c.percent_attended != null ? '%' : ''}</b></span>
-                      <span>{ar ? 'غياب' : 'Absent'} <b>{c.absent}</b></span>
-                      <span>{ar ? 'تأخير' : 'Late'} <b>{c.late}</b></span>
-                      <span>{ar ? 'بعذر' : 'Excused'} <b>{c.excused}</b></span>
-                    </div>
-                    {c.state !== 'ok' && (
-                      <div className="st-alert st-alert--danger" style={{ margin: 0 }}>
-                        <Icon name="alert-triangle" size={15} />
-                        <span>{ar ? STATE_LABEL[c.state].ar : STATE_LABEL[c.state].en} — {ar ? `غيابك ${c.percent_absent}%` : `absence ${c.percent_absent}%`}</span>
-                      </div>
-                    )}
-                    {c.recent?.length > 0 && (
-                      <div className="att-nums">
-                        {c.recent.slice(0, 6).map((r) => (
-                          <span key={r.window_id} className={`att-pill att-pill--${r.status}`} title={r.opens_at}>{ar ? REC_LABEL[r.status].ar : REC_LABEL[r.status].en}</span>
-                        ))}
-                      </div>
-                    )}
+          {courses.length === 0 ? (
+            <EmptyState icon="check-circle" title={ar ? 'لا توجد مواد مسجّلة' : 'No enrolled courses'} />
+          ) : (
+            <div className="acx-courses">
+              {courses.map((c) => (
+                <article key={c.course.id} className={`acx-course is-${c.state}`}>
+                  <div>
+                    <span className="acx-code" dir="ltr">{c.course.code}</span>
+                    <div className="acx-course__name">{c.course.name}</div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  {c.open_now && <span className="acx-live"><Icon name="clock" size={13} /> {ar ? 'التحضير مفتوح الآن' : 'Attendance open now'}</span>}
+                  <div className="acx-bar" aria-hidden><i style={{ width: `${c.percent_attended ?? 100}%` }} /></div>
+                  <AcNums inline items={[
+                    [ar ? 'حضور' : 'Attended', c.percent_attended != null ? `${c.percent_attended}%` : '—'],
+                    [ar ? 'غياب' : 'Absent', c.absent],
+                    [ar ? 'تأخير' : 'Late', c.late],
+                    [ar ? 'بعذر' : 'Excused', c.excused],
+                  ]} />
+                  {c.state !== 'ok' && (
+                    <div className={`st-alert st-alert--${c.state === 'deprived' ? 'danger' : 'warning'}`}>
+                      <Icon name="alert-triangle" size={15} />
+                      <span>{ar ? STATE_LABEL[c.state].ar : STATE_LABEL[c.state].en} — {ar ? `غيابك ${c.percent_absent}%` : `absence ${c.percent_absent}%`}</span>
+                    </div>
+                  )}
+                  {c.recent?.length > 0 && (
+                    <span className="acx-pills">
+                      {c.recent.slice(0, 6).map((r) => (
+                        <span key={r.window_id} className={`st-pill${REC_TONE[r.status] ? ` st-pill--${REC_TONE[r.status]}` : ''}`} title={r.opens_at}>{ar ? REC_LABEL[r.status].ar : REC_LABEL[r.status].en}</span>
+                      ))}
+                    </span>
+                  )}
+                </article>
+              ))}
+            </div>
+          )}
         </>
       )}
 
       {scanning && <ScanDialog ar={ar} locale={locale} onClose={() => setScanning(false)} onDone={(msg) => { setScanning(false); setNotice(msg); load().catch(() => {}); }} />}
-    </div>
+    </AcPage>
   );
 }
 
@@ -216,7 +214,7 @@ function ScanDialog({ ar, locale, onClose, onDone }) {
           <details>
             <summary className="is-muted" style={{ fontSize: 12.5, cursor: 'pointer' }}>{ar ? 'الكاميرا مش شغالة؟ أدخل الكود يدويًا' : 'Camera not working? Enter the code'}</summary>
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <input className="ex-input" dir="ltr" value={manual} onChange={(e) => setManual(e.target.value)} placeholder="att.12.3456789.abcdef…" />
+              <input className="acx-input" dir="ltr" value={manual} onChange={(e) => setManual(e.target.value)} placeholder="att.12.3456789.abcdef…" />
               <button type="button" className="btn btn-primary" disabled={busy || !manual.trim()} onClick={() => submit(manual.trim())}>{ar ? 'تسجيل' : 'Submit'}</button>
             </div>
           </details>

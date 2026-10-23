@@ -3,7 +3,7 @@ import { api, errorMessage } from '../../api/client';
 import Icon from '../Icon';
 import { useLanguage } from '../../context/LanguageContext';
 import { EmptyState, Skeleton } from '../student/stUi';
-import { ExKpi } from '../exam/examUi';
+import { AcPage, AcHead, AcAlerts, AcKpis, AcPanel, AcNums, AcTable } from './acKit';
 import { Field, FormModal, FormSection } from '../people/formUi';
 import { downloadAuthed } from '../../lib/download';
 
@@ -55,73 +55,75 @@ export default function StudentAssignments() {
   const shown = groups[tab] || [];
   const graded = rows.filter((a) => a.state === 'graded');
 
+  const TONE = { late: 'warning', absent: 'danger', excused: '', present: 'success' };
+
   return (
-    <div className="ex-page">
-      <div>
-        <h1 style={{ margin: 0, fontSize: 24 }}>{ar ? 'التكليفات' : 'Assignments'}</h1>
-        <p className="is-muted" style={{ margin: '4px 0 0', fontSize: 13 }}>{ar ? 'تكليفات موادك: سلّم قبل الموعد وتابع درجاتك وتعليقات الدكتور.' : 'Your course assignments: submit before the deadline and track grades and feedback.'}</p>
-      </div>
+    <AcPage>
+      <AcHead
+        title={ar ? 'التكليفات' : 'Assignments'}
+        text={ar ? 'تكليفات موادك: سلّم قبل الموعد وتابع درجاتك وتعليقات الدكتور.' : 'Your course assignments: submit before the deadline and track grades and feedback.'}
+      />
+      <AcAlerts error={error} notice={notice} />
 
-      {error && <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={16} /><span>{error}</span></div>}
-      {notice && <div className="st-alert"><Icon name="check-circle" size={16} /><span>{notice}</span></div>}
+      <AcKpis items={[
+        { label: ar ? 'مطلوب منك' : 'To do', value: groups.todo.length, icon: 'clock', tone: groups.todo.length ? 'bad' : 'good' },
+        { label: ar ? 'تم تسليمها' : 'Submitted', value: groups.done.length, icon: 'check-circle', tone: 'good' },
+        { label: ar ? 'فاتها الموعد' : 'Missed', value: groups.missed.length, icon: 'alert-triangle', tone: groups.missed.length ? 'bad' : '' },
+        { label: ar ? 'تم تصحيحها' : 'Graded', value: graded.length, icon: 'award' },
+      ]} />
 
-      <div className="ex-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-        <ExKpi label={ar ? 'مطلوب منك' : 'To do'} value={groups.todo.length} icon="clock" tone={groups.todo.length ? 'bad' : 'good'} />
-        <ExKpi label={ar ? 'تم تسليمها' : 'Submitted'} value={groups.done.length} icon="check-circle" tone="good" />
-        <ExKpi label={ar ? 'فاتها الموعد' : 'Missed'} value={groups.missed.length} icon="alert-triangle" tone={groups.missed.length ? 'bad' : ''} />
-        <ExKpi label={ar ? 'تم تصحيحها' : 'Graded'} value={graded.length} icon="award" />
-      </div>
-
-      <div className="ex-card">
-        <div className="att-tabs">
+      <section className="acx-panel">
+        <div className="acx-tabs" role="tablist">
           {[['todo', ar ? 'المطلوبة' : 'To do'], ['done', ar ? 'المسلّمة' : 'Submitted'], ['missed', ar ? 'الفائتة' : 'Missed']].map(([k, l]) => (
-            <button key={k} type="button" className={tab === k ? 'is-on' : ''} onClick={() => setTab(k)}>{l} ({groups[k].length})</button>
+            <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'is-on' : ''} onClick={() => setTab(k)}>{l}<small>{groups[k].length}</small></button>
           ))}
         </div>
-        {loading ? <Skeleton h={80} count={3} /> : shown.length === 0 ? (
-          <EmptyState icon="check-circle" title={ar ? 'لا توجد تكليفات هنا' : 'Nothing here'} />
+        {loading ? <div className="acx-panel__body"><Skeleton h={80} count={3} /></div> : shown.length === 0 ? (
+          <div className="acx-empty"><EmptyState icon="check-circle" title={ar ? 'لا توجد تكليفات هنا' : 'Nothing here'} /></div>
         ) : (
-          <div className="as-list">
+          <div>
             {shown.map((a) => {
               const st = STATE[a.state] || STATE.open;
               const canSubmit = a.state !== 'graded' && a.state !== 'missed';
               return (
-                <div key={a.id} className="as-card">
-                  <div className="as-card__head">
-                    <div>
-                      <span className="att-course__code">{a.course?.code}</span>
-                      <div className="att-course__name">{a.title}</div>
-                      <small className="is-muted">{a.course?.name}</small>
+                <article key={a.id} className="acx-item">
+                  <div className="acx-item__head">
+                    <div style={{ minWidth: 0 }}>
+                      <span className="acx-code" dir="ltr">{a.course?.code}</span>
+                      <div className="acx-item__title">{a.title}</div>
+                      <div className="acx-muted">{a.course?.name}</div>
                     </div>
-                    <span className={`att-pill att-pill--${st.cls}`}>{ar ? st.ar : st.en}</span>
+                    <span className={`st-pill${TONE[st.cls] ? ` st-pill--${TONE[st.cls]}` : ''}`}>{ar ? st.ar : st.en}</span>
                   </div>
-                  {a.body && <p className="as-body">{a.body}</p>}
-                  <div className="att-nums">
-                    <span><Icon name="clock" size={12} /> {fmtDate(a.due_at)} · <b>{dueText(a, ar)}</b></span>
-                    <span>{ar ? 'الدرجة العظمى' : 'Max'} <b>{a.max_score}</b></span>
-                    {a.weight != null && <span>{ar ? 'الوزن' : 'Weight'} <b>{a.weight}%</b></span>}
-                  </div>
+                  {a.body && <p className="acx-item__body">{a.body}</p>}
+                  <AcNums inline items={[
+                    [ar ? 'الموعد' : 'Due', `${fmtDate(a.due_at)} · ${dueText(a, ar)}`],
+                    [ar ? 'الدرجة العظمى' : 'Max', a.max_score],
+                    ...(a.weight != null ? [[ar ? 'الوزن' : 'Weight', `${a.weight}%`]] : []),
+                  ]} />
                   {a.submission?.status === 'graded' && (
-                    <div className="st-alert"><Icon name="award" size={15} /><span><b>{a.submission.score} / {a.max_score}</b>{a.submission.feedback ? ` — ${a.submission.feedback}` : ''}</span></div>
+                    <div className="st-alert st-alert--success"><Icon name="award" size={15} /><span><b>{a.submission.score} / {a.max_score}</b>{a.submission.feedback ? ` — ${a.submission.feedback}` : ''}</span></div>
                   )}
                   {a.submission?.status === 'returned' && (
-                    <div className="st-alert st-alert--danger"><Icon name="alert-triangle" size={15} /><span>{ar ? 'الدكتور طلب تعديل: ' : 'Changes requested: '}{a.submission.feedback || ''}</span></div>
+                    <div className="st-alert st-alert--warning"><Icon name="alert-triangle" size={15} /><span>{ar ? 'الدكتور طلب تعديل: ' : 'Changes requested: '}{a.submission.feedback || ''}</span></div>
                   )}
-                  {a.submission && <small className="is-muted">{ar ? 'آخر تسليم' : 'Last submitted'}: {fmtDate(a.submission.submitted_at)}{a.submission.is_late ? (ar ? ' (متأخر)' : ' (late)') : ''}{a.submission.file_name ? ` · ${a.submission.file_name}` : ''}</small>}
-                  <div className="as-actions">
-                    {a.has_file && <button type="button" className="btn btn-ghost btn-sm" onClick={() => downloadAuthed(`/api/v1/assignments/courses/${a.course_id}/${a.id}/file`, a.file_name).catch((e) => setError(errorMessage(e)))}><Icon name="download" size={13} /> {ar ? 'مرفق التكليف' : 'Attachment'}</button>}
-                    {a.submission?.has_file && <button type="button" className="btn btn-ghost btn-sm" onClick={() => downloadAuthed(`/api/v1/assignments/courses/${a.course_id}/${a.id}/submissions/${a.submission.student_id}/file`, a.submission.file_name).catch((e) => setError(errorMessage(e)))}><Icon name="paperclip" size={13} /> {ar ? 'ملف تسليمي' : 'My file'}</button>}
-                    {canSubmit && <button type="button" className="btn btn-primary btn-sm" onClick={() => { setNotice(null); setDialog(a); }}><Icon name="upload" size={13} /> {a.submission ? (ar ? 'إعادة التسليم' : 'Resubmit') : (ar ? 'تسليم' : 'Submit')}</button>}
-                  </div>
-                </div>
+                  {a.submission && <div className="acx-muted">{ar ? 'آخر تسليم' : 'Last submitted'}: {fmtDate(a.submission.submitted_at)}{a.submission.is_late ? (ar ? ' (متأخر)' : ' (late)') : ''}{a.submission.file_name ? ` · ${a.submission.file_name}` : ''}</div>}
+                  {(a.has_file || a.submission?.has_file || canSubmit) && (
+                    <div className="acx-actions">
+                      {canSubmit && <button type="button" className="btn btn-primary btn-sm" onClick={() => { setNotice(null); setDialog(a); }}><Icon name="upload" size={13} /> {a.submission ? (ar ? 'إعادة التسليم' : 'Resubmit') : (ar ? 'تسليم' : 'Submit')}</button>}
+                      {a.has_file && <button type="button" className="btn btn-outline btn-sm" onClick={() => downloadAuthed(`/api/v1/assignments/courses/${a.course_id}/${a.id}/file`, a.file_name).catch((e) => setError(errorMessage(e)))}><Icon name="download" size={13} /> {ar ? 'مرفق التكليف' : 'Attachment'}</button>}
+                      {a.submission?.has_file && <button type="button" className="btn btn-outline btn-sm" onClick={() => downloadAuthed(`/api/v1/assignments/courses/${a.course_id}/${a.id}/submissions/${a.submission.student_id}/file`, a.submission.file_name).catch((e) => setError(errorMessage(e)))}><Icon name="paperclip" size={13} /> {ar ? 'ملف تسليمي' : 'My file'}</button>}
+                    </div>
+                  )}
+                </article>
               );
             })}
           </div>
         )}
-      </div>
+      </section>
 
       {dialog && <SubmitDialog a={dialog} ar={ar} locale={locale} onClose={() => setDialog(null)} onDone={(m) => { setDialog(null); setNotice(m); load().catch(() => {}); }} />}
-    </div>
+    </AcPage>
   );
 }
 
