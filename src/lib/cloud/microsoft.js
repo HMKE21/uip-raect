@@ -71,6 +71,29 @@ function popupCode(cfg, scope = SCOPE) {
   }));
 }
 
+/**
+ * "Continue with Microsoft" (login / sign-up): same pop-up + PKCE flow, but with identity scopes only (no OneDrive permissions),
+ * and it returns the OpenID Connect ID token. The API verifies that token itself (MicrosoftIdTokenVerifier), nothing else is trusted.
+ */
+export async function microsoftIdToken(cfg) {
+  const scope = 'openid profile email';
+  const { code, verifier } = await popupCode(cfg, scope);
+  let res;
+  try {
+    res = await fetch(tokenUrl(cfg), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ client_id: cfg.client_id, scope, grant_type: 'authorization_code', code, redirect_uri: redirectUri(), code_verifier: verifier }),
+    });
+  } catch { throw new CloudRetryError('Network problem.', 0); }
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.id_token) {
+    if (res.status >= 500) throw new CloudRetryError('Microsoft is busy.', res.status);
+    throw new CloudAuthError(j.error_description?.split('\r')[0] || 'Microsoft sign-in failed.', j.error || 'denied');
+  }
+  return j.id_token;
+}
+
 const authed = (tok, extra) => ({ ...(extra || {}), Authorization: `Bearer ${tok.accessToken}` });
 const enc = (path) => path.split('/').map(encodeURIComponent).join('/');
 const approot = (path) => `https://graph.microsoft.com/v1.0/me/drive/special/approot:/${enc(path)}`;
