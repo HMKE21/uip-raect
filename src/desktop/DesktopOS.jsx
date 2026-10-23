@@ -163,12 +163,19 @@ function useDesktopFolder() {
       try { out = await attempt(); } catch (e) { idRef.current = null; out = await attempt(); }
       let binFull = false;
       try { binFull = ((await drive.trashList()).data || []).length > 0; } catch { /* ignore */ }
-      setSt({ id: idRef.current, items: out.listing.data.items || [], binFull, usage: out.usage, error: '', ready: true });
+      const items = out.listing.data.items || [];
+      // the 45 s poll usually finds nothing new: keep the old state object so the whole desktop does not re-render
+      setSt((prev) => {
+        const same = prev.ready && !prev.error && prev.id === idRef.current && prev.binFull === binFull && prev.items.length === items.length
+          && prev.items.every((n, i) => n.id === items[i].id && n.name === items[i].name && n.updated_at === items[i].updated_at && n.size_bytes === items[i].size_bytes)
+          && JSON.stringify(prev.usage) === JSON.stringify(out.usage);
+        return same ? prev : { id: idRef.current, items, binFull, usage: out.usage, error: '', ready: true };
+      });
     } catch (err) {
       setSt((s) => ({ ...s, error: errorMessage(err), ready: true }));
     }
   }, []);
-  useEffect(() => { reload(); const h = setInterval(reload, 45000); return () => clearInterval(h); }, [reload]);
+  useEffect(() => { reload(); const h = setInterval(() => { if (document.visibilityState !== 'hidden') reload(); }, 45000); return () => clearInterval(h); }, [reload]);
   // optimistic: drop items from the list right away (e.g. after "Move to…"); the next reload brings back anything that failed
   const hideLocal = useCallback((ids) => { const gone = new Set(ids); setSt((x) => ({ ...x, items: x.items.filter((n) => !gone.has(n.id)) })); }, []);
   return [st, reload, hideLocal];

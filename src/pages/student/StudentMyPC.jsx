@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usePrivateParams } from '../../lib/privateParams';
 import { unzipSync, zipSync } from 'fflate';
@@ -115,6 +115,39 @@ function Pop({ anchor, end, rtl, className = '', children }) {
     document.querySelector('.os') || document.body,
   );
 }
+
+/** One file / folder row. Memoised: a selection change re-renders only the rows whose own state changed, not the whole folder.
+ *  Handlers come from `act.current` (always the latest closures) so every prop stays primitive. */
+const ItemRow = memo(function ItemRow({ n, view, ar, locale, selected, cut, fav, tagsKey, showPath, act }) {
+  const tt = (en, a) => (ar ? a : en);
+  const tags = tagsKey ? tagsKey.split('\u0001') : null;
+  return (
+    <div
+                      data-id={n.id} role="option" aria-selected={selected} tabIndex={0}
+                      className={`mp-item${selected ? ' is-sel' : ''}${cut ? ' is-cut' : ''}`}
+                      draggable
+                      onClick={(e) => act.current.clickItem(e, n)}
+                      onDoubleClick={(e) => { e.stopPropagation(); act.current.openNode(n); }}
+                      onContextMenu={(e) => act.current.showMenu(e, n)}
+                      onKeyDown={(e) => { if (e.key === ' ') { e.preventDefault(); act.current.clickItem({ ctrlKey: true, shiftKey: false, stopPropagation: () => {} }, n); } }}
+                      data-node-id={n.id} data-node-type={n.type}
+                      onDragStart={(e) => act.current.dragStart(e, n)}
+                      onDragOver={(e) => { if (n.type === 'folder' && (e.dataTransfer.types.includes('application/x-drive-ids') || e.dataTransfer.types.includes('Files'))) { e.preventDefault(); e.currentTarget.classList.add('is-over'); } }}
+                      onDragLeave={(e) => e.currentTarget.classList.remove('is-over')}
+                      onDrop={(e) => { e.currentTarget.classList.remove('is-over'); if (n.type !== 'folder') return; if (e.dataTransfer.types.includes('application/x-drive-ids')) act.current.dropIds(e, n.id); else act.current.onDropFiles(e, n.id); }}
+                    >
+                      <NodeIcon node={n} size={view === 'grid' ? 56 : 28} />
+                      <span className="mp-item__name" dir="auto" title={n.name}>{n.name}{fav && <Icon name="star" size={12} className="mp-star" />}{tags && <span className="mp-dots" aria-label={tags.join(', ')}>{tags.map((t) => <i key={t} style={{ background: tagColor(t) }} title={t} />)}</span>}{showPath && n.path ? <small>{n.path}</small> : null}</span>
+                      {view === 'list' && (
+                        <>
+                          <span className="mp-item__date">{timeAgo(n.updated_at || n.created_at, locale)}</span>
+                          <span className="mp-item__type">{n.type === 'folder' ? (n.kind === 'project' ? tt('Project', 'مشروع') : n.kind === 'disk' ? tt('Disk', 'قرص') : tt('Folder', 'مجلد')) : (n.extension || '—').toUpperCase()}</span>
+                          <span className="mp-item__size">{n.type === 'folder' ? '' : n.size_human}</span>
+                        </>
+                      )}
+                    </div>
+  );
+});
 
 /** Folder tree row (recursive). */
 function TreeNode({ node, byParent, depth, openSet, toggle, activeId, onOpen, onDropIds, rtl }) {
@@ -353,6 +386,9 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
   const [queue, setQueue] = useState([]);
 
   const rootRef = useRef(null);
+  const treeTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(treeTimer.current), []);
+  const act = useRef({}); // latest handlers for the memoised <ItemRow>s
   const fileInput = useRef(null);
   const dirInput = useRef(null);
   const area = useRef(null);
@@ -400,7 +436,14 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     } finally {
       setLoading(false);
     }
-    drive.tree().then((r) => setTree(r.data || [])).catch(() => {});
+    // the folder tree is the heaviest call: refresh it at most once a second and only re-render when it really changed
+    window.clearTimeout(treeTimer.current);
+    treeTimer.current = window.setTimeout(() => {
+      drive.tree().then((r) => {
+        const next = r.data || [];
+        setTree((prev) => (prev.length === next.length && prev.every((x, i) => x.id === next[i].id && x.name === next[i].name && x.parent_id === next[i].parent_id) ? prev : next));
+      }).catch(() => {});
+    }, 700);
   }, [folderParam, inTrash, setParams]);
 
   useEffect(() => { setSel(new Set()); setAnchor(null); setQuery(''); setResults(null); if (keepSpecial.current) keepSpecial.current = false; else setSpecial(null); reload(); }, [reload]);
@@ -462,6 +505,21 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
   }, [data.items, results, sort, diskNodes]);
 
   const selected = useMemo(() => [...diskCards, ...items].filter((n) => sel.has(n.id)), [diskCards, items, sel]);
+
+  // Big folders: draw the first PAGE rows, then more as the list is scrolled (data, selection and keyboard still cover every item).
+  const PAGE = 150;
+  const [limit, setLimit] = useState(PAGE);
+  const moreRef = useRef(null);
+  const shownItems = useMemo(() => (items.length > limit ? items.slice(0, limit) : items), [items, limit]);
+  const cutSet = useMemo(() => new Set(clip?.mode === 'cut' ? clip.ids : []), [clip]);
+  useEffect(() => { setLimit(PAGE); }, [folderParam, inTrash, special, results === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const el = moreRef.current;
+    if (!el || typeof IntersectionObserver === 'undefined') return undefined;
+    const io = new IntersectionObserver((es) => { if (es.some((x) => x.isIntersecting)) setLimit((l) => l + PAGE); }, { root: area.current, rootMargin: '600px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [shownItems.length, items.length]);
 
   // ---- navigation -------------------------------------------------------------------------------------
   // back / forward history (like a real Explorer): one entry per visited location
@@ -712,6 +770,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
   const clickItem = (e, n) => {
     e.stopPropagation();
     cursorRef.current = n.id;
+    setLimit((l) => Math.max(l, idx + 60)); // make sure the target row is drawn
     if (e.shiftKey && anchor != null) {
       const a = items.findIndex((x) => x.id === anchor); const b = items.findIndex((x) => x.id === n.id);
       const [lo, hi] = a < b ? [a, b] : [b, a];
@@ -807,27 +866,39 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     const local = (ev) => ({ x: ev.clientX - rect.left + main.scrollLeft, y: ev.clientY - rect.top + main.scrollTop });
     const start = local(e);
     const base = e.ctrlKey || e.metaKey || e.shiftKey ? new Set(sel) : new Set();
-    const byId = new Map(items.map((n) => [String(n.id), n.id]));
-    let dragging = false;
+    let rects = null; // item rectangles in content coordinates, measured once per drag (not on every mouse move)
+    let dragging = false; let raf = 0; let last = null; let lastKey = '';
     rootRef.current?.focus({ preventScroll: true }); // keep keyboard focus on the explorer so Delete / Ctrl+A work right after a drag
+    const measure = () => {
+      rects = [];
+      main.querySelectorAll('.mp-item[data-id]').forEach((el) => {
+        const r = el.getBoundingClientRect();
+        rects.push({ id: Number(el.dataset.id), x1: r.left - rect.left + main.scrollLeft, x2: r.right - rect.left + main.scrollLeft, y1: r.top - rect.top + main.scrollTop, y2: r.bottom - rect.top + main.scrollTop });
+      });
+    };
+    const apply = () => {
+      raf = 0;
+      if (!last) return;
+      const p = last;
+      const x1 = Math.min(start.x, p.x); const x2 = Math.max(start.x, p.x);
+      const y1 = Math.min(start.y, p.y); const y2 = Math.max(start.y, p.y);
+      setBox({ x1, y1, x2, y2 });
+      if (!rects) measure();
+      const next = new Set(base);
+      for (const r of rects) if (r.x1 < x2 && r.x2 > x1 && r.y1 < y2 && r.y2 > y1) next.add(r.id);
+      const key = [...next].join(',');
+      if (key !== lastKey) { lastKey = key; setSel(next); }
+    };
     const move = (ev) => {
       const p = local(ev);
       if (!dragging) { if (Math.hypot(p.x - start.x, p.y - start.y) < 4) return; dragging = true; }
       if (ev.clientY > rect.bottom - 24) main.scrollTop += 14; else if (ev.clientY < rect.top + 24) main.scrollTop -= 14; // auto-scroll near an edge
-      const x1 = Math.min(start.x, p.x); const x2 = Math.max(start.x, p.x);
-      const y1 = Math.min(start.y, p.y); const y2 = Math.max(start.y, p.y);
-      setBox({ x1, y1, x2, y2 });
-      const next = new Set(base);
-      main.querySelectorAll('.mp-item[data-id]').forEach((el) => {
-        const b = el.getBoundingClientRect();
-        const ix1 = b.left - rect.left + main.scrollLeft; const ix2 = b.right - rect.left + main.scrollLeft;
-        const iy1 = b.top - rect.top + main.scrollTop; const iy2 = b.bottom - rect.top + main.scrollTop;
-        if (ix1 < x2 && ix2 > x1 && iy1 < y2 && iy2 > y1) { const id = byId.get(el.dataset.id); if (id !== undefined) next.add(id); }
-      });
-      setSel(next);
+      last = local(ev);
+      if (!raf) raf = requestAnimationFrame(apply);
     };
     const up = () => {
       window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      if (raf) cancelAnimationFrame(raf);
       setBox(null);
       if (dragging) { suppressClick.current = true; window.setTimeout(() => { suppressClick.current = false; }, 0); }
     };
@@ -914,6 +985,15 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     text: tt('Everything in the recycle bin will be deleted permanently. This cannot be undone.', 'كل ما في السلة هيتحذف نهائيًا ومش هتقدر ترجعه.'),
     action: tt('Empty', 'تفريغ'), onOk: () => run(() => drive.emptyTrash(), tt('Recycle bin emptied.', 'تم تفريغ السلة.')),
   });
+
+  act.current = {
+    clickItem, openNode, showMenu, dropIds, onDropFiles,
+    dragStart: (e, n) => {
+      const ids = sel.has(n.id) ? sel : new Set([n.id]);
+      const list = items.filter((x) => ids.has(x.id));
+      setDragData(e.dataTransfer, list.length ? list : [n]);
+    },
+  };
 
   // ---- render -----------------------------------------------------------------------------------------
   const usage = data.usage;
@@ -1170,32 +1250,14 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
                       ))}
                     </div>
                   )}
-                  {items.map((n) => (
-                    <div
-                      key={n.id} data-id={n.id} role="option" aria-selected={sel.has(n.id)} tabIndex={0}
-                      className={`mp-item${sel.has(n.id) ? ' is-sel' : ''}${clip?.mode === 'cut' && clip.ids.includes(n.id) ? ' is-cut' : ''}`}
-                      draggable
-                      onClick={(e) => clickItem(e, n)}
-                      onDoubleClick={(e) => { e.stopPropagation(); openNode(n); }}
-                      onContextMenu={(e) => showMenu(e, n)}
-                      onKeyDown={(e) => { if (e.key === ' ') { e.preventDefault(); clickItem({ ctrlKey: true, shiftKey: false, stopPropagation: () => {} }, n); } }}
-                      data-node-id={n.id} data-node-type={n.type}
-                      onDragStart={(e) => { const ids = sel.has(n.id) ? [...sel] : [n.id]; setDragData(e.dataTransfer, items.filter((x) => ids.includes(x.id)).length ? items.filter((x) => ids.includes(x.id)) : [n]); }}
-                      onDragOver={(e) => { if (n.type === 'folder' && (e.dataTransfer.types.includes('application/x-drive-ids') || e.dataTransfer.types.includes('Files'))) { e.preventDefault(); e.currentTarget.classList.add('is-over'); } }}
-                      onDragLeave={(e) => e.currentTarget.classList.remove('is-over')}
-                      onDrop={(e) => { e.currentTarget.classList.remove('is-over'); if (n.type !== 'folder') return; if (e.dataTransfer.types.includes('application/x-drive-ids')) dropIds(e, n.id); else onDropFiles(e, n.id); }}
-                    >
-                      <NodeIcon node={n} size={view === 'grid' ? 56 : 28} />
-                      <span className="mp-item__name" dir="auto" title={n.name}>{n.name}{marks.isFav(n.id) && <Icon name="star" size={12} className="mp-star" />}{marks.tagsOf(n.id).length > 0 && <span className="mp-dots" aria-label={marks.tagsOf(n.id).join(', ')}>{marks.tagsOf(n.id).map((t) => <i key={t} style={{ background: tagColor(t) }} title={t} />)}</span>}{results && n.path ? <small>{n.path}</small> : null}</span>
-                      {view === 'list' && (
-                        <>
-                          <span className="mp-item__date">{timeAgo(n.updated_at || n.created_at, locale)}</span>
-                          <span className="mp-item__type">{n.type === 'folder' ? (n.kind === 'project' ? tt('Project', 'مشروع') : n.kind === 'disk' ? tt('Disk', 'قرص') : tt('Folder', 'مجلد')) : (n.extension || '—').toUpperCase()}</span>
-                          <span className="mp-item__size">{n.type === 'folder' ? '' : n.size_human}</span>
-                        </>
-                      )}
-                    </div>
+                  {shownItems.map((n) => (
+                    <ItemRow
+                      key={n.id} n={n} view={view} ar={ar} locale={locale} act={act}
+                      selected={sel.has(n.id)} cut={clip?.mode === 'cut' && cutSet.has(n.id)}
+                      fav={marks.isFav(n.id)} tagsKey={marks.tagsOf(n.id).join('\u0001')} showPath={!!results}
+                    />
                   ))}
+                  {shownItems.length < items.length && <div ref={moreRef} className="mp-more" aria-hidden="true" />}
                 </div>
               )
           )}

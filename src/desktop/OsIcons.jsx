@@ -1,11 +1,13 @@
+import { memo, useId } from 'react';
 import Icon from '../components/Icon';
 
 /** Big colourful desktop / start-menu glyphs. Folder / PC / bin are hand-drawn SVG, the rest use the shared Icon set on a gradient tile. */
 let uid = 0;
 const gid = () => `osg${(uid += 1)}`;
 
-export function FolderGlyph({ size = 48, project = false }) {
-  const a = gid(); const b = gid(); const c = gid();
+/** memo + stable ids (useId): a folder full of icons no longer rebuilds every gradient on each render. */
+export const FolderGlyph = memo(function FolderGlyph({ size = 48, project = false }) {
+  const u = useId().replace(/:/g, ''); const a = `${u}a`; const b = `${u}b`; const c = `${u}c`;
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
       <defs>
@@ -19,7 +21,7 @@ export function FolderGlyph({ size = 48, project = false }) {
       {project && <path d="m24 32 5 5-5 5M33 42h7" fill="none" stroke="#0b4a85" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />}
     </svg>
   );
-}
+});
 
 export function PcGlyph({ size = 48 }) {
   const a = gid(); const b = gid();
@@ -61,8 +63,8 @@ function shade(hex, t) {
 }
 
 /** Modern file icon: a rounded sheet tinted with the file-type colour (soft gradient + glossy fold) and a bold type badge. */
-export function FileGlyph({ size = 48, label = '', color = '#64748b' }) {
-  const a = gid(); const b = gid(); const c = gid(); const d = gid();
+export const FileGlyph = memo(function FileGlyph({ size = 48, label = '', color = '#64748b' }) {
+  const u = useId().replace(/:/g, ''); const a = `${u}a`; const b = `${u}b`; const c = `${u}c`;
   const text = String(label).slice(0, 4).toUpperCase() || 'FILE';
   const fs = text.length >= 4 ? 8.6 : text.length === 3 ? 10.5 : 12.5;
   return (
@@ -71,9 +73,8 @@ export function FileGlyph({ size = 48, label = '', color = '#64748b' }) {
         <linearGradient id={a} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#ffffff" /><stop offset="1" stopColor={shade(color, 0.86)} /></linearGradient>
         <linearGradient id={b} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={shade(color, 0.22)} /><stop offset="1" stopColor={shade(color, -0.18)} /></linearGradient>
         <linearGradient id={c} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".95" /><stop offset="1" stopColor={shade(color, 0.55)} /></linearGradient>
-        <filter id={d} x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#0b1220" floodOpacity=".35" /></filter>
       </defs>
-      <g filter={`url(#${d})`}>
+      <g>
         <path d="M17 4h21.5L55 20.5V52a8 8 0 0 1-8 8H17a8 8 0 0 1-8-8V12a8 8 0 0 1 8-8Z" fill={`url(#${a})`} />
         <path d="M17 4.6h21.2l16.2 16.2V52a7.4 7.4 0 0 1-7.4 7.4H17A7.4 7.4 0 0 1 9.6 52V12A7.4 7.4 0 0 1 17 4.6Z" fill="none" stroke={shade(color, 0.5)} strokeWidth="1" opacity=".7" />
         <path d="M38.5 4v11a5.5 5.5 0 0 0 5.5 5.5h11Z" fill={`url(#${c})`} />
@@ -85,7 +86,7 @@ export function FileGlyph({ size = 48, label = '', color = '#64748b' }) {
       </g>
     </svg>
   );
-}
+});
 
 const TILES = {
   settings: ['#a1a6b0', '#6b7280', 'settings'],
