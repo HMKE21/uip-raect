@@ -205,6 +205,9 @@ export function AuthProvider({ children }) {
     return adoptGoogleResult(json.data);
   }, [adoptGoogleResult]);
 
+  /** GitHub sign-in: the pop-up flow (lib/githubAuth.js) already got the API's answer — same shape as /auth/google. */
+  const loginWithGithub = useCallback(async (data) => adoptGoogleResult(data), [adoptGoogleResult]);
+
   /** POST /api/v1/auth/google/complete — creates the student account from the Google profile + the details they filled in. */
   const completeGoogleSignup = useCallback(async (payload) => {
     const json = await api.post('/api/v1/auth/google/complete', payload);
@@ -383,8 +386,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, status, login, loginWithGoogle, loginWithMicrosoft, completeGoogleSignup, restoreGoogleDeleted, completeTwoFactor, cancelTwoFactor, adoptSession, logout, updateUser, can, permissionsReady: permissions !== null, isJoker: jokerRoles.length > 0, availableRoles: jokerRoles, switchRole }),
-    [user, status, login, loginWithGoogle, loginWithMicrosoft, completeGoogleSignup, restoreGoogleDeleted, completeTwoFactor, cancelTwoFactor, adoptSession, logout, updateUser, can, permissions, jokerRoles, switchRole]
+    () => ({ user, status, login, loginWithGoogle, loginWithMicrosoft, loginWithGithub, completeGoogleSignup, restoreGoogleDeleted, completeTwoFactor, cancelTwoFactor, adoptSession, logout, updateUser, can, permissionsReady: permissions !== null, isJoker: jokerRoles.length > 0, availableRoles: jokerRoles, switchRole }),
+    [user, status, login, loginWithGoogle, loginWithMicrosoft, loginWithGithub, completeGoogleSignup, restoreGoogleDeleted, completeTwoFactor, cancelTwoFactor, adoptSession, logout, updateUser, can, permissions, jokerRoles, switchRole]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

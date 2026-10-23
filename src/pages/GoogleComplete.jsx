@@ -25,6 +25,8 @@ export default function GoogleComplete() {
   const L = (en, ar) => (locale === 'ar' ? ar : en);
 
   const profile = reg?.profile || {};
+  const provName = profile.provider === 'github' ? 'GitHub' : profile.provider === 'microsoft' ? 'Microsoft' : 'Google';
+  const provNameAr = profile.provider === 'github' ? 'GitHub' : profile.provider === 'microsoft' ? 'مايكروسوفت' : 'جوجل';
   const deleted = reg?.deletedAccount || null;
   const missing = reg?.missing || [];
   const [nameAr, setNameAr] = useState(profile.name_ar || '');
@@ -104,7 +106,7 @@ export default function GoogleComplete() {
         <div className="auth-profile__text">
           <strong>{profile.name || profile.email}</strong>
           <span dir="ltr">{profile.email}</span>
-          <small><Icon name="shield" size={13} /> {profile.provider === 'microsoft' ? L('Verified by Microsoft', 'متأكد منه مايكروسوفت') : L('Verified by Google', 'متأكد منه جوجل')}</small>
+          <small><Icon name="shield" size={13} /> {profile.provider === 'github' ? L('Verified by GitHub', 'متأكد منه GitHub') : profile.provider === 'microsoft' ? L('Verified by Microsoft', 'متأكد منه مايكروسوفت') : L('Verified by Google', 'متأكد منه جوجل')}</small>
         </div>
       </div>
 
@@ -140,7 +142,7 @@ export default function GoogleComplete() {
             placeholder="أحمد محمد علي"
             autoComplete="off"
             lang="ar"
-            hint={missing.includes('name_ar') ? L('Google gave us your name in English only — please add it in Arabic.', 'جوجل ادّانا اسمك بالإنجليزي بس — اكتبه بالعربي.') : undefined}
+            hint={missing.includes('name_ar') ? L(`${provName} gave us your name in English only — please add it in Arabic.`, `${provNameAr} ادّانا اسمك بالإنجليزي بس — اكتبه بالعربي.`) : undefined}
             required
             autoFocus={missing.includes('name_ar')}
           />
@@ -156,7 +158,7 @@ export default function GoogleComplete() {
             placeholder="Ahmed Mohamed Ali"
             autoComplete="off"
             lang="en"
-            hint={missing.includes('name_en') ? L('Google gave us your name in Arabic only — please add it in English.', 'جوجل ادّانا اسمك بالعربي بس — اكتبه بالإنجليزي.') : undefined}
+            hint={missing.includes('name_en') ? L(`${provName} gave us your name in Arabic only — please add it in English.`, `${provNameAr} ادّانا اسمك بالعربي بس — اكتبه بالإنجليزي.`) : undefined}
             required
             autoFocus={missing.includes('name_en') && !missing.includes('name_ar')}
           />

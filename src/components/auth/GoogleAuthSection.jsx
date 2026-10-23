@@ -7,6 +7,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { getGoogleConfig } from '../../lib/googleAuth';
 import GoogleSignInButton from './GoogleSignInButton';
 import MicrosoftSignInButton from './MicrosoftSignInButton';
+import GithubSignInButton from './GithubSignInButton';
 
 /**
  * The "or continue with Google" block used on Login and Register.
@@ -15,12 +16,13 @@ import MicrosoftSignInButton from './MicrosoftSignInButton';
  * Renders nothing when Google sign-in isn't configured.
  */
 export default function GoogleAuthSection({ onError, placement = 'after' }) {
-  const { loginWithGoogle, loginWithMicrosoft } = useAuth();
+  const { loginWithGoogle, loginWithMicrosoft, loginWithGithub } = useAuth();
   const { locale } = useLanguage();
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [msEnabled, setMsEnabled] = useState(false);
+  const [ghEnabled, setGhEnabled] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -32,7 +34,8 @@ export default function GoogleAuthSection({ onError, placement = 'after' }) {
     onError?.(null);
     setBusy(true);
     try {
-      const r = await (provider === 'microsoft' ? loginWithMicrosoft : loginWithGoogle)(idToken);
+      // google / microsoft hand us an ID token to send to the API; github's pop-up flow already returns the API's answer.
+      const r = await (provider === 'github' ? loginWithGithub : provider === 'microsoft' ? loginWithMicrosoft : loginWithGoogle)(idToken);
       if (r.needsRegistration) {
         navigate('/auth/google/complete', { state: { registration: r } });
       } else if (r.requiresTwoFactor) {
@@ -47,7 +50,7 @@ export default function GoogleAuthSection({ onError, placement = 'after' }) {
     }
   }
 
-  const any = enabled || msEnabled;
+  const any = enabled || msEnabled || ghEnabled;
 
   const divider = (
     <div className="auth-divider" role="separator"><span>{locale === 'ar' ? 'أو' : 'or'}</span></div>
@@ -57,6 +60,7 @@ export default function GoogleAuthSection({ onError, placement = 'after' }) {
       {any && placement === 'after' && divider}
       <GoogleSignInButton onToken={(t) => handleToken(t, 'google')} onError={onError} disabled={busy} />
       <MicrosoftSignInButton onToken={(t) => handleToken(t, 'microsoft')} onError={onError} disabled={busy} onAvailable={setMsEnabled} />
+      <GithubSignInButton onResult={(d) => handleToken(d, 'github')} onError={onError} disabled={busy} onAvailable={setGhEnabled} />
       {any && placement === 'before' && divider}
     </div>
   );
