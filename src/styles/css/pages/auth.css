@@ -542,3 +542,19 @@ button.auth-role { width: 100%; font: inherit; text-align: start; cursor: var(--
   @keyframes auth-step-in-rtl { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
   .auth-alert { animation: auth-fade-up .35s ease both; }
 }
+
+/* ---- social sign-in buttons (Google / Microsoft / GitHub): one layout for all three ----
+   The logo is pinned to a fixed slot at the start edge and the label is centred in the space left, so the three logos line up
+   in one column and the labels share the same size, weight and baseline (before, logo + label were centred together,
+   so every button put its logo at a different x). */
+.auth-google { position: relative; justify-content: center; gap: 0; padding-inline: 54px; font-size: 1rem; font-weight: 700; letter-spacing: 0; }
+.auth-google-section > .auth-google { position: relative; }
+.auth-google svg {
+  position: absolute; inset-inline-start: 18px; top: 50%; width: 22px; height: 22px; margin-top: -11px; flex: none; display: block;
+}
+.auth-google span { flex: 0 1 auto; text-align: center; font-size: inherit; font-weight: inherit; line-height: 1.2; }
+.auth-google-wrap .auth-google { position: absolute; }
+@media (max-width: 560px) {
+  .auth-google { padding-inline: 46px; font-size: .95rem; }
+  .auth-google svg { inset-inline-start: 14px; }
+}
