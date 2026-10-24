@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { attachNoiseSuppressor, noiseSuppressSupported } from '../lib/calls/noiseSuppress';
+import { attachNoiseSuppressor } from '../lib/calls/noiseSuppress';
 import { attachEchoGate, echoGateEnabled, setRemoteAudio, clearRemoteAudio, tightenEchoGate } from '../lib/calls/echoGate';
 import { createCameraFx, cameraFxSupported } from '../lib/cameraFx';
 import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, meetingLifecycleApi, filesApi, notesApi, pollsApi, recordingsApi } from '../lib/meetingSignaling';
@@ -126,11 +126,9 @@ function buildAudioConstraints(noise) {
     noiseSuppression: noise,
     // ONE gain stage only. With neural isolation the leveler + make-up gain inside the isolation graph already lift a quiet mic, so the
     // browser's AGC must stay off: AGC + compressor + make-up stacked on top of each other made the voice pump, hiss and clip.
-    autoGainControl: noise && !noiseSuppressSupported(),
+    autoGainControl: true, // same as 1:1 calls (which sound right): the browser's own echo canceller + noise suppressor + auto gain
     voiceIsolation: { ideal: noise },
     channelCount: { ideal: 1 },
-    sampleRate: { ideal: 48000 },
-    advanced: [{ googEchoCancellation: true, googHighpassFilter: true, googNoiseSuppression: noise, googNoiseSuppression2: noise, googTypingNoiseDetection: true }],
   };
 }
 
@@ -719,7 +717,11 @@ export function useMeetingRoom({
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         // Neural noise isolation (RNNoise): always built when supported so the in-room switch can flip it instantly. If it is
         // unavailable we keep the browser's own suppression + echo cancellation (set above) — never break joining.
-        if (stream.getAudioTracks().length) {
+        // Plain browser microphone by default (exactly like 1:1 calls): routing it through WebAudio / RNNoise made rooms sound choppy.
+        // Opt in with localStorage `uip.call.rnnoise` = '1'.
+        let useRnn = false;
+        try { useRnn = localStorage.getItem('uip.call.rnnoise') === '1'; } catch { /* private mode */ }
+        if (useRnn && stream.getAudioTracks().length) {
           const ns = await attachNoiseSuppressor(stream, noisePref, { makeupGain: 1.8, onFeedback: (hz) => onFeedbackRef.current?.(hz) });
           if (cancelled) { (ns ? ns.stream : stream).getTracks().forEach((t) => t.stop()); return; }
           if (ns) { noiseRef.current = ns; stream = ns.stream; setNoiseAvailable(true); }
