@@ -266,7 +266,9 @@ export default function MyMeetings() {
   function handleJoin(e) {
     e.preventDefault();
     const raw = joinLink.trim();
-    const m = /\/join\/([A-Za-z0-9_-]+)/.exec(raw) || /^([A-Za-z0-9_-]{8,})$/.exec(raw);
+    // a 10-digit meeting code may be typed with spaces / dashes (213 927 1924)
+    const compact = raw.replace(/[\s-]/g, '');
+    const m = /\/join\/([A-Za-z0-9_-]+)/.exec(raw) || /^(\d{10})$/.exec(compact) || /^([A-Za-z0-9_-]{8,})$/.exec(raw);
     if (!m) { setJoinError(t('Paste a valid meeting link or code.')); return; }
     setJoinError(null);
     navigate(`/join/${m[1]}`);
