@@ -70,18 +70,29 @@ export default function InviteModal({ meetingUuid, onClose, onSent }) {
   const [tab, setTab] = useState('single');
 
   // -- Single invite ------------------------------------------------------
+  // The field takes the invitee's e-mail (the backend looks the account up and
+  // e-mails them the meeting details + link) — or, as before, a numeric user ID.
   const [userId, setUserId] = useState('');
   const [singleMessage, setSingleMessage] = useState('');
   const [singleSaving, setSingleSaving] = useState(false);
   const [singleError, setSingleError] = useState(null);
+  const [singleResult, setSingleResult] = useState(null); // { byEmail, emailSent, emailError }
 
   async function handleSingleSubmit(e) {
     e.preventDefault();
     setSingleSaving(true);
     setSingleError(null);
     try {
-      await invitationsApi.send(meetingUuid, { user_id: Number(userId), message: singleMessage.trim() || undefined });
-      onSent();
+      const value = userId.trim();
+      const byEmail = !/^\d+$/.test(value);
+      const payload = byEmail ? { email: value } : { user_id: Number(value) };
+      const json = await invitationsApi.send(meetingUuid, { ...payload, message: singleMessage.trim() || undefined });
+      if (byEmail) {
+        // Stay open so the host sees whether the e-mail actually went out.
+        setSingleResult({ byEmail: true, emailSent: json?.data?.email_sent === true, emailError: json?.data?.email_error || null });
+      } else {
+        onSent();
+      }
     } catch (err) {
       setSingleError(errorMessage(err) || t('This invitation could not be sent.'));
     } finally {
@@ -152,11 +163,38 @@ export default function InviteModal({ meetingUuid, onClose, onSent }) {
           </button>
         </div>
 
-        {tab === 'single' ? (
+        {tab === 'single' && singleResult ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p className={singleResult.emailSent ? 'text-small' : 'form-error'} style={singleResult.emailSent ? { color: 'var(--color-success, inherit)' } : undefined}>
+              {singleResult.emailSent
+                ? t('Invitation sent — an email with the meeting details and link was sent to the invitee.')
+                : t('Invitation recorded, but the email could not be sent.')}
+            </p>
+            {!singleResult.emailSent && singleResult.emailError && (
+              <p className="text-small" dir="ltr">{singleResult.emailError}</p>
+            )}
+            <div className="modal-box__actions">
+              <button type="button" className="btn btn-primary" onClick={() => onSent()}>{t('Done')}</button>
+            </div>
+          </div>
+        ) : tab === 'single' ? (
           <form onSubmit={handleSingleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div className="form-group">
-              <label className="form-label">{t('User ID')}</label>
-              <input className="form-input" type="number" min="1" required value={userId} onChange={(e) => setUserId(e.target.value)} />
+              <label className="form-label">{t('User email (or user ID)')}</label>
+              <input
+                className="form-input"
+                type="text"
+                inputMode="email"
+                dir="ltr"
+                autoComplete="off"
+                placeholder="name@gmail.com"
+                required
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+              />
+              <p className="text-small" style={{ marginTop: 'var(--space-1, 4px)', opacity: 0.75 }}>
+                {t('The invitee receives an email with the meeting details and link.')}
+              </p>
             </div>
             <div className="form-group">
               <label className="form-label">{t('Message (optional)')}</label>
@@ -165,7 +203,7 @@ export default function InviteModal({ meetingUuid, onClose, onSent }) {
             {singleError && <p className="form-error">{singleError}</p>}
             <div className="modal-box__actions">
               <button type="button" className="btn btn-outline" onClick={onClose}>{t('Cancel')}</button>
-              <button type="submit" className="btn btn-primary" disabled={singleSaving || !userId}>
+              <button type="submit" className="btn btn-primary" disabled={singleSaving || !userId.trim()}>
                 {singleSaving ? t('Sending…') : t('Send Invite')}
               </button>
             </div>
