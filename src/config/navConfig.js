@@ -270,6 +270,7 @@ const RAW_CONFIGS = {
     ],
     platform: [
       { key: 'mobile', en: 'Mobile App Management', ar: 'إدارة تطبيق الجوال', icon: 'smartphone', route: '/admin/mobile', built: true },
+      { key: 'meetings-control', en: 'Meetings Control', ar: 'التحكم في الاجتماعات', icon: 'meeting-type', route: '/admin/meetings-control', built: true },
       { key: 'platform-policy', en: 'Platform Policy', ar: 'سياسة المنصة', icon: 'x-circle', route: '/admin/platform-policy', built: true },
       { key: 'attendance-settings', en: 'Attendance Settings', ar: 'إعدادات الحضور', icon: 'check-circle', route: '/admin/attendance-settings', built: true },
       { key: 'grading-scale', en: 'Grading Scale', ar: 'نظام الدرجات', icon: 'settings', route: '/admin/grading-scale', built: true },
