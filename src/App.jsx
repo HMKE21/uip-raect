@@ -289,6 +289,7 @@ installRemoteControlReceiver({ isMeetingRoute: () => /\/meetings\/[^/]+\/room/.t
 const MeetingRoom = lazy(() => import('./pages/meetings/MeetingRoom'));
 const MEETING_PORTALS = ['student', 'university', 'faculty', 'admin', 'academic-staff', 'supervisor', 'data-analysis', 'security'];
 const Notifications = lazy(() => import('./pages/Notifications'));
+const PortalGuide = lazy(() => import('./pages/guide/PortalGuide'));
 
 export default function App() {
   usePlatformInspectGuard(); // blocks Ctrl+U / Ctrl+Shift+I,J,C,K… everywhere (F12, right-click, copy/paste untouched)
@@ -783,6 +784,13 @@ export default function App() {
                 <Route path="/faculty/notifications" element={<Notifications />} />
                 <Route path="/admin/notifications" element={<Notifications />} />
                 <Route path="/academic-staff/notifications" element={<Notifications />} />
+
+                {/* Platform guide — one shared page for every portal (/<portal>/guide), backed by
+                    /api/v1/guides/* (PortalGuideApiController). Admins (or any role with the
+                    guides.manage permission) get an edit mode on the same page. */}
+                {['student', 'university', 'faculty', 'academic-staff', 'supervisor', 'data-analysis', 'security', 'admin'].map((p) => (
+                  <Route key={`${p}-guide`} path={`/${p}/guide`} element={<PortalGuide />} />
+                ))}
 
                 {/* Add each converted page here as its own <Route>. It
                     renders inside DashboardLayout's <Outlet/>, with the

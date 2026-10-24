@@ -8,6 +8,8 @@ const COMMON_ACCOUNT_ITEMS = [
   { key: 'meetings', en: 'Meetings', ar: 'الاجتماعات', icon: 'video', built: true },
   { key: 'messages', en: 'Messages', ar: 'الرسائل', icon: 'message', perm: 'messaging.use', built: true },
   { key: 'notifications', en: 'Notifications', ar: 'الإشعارات', icon: 'bell', built: true },
+  // Platform guide: one page per portal (/<portal>/guide) explaining every page and where to find it. Admins edit it.
+  { key: 'guide', en: 'Platform Guide', ar: 'دليل المنصة', icon: 'book-open', built: true },
   { key: 'settings', en: 'Settings', ar: 'الإعدادات', icon: 'settings', built: true },
 ];
 

@@ -54,6 +54,27 @@ function useUserCard(enabled, endpoint) {
   return card;
 }
 
+/** Event the guide page fires once the person has read the latest version (clears the sidebar's "New" tag). */
+export const GUIDE_SEEN_EVENT = 'uip:guide-seen';
+
+/** True when an admin changed this portal's guide since the person last opened it. Best-effort: any failure = no tag. */
+function useGuideHasNew() {
+  const [hasNew, setHasNew] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api.get('/api/v1/guides')
+      .then((json) => {
+        const mine = (json?.data || []).find((g) => g.is_mine);
+        if (alive) setHasNew(!!mine?.has_new);
+      })
+      .catch(() => {});
+    const clear = () => setHasNew(false);
+    window.addEventListener(GUIDE_SEEN_EVENT, clear);
+    return () => { alive = false; window.removeEventListener(GUIDE_SEEN_EVENT, clear); };
+  }, []);
+  return hasNew;
+}
+
 // Shortcuts under "Messages": each opens the messages page on that view (Messages.jsx reads ?view=).
 const MESSAGE_SUBLINKS = [
   { view: 'archived', icon: 'archive', en: 'Archived', ar: 'المحفوظات' },
@@ -83,6 +104,7 @@ export default function Sidebar({ role, user, isOpen, collapsed = false, unread 
   const promo = brand.promo;
   const profileTo = PROFILE_ROUTE[role] || `/${portalPrefix(role)}/settings`;
   const card = useUserCard(true, brand.avatar);
+  const guideHasNew = useGuideHasNew();
   const shownName = (card.names && personName(card.names, locale)) || card.name || displayName(user, locale);
 
   return (
@@ -126,6 +148,9 @@ export default function Sidebar({ role, user, isOpen, collapsed = false, unread 
                 )}
                 {item.key === 'notifications' && unread > 0 && (
                   <span className="sidebar__count">{unread > 9 ? '9+' : unread}</span>
+                )}
+                {item.key === 'guide' && guideHasNew && (
+                  <span className="sidebar__count">{locale === 'ar' ? 'جديد' : 'New'}</span>
                 )}
                 {!item.built && (
                   <span
