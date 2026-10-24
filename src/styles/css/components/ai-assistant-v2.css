@@ -195,3 +195,14 @@ body:has(.ai-panel.is-open) .export-menu { z-index: 720; }
 body:has(.ai-panel.is-open) .modal-overlay { z-index: 730 !important; }
 .ai-conv-menu__export { justify-content: flex-start; }
 .ai-conv-menu__export > svg:last-child { margin-inline-start: auto; opacity: .6; }
+
+/* ---- Theme (background) picker was hidden under the chat ----
+   The header has backdrop-filter, which makes it its own stacking context, so the picker's z-index (30) only counted INSIDE the
+   header — and the chat body, which comes later in the DOM, was painted over it. Lift the whole header above the body. */
+html body .ai-panel__header { position: relative; z-index: 20; }
+html body .ai-panel .ai-wall-pop { z-index: 40; max-width: calc(100vw - 20px); max-height: calc(100dvh - 90px); overflow-y: auto; }
+/* Phones: anchor the picker to the panel (not to the small palette button) so it can never run off either edge of the screen. */
+@media (max-width: 640px) {
+  html body .ai-panel .ai-wall-wrap { position: static; }
+  html body .ai-panel .ai-wall-pop { inset-inline: 10px; inset-block-start: calc(100% + 6px); width: auto; }
+}
