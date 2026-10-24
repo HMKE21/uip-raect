@@ -120,6 +120,11 @@ export function createCallEngine(deps) {
   let noticeTimer = 0;
   let lastLoss = { lost: 0, recv: 0 };
   let makingOffer = false;
+  let resuming = false;       // a page reload is re-joining a live call: polling is paused until the server has re-bound it to this page
+  let resumeWindowUntil = 0;  // right after a reload on either side, stale offers/answers from the old connection may still arrive: tolerate them
+  let needStats = false;      // the peer connection was replaced while active: restart the stats watcher + sender tuning when it connects
+  let rebuilding = false;     // the peer reloaded: my side of the connection is being recreated
+  let resumedStartedAt = 0;   // keeps the call timer running across the reload
   const ignored = new Set(); // call ids I already handled/closed — never ring for them again
 
   const emit = () => { try { onChange && onChange({ ...st }); } catch { /* UI errors must not break the engine */ } };
@@ -449,11 +454,13 @@ export function createCallEngine(deps) {
       if (disconnectTimer) { timers.clearTimeout(disconnectTimer); disconnectTimer = 0; }
       if (restartTimer) { timers.clearTimeout(restartTimer); restartTimer = 0; }
       if (connectTimer) { timers.clearTimeout(connectTimer); connectTimer = 0; }
+      if (needStats && st.phase === 'active') { needStats = false; startStats(conn); tuneVideoSender(conn); }
       const first = st.phase !== 'active';
       if (first) {
         tones.stop();
         tones.blip('connect');
-        st.startedAt = now();
+        st.startedAt = resumedStartedAt || now();
+        resumedStartedAt = 0;
         st.phase = 'active';
         startStats(conn);
         tuneVideoSender(conn);
@@ -656,6 +663,8 @@ export function createCallEngine(deps) {
       } else {
         pendingIce.push(p);
       }
+    } else if (s.kind === 'resume') {
+      await rebuildForPeerReload();
     } else if (s.kind === 'state') {
       if (typeof p.muted === 'boolean' && p.muted !== st.peerMuted) set({ peerMuted: p.muted });
       if (typeof p.cam === 'boolean' && p.cam !== st.peerCam) set({ peerCam: p.cam });
@@ -670,6 +679,145 @@ export function createCallEngine(deps) {
     for (const c of q) {
       try { await conn.addIceCandidate(c); } catch { /* ignore */ }
     }
+  }
+
+  // ------------------------------------------------------------------ surviving a page reload
+
+  /**
+   * The OTHER person reloaded their page: their old peer connection is gone for good (a new page cannot adopt it), so drop mine and
+   * build a fresh one on the SAME microphone/camera. Only the caller makes offers, so the caller sends a new offer right away;
+   * the callee just waits for it. The call itself (server row, timer, mute state) is untouched.
+   */
+  async function rebuildForPeerReload() {
+    if (!st.call || rebuilding || !['connecting', 'active'].includes(st.phase)) return;
+    rebuilding = true;
+    resumeWindowUntil = now() + 20000;
+    try {
+      const old = pc;
+      pc = null;
+      if (old) {
+        old.onicecandidate = old.ontrack = old.onconnectionstatechange = old.oniceconnectionstatechange = null;
+        try { old.close(); } catch { /* ignore */ }
+      }
+      pendingIce = [];
+      makingOffer = false;
+      [disconnectTimer, restartTimer].forEach((h) => h && timers.clearTimeout(h));
+      disconnectTimer = restartTimer = 0;
+      if (statsTimer) { timers.clearInterval(statsTimer); statsTimer = 0; }
+      stallTicks = 0; lastIn = -1; recoveries = 0; frameStall = 0; lastFrames = -1;
+      if (st.phase === 'active') set({ reconnecting: true, quality: 'poor' });
+      needStats = true;
+      const conn = await buildPc();
+      // if the old connection had been carrying only audio+video from localStream, the new one gets the same tracks; re-apply
+      // the current camera/screen/filter choice so the video line sends what it did before
+      if (st.callType === 'video') applyOutgoingVideo().catch(() => {});
+      if (isCaller()) {
+        makingOffer = true;
+        let offer = await conn.createOffer();
+        if (offer && offer.sdp) offer = { type: offer.type, sdp: tuneSdp(offer.sdp, videoMaxBitrate) };
+        if (pc !== conn) return;
+        await conn.setLocalDescription(offer);
+        makingOffer = false;
+        await sendSignal('offer', { type: offer.type, sdp: offer.sdp });
+      }
+      sendState(); // the reloaded page does not know whether I am muted / have my camera on
+    } catch (e) {
+      makingOffer = false;
+      try { console.warn('[call] could not rebuild the connection after the peer reloaded', e && e.message); } catch { /* diagnostics only */ }
+    } finally {
+      rebuilding = false;
+    }
+  }
+
+  /**
+   * MY page was reloaded in the middle of a call. `rec` is what the previous page saved (call id, role, type, peer, timer start,
+   * mute/camera state). Re-acquire the microphone (and camera), ask the server to bind the call to this page, build a fresh peer
+   * connection and tell the other side with a `resume` signal (the caller then also sends the new offer). Returns false and
+   * leaves the engine idle if the call is already over.
+   */
+  async function resume(rec) {
+    if (!rec || !rec.call || !rec.call.id || BUSY_PHASES.includes(st.phase)) return false;
+    const wantVideo = rec.callType === 'video';
+    const token = (attempt += 1);
+    resuming = true;
+    resumeWindowUntil = now() + 20000;
+    lastSignalId = 0;
+    resumedStartedAt = rec.startedAt || 0;
+    set({
+      phase: 'connecting', call: { ...rec.call, status: 'active' }, peer: rec.peer || null, callType: wantVideo ? 'video' : 'audio',
+      notice: null, muted: !!rec.muted, peerMuted: false, minimized: false, reconnecting: true, quality: 'poor', startedAt: 0,
+      noiseOn: rec.noiseOn !== false, camOn: false, peerCam: wantVideo, sharing: false, peerSharing: false,
+    });
+    const giveUp = (notice) => {
+      resuming = false;
+      resumedStartedAt = 0;
+      dropMedia();
+      tones.stop();
+      Object.assign(st, { phase: 'idle', call: null, peer: null, muted: false, reconnecting: false, startedAt: 0, callType: 'audio', camOn: false, peerCam: false });
+      set({ notice });
+      if (notice) noticeTimer = timers.setTimeout(() => { if (st.notice === notice) set({ notice: null }); }, 6000);
+      return false;
+    };
+
+    let stream;
+    try {
+      stream = await getUserMedia({ video: wantVideo, facing: st.facing, noise: st.noiseOn });
+    } catch (e) {
+      // I cannot capture audio any more: leave the call properly so the other person is not left talking to nobody
+      api.post(`${base}/${rec.call.id}/end`, { reason: 'failed' }).catch(() => {});
+      ignored.add(rec.call.id);
+      return giveUp(micNotice(e, wantVideo));
+    }
+    if (token !== attempt) { stopStream(stream); resuming = false; return false; }
+    localStream = stream;
+    adoptStream(stream);
+    try { stream.getAudioTracks().forEach((t) => { t.enabled = !rec.muted; }); } catch { /* ignore */ }
+
+    let data;
+    try {
+      const res = await api.post(`${base}/${rec.call.id}/resume`, { client_id: clientId });
+      data = res && res.data;
+      if (!data) throw new Error('empty');
+    } catch (e) {
+      ignored.add(rec.call.id);
+      return giveUp({ kind: 'ended', name: (rec.peer && rec.peer.name) || '', duration: 0, message: e && e.message });
+    }
+    if (stopped || !st.call || st.call.id !== rec.call.id) { resuming = false; return false; } // hung up / signed out while we waited
+    lastSignalId = Number(data.after_signal_id) || 0;
+    st.call = { ...st.call, ...data, role: rec.call.role };
+    // a video call whose camera was off before the reload resumes with the camera off (no surprise broadcast)
+    const camWasOn = rec.camOn !== false;
+
+    try {
+      await buildPc();
+      if (wantVideo && !camWasOn && camTrack) {
+        try { camTrack.stop(); } catch { /* ignore */ }
+        camTrack = null;
+        set({ camOn: false });
+        await applyOutgoingVideo();
+      } else {
+        set({ camOn: !!camTrack });
+      }
+      startConnectTimer();
+      resuming = false;
+      await sendSignal('resume', {});
+      if (isCaller()) {
+        const conn = pc;
+        makingOffer = true;
+        let offer = await conn.createOffer();
+        if (offer && offer.sdp) offer = { type: offer.type, sdp: tuneSdp(offer.sdp, videoMaxBitrate) };
+        await conn.setLocalDescription(offer);
+        makingOffer = false;
+        await sendSignal('offer', { type: offer.type, sdp: offer.sdp });
+      }
+    } catch {
+      makingOffer = false;
+      resuming = false;
+      if (st.call && st.call.id === rec.call.id) endLocal('failed');
+      return false;
+    }
+    schedule(250);
+    return true;
   }
 
   // ------------------------------------------------------------------ polling
@@ -690,6 +838,7 @@ export function createCallEngine(deps) {
 
   async function pollNow() {
     if (stopped || polling) return;
+    if (resuming) { schedule(300); return; }
     polling = true;
     if (pollTimer) { timers.clearTimeout(pollTimer); pollTimer = 0; }
     try {
@@ -761,7 +910,7 @@ export function createCallEngine(deps) {
             // eslint-disable-next-line no-console
             console.warn('[call] signal failed', s.kind, err && (err.name + ': ' + err.message));
           } catch { /* diagnostics only */ }
-          if (s.kind === 'offer' || s.kind === 'answer') { endLocal('failed'); return; }
+          if ((s.kind === 'offer' || s.kind === 'answer') && now() >= resumeWindowUntil) { endLocal('failed'); return; }
         }
         lastSignalId = Math.max(lastSignalId, s.id);
       }
@@ -1065,7 +1214,7 @@ export function createCallEngine(deps) {
   }
 
   return {
-    start, stop, startCall, accept, decline, hangup, toggleMute, setMinimized, dismissNotice,
+    start, stop, startCall, resume, accept, decline, hangup, toggleMute, setMinimized, dismissNotice,
     toggleCamera, switchCamera, toggleScreenShare, setFilter, setFilterAmount, setNoise,
     pollNow, kick: () => schedule(0), getState: () => ({ ...st }), diagnostics,
   };

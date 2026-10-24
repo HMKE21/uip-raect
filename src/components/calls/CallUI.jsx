@@ -230,8 +230,8 @@ export default function CallUI() {
   const statusText = (() => {
     if (c.phase === 'starting') return t('Starting…', 'جارٍ البدء…');
     if (c.phase === 'outgoing') return t('Calling…', 'جارٍ الاتصال…');
-    if (c.phase === 'connecting') return isVideo ? t('Connecting…', 'جارٍ الاتصال…') : t('Connecting…', 'جارٍ الاتصال بالصوت…');
     if (c.reconnecting) return t('Reconnecting…', 'جارٍ إعادة الاتصال…');
+    if (c.phase === 'connecting') return isVideo ? t('Connecting…', 'جارٍ الاتصال…') : t('Connecting…', 'جارٍ الاتصال بالصوت…');
     return fmtCallDuration(secs);
   })();
 

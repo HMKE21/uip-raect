@@ -30,6 +30,7 @@ const CLIENT_ID = (() => {
   }
 })();
 
+const RESUME_KEY = 'uip.call.resume';
 const NOISE_KEY = 'uip.call.noise';
 const readNoisePref = () => { try { return localStorage.getItem(NOISE_KEY) !== '0'; } catch { return true; } };
 
@@ -275,10 +276,23 @@ export function CallProvider({ children }) {
     const onVisible = () => { if (document.visibilityState === 'visible') engine.kick(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
-    // Best effort: closing the tab mid-call tells the server straight away (otherwise it notices after ~25 s).
+    // Reload vs. close: a reload must NOT hang up. While the call is live (connecting/active) we only remember it in sessionStorage
+    // (survives a reload, vanishes when the tab is closed) and the reloaded page re-joins it; if nobody comes back the server hangs
+    // up by itself after ~25 s. A call that is still ringing out (nobody answered yet) is cancelled right away, as before.
     const leave = () => {
       const s = engine.getState();
-      if (!s.call || !['outgoing', 'connecting', 'active'].includes(s.phase)) return;
+      if (!s.call) return;
+      if (s.phase === 'connecting' || s.phase === 'active') {
+        try {
+          sessionStorage.setItem(RESUME_KEY, JSON.stringify({
+            ts: Date.now(), userId,
+            call: { id: s.call.id, role: s.call.role, type: s.call.type },
+            peer: s.peer, callType: s.callType, startedAt: s.startedAt || 0, muted: !!s.muted, camOn: !!s.camOn, noiseOn: s.noiseOn !== false,
+          }));
+        } catch { /* storage blocked: the call just ends after ~25 s */ }
+        return;
+      }
+      if (s.phase !== 'outgoing') return;
       try {
         const { accessToken } = getTokens();
         fetch(`${BASE}/${s.call.id}/end`, {
@@ -289,11 +303,24 @@ export function CallProvider({ children }) {
       } catch { /* the server's 25 s heartbeat timeout is the fallback */ }
     };
     window.addEventListener('beforeunload', leave);
+    window.addEventListener('pagehide', leave);
+
+    // Re-join the call the previous page left (see above). Deferred a tick so React StrictMode's throw-away first mount never consumes it.
+    const resumeTimer = setTimeout(() => {
+      let rec = null;
+      try {
+        const raw = sessionStorage.getItem(RESUME_KEY);
+        if (raw) { sessionStorage.removeItem(RESUME_KEY); rec = JSON.parse(raw); }
+      } catch { rec = null; }
+      if (rec && rec.call && rec.call.id && String(rec.userId) === String(userId) && Date.now() - Number(rec.ts || 0) < 60000) engine.resume(rec);
+    }, 60);
 
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
+      clearTimeout(resumeTimer);
       window.removeEventListener('beforeunload', leave);
+      window.removeEventListener('pagehide', leave);
       engine.stop();
       engineRef.current = null;
       setState(IDLE);
