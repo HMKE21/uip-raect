@@ -428,20 +428,20 @@ export default function MeetingRoomShell({
               <Icon name={room.screenSharingLocked ? 'lock' : 'screen-share'} size={16} />
             </button>
           )}
-          <button type="button" className="meeting-room__pill" onClick={toggleLocale} title={t('Switch language')} aria-label={t('Switch language')}>
+          <button type="button" className="meeting-room__pill meeting-room__hide-xs" onClick={toggleLocale} title={t('Switch language')} aria-label={t('Switch language')}>
             <Icon name="globe" size={15} />
             <span>{locale === 'ar' ? 'EN' : 'عربي'}</span>
           </button>
           <button
             type="button"
-            className="meeting-room__icon-btn"
+            className="meeting-room__icon-btn meeting-room__hide-xs"
             onClick={toggleRoomTheme}
             title={roomTheme === 'light' ? t('Dark mode') : t('Light mode')}
             aria-label={roomTheme === 'light' ? t('Dark mode') : t('Light mode')}
           >
             <Icon name={roomTheme === 'light' ? 'moon' : 'sun'} size={16} />
           </button>
-          <button type="button" className={`meeting-room__icon-btn ${diagOpen ? 'is-active' : ''}`} onClick={() => setDiagOpen((v) => !v)} title={t('Diagnostics')} aria-label={t('Diagnostics')}>
+          <button type="button" className={`meeting-room__icon-btn meeting-room__hide-xs ${diagOpen ? 'is-active' : ''}`} onClick={() => setDiagOpen((v) => !v)} title={t('Diagnostics')} aria-label={t('Diagnostics')}>
             <Icon name="pulse" size={16} />
           </button>
         </div>
@@ -732,6 +732,15 @@ export default function MeetingRoomShell({
                     <Icon name="record-dot" size={16} style={room.activeRecording ? { color: '#ef4444' } : undefined} /><span className="meeting-room__menu-text">{t('Recordings')}</span>
                   </button>
                   <div className="meeting-room__menu-sep" role="separator" />
+                  <button type="button" role="menuitem" className="meeting-room__menu-item meeting-room__show-xs" onClick={() => { toggleLocale(); setMoreOpen(false); }}>
+                    <Icon name="globe" size={16} /><span className="meeting-room__menu-text">{t('Switch language')}</span>
+                  </button>
+                  <button type="button" role="menuitem" className="meeting-room__menu-item meeting-room__show-xs" onClick={() => { toggleRoomTheme(); setMoreOpen(false); }}>
+                    <Icon name={roomTheme === 'light' ? 'moon' : 'sun'} size={16} /><span className="meeting-room__menu-text">{roomTheme === 'light' ? t('Dark mode') : t('Light mode')}</span>
+                  </button>
+                  <button type="button" role="menuitem" className="meeting-room__menu-item meeting-room__show-xs" onClick={() => { setDiagOpen(true); setMoreOpen(false); }}>
+                    <Icon name="pulse" size={16} /><span className="meeting-room__menu-text">{t('Diagnostics')}</span>
+                  </button>
                   <button type="button" role="menuitemcheckbox" aria-checked={!!room.noiseOn} className="meeting-room__menu-item" onClick={room.toggleNoise}>
                     <Icon name="mic" size={16} /><span className="meeting-room__menu-text">{t('Noise isolation')}</span>
                     <span className={`meeting-room__switch ${room.noiseOn ? 'is-on' : ''}`} aria-hidden="true"><i /></span>

@@ -48,10 +48,10 @@ export default function Landing() {
   }
 
   const stats = [
-    [liveStats?.active_students, t('active students', 'طالب نشط')],
-    [liveStats?.partner_universities, t('partner universities', 'جامعة شريكة')],
-    [liveStats?.published_projects, t('published projects', 'مشروع منشور')],
-    [liveStats?.projects_scored, t('projects scored by AI', 'مشروع اتقيّم بالذكاء الاصطناعي')],
+    ['users', liveStats?.active_students, t('active students', 'طالب نشط')],
+    ['building', liveStats?.partner_universities, t('partner universities', 'جامعة شريكة')],
+    ['layers', liveStats?.published_projects, t('published projects', 'مشروع منشور')],
+    ['sparkles', liveStats?.projects_scored, t('projects scored by AI', 'مشروع اتقيّم بالذكاء الاصطناعي')],
   ];
 
   const steps = [
@@ -170,10 +170,13 @@ export default function Landing() {
 
         <div className="lp4-shell">
           <ul className="lp4-stats">
-            {stats.map(([num, label]) => (
+            {stats.map(([ic, num, label]) => (
               <li key={label}>
-                <strong>{num == null ? '—' : <CountUp value={num} locale={locale} />}</strong>
-                <span>{label}</span>
+                <span className="lp4-stats__ico"><Icon name={ic} size={20} /></span>
+                <div>
+                  <strong>{num == null ? '—' : <CountUp value={num} locale="en" />}</strong>
+                  <span>{label}</span>
+                </div>
               </li>
             ))}
           </ul>

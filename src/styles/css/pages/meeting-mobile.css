@@ -1,0 +1,115 @@
+/* =====================================================================
+   meeting-mobile.css — responsive / polish pass for the live meeting room (loaded LAST, after meeting-chat-pro.css).
+   Fixes: cramped top bar (title + timer squashed), the emoji bar stuck under every chat bubble on touch screens,
+   overlapping banners / buttons while someone presents, oversized avatars in the thumbnail strip, blank avatar placeholders.
+   ===================================================================== */
+
+/* ---- top bar: the title always gets the space, the timer never wraps ---- */
+.meeting-room__title { flex: 1 1 auto; }
+.meeting-room__title-text { flex: 1 1 auto; }
+.meeting-room__title-text span { white-space: nowrap; }
+.meeting-room__topbar-end { flex: 0 0 auto; }
+.meeting-room__show-xs { display: none; }
+@media (max-width: 640px) {
+  .meeting-room__hide-xs { display: none !important; }
+  .meeting-room__topbar { padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 4px; gap: 8px; }
+  .meeting-room__topbar-end { gap: 6px; }
+  .meeting-room__pill, .meeting-room__icon-btn { height: 36px; }
+  .meeting-room__pill { padding: 0 12px; }
+  .meeting-room__title { gap: 8px; }
+  .meeting-room__title-text strong { font-size: 14px; }
+  .meeting-room__alerts { top: calc(52px + env(safe-area-inset-top, 0px)); }
+  .meeting-room__show-xs { display: flex; }
+}
+
+/* ---- alerts: never wider than the screen, buttons wrap under the text ---- */
+.meeting-room__alert { flex-wrap: wrap; }
+.meeting-room__alert > span { min-width: 0; overflow-wrap: anywhere; }
+@media (max-width: 560px) {
+  .meeting-room__alert { padding: 9px 12px; font-size: 12.5px; border-radius: 12px; width: 100%; box-sizing: border-box; }
+}
+
+/* ---- stage ---- */
+.meeting-tile__avatar { max-width: 40%; aspect-ratio: 1; height: auto !important; }
+.meeting-room__strip .meeting-tile__avatar { width: 52px !important; height: 52px !important; max-width: none; font-size: 21px !important; }
+.meeting-room__strip .meeting-tile__nameplate { height: 24px; font-size: 11.5px; bottom: 6px; inset-inline-start: 6px; max-width: calc(100% - 12px); padding: 0 8px 0 4px; }
+.meeting-room__strip .meeting-tile__mic { width: 18px; height: 18px; }
+.meeting-room__strip .meeting-tile__mic svg { width: 11px; height: 11px; }
+.meeting-room__strip .meeting-tile__badges { top: 6px; inset-inline-start: 6px; }
+.meeting-room__strip .meeting-tile__badge { height: 22px; padding: 0 7px; }
+.meeting-room__strip .meeting-tile__avatar-wrap { padding-bottom: 14px; }
+.meeting-tile.is-large .meeting-tile__badge.is-accent { display: none; } /* the presenter banner already says it */
+.meeting-tile__name { min-width: 0; }
+
+@media (max-width: 900px) {
+  .meeting-room__strip { gap: 8px; scroll-snap-type: x proximity; padding-bottom: 2px; }
+  .meeting-room__strip .meeting-tile-wrap { scroll-snap-align: start; flex: 0 0 auto; }
+}
+@media (max-width: 768px) {
+  .meeting-room__presenter-banner { top: 8px; max-width: calc(100% - 92px); overflow: hidden; text-overflow: ellipsis; padding: 5px 12px; font-size: 12px; }
+  .meeting-rc__bar { inset-block-end: 46px; }
+  .meeting-tile__nameplate { height: 28px; font-size: 12px; bottom: 8px; inset-inline-start: 8px; }
+  .meeting-tile__badges { top: 8px; inset-inline-start: 8px; }
+  .meeting-tile__actions { top: 6px; inset-inline-end: 6px; }
+  .meeting-room__body { padding: 6px 8px 0; }
+  /* 1-2 people: stack full-width tiles; 3+: two columns, last odd tile spans the row */
+  .meeting-room__stage.is-grid { overflow-y: auto; }
+  .meeting-room__stage.is-grid .meeting-tile-wrap:last-of-type:nth-child(odd):not(:first-child) { grid-column: 1 / -1; }
+}
+@media (max-width: 420px) {
+  .meeting-room__stage.is-grid:has(.meeting-tile-wrap:nth-child(7)) { --m-cols: 2; grid-auto-rows: minmax(120px, 1fr); }
+}
+
+/* ---- control dock: respect the home-indicator, comfortable 44px+ targets ---- */
+@media (max-width: 768px) {
+  .meeting-room__controls { padding: 8px 8px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .meeting-room__dock { border-radius: 26px; }
+  .meeting-room__dock-ico { min-width: 36px; }
+}
+
+/* ---- side panels become proper full-screen sheets on phones ---- */
+@media (max-width: 820px) {
+  .meeting-room.has-panel .meeting-room__body { padding: 0; }
+  .meeting-chat-panel, .meeting-participants-panel, .meeting-files-panel, .meeting-notes-panel, .meeting-polls-panel, .meeting-recordings-panel {
+    inset: 0 0 0 0 !important; border-radius: 0 !important; border-inline: 0 !important; border-block-start: 0 !important;
+    animation: meeting-sheet-in 180ms ease-out;
+  }
+  .meeting-chat-panel__header { padding-top: calc(12px + env(safe-area-inset-top, 0px)); }
+  .meeting-chat-panel__list { padding: 12px 10px 8px; }
+  .meeting-chat-panel__compose { padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
+  .meeting-chat-panel__field textarea { font-size: 16px; } /* >=16px stops iOS from zooming the page when the field is focused */
+  .meeting-chat-panel__to select { font-size: 14px; }
+  .meeting-chat-msg__col { max-width: calc(100% - 38px); }
+  .meeting-chat-msg.is-mine .meeting-chat-msg__col { max-width: 88%; }
+  .meeting-chat-att.is-image img, .meeting-chat-att.is-image video { max-height: 200px; }
+  .meeting-participants-panel__row { padding: 10px 6px; }
+  .meeting-participants-panel__actions button { width: 34px; height: 34px; }
+}
+@keyframes meeting-sheet-in { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+
+/* ---- chat: avatar placeholder of grouped messages is invisible (it used to show as a blank white disc) ---- */
+.meeting-chat-msg__avatar:empty { background: transparent; box-shadow: none; }
+
+/* ---- chat: emoji bar only on hover (mouse) or on tap (touch) — never permanently under every bubble ---- */
+@media (hover: none) {
+  .meeting-chat-msg__quick-react {
+    position: absolute; bottom: calc(100% + 2px); padding: 3px 5px; border-radius: 999px; background: var(--mr-surface-2);
+    border: 1px solid var(--mr-line-strong); box-shadow: 0 6px 18px var(--mr-shadow); opacity: 0; pointer-events: none; transform: translateY(4px);
+  }
+  .meeting-chat-msg__bubble-wrap:focus-within .meeting-chat-msg__quick-react { opacity: 1; pointer-events: auto; transform: none; }
+  .meeting-chat-msg__quick-react button { font-size: 20px; padding: 6px; }
+  .meeting-chat-msg__bubble-wrap { outline: none; -webkit-tap-highlight-color: transparent; }
+}
+
+/* ---- popovers on phones: bottom sheet above the dock ---- */
+@media (max-width: 768px) {
+  .meeting-room__menu, .meeting-room__reactions-popover { bottom: calc(86px + env(safe-area-inset-bottom, 0px)); max-height: 60dvh; overflow-y: auto; }
+  .meeting-room__menu-item { min-height: 44px; }
+  .meeting-room__fx { max-width: calc(100vw - 24px); }
+}
+
+/* ---- leave / invite dialogs ---- */
+@media (max-width: 480px) {
+  .meeting-leave, .meeting-invite { align-items: flex-end; padding: 0; }
+  .meeting-leave__box, .meeting-invite__card { width: 100%; border-radius: 22px 22px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
+}

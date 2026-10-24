@@ -96,16 +96,15 @@
 .lp4-icon--amber { color: var(--lp4-amber); background: rgba(232, 161, 43, .15); }
 
 /* Stats */
-.lp4-stats { list-style: none; margin: clamp(32px, 5vw, 56px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 18px; }
-.lp4-stats li { padding: 22px 26px; border-inline-end: 1px solid var(--border-subtle); }
-.lp4-stats li:last-child { border-inline-end: 0; }
-.lp4-stats strong { display: block; font-size: 1.9rem; font-weight: 800; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.lp4-stats span { font-size: .9rem; color: var(--text-secondary); }
-@media (max-width: 760px) {
-  .lp4-stats { grid-template-columns: repeat(2, 1fr); }
-  .lp4-stats li:nth-child(2) { border-inline-end: 0; }
-  .lp4-stats li:nth-child(-n+2) { border-bottom: 1px solid var(--border-subtle); }
-}
+.lp4-stats { list-style: none; margin: clamp(32px, 5vw, 56px) 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.lp4-stats li { display: flex; align-items: center; gap: 16px; padding: 20px 22px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 18px; transition: border-color .2s, transform .2s; }
+.lp4-stats li:hover { border-color: rgba(var(--color-primary-rgb), .4); transform: translateY(-2px); }
+.lp4-stats__ico { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0; color: #fff; background: var(--lp4-grad); box-shadow: 0 8px 18px -8px rgba(var(--color-primary-rgb), .7); }
+.lp4-stats div { min-width: 0; }
+.lp4-stats strong { display: block; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 2rem; font-weight: 800; line-height: 1.1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.lp4-stats div > span { display: block; margin-top: 4px; font-size: .88rem; line-height: 1.35; color: var(--text-secondary); }
+@media (max-width: 980px) { .lp4-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .lp4-stats li { padding: 16px; gap: 12px; } .lp4-stats__ico { width: 40px; height: 40px; } .lp4-stats strong { font-size: 1.6rem; } }
 
 /* ---- Section heads ------------------------------------------------------- */
 .lp4-section { padding-block: clamp(48px, 7vw, 96px); scroll-margin-top: 72px; }

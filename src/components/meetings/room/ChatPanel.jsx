@@ -271,7 +271,7 @@ export default function ChatPanel({
                   </div>
                 )}
 
-                <div className="meeting-chat-msg__bubble-wrap">
+                <div className="meeting-chat-msg__bubble-wrap" tabIndex={-1}>
                   {(m.body || !m.attachment) && <div className="meeting-chat-msg__body" dir="auto">{m.body}</div>}
                   {m.attachment && <ChatAttachment file={m.attachment} onOpen={() => setPreviewFile(m.attachment)} t={t} />}
                   <div className="meeting-chat-msg__quick-react" role="group" aria-label={t('React')}>
