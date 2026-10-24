@@ -221,7 +221,7 @@ export default function MyMeetings() {
   const loadInvitations = useCallback(() => {
     setInvitationsLoading(true);
     return invitationsApi.mine()
-      .then((json) => setInvitations(json.data || []))
+      .then((json) => setInvitations((json.data || []).filter((inv) => inv && inv.meeting?.uuid))) // an invitation whose meeting was deleted has nothing to open or answer
       .catch((err) => setInvitationsError(errorMessage(err)))
       .finally(() => setInvitationsLoading(false));
   }, []);

@@ -77,6 +77,7 @@ const AdminAnalyticsDashboard = lazy(() => import('./pages/admin/AdminAnalyticsD
 const AdminStatistics = lazy(() => import('./pages/admin/AdminStatistics'));
 const AdminMobile = lazy(() => import('./pages/admin/AdminMobile'));
 const AdminMobileTokenDetail = lazy(() => import('./pages/admin/AdminMobileTokenDetail'));
+const AdminMeetingControlDetail = lazy(() => import('./pages/admin/AdminMeetingControlDetail'));
 const AdminMeetingsControl = lazy(() => import('./pages/admin/AdminMeetingsControl'));
 const AdminMeetingsMonitoring = lazy(() => import('./pages/admin/AdminMeetingsMonitoring'));
 const AdminPlatformPolicy = lazy(() => import('./pages/admin/AdminPlatformPolicy'));
@@ -529,6 +530,7 @@ export default function App() {
                 <Route path="/admin/mobile/:id" element={<AdminMobileTokenDetail />} />
                 <Route path="/admin/platform-policy" element={<AdminPlatformPolicy />} />
                 <Route path="/admin/meetings-control" element={<AdminMeetingsControl />} />
+                <Route path="/admin/meetings-control/:uuid" element={<AdminMeetingControlDetail />} />
                 <Route path="/admin/meetings/monitoring" element={<AdminMeetingsMonitoring />} />
                 <Route path="/admin/attendance-settings" element={<AdminAttendanceSettings />} />
                 <Route path="/admin/grading-scale" element={<AdminGradingScale />} />

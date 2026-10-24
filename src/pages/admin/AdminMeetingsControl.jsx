@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Navigate, useSearchParams } from 'react-router-dom';
 import AdminPage from '../../components/admin/AdminPage';
 import { useL } from '../../components/admin/meetingsControl/shared';
 import OverviewTab from '../../components/admin/meetingsControl/OverviewTab';
@@ -18,7 +18,7 @@ export default function AdminMeetingsControl() {
   const { L } = useL();
   const [params, setParams] = useSearchParams();
   const [tab, setTab] = useState(params.get('tab') || 'overview');
-  const meeting = params.get('meeting');
+  const meeting = params.get('meeting'); // old links (?meeting=<uuid>) now land on the meeting's own page
 
   const TABS = [
     ['overview', L('Overview', 'نظرة عامة'), 'dashboard'],
@@ -32,16 +32,11 @@ export default function AdminMeetingsControl() {
   function go(next) {
     setTab(next);
     const p = new URLSearchParams(params);
-    p.set('tab', next); p.delete('meeting');
+    p.set('tab', next);
     setParams(p, { replace: true });
   }
-  function setOpenMeeting(uuid) {
-    const p = new URLSearchParams(params);
-    p.set('tab', 'meetings');
-    if (uuid) p.set('meeting', uuid); else p.delete('meeting');
-    setParams(p, { replace: true });
-  }
-  useEffect(() => { if (meeting && tab !== 'meetings') setTab('meetings'); }, [meeting, tab]);
+
+  if (meeting) return <Navigate to={`/admin/meetings-control/${meeting}`} replace />;
 
   return (
     <AdminPage icon="video" title={L('Meetings Control', 'التحكم في الاجتماعات')}
@@ -53,7 +48,7 @@ export default function AdminMeetingsControl() {
       </div>
       <div role="tabpanel">
         {tab === 'overview' && <OverviewTab onGoto={go} />}
-        {tab === 'meetings' && <MeetingsTab initialUuid={meeting} onOpenChange={setOpenMeeting} />}
+        {tab === 'meetings' && <MeetingsTab />}
         {tab === 'features' && <SettingsTab key="features" groups={['system', 'features']} />}
         {tab === 'rules' && <SettingsTab key="rules" groups={['creation', 'limits', 'access', 'defaults', 'recording']} />}
         {tab === 'users' && <UsersTab />}

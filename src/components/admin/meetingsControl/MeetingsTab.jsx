@@ -1,9 +1,9 @@
+import { useNavigate } from 'react-router-dom';
 import { useCallback, useEffect, useState } from 'react';
 import { api, errorMessage } from '../../../api/client';
 import Icon from '../../Icon';
 import { ConfirmModal, Pager } from '../adminUi';
 import { EmptyState, ErrorState, Skeleton } from '../AdminPage';
-import MeetingDetail from './MeetingDetail';
 import { BASE, StatusPill, fmtDate, useL } from './shared';
 
 const PER = 20;
@@ -22,7 +22,8 @@ const STATUS_FILTERS = [
  * Every meeting on the platform (all portals). Filters + paging here; clicking a row opens the
  * full control panel for that meeting (MeetingDetail).
  */
-export default function MeetingsTab({ initialUuid, onOpenChange }) {
+export default function MeetingsTab() {
+  const navigate = useNavigate();
   const { ar, L } = useL();
   const [status, setStatus] = useState('');
   const [type, setType] = useState('');
@@ -36,7 +37,6 @@ export default function MeetingsTab({ initialUuid, onOpenChange }) {
   const [rows, setRows] = useState(null);
   const [total, setTotal] = useState(0);
   const [err, setErr] = useState(null);
-  const [openUuid, setOpenUuid] = useState(initialUuid || null);
   const [quick, setQuick] = useState(null); // { row, kind } confirm modal for the inline end button
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(null);
@@ -60,8 +60,7 @@ export default function MeetingsTab({ initialUuid, onOpenChange }) {
     return () => clearInterval(h);
   }, [status, load]);
 
-  const open = (uuid) => { setOpenUuid(uuid); onOpenChange?.(uuid); };
-  const close = () => { setOpenUuid(null); onOpenChange?.(null); load(); };
+  const open = (uuid) => navigate(`/admin/meetings-control/${uuid}`); // each meeting has its own page
 
   async function quickEnd() {
     setBusy(true);
@@ -146,7 +145,6 @@ export default function MeetingsTab({ initialUuid, onOpenChange }) {
         message={L(`“${quick.row.title}” will be ended for everyone now.`, `اجتماع “${quick.row.title}” هيتنهي للجميع الآن.`)}
         confirmLabel={L('End meeting', 'إنهاء الاجتماع')} onConfirm={quickEnd} onClose={() => setQuick(null)} />}
 
-      {openUuid && <MeetingDetail uuid={openUuid} onClose={close} />}
     </div>
   );
 }

@@ -71,7 +71,12 @@
 .mtc-row-actions .btn + .btn { margin-inline-start: 6px; }
 .mtc-row-deleted { opacity: .7; }
 
-/* meeting drawer */
+/* one meeting = its own page (was a side drawer) */
+.mtc-page { display: flex; flex-direction: column; gap: 14px; width: 100%; max-width: 1200px; margin-inline: auto; min-width: 0; }
+.mtc-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
+.mtc-page .adm-table td { white-space: normal; }
+.mtc-page .mtc-block { min-width: 0; }
+/* legacy drawer rules (unused) */
 .mtc-drawer-overlay { position: fixed; inset: 0; z-index: 1200; background: rgba(8, 12, 24, .5); display: flex; justify-content: flex-end; }
 .mtc-drawer { width: min(860px, 100%); height: 100%; overflow-y: auto; background: var(--bg-canvas); padding: 20px; display: flex; flex-direction: column; gap: 14px; box-shadow: -12px 0 40px rgba(0,0,0,.25); }
 [dir="rtl"] .mtc-drawer-overlay { justify-content: flex-start; }
@@ -103,6 +108,6 @@
 }
 
 /* people table inside the drawer: let the action buttons wrap instead of forcing a horizontal scroll */
-.mtc-drawer .adm-table td { white-space: normal; }
 .mtc-person-actions { min-width: 230px; max-width: 340px; }
+@media (max-width: 768px) { .mtc-person-actions { min-width: 0; max-width: none; } .mtc-page { gap: 12px; } }
 .mtc-person-actions .btn { height: 30px; padding-inline: 9px; }

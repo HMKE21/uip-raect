@@ -18,7 +18,7 @@ const CONN_TONE = { connected: 'badge-success', connecting: 'badge-warning', rec
 const toLocalInput = (v) => (v ? String(v).slice(0, 16) : '');
 
 /**
- * Full control panel for ONE meeting (admin). Everything here calls
+ * Full control PAGE for ONE meeting (admin) — opens on its own route /admin/meetings-control/:uuid (AdminMeetingControlDetail). Everything here calls
  * /api/v1/admin/meetings/control/meetings/{uuid}/…  Chat text, notes and recording/file contents are
  * deliberately NOT available (privacy rule of the platform) — admins see metadata and can delete.
  */
@@ -70,11 +70,9 @@ export default function MeetingDetail({ uuid, onClose }) {
 
   if (loadErr) {
     return (
-      <div className="mtc-drawer-overlay" onClick={onClose}>
-        <aside className="mtc-drawer" onClick={(e) => e.stopPropagation()}>
-          <div className="st-alert st-alert--danger mtc-banner"><Icon name="alert-triangle" size={16} /><span>{loadErr}</span></div>
-          <button type="button" className="btn btn-outline btn-sm" onClick={onClose}>{L('Close', 'إغلاق')}</button>
-        </aside>
+      <div className="mtc-page">
+        <div className="st-alert st-alert--danger mtc-banner"><Icon name="alert-triangle" size={16} /><span>{loadErr}</span></div>
+        <button type="button" className="btn btn-outline btn-sm mtc-back" onClick={onClose}><Icon name={ar ? 'arrow-right' : 'arrow-left'} size={14} /> {L('Back to meetings', 'الرجوع للاجتماعات')}</button>
       </div>
     );
   }
@@ -129,14 +127,13 @@ export default function MeetingDetail({ uuid, onClose }) {
   }
 
   return (
-    <div className="mtc-drawer-overlay" onClick={onClose}>
-      <aside className="mtc-drawer" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+    <div className="mtc-page">
+        <button type="button" className="btn btn-outline btn-sm mtc-back" onClick={onClose}><Icon name={ar ? 'arrow-right' : 'arrow-left'} size={14} /> {L('Back to meetings', 'الرجوع للاجتماعات')}</button>
         <header className="mtc-drawer__head">
           <div>
             <h2 className="mtc-drawer__title">{m ? m.title : '…'}</h2>
             {m && <div className="mtc-drawer__sub"><StatusPill status={m.status} deleted={deleted} /> <small className="mtc-muted" dir="ltr">{m.meeting_code} · {m.uuid}</small></div>}
           </div>
-          <button type="button" className="btn btn-outline btn-sm" onClick={onClose} aria-label={L('Close', 'إغلاق')}><Icon name="x" size={14} /></button>
         </header>
 
         {banner}
@@ -292,7 +289,6 @@ export default function MeetingDetail({ uuid, onClose }) {
         )}
 
         {confirm && <ConfirmModal danger={confirm.danger} title={confirm.title} message={confirm.message} confirmLabel={confirm.label} onConfirm={runConfirmed} onClose={() => setConfirm(null)} />}
-      </aside>
     </div>
   );
 }
