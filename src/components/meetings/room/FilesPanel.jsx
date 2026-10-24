@@ -118,7 +118,7 @@ export default function FilesPanel({ files, myKey, isManager, isOpen, onClose, o
         })}
       </div>
 
-      {previewFile && <MeetingFilePreview file={previewFile} onClose={() => setPreviewFile(null)} />}
+      {previewFile && <MeetingFilePreview file={previewFile} files={files} onClose={() => setPreviewFile(null)} />}
 
       <div className="meeting-chat-panel__compose">
         {uploadError && <p className="form-error" style={{ margin: '0 0 6px' }}>{uploadError}</p>}

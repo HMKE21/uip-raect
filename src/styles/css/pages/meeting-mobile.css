@@ -113,3 +113,8 @@
   .meeting-leave, .meeting-invite { align-items: flex-end; padding: 0; }
   .meeting-leave__box, .meeting-invite__card { width: 100%; border-radius: 22px 22px 0 0; padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px)); }
 }
+
+/* File cards in the meeting chat: extension badge + the shared FileViewer is full-screen on phones */
+.meeting-chat-att__ext { font-size: 10.5px; font-weight: 800; letter-spacing: .02em; text-transform: uppercase; }
+.meeting-chat-att.is-file { min-width: 0; max-width: min(100%, 320px); }
+.meeting-chat-att__name { max-width: 100%; }
