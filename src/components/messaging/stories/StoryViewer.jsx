@@ -7,6 +7,8 @@ import { useBackLayer } from '../../../lib/backStack';
 import Face from './Face';
 import { API, bgCss, ago, endsIn, slideMs, mediaUrl } from './storyUtils';
 
+// bare U+2764 renders as a black text glyph; append the emoji variation selector so it shows as the coloured heart
+const emo = (r) => (r ? String(r).replace(/\u2764(?!\uFE0F)/g, '\u2764\uFE0F') : r);
 const startIndex = (g) => (g && !g.is_mine ? g.first_unseen || 0 : 0);
 
 /**
@@ -373,7 +375,7 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
               <button type="button" className="sv__views" onClick={openViewers}>
                 <Icon name="eye" size={18} />
                 <span>{story.views_count || 0}</span>
-                {story.reactions_count > 0 && <span className="sv__views-react">❤ {story.reactions_count}</span>}
+                {story.reactions_count > 0 && <span className="sv__views-react">{emo('❤')} {story.reactions_count}</span>}
                 <small>{t('Viewers', 'المشاهدين')}</small>
               </button>
               <button type="button" className="sv__add" onClick={onAdd} aria-label={t('Add status', 'أضف استوري')}><Icon name="plus" size={20} /></button>
@@ -399,7 +401,7 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
                   <button type="button" className="sv__send" disabled={sending} onClick={sendReply} aria-label={t('Send', 'إرسال')}><Icon name="send" size={18} /></button>
                 ) : (
                   <button type="button" className={`sv__heart${story.my_reaction ? ' is-on' : ''}`} onClick={() => setPickReact((p) => !p)} aria-label={t('React', 'تفاعل')} aria-expanded={pickReact}>
-                    {story.my_reaction ? <span aria-hidden="true">{story.my_reaction}</span> : <Icon name="heart" size={20} />}
+                    {story.my_reaction ? <span aria-hidden="true">{emo(story.my_reaction)}</span> : <Icon name="heart" size={20} />}
                   </button>
                 )}
               </div>
@@ -408,7 +410,7 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
             <div className="sv__reply">
               <p className="sv__off">{t('Replies are turned off for this story', 'الرد مقفول على الاستوري دي')}</p>
               <button type="button" className={`sv__heart${story.my_reaction ? ' is-on' : ''}`} onClick={() => setPickReact((p) => !p)} aria-label={t('React', 'تفاعل')}>
-                {story.my_reaction ? <span aria-hidden="true">{story.my_reaction}</span> : <Icon name="heart" size={20} />}
+                {story.my_reaction ? <span aria-hidden="true">{emo(story.my_reaction)}</span> : <Icon name="heart" size={20} />}
               </button>
               {pickReact && (
                 <div className="sv__reacts sv__reacts--float" role="group">
@@ -454,7 +456,7 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
                   <div className="sv__viewer" key={v.id}>
                     <Face name={v.full_name} src={v.avatar_path} />
                     <div><strong>{v.full_name}</strong><small>{ago(v.viewed_at, ar)}</small></div>
-                    {v.reaction && <span className="sv__viewer-react" aria-hidden="true">{v.reaction}</span>}
+                    {v.reaction && <span className="sv__viewer-react" aria-hidden="true">{emo(v.reaction)}</span>}
                   </div>
                 ))}
                 {!sheet.loading && !sheet.receipts_off && sheet.hidden_count > 0 && sheet.viewers?.length > 0 && (

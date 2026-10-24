@@ -206,3 +206,14 @@ html body .ai-panel .ai-wall-pop { z-index: 40; max-width: calc(100vw - 20px); m
   html body .ai-panel .ai-wall-wrap { position: static; }
   html body .ai-panel .ai-wall-pop { inset-inline: 10px; inset-block-start: calc(100% + 6px); width: auto; }
 }
+
+
+/* FIX: wallpaper picker was anchored to the small palette button, so in the narrow laptop panel it ran past the panel edge
+   (first column + title clipped by the panel's overflow:hidden). Anchor it to the header (= panel width) at every size and
+   keep it inside the panel on whichever side the button is. */
+html body .ai-panel .ai-wall-wrap { position: static; }
+html body .ai-panel .ai-wall-pop {
+  inset-block-start: calc(100% + 6px); inset-inline-start: auto; inset-inline-end: 10px;
+  width: 252px; max-width: calc(100% - 20px); box-sizing: border-box;
+  max-height: calc(100dvh - 110px); overflow-y: auto;
+}

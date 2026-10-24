@@ -267,3 +267,11 @@
   .sv, .sv__sheet, .sv__sheet-back, .sv__reacts, .sv__toast, .sc, .st-skel, .st-ring { animation: none !important; transition: none !important; }
   .sv__burst { animation-duration: .01s; }
 }
+
+
+/* FIX: a bare "\2764" (no emoji variation selector) renders as a monochrome text glyph in the current text colour (black on the
+   white viewers sheet). Force the colour-emoji font for every reaction glyph. */
+.sv__viewer-react, .sv__views-react, .sv__heart span, .sv__reacts button {
+  font-family: "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", "Twemoji Mozilla", sans-serif;
+  font-variant-emoji: emoji;
+}
