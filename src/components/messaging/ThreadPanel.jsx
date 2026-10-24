@@ -1,5 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
+import { api, errorMessage } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
+import { portalPrefix } from '../../config/navConfig';
+import { publicOrigin } from '../../config/siteUrl';
 import Icon from '../Icon';
 import VideoPlayer from '../VideoPlayer';
 import ChatFile from './ChatFile';
@@ -199,6 +204,7 @@ function FloatingPanel({ anchorRef, onClose, className, children }) {
 
 function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit }) {
   const t = useT();
+  const navigate = useNavigate();
   const [showReactPicker, setShowReactPicker] = useState(false);
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -297,6 +303,8 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
     && m.attachments.every((a) => a.kind === 'image' || (a.kind === 'video' && !isVoiceAttachment(a)));
   let isMedia = false;
   let body = null;
+  const gcm = typeof m.body === 'string' ? m.body.match(/^(📹|📞)([^\n]*)\n\S*\/join\/([A-Za-z0-9_-]+)\s*$/) : null;
+  const groupCall = gcm ? { video: gcm[1] === '📹', head: gcm[1] + gcm[2], token: gcm[3] } : null;
   if (m.message_type === 'call' && m.metadata) {
     body = <CallBubble m={m} myUserId={myUserId} onCallBack={onCallBack} canCall={!!onCallBack} />;
   } else if (m.message_type === 'poll' && m.metadata) {
@@ -330,8 +338,16 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
             <MsgIcon name="forward" size={11} /> {t('Forwarded', 'معاد توجيهها')}
           </div>
         )}
-        {m.body && !captioned ? <div>{renderBody(m.body, others)}</div> : null}
-        {m.body && !captioned && !m.pending && firstUrl(m.body) ? <LinkCard url={firstUrl(m.body)} ar={t('a', 'b') === 'b'} /> : null}
+        {groupCall ? (
+          <div className="msg-group-call">
+            <div className="msg-group-call__head">{groupCall.head}</div>
+            <button type="button" className="msg-group-call__join" onClick={() => navigate(`/join/${groupCall.token}`)}>
+              <Icon name={groupCall.video ? 'video' : 'phone'} size={16} /> {t('Join call', 'انضم للمكالمة')}
+            </button>
+          </div>
+        ) : null}
+        {m.body && !captioned && !groupCall ? <div>{renderBody(m.body, others)}</div> : null}
+        {m.body && !captioned && !groupCall && !m.pending && firstUrl(m.body) ? <LinkCard url={firstUrl(m.body)} ar={t('a', 'b') === 'b'} /> : null}
         {m.attachments && m.attachments.length > 0 && (
           m.pending || m.failed
             ? <PendingAttachments attachments={m.attachments} pct={m.upload_progress || 0} uploading={!!m.pending} />
@@ -873,6 +889,9 @@ export default function ThreadPanel({
 }) {
   const [text, setText] = useState('');
   const call = useCall(); // before the `if (!conversation)` early return below (hook order)
+  const navigate = useNavigate();
+  const { user: authUser } = useAuth();
+  const [groupCallBusy, setGroupCallBusy] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -1029,6 +1048,40 @@ export default function ThreadPanel({
     call.startCall(conversation.id, { id: conversation.peer_id || others[0]?.id || null, name: peerLabel(conversation), avatar: peerDeleted ? null : others[0]?.avatar_path }, { video: video === true && !!call.videoEnabled });
   };
   const callBack = canCall && !callBusy ? startCall : undefined;
+  // Group voice / video calls ride on the meetings system: an instant meeting (no waiting room, no guests) is created for the
+  // group, every member is invited, a "join" card is posted in the chat, and the starter goes straight into the room.
+  const canGroupCall = !!conversation && !!conversation.is_group && others.length > 0 && canSend;
+  const startGroupCall = async (video) => {
+    if (!canGroupCall || groupCallBusy || callBusy) return;
+    setGroupCallBusy(true);
+    try {
+      const title = peerLabel(conversation);
+      const created = await api.post('/api/v1/meetings', {
+        title,
+        type: 'instant',
+        waiting_room_enabled: false,
+        allow_guests: false,
+        settings: { camera_on_entry: video === true, mute_on_entry: false },
+      });
+      const meeting = created.data;
+      await api.post(`/api/v1/meetings/${meeting.uuid}/start`);
+      const memberIds = others.map((o) => o.id).filter(Boolean);
+      if (memberIds.length) {
+        // best effort: members who can't be invited (other university, deleted...) can still use the link in the chat
+        try { await api.post(`/api/v1/meetings/${meeting.uuid}/invitations/bulk`, { targets: [{ type: 'users', user_ids: memberIds }], message: title }); } catch { /* ignore */ }
+      }
+      const joinToken = meeting.join_url ? String(meeting.join_url).split('/').filter(Boolean).pop() : null;
+      if (joinToken) {
+        const head = video ? t('📹 Group video call', '📹 مكالمة فيديو جماعية') : t('📞 Group voice call', '📞 مكالمة صوتية جماعية');
+        try { await onSend(`${head}\n${publicOrigin()}/join/${joinToken}`); } catch { /* the call still starts */ }
+      }
+      navigate(`/${portalPrefix(authUser?.role)}/meetings/${meeting.uuid}/room`);
+    } catch (err) {
+      if (onError) onError(errorMessage(err));
+    } finally {
+      setGroupCallBusy(false);
+    }
+  };
   const allowedTypes = grp && Array.isArray(grp.allowed_types) ? grp.allowed_types : null;
   const typeOk = (k) => !allowedTypes || allowedTypes.includes(k);
   const canAttach = typeOk('image') || typeOk('video') || typeOk('file');
@@ -1252,6 +1305,20 @@ export default function ThreadPanel({
               <button type="button" className="msg-icon-btn msg-call-btn" onClick={() => startCall(true)} disabled={callBusy}
                 title={callBusy ? t('You are already in a call', 'أنت في مكالمة بالفعل') : t('Video call', 'مكالمة فيديو')}
                 aria-label={t('Video call', 'مكالمة فيديو')}>
+                <Icon name="video" size={18} />
+              </button>
+            )}
+            {canGroupCall && (
+              <button type="button" className="msg-icon-btn msg-call-btn" onClick={() => startGroupCall(false)} disabled={callBusy || groupCallBusy}
+                title={callBusy ? t('You are already in a call', 'أنت في مكالمة بالفعل') : t('Group voice call', 'مكالمة صوتية جماعية')}
+                aria-label={t('Group voice call', 'مكالمة صوتية جماعية')}>
+                <Icon name="phone" size={18} />
+              </button>
+            )}
+            {canGroupCall && (
+              <button type="button" className="msg-icon-btn msg-call-btn" onClick={() => startGroupCall(true)} disabled={callBusy || groupCallBusy}
+                title={callBusy ? t('You are already in a call', 'أنت في مكالمة بالفعل') : t('Group video call', 'مكالمة فيديو جماعية')}
+                aria-label={t('Group video call', 'مكالمة فيديو جماعية')}>
                 <Icon name="video" size={18} />
               </button>
             )}
