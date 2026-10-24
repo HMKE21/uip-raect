@@ -37,6 +37,17 @@ export function recordingFileName(r) {
  */
 export async function downloadRecording(r) {
   const name = recordingFileName(r);
+  // Preferred: the backend's signed "attachment" link — the browser saves the file and never leaves the page.
+  if (r.attachment_url) {
+    const a = document.createElement('a');
+    a.href = r.attachment_url;
+    a.download = name;
+    a.rel = 'noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
   try {
     const res = await fetch(r.download_url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

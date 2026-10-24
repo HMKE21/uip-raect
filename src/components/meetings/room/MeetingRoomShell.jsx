@@ -204,6 +204,11 @@ export default function MeetingRoomShell({
         <Icon name="alert-triangle" size={32} />
         <p className="text-h3" style={{ margin: 'var(--space-3) 0 var(--space-2)' }}>{t("You haven't joined this meeting yet.")}</p>
         <p className="text-small" style={{ color: 'var(--mr-muted)' }}>{t('Use the meeting link to join first.')}</p>
+        {room.error && (
+          <p className="text-caption" dir="ltr" style={{ color: 'var(--mr-muted)', maxWidth: 520, wordBreak: 'break-word' }}>
+            {room.error?.message || String(room.error)}
+          </p>
+        )}
         <button type="button" className="btn btn-outline" style={{ marginTop: 'var(--space-3)' }} onClick={() => onLeave?.()}>
           {t('Back to My Meetings')}
         </button>
