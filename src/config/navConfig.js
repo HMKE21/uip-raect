@@ -258,6 +258,7 @@ const RAW_CONFIGS = {
       { key: 'chat-reports', en: 'Chat Reports', ar: 'بلاغات الشات', icon: 'flag', route: '/admin/chat-reports', built: true },
       { key: 'messaging-oversight', en: 'Messaging Oversight', ar: 'إشراف الرسائل', icon: 'eye', route: '/admin/messaging/oversight', built: true },
       { key: 'ai-conversations', en: 'AI Conversations', ar: 'محادثات الـ AI', icon: 'message-square', route: '/admin/messaging/ai', built: true },
+      { key: 'meetings-monitoring', en: 'Meetings Monitoring', ar: 'مراقبة الاجتماعات', icon: 'video-off', route: '/admin/meetings/monitoring', built: true },
       { key: 'messaging-analytics', en: 'Messaging Analytics', ar: 'تحليلات الرسائل', icon: 'trend', route: '/admin/messaging/analytics', built: true },
       { key: 'messaging-settings', en: 'Messaging Settings', ar: 'إعدادات الرسائل', icon: 'wrench', route: '/admin/messaging/settings', built: true },
       { key: 'notification-settings', en: 'Notification Settings', ar: 'إعدادات الإشعارات', icon: 'mail', route: '/admin/notifications/settings', built: true },
@@ -380,12 +381,24 @@ export function portalPrefix(role) {
   return PORTAL_PREFIX_OVERRIDES[role] || role || 'student';
 }
 
+/** "My PC" is in every portal (students list it themselves). It goes right after the dashboard in the first group;
+ *  portals that already use the `monitor` icon (Sessions) get `hard-drive` so no two entries share an icon. */
+function withMyPc(sections, role, prefix) {
+  const all = Object.values(sections).flat();
+  if (all.some((i) => i.key === 'my-pc')) return sections;
+  const [firstKey, firstItems] = Object.entries(sections)[0];
+  const icon = all.some((i) => i.icon === 'monitor') ? 'hard-drive' : 'monitor';
+  const item = { key: 'my-pc', en: 'My PC', ar: 'جهازي', icon, route: `/${prefix}/my-pc`, built: true };
+  return { ...sections, [firstKey]: [firstItems[0], item, ...firstItems.slice(1)] };
+}
+
 /** Returns { main: [...], <groups>..., account: [...] } for a role.
  *  Section order = the order written in RAW_CONFIGS; `account` is always
  *  appended last (personal extras first, then Messages/Notifications/Settings). */
 export function getNavConfig(role, can) {
-  const { account: accountExtras = [], ...sections } = RAW_CONFIGS[role] || RAW_CONFIGS.student;
+  const { account: accountExtras = [], ...rawSections } = RAW_CONFIGS[role] || RAW_CONFIGS.student;
   const prefix = portalPrefix(role);
+  const sections = withMyPc(rawSections, role, prefix);
   const overrides = ACCOUNT_ITEM_OVERRIDES[role] || {};
   const common = COMMON_ACCOUNT_ITEMS.map((item) => ({
     ...item,

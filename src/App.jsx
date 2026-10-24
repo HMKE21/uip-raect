@@ -11,6 +11,7 @@ import { LanguageProvider } from './context/LanguageContext';
 import { CallProvider } from './context/CallContext';
 import SaveCenterHost from './components/savecenter/SaveCenterHost';
 import ProtectedRoute from './components/ProtectedRoute';
+import { MY_PC_PREFIXES, myPcPath } from './config/myPc';
 import ErrorBoundary from './components/ErrorBoundary';
 import DeviceGate from './components/DeviceGate';
 import MfaGate from './components/MfaGate';
@@ -76,6 +77,7 @@ const AdminAnalyticsDashboard = lazy(() => import('./pages/admin/AdminAnalyticsD
 const AdminStatistics = lazy(() => import('./pages/admin/AdminStatistics'));
 const AdminMobile = lazy(() => import('./pages/admin/AdminMobile'));
 const AdminMobileTokenDetail = lazy(() => import('./pages/admin/AdminMobileTokenDetail'));
+const AdminMeetingsMonitoring = lazy(() => import('./pages/admin/AdminMeetingsMonitoring'));
 const AdminPlatformPolicy = lazy(() => import('./pages/admin/AdminPlatformPolicy'));
 const AdminNotificationSettings = lazy(() => import('./pages/admin/AdminNotificationSettings'));
 const AdminMessagingOversight = lazy(() => import('./pages/admin/AdminMessagingOversight'));
@@ -180,7 +182,12 @@ function ClassicLockGuard({ children }) {
   const { user } = useAuth();
   const uid = user?.id;
   const blocked = readHeldFlag(uid) || (readLockCache(uid) !== false && !readUnlockedFlag(uid));
-  return blocked ? <Navigate to="/student/my-pc" replace /> : children;
+  return blocked ? <Navigate to={myPcPath(user?.role)} replace /> : children;
+}
+/** `/my-pc` (no portal prefix) → this account's own My PC. */
+function MyPcRedirect() {
+  const { user } = useAuth();
+  return <Navigate to={myPcPath(user?.role)} replace />;
 }
 const StudentGraduation = lazy(() => import('./pages/student/StudentGraduation'));
 const StudentGraduationTranscript = lazy(() => import('./pages/student/StudentGraduationTranscript'));
@@ -390,8 +397,12 @@ export default function App() {
                 <Route path="/student/group-hub" element={<StudentGroupHub />} />
                 <Route path="/student/contacts" element={<StudentContacts />} />
                 <Route path="/student/portfolio" element={<StudentPortfolio />} />
-                <Route path="/student/my-pc" element={<DesktopOS />} />
-                <Route path="/student/my-pc/classic" element={<ClassicLockGuard><StudentMyPC /></ClassicLockGuard>} />
+                {/* My PC lives in every portal: /student/my-pc, /admin/my-pc, /faculty/my-pc, … (the API decides who may use it). */}
+                <Route path="/my-pc" element={<MyPcRedirect />} />
+                {MY_PC_PREFIXES.map((px) => [
+                  <Route key={`${px}-pc`} path={`/${px}/my-pc`} element={<DesktopOS />} />,
+                  <Route key={`${px}-pc-classic`} path={`/${px}/my-pc/classic`} element={<ClassicLockGuard><StudentMyPC /></ClassicLockGuard>} />,
+                ])}
                 <Route path="/student/graduation" element={<StudentGraduation />} />
                 <Route path="/student/group-chat" element={<StudentGroupChat />} />
                 <Route path="/student/patents" element={<StudentPatents />} />
@@ -516,6 +527,7 @@ export default function App() {
                 <Route path="/admin/mobile" element={<AdminMobile />} />
                 <Route path="/admin/mobile/:id" element={<AdminMobileTokenDetail />} />
                 <Route path="/admin/platform-policy" element={<AdminPlatformPolicy />} />
+                <Route path="/admin/meetings/monitoring" element={<AdminMeetingsMonitoring />} />
                 <Route path="/admin/attendance-settings" element={<AdminAttendanceSettings />} />
                 <Route path="/admin/grading-scale" element={<AdminGradingScale />} />
                 <Route path="/admin/notifications/settings" element={<AdminNotificationSettings />} />
