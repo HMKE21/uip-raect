@@ -224,10 +224,11 @@ test('tuneSdp: opus FEC/mono + video bitrate hints, tolerant of junk', async () 
   const out = tuneSdp(sdp, 3500000);
   assert.match(out, /a=fmtp:111 minptime=10;useinbandfec=0;stereo=0;/); // existing keys are kept, not duplicated
   assert.doesNotMatch(out, /useinbandfec=1/);
-  assert.match(out, /a=fmtp:96 x-google-min-bitrate=600;x-google-start-bitrate=1800;x-google-max-bitrate=3500/);
-  assert.match(out, /a=fmtp:98 level-asymmetry-allowed=1;profile-level-id=42e01f;x-google-min-bitrate=600/);
+  assert.match(out, /a=fmtp:96 x-google-min-bitrate=150;x-google-start-bitrate=900;x-google-max-bitrate=3500/);
+  assert.match(out, /a=fmtp:98 level-asymmetry-allowed=1;profile-level-id=42e01f;x-google-min-bitrate=150/);
   assert.equal(out.match(/a=fmtp:97 apt=96/g).length, 1); // rtx line untouched
   assert.ok(out.includes('\r\n'));
   assert.equal(tuneSdp('OFFER'), 'OFFER');
   assert.equal(tuneSdp(undefined), undefined);
 });
+

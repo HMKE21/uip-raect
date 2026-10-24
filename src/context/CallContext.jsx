@@ -42,6 +42,11 @@ const readNoisePref = () => { try { return localStorage.getItem(NOISE_KEY) !== '
 // The active noise-isolation graph of the current call (one mic at a time); the engine's on/off switch flips it.
 let activeSuppressor = null;
 
+const withTimeout = (p, ms, fallback = null) => new Promise((resolve) => {
+  const h = setTimeout(() => resolve(fallback), ms);
+  Promise.resolve(p).then((v) => { clearTimeout(h); resolve(v); }, () => { clearTimeout(h); resolve(fallback); });
+});
+
 function getUserMedia(opts = {}) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     const e = new Error('unsupported');
@@ -49,31 +54,32 @@ function getUserMedia(opts = {}) {
     return Promise.reject(e);
   }
   const noise = opts.noise !== false;
+  // Same processing a Meet-style web call uses: the browser's own echo canceller + noise suppressor + auto gain, all on.
+  // (The previous build turned auto-gain off and then boosted the mic 2.4x in software, which also boosted every bit of
+  // leftover echo - that was the repeating, distorted voice.)
   const audio = opts.audio === false ? false : {
-    // echo cancellation is what stops the whistle/feedback: always on, and not merely "ideal" (a hard true, so the browser can't quietly skip it)
     echoCancellation: true,
     noiseSuppression: noise,
-    // auto-gain keeps raising a quiet mic, which feeds speaker->mic howl when two devices are close: only with the noise switch on
-    // AGC keeps raising the gain on a quiet mic - that is what turns room noise into a loud hiss and lets two nearby devices start whistling.
-    // With the neural isolation available it is not needed (the browser's own filter + AEC stay on).
-    autoGainControl: noise && !noiseSuppressSupported(),
-    voiceIsolation: { ideal: noise },
+    autoGainControl: true,
     channelCount: { ideal: 1 },
-    sampleRate: { ideal: 48000 },
-    latency: { ideal: 0.01 },
-    // older Chromium / WebView builds still read the legacy switches: keep the high-pass + second-generation AGC/NS on
-    advanced: [{ googEchoCancellation: true, googHighpassFilter: true, googNoiseSuppression: noise, googNoiseSuppression2: noise, googTypingNoiseDetection: true }],
   };
-  // 720p @ 30 fps everywhere (what Meet / Zoom use). Phones used to capture 960x540 @ 20 fps, which then gets stretched over the whole
-  // screen of the other device and looks soft; the sender still adapts down by itself when the link is weak.
-  const video = opts.video ? {
-    width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 },
-    facingMode: { ideal: opts.facing === 'environment' ? 'environment' : 'user' },
-  } : false;
+  // 720p everywhere; the sender adapts down by itself when the link is weak.
+  let video = false;
+  if (opts.video) {
+    video = { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } };
+    if (opts.deviceId) video.deviceId = { exact: opts.deviceId };
+    else if (opts.facingExact) video.facingMode = { exact: opts.facingExact };
+    else video.facingMode = { ideal: opts.facing === 'environment' ? 'environment' : 'user' };
+  }
   return navigator.mediaDevices.getUserMedia({ audio, video }).then(async (stream) => {
     if (!audio || !stream.getAudioTracks().length) return stream;
-    // Neural noise isolation (RNNoise). Always built when supported, so the in-call switch can turn it on/off instantly.
-    const ns = await attachNoiseSuppressor(stream, noise);
+    // The browser already cancels echo and suppresses noise: stacking the neural filter on top of that is what made the voice
+    // sound robotic. It is only added where the browser did NOT apply its own suppression.
+    let st = {};
+    try { st = stream.getAudioTracks()[0].getSettings() || {}; } catch { st = {}; }
+    if (st.noiseSuppression === true && st.echoCancellation !== false) { activeSuppressor = null; return stream; }
+    // Never let the optional filter hold the call at "Starting…": give it a few seconds, then go on with the plain microphone.
+    const ns = await withTimeout(attachNoiseSuppressor(stream, noise), 4000, null);
     if (!ns) { activeSuppressor = null; return stream; }
     activeSuppressor = ns;
     return ns.stream;
@@ -89,11 +95,17 @@ function getDisplayMedia() {
   return navigator.mediaDevices.getDisplayMedia({ video: { frameRate: { ideal: 15, max: 30 } }, audio: false });
 }
 
-async function countCameras() {
+async function listCameras() {
   try {
     const list = await navigator.mediaDevices.enumerateDevices();
-    return list.filter((d) => d.kind === 'videoinput').length;
-  } catch { return 1; }
+    return list.filter((d) => d.kind === 'videoinput');
+  } catch { return []; }
+}
+
+async function countCameras() {
+  const n = (await listCameras()).length;
+  // phones: some WebViews list one camera until the other is opened, but front/back both exist
+  return /Android|iPhone|iPad|iPod|Mobile/i.test((navigator && navigator.userAgent) || '') ? Math.max(n, 2) : n;
 }
 
 /** System notification + tab-title flash for a call that rings while the tab is in the background. */
@@ -227,6 +239,7 @@ export function CallProvider({ children }) {
       getUserMedia,
       getDisplayMedia: typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia ? getDisplayMedia : null,
       countCameras,
+      listCameras,
       createFx: createVideoFx,
       makeStream: (tracks) => new MediaStream(tracks),
       videoMaxBitrate: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ? 2500000 : 3500000,

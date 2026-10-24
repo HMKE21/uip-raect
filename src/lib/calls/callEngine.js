@@ -38,7 +38,7 @@ export function tuneSdp(sdp, maxVideoBps = 3500000) {
   if (typeof sdp !== 'string' || sdp.indexOf('m=') === -1) return sdp;
   try {
     const maxK = Math.round(maxVideoBps / 1000);
-    const startK = Math.min(maxK, 1800);
+    const startK = Math.min(maxK, 900);
     const eol = sdp.includes('\r\n') ? '\r\n' : '\n';
     const lines = sdp.split(/\r?\n/);
     const res = [];
@@ -53,8 +53,8 @@ export function tuneSdp(sdp, maxVideoBps = 3500000) {
     });
     const wantAudio = (pt, codec) => codec === 'OPUS';
     const wantVideo = (pt, codec) => ['VP8', 'VP9', 'H264', 'AV1', 'H265'].includes(codec);
-    const audioParams = 'useinbandfec=1;stereo=0;sprop-stereo=0;usedtx=0;maxaveragebitrate=40000;maxplaybackrate=48000';
-    const videoParams = `x-google-min-bitrate=600;x-google-start-bitrate=${startK};x-google-max-bitrate=${maxK}`;
+    const audioParams = 'useinbandfec=1;stereo=0;sprop-stereo=0;usedtx=0;cbr=0;minptime=10;maxaveragebitrate=64000;maxplaybackrate=48000';
+    const videoParams = `x-google-min-bitrate=150;x-google-start-bitrate=${startK};x-google-max-bitrate=${maxK}`;
     const merge = (existing, extra) => {
       const have = new Set(existing.split(';').map((x) => x.split('=')[0].trim()));
       const add = extra.split(';').filter((x) => !have.has(x.split('=')[0]));
@@ -88,7 +88,7 @@ export function createCallEngine(deps) {
     isHidden = () => false, notify = () => () => {}, vibrate = () => {}, now = () => Date.now(),
     // video-only helpers (all optional, so voice-only hosts/tests keep working)
     setLocalVideo = () => {}, setRemoteVideo = () => {}, makeStream = (tracks) => ({ getTracks: () => tracks }),
-    videoMaxBitrate = 2500000, createFx = null, getDisplayMedia = null, countCameras = async () => 1, onPref = () => {}, initialNoise = true,
+    videoMaxBitrate = 2500000, createFx = null, getDisplayMedia = null, countCameras = async () => 1, listCameras = null, onPref = () => {}, initialNoise = true,
     base = '/api/v1/messaging/calls',
     timers = {
       setTimeout: (...a) => setTimeout(...a), clearTimeout: (...a) => clearTimeout(...a),
@@ -157,11 +157,26 @@ export function createCallEngine(deps) {
   function adoptStream(stream) {
     camTrack = firstVideoTrack(stream);
     watchCam(camTrack);
+    try { const f = trackFacing(camTrack); if (f && f !== st.facing) st.facing = f; } catch { /* ignore */ }
     try { setLocalVideo(camTrack ? makeStream([camTrack]) : null); } catch { /* preview is best-effort */ }
     if (camTrack && countCameras) {
       Promise.resolve(countCameras()).then((n) => { if (camTrack) set({ canSwitchCam: n > 1 }); }).catch(() => {});
     }
   }
+
+
+  const BACK_RE = /back|rear|environment|world|خلف/i;
+  const FRONT_RE = /front|user|face|selfie|أمام/i;
+  const settingsOf = (t) => { try { return (t && t.getSettings && t.getSettings()) || {}; } catch { return {}; } };
+  /** 'user' | 'environment' | '' (unknown) — from the track itself, never from what we asked for. */
+  function trackFacing(t) {
+    const s = settingsOf(t);
+    if (s.facingMode === 'environment' || s.facingMode === 'user') return s.facingMode;
+    const label = (t && t.label) || '';
+    if (BACK_RE.test(label)) return 'environment';
+    return label ? 'user' : '';
+  }
+  let switching = false;
 
   // ---- camera health: a webcam can stall mid-call (driver hiccup, camera shared with another window/app). The preview then
   // freezes and the peer sees black. Browsers flag it as a muted/ended track, or the encoder stops producing frames.
@@ -538,8 +553,8 @@ export function createCallEngine(deps) {
       params.encodings[0].maxBitrate = videoMaxBitrate;
       params.encodings[0].maxFramerate = 30;
       params.encodings[0].scaleResolutionDownBy = 1;     // never send a downscaled picture unless the browser has to
-      params.encodings[0].networkPriority = 'high';
-      params.degradationPreference = 'maintain-resolution'; // on a weak link drop frames, keep the picture sharp
+      params.encodings[0].networkPriority = 'medium';
+      params.degradationPreference = 'balanced'; // weak link: lower resolution AND fps a little instead of freezing the picture
       await vt.sender.setParameters(params);
     } catch { /* optional tuning */ }
     try { // voice: small constant bitrate budget, top priority on the wire
@@ -547,7 +562,7 @@ export function createCallEngine(deps) {
       if (at && at.sender && at.sender.getParameters && at.sender.setParameters) {
         const ap = at.sender.getParameters();
         if (!ap.encodings || !ap.encodings.length) ap.encodings = [{}];
-        ap.encodings[0].maxBitrate = 48000;
+        ap.encodings[0].maxBitrate = 64000;
         ap.encodings[0].priority = 'high';
         ap.encodings[0].networkPriority = 'high';
         await at.sender.setParameters(ap);
@@ -1113,26 +1128,60 @@ export function createCallEngine(deps) {
     }
   }
 
+  /**
+   * Front <-> back camera. The old version only asked for `facingMode: { ideal }`, which many phones/WebViews silently answer with the
+   * SAME camera - and the UI then mirrored the picture as if it had switched ("only the angle changes"). Now:
+   *   1. ask for the other facing with `exact`, 2. otherwise walk the real camera list by deviceId (labels containing back/rear first),
+   *   3. only accept a result whose track really is a different camera, and show the facing the TRACK reports.
+   */
   async function switchCamera() {
-    if (!inLiveCall() || !camTrack || st.sharing || !videoTransceiver()) return;
+    if (switching || !inLiveCall() || !camTrack || st.sharing || !videoTransceiver()) return;
+    switching = true;
     const id = st.call.id;
-    const next = st.facing === 'user' ? 'environment' : 'user';
+    const want = st.facing === 'environment' ? 'user' : 'environment';
     const old = camTrack;
-    try { old.stop(); } catch { /* ignore */ } // some phones cannot open two cameras at once
+    const oldSet = settingsOf(old);
+    const sameCam = (t) => {
+      const s = settingsOf(t);
+      if (s.deviceId && oldSet.deviceId) return s.deviceId === oldSet.deviceId;
+      return trackFacing(t) === trackFacing(old);
+    };
+    const attempts = [{ facingExact: want }];
     try {
-      const stream = await getUserMedia({ video: true, audio: false, facing: next, noise: st.noiseOn });
-      if (!st.call || st.call.id !== id) { stopStream(stream); return; }
-      camTrack = firstVideoTrack(stream);
-      watchCam(camTrack);
-      set({ facing: next });
-    } catch {
-      try { // fall back to the camera that was in use
-        const stream = await getUserMedia({ video: true, audio: false, facing: st.facing, noise: st.noiseOn });
-        if (st.call && st.call.id === id) camTrack = firstVideoTrack(stream); else stopStream(stream);
+      const cams = listCameras ? await listCameras() : [];
+      const others = (cams || []).filter((d) => d.deviceId && d.deviceId !== oldSet.deviceId);
+      const rx = want === 'environment' ? BACK_RE : FRONT_RE;
+      const ordered = [...others.filter((d) => rx.test(d.label || '')), ...others.filter((d) => !rx.test(d.label || ''))];
+      ordered.slice(0, 3).forEach((d) => attempts.push({ deviceId: d.deviceId }));
+    } catch { /* the exact-facing attempt is still tried */ }
+    try { old.stop(); } catch { /* some phones cannot open two cameras at once */ }
+    let fresh = null;
+    for (const opt of attempts) {
+      if (!st.call || st.call.id !== id) { switching = false; return; }
+      try {
+        const stream = await getUserMedia({ video: true, audio: false, noise: st.noiseOn, ...opt });
+        const tr = firstVideoTrack(stream);
+        if (tr && !sameCam(tr)) { fresh = tr; break; }
+        stopStream(stream);
+      } catch { /* try the next candidate */ }
+    }
+    if (!st.call || st.call.id !== id) { if (fresh) { try { fresh.stop(); } catch { /* ignore */ } } switching = false; return; }
+    if (fresh) {
+      camTrack = fresh;
+      watchCam(fresh);
+      set({ facing: trackFacing(fresh) || want });
+    } else {
+      // no other camera could be opened: bring the previous one back and say so (do NOT pretend the camera changed)
+      try {
+        const stream = await getUserMedia({ video: true, audio: false, noise: st.noiseOn, deviceId: oldSet.deviceId, facing: st.facing });
+        camTrack = firstVideoTrack(stream);
+        watchCam(camTrack);
+        if (st.call && st.call.id === id) set({ notice: failNotice('cam_switch') });
       } catch { camTrack = null; set({ camOn: false }); }
     }
     await applyOutgoingVideo();
     if (!camTrack) sendState();
+    switching = false;
   }
 
   async function stopSharing() {

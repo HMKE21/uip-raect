@@ -136,47 +136,62 @@ function DebugPanel({ c }) {
   );
 }
 
-/** Noise cancellation (all calls) + filters (video calls, where the browser can draw them). */
+/** Effects bottom sheet: noise cancellation (all calls) + filters (video calls, where the browser can draw them). */
 function EffectsPanel({ c, ar, t, onClose }) {
   const fxOk = c.callType === 'video' && supportsVideoFx();
+  const camReady = c.camOn && !c.sharing;
+  const amount = c.filterAmount == null ? 100 : c.filterAmount;
   return (
-    <div className="call-fx" role="dialog" aria-label={t('Call effects', 'مؤثرات المكالمة')}>
-      <div className="call-fx__head">
-        <strong>{t('Effects', 'المؤثرات')}</strong>
-        <button type="button" className="call-toast__x" onClick={onClose} aria-label={t('Close', 'إغلاق')}><Icon name="x" size={14} /></button>
+    <>
+      <div className="cx-scrim" onClick={onClose} aria-hidden="true" />
+      <div className="cx-sheet" role="dialog" aria-label={t('Call effects', 'مؤثرات المكالمة')}>
+        <span className="cx-grab" aria-hidden="true" />
+        <div className="cx-head">
+          <strong>{t('Effects', 'المؤثرات')}</strong>
+          <button type="button" className="cx-close" onClick={onClose} aria-label={t('Close', 'إغلاق')}><Icon name="x" size={16} /></button>
+        </div>
+        <button type="button" role="switch" aria-checked={c.noiseOn} className={`cx-noise${c.noiseOn ? ' is-on' : ''}`} onClick={() => c.setNoise(!c.noiseOn)}>
+          <span className="cx-noise__ico"><Icon name="audio-wave" size={18} /></span>
+          <span className="cx-noise__txt">
+            <strong>{t('Noise cancellation', 'إلغاء الضوضاء')}</strong>
+            <span>{t('Reduces background noise and echo', 'يقلل ضوضاء الخلفية والصدى')}</span>
+          </span>
+          <i className="cx-switch" aria-hidden="true" />
+        </button>
+        {fxOk && (
+          <>
+            <p className="cx-label">{t('Video filters', 'فلاتر الفيديو')}</p>
+            <div className="cx-filters" role="radiogroup" aria-label={t('Video filters', 'فلاتر الفيديو')}>
+              {FILTER_LIST.map((f) => (
+                <button key={f.id} type="button" role="radio" aria-checked={c.filter === f.id} className={`cx-flt${c.filter === f.id ? ' is-on' : ''}`}
+                  onClick={() => c.setFilter(f.id)} disabled={!camReady}>
+                  <span className="cx-flt__sw" style={{ background: f.sw }} aria-hidden="true" />
+                  <span className="cx-flt__name">{ar ? f.ar : f.en}</span>
+                </button>
+              ))}
+            </div>
+            {c.filter !== 'none' && camReady && (
+              <label className="cx-range">
+                <span>{t('Intensity', 'الشدة')}</span>
+                <input type="range" min="0" max="100" step="1" value={amount} onChange={(e) => c.setFilterAmount(Number(e.target.value))} aria-label={t('Filter intensity', 'شدة الفلتر')} />
+                <output>{amount}%</output>
+              </label>
+            )}
+            {!camReady && <p className="cx-hint">{c.sharing ? t('Filters apply to the camera, not a shared screen.', 'الفلاتر تعمل على الكاميرا فقط وليس على مشاركة الشاشة.') : t('Turn the camera on to use filters.', 'شغّل الكاميرا لاستخدام الفلاتر.')}</p>}
+          </>
+        )}
       </div>
-      <button type="button" role="switch" aria-checked={c.noiseOn} className={`call-fx__row${c.noiseOn ? ' is-on' : ''}`} onClick={() => c.setNoise(!c.noiseOn)}>
-        <Icon name="audio-wave" size={18} />
-        <span className="call-fx__txt">
-          <strong>{t('Noise cancellation', 'إلغاء الضوضاء')}</strong>
-          <span>{t('Reduces background noise and echo', 'يقلل ضوضاء الخلفية والصدى')}</span>
-        </span>
-        <i className="call-fx__sw" aria-hidden="true" />
-      </button>
-      {fxOk && (
-        <>
-          <p className="call-fx__label">{t('Video filters', 'فلاتر الفيديو')}</p>
-          <div className="call-fx__grid" role="radiogroup" aria-label={t('Video filters', 'فلاتر الفيديو')}>
-            {FILTER_LIST.map((f) => (
-              <button key={f.id} type="button" role="radio" aria-checked={c.filter === f.id} className={`call-flt${c.filter === f.id ? ' is-on' : ''}`}
-                onClick={() => c.setFilter(f.id)} disabled={!c.camOn || c.sharing}>
-                <span className="call-flt__sw" style={{ background: f.sw }} aria-hidden="true" />
-                <span className="call-flt__name">{ar ? f.ar : f.en}</span>
-              </button>
-            ))}
-          </div>
-          {c.filter !== 'none' && c.camOn && !c.sharing && (
-            <label className="call-fx__range">
-              <span>{t('Intensity', 'الشدة')}</span>
-              <input type="range" min="0" max="100" step="1" value={c.filterAmount == null ? 100 : c.filterAmount}
-                onChange={(e) => c.setFilterAmount(Number(e.target.value))} aria-label={t('Filter intensity', 'شدة الفلتر')} />
-              <output>{c.filterAmount == null ? 100 : c.filterAmount}%</output>
-            </label>
-          )}
-          {(!c.camOn || c.sharing) && <p className="call-fx__hint">{c.sharing ? t('Filters apply to the camera, not a shared screen.', 'الفلاتر تعمل على الكاميرا فقط وليس على مشاركة الشاشة.') : t('Turn the camera on to use filters.', 'شغّل الكاميرا لاستخدام الفلاتر.')}</p>}
-        </>
-      )}
-    </div>
+    </>
+  );
+}
+
+/** One control of the video-call dock: round glass button with a small label underneath. */
+function CvBtn({ icon, label, on, onClick, disabled, pressed }) {
+  return (
+    <button type="button" className={`cv-btn${on ? ' is-on' : ''}`} onClick={onClick} disabled={disabled} aria-pressed={pressed} aria-label={label} title={label}>
+      <span className="cv-btn__ico"><Icon name={icon} size={22} /></span>
+      <span className="cv-btn__lbl">{label}</span>
+    </button>
   );
 }
 
@@ -196,6 +211,7 @@ function noticeText(n, ar) {
     case 'cam_denied': return ar ? 'الكاميرا أو الميكروفون محظور. اسمح بالوصول من إعدادات المتصفح ثم حاول مرة أخرى.' : 'Camera or microphone access is blocked. Allow it in your browser settings and try again.';
     case 'cam_missing': return ar ? 'لم يتم العثور على كاميرا أو ميكروفون.' : 'No camera or microphone was found.';
     case 'cam_error': return ar ? 'تعذّر تشغيل الكاميرا.' : 'Couldn’t start the camera.';
+    case 'cam_switch': return ar ? 'لا توجد كاميرا أخرى متاحة للتبديل على هذا الجهاز.' : 'No other camera is available to switch to on this device.';
     case 'screen_error': return ar ? 'تعذّرت مشاركة الشاشة.' : 'Couldn’t share the screen.';
     case 'unsupported': return ar ? 'المكالمات تحتاج اتصالًا آمنًا (HTTPS) ومتصفحًا يدعمها.' : 'Calls need a secure (HTTPS) connection and a browser that supports them.';
     case 'unavailable': return ar ? 'هذه المكالمة لم تعد متاحة.' : 'This call is no longer available.';
@@ -214,6 +230,21 @@ export default function CallUI() {
   const isVideo = c.callType === 'video';
   const [fxOpen, setFxOpen] = useState(false);
   const screenRef = useRef(null);
+  const [uiOn, setUiOn] = useState(true);
+  const hideTimer = useRef(0);
+  const fxOpenRef = useRef(false);
+  fxOpenRef.current = fxOpen;
+  // video call: the bars fade away a few seconds after the last touch / mouse move so the picture is the whole screen
+  const poke = () => {
+    setUiOn(true);
+    clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => { if (!fxOpenRef.current) setUiOn(false); }, 5000);
+  };
+  useEffect(() => {
+    if (inCall && c.callType === 'video' && c.phase === 'active') poke(); else { clearTimeout(hideTimer.current); setUiOn(true); }
+    return () => clearTimeout(hideTimer.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inCall, c.callType, c.phase]);
   const live = c.phase === 'connecting' || c.phase === 'active';
   const canShare = isVideo && typeof navigator !== 'undefined' && !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia)
     && !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent || ''); // phones can't pick a screen to share
@@ -310,8 +341,11 @@ export default function CallUI() {
     const showSelfBig = !showRemote && c.camOn && c.localVideo && c.phase !== 'active'; // preview while ringing/connecting
     const showPip = (c.camOn || c.sharing) && c.localVideo && !showSelfBig;
     const mirrorSelf = c.facing === 'user' && !c.sharing;
+    const canFlip = c.canSwitchCam && c.camOn && !c.sharing;
+    const ending = c.phase === 'outgoing' || c.phase === 'starting';
     body = (
-      <div className="call-screen call-screen--video" ref={screenRef} role="dialog" aria-modal="false" aria-label={t('Video call', 'مكالمة فيديو')}>
+      <div className={`call-screen call-screen--video cv${uiOn || fxOpen ? '' : ' is-idle'}`} ref={screenRef} role="dialog" aria-modal="false" aria-label={t('Video call', 'مكالمة فيديو')}
+        onPointerDown={poke} onPointerMove={() => { if (!uiOn) poke(); }}>
         <div className="call-vstage">
           {showRemote && <StreamVideo className={`call-vremote${c.peerSharing ? ' is-contain' : ''}`} stream={c.remoteVideo} />}
           {showSelfBig && <StreamVideo className={`call-vremote call-vremote--self${mirrorSelf ? ' is-mirror' : ''}`} stream={c.localVideo} />}
@@ -323,52 +357,47 @@ export default function CallUI() {
           )}
         </div>
 
-        <div className="call-vtop">
-          <button type="button" className="call-screen__min" onClick={() => c.setMinimized(true)} aria-label={t('Minimise', 'تصغير')} title={t('Minimise', 'تصغير')}>
-            <Icon name="chevron-down" size={22} />
+        <div className="cv-top">
+          <button type="button" className="cv-round" onClick={() => c.setMinimized(true)} aria-label={t('Minimise', 'تصغير')} title={t('Minimise', 'تصغير')}>
+            <Icon name="chevron-down" size={20} />
           </button>
-          <div className="call-vtop__info">
+          <div className="cv-chip" aria-live="polite">
             <strong dir="auto">{name}</strong>
-            <span className="call-screen__status" aria-live="polite">
+            <span className="cv-chip__sub">
               {c.phase === 'active' && <QualityBars quality={c.reconnecting ? 'poor' : c.quality} ar={ar} />}
               <span className={c.phase === 'active' && !c.reconnecting ? 'is-timer' : ''}>{statusText}</span>
+              {c.peerMuted && c.phase === 'active' && <span className="cv-chip__muted"><Icon name="mic-off" size={12} /></span>}
             </span>
-            {c.peerMuted && c.phase === 'active' && <span className="call-vtop__muted"><Icon name="mic-off" size={12} /> {t('Muted', 'مكتوم')}</span>}
           </div>
-          <button type="button" className="call-screen__min" onClick={toggleFullscreen} aria-label={t('Full screen', 'ملء الشاشة')} title={t('Full screen', 'ملء الشاشة')}>
-            <Icon name="maximize" size={18} />
+          <button type="button" className="cv-round" onClick={toggleFullscreen} aria-label={t('Full screen', 'ملء الشاشة')} title={t('Full screen', 'ملء الشاشة')}>
+            <Icon name="maximize" size={17} />
           </button>
         </div>
 
-        {showPip && <StreamVideo className={`call-vpip${mirrorSelf ? ' is-mirror' : ''}`} stream={c.localVideo} />}
+        {showPip && (
+          <div className="cv-pip">
+            <StreamVideo className={`cv-pip__v${mirrorSelf ? ' is-mirror' : ''}`} stream={c.localVideo} />
+            {canFlip && (
+              <button type="button" className="cv-pip__flip" onClick={c.switchCamera} disabled={!live} aria-label={t('Switch camera', 'تبديل الكاميرا')} title={t('Switch camera', 'تبديل الكاميرا')}>
+                <Icon name="camera-flip" size={16} />
+              </button>
+            )}
+          </div>
+        )}
         {c.sharing && <div className="call-vbadge"><Icon name="screen-share" size={14} /> {t('You are sharing your screen', 'أنت تشارك شاشتك')}</div>}
         {fxOpen && <EffectsPanel c={c} ar={ar} t={t} onClose={() => setFxOpen(false)} />}
 
-        <div className="call-vbar">
-          <button type="button" className={`call-btn call-btn--mute${c.muted ? ' is-on' : ''}`} onClick={c.toggleMute} aria-pressed={c.muted} aria-label={c.muted ? t('Unmute', 'إلغاء الكتم') : t('Mute', 'كتم')} title={c.muted ? t('Unmute', 'إلغاء الكتم') : t('Mute', 'كتم')} disabled={c.phase === 'starting'}>
-            <Icon name={c.muted ? 'mic-off' : 'mic'} size={22} />
-          </button>
-          <button type="button" className={`call-btn call-btn--mute${!c.camOn ? ' is-on' : ''}`} onClick={c.toggleCamera} aria-pressed={!c.camOn} disabled={!live || c.sharing}
-            aria-label={c.camOn ? t('Turn camera off', 'إيقاف الكاميرا') : t('Turn camera on', 'تشغيل الكاميرا')} title={c.camOn ? t('Turn camera off', 'إيقاف الكاميرا') : t('Turn camera on', 'تشغيل الكاميرا')}>
-            <Icon name={c.camOn ? 'video' : 'video-off'} size={22} />
-          </button>
-          {c.canSwitchCam && c.camOn && !c.sharing && (
-            <button type="button" className="call-btn" onClick={c.switchCamera} disabled={!live} aria-label={t('Switch camera', 'تبديل الكاميرا')} title={t('Switch camera', 'تبديل الكاميرا')}>
-              <Icon name="camera-flip" size={22} />
-            </button>
-          )}
-          {canShare && (
-            <button type="button" className={`call-btn call-btn--mute${c.sharing ? ' is-on' : ''}`} onClick={c.toggleScreenShare} disabled={!live} aria-pressed={c.sharing}
-              aria-label={c.sharing ? t('Stop sharing', 'إيقاف المشاركة') : t('Share screen', 'مشاركة الشاشة')} title={c.sharing ? t('Stop sharing', 'إيقاف المشاركة') : t('Share screen', 'مشاركة الشاشة')}>
-              <Icon name="screen-share" size={22} />
-            </button>
-          )}
-          <button type="button" className={`call-btn${fxOpen ? ' call-btn--mute is-on' : ''}`} onClick={() => setFxOpen((v) => !v)} aria-expanded={fxOpen}
-            aria-label={t('Effects', 'المؤثرات')} title={t('Effects', 'المؤثرات')}>
-            <Icon name="ai-spark" size={22} />
-          </button>
-          <button type="button" className="call-btn call-btn--end call-btn--lg" onClick={c.hangup} aria-label={c.phase === 'outgoing' || c.phase === 'starting' ? t('Cancel call', 'إلغاء المكالمة') : t('End call', 'إنهاء المكالمة')} title={c.phase === 'outgoing' || c.phase === 'starting' ? t('Cancel', 'إلغاء') : t('End', 'إنهاء')}>
-            <Icon name="phone" size={26} />
+        <div className="cv-dock">
+          <div className="cv-bar" role="toolbar" aria-label={t('Call controls', 'أزرار المكالمة')}>
+            <CvBtn icon={c.muted ? 'mic-off' : 'mic'} label={c.muted ? t('Unmute', 'تشغيل') : t('Mute', 'كتم')} on={c.muted} pressed={c.muted} onClick={c.toggleMute} disabled={c.phase === 'starting'} />
+            <CvBtn icon={c.camOn ? 'video' : 'video-off'} label={c.camOn ? t('Camera', 'الكاميرا') : t('Camera off', 'مغلقة')} on={!c.camOn} pressed={!c.camOn} onClick={c.toggleCamera} disabled={!live || c.sharing} />
+            {canFlip && <CvBtn icon="camera-flip" label={t('Flip', 'تبديل')} onClick={c.switchCamera} disabled={!live} />}
+            {canShare && <CvBtn icon="screen-share" label={c.sharing ? t('Stop', 'إيقاف') : t('Share', 'مشاركة')} on={c.sharing} pressed={c.sharing} onClick={c.toggleScreenShare} disabled={!live} />}
+            <CvBtn icon="ai-spark" label={t('Effects', 'مؤثرات')} on={fxOpen} pressed={fxOpen} onClick={() => setFxOpen((v) => !v)} />
+          </div>
+          <button type="button" className="cv-end" onClick={c.hangup} aria-label={ending ? t('Cancel call', 'إلغاء المكالمة') : t('End call', 'إنهاء المكالمة')}>
+            <Icon name="phone" size={22} />
+            <span>{ending ? t('Cancel', 'إلغاء') : t('End', 'إنهاء')}</span>
           </button>
         </div>
       </div>

@@ -58,8 +58,10 @@ export function supportsVideoFx() {
   return supportCache;
 }
 
-const MAX_W = 1280; // never downscale a 720p camera
-const FPS = 30;
+// Heavy per-pixel work (blur taps, skin filter) at full 720p/30 fps froze weaker phones: cap the processed picture and frame rate there.
+const IS_MOBILE = typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+const MAX_W = IS_MOBILE ? 640 : 960;
+const FPS = IS_MOBILE ? 24 : 30;
 const MASK_W = 256;
 const MASK_H = 144;
 const SEG_BASE = '/mediapipe/';
@@ -100,13 +102,13 @@ void main() {
   if (uBlur > 0.5) {
     float m = smoothstep(0.30, 0.70, texture(uMask, vUv).r);
     vec3 b = vec3(0.0);
-    for (int k = 0; k < 20; k++) {
+    for (int k = 0; k < 12; k++) {
       float fk = float(k);
-      float r = sqrt((fk + 0.5) / 20.0) * 16.0;
+      float r = sqrt((fk + 0.5) / 12.0) * 16.0;
       float a = fk * 2.39996323;
       b += textureLod(uTex, vUv + vec2(cos(a), sin(a)) * r * uPx, 2.5).rgb;
     }
-    b = (b / 20.0) * 0.97;
+    b = (b / 12.0) * 0.97;
     c = mix(b, c0, m);
   }
 
@@ -117,9 +119,9 @@ void main() {
       vec3 sum = vec3(0.0);
       float ws = 0.0;
       float l0 = L(c0);
-      for (int i = -2; i <= 2; i++) {
-        for (int j = -2; j <= 2; j++) {
-          vec3 s = texture(uTex, vUv + vec2(float(i), float(j)) * uPx * 1.6).rgb;
+      for (int i = -1; i <= 1; i++) {
+        for (int j = -1; j <= 1; j++) {
+          vec3 s = texture(uTex, vUv + vec2(float(i), float(j)) * uPx * 2.4).rgb;
           float d = L(s) - l0;
           float w = exp(-d * d * 160.0) * exp(-float(i * i + j * j) * 0.12);
           sum += s * w;
@@ -395,7 +397,7 @@ export function createVideoFx() {
 
       if (def.blur) {
         if (segState === 'idle') ensureSeg();
-        if (segState === 'ready' && !segBusy && frameNo % 2 === 0) {
+        if (segState === 'ready' && !segBusy && frameNo % 3 === 0) {
           segBusy = true;
           Promise.resolve(seg.send({ image: video })).catch(() => { segBusy = false; });
         }
@@ -430,7 +432,7 @@ export function createVideoFx() {
         out = canvas.captureStream(FPS).getVideoTracks()[0] || null;
         if (!out) return null;
         try { out.contentHint = 'motion'; } catch { /* optional */ }
-        timer = setInterval(draw, 16); // checked at ~60 Hz, but only a NEW camera frame is drawn
+        timer = setInterval(draw, IS_MOBILE ? 33 : 16); // checked at ~60 Hz, but only a NEW camera frame is drawn
       }
       return out;
     },

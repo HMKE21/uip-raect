@@ -30,7 +30,7 @@ export async function attachNoiseSuppressor(stream, enabled = true, opts = {}) {
     ctx = new AC({ sampleRate: RNNOISE_SAMPLE_RATE, latencyHint: 'interactive' }); // RNNoise works at 48 kHz only
     const rnnoise = await createRnnoiseNode(ctx);
     if (!rnnoise) { ctx.close(); return null; }
-    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch { /* resumes on the next gesture */ } }
+    if (ctx.state === 'suspended') { try { ctx.resume().catch(() => {}); } catch { /* resumes on the next gesture */ } } // never await: it stays pending until a tap and would freeze the call start
 
     const src = ctx.createMediaStreamSource(new MediaStream([micTrack]));
     const dest = ctx.createMediaStreamDestination();
@@ -49,23 +49,20 @@ export async function attachNoiseSuppressor(stream, enabled = true, opts = {}) {
     const hp = ctx.createBiquadFilter();
     hp.type = 'highpass'; hp.frequency.value = 85; hp.Q.value = 0.7;
     const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.frequency.value = 12000; lp.Q.value = 0.7;
+    lp.type = 'lowpass'; lp.frequency.value = 16000; lp.Q.value = 0.7;
     const mix = ctx.createGain();
     const howl = ctx.createBiquadFilter();
     howl.type = 'notch'; howl.frequency.value = 20000; howl.Q.value = 28;
     // Loudness: RNNoise (and a laptop mic array) hand back a quiet voice. A gentle compressor evens out soft/loud speech, then a
     // make-up gain brings it to a normal call level; the limiter right after it catches peaks so the boost can never clip or squeal.
-    const leveler = ctx.createDynamicsCompressor();
-    leveler.threshold.value = -30; leveler.knee.value = 30; leveler.ratio.value = 2.5; leveler.attack.value = 0.01; leveler.release.value = 0.3; // gentle: a hard/fast compressor pumps the noise floor up between words
-    const makeup = ctx.createGain();
-    makeup.gain.value = (opts && typeof opts.makeupGain === 'number') ? opts.makeupGain : 2.4;
-    const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -3; limiter.knee.value = 2; limiter.ratio.value = 20; limiter.attack.value = 0.002; limiter.release.value = 0.1;
+    // No compressor / make-up gain here any more: boosting after the echo canceller amplified the leftover echo and distorted the voice.
+    const limiter = ctx.createDynamicsCompressor(); // only a safety net against clipping
+    limiter.threshold.value = -2; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.003; limiter.release.value = 0.1;
 
     src.connect(hp);
     hp.connect(rnnoise); rnnoise.connect(gainClean); gainClean.connect(mix);
     hp.connect(gainRaw); gainRaw.connect(mix);
-    mix.connect(lp); lp.connect(howl); howl.connect(leveler); leveler.connect(makeup); makeup.connect(limiter); limiter.connect(dest);
+    mix.connect(lp); lp.connect(howl); howl.connect(limiter); limiter.connect(dest);
 
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
