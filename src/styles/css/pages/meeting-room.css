@@ -684,3 +684,26 @@ a.meeting-files-panel__name:hover { text-decoration: underline; }
   }
 }
 @keyframes meeting-reaction-fade { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---- on-screen reactions (animated with Web Animations in ReactionFx.jsx, so they ignore the "animations off" switch) ---- */
+.meeting-tile__reaction-pop {
+  position: absolute; z-index: 6; left: 50%; top: 38%; font-size: 44px; line-height: 1; pointer-events: none; opacity: 0;
+  transform: translate(-50%, 0); filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+.meeting-fx { position: absolute; inset: 0; z-index: 30; pointer-events: none; overflow: hidden; }
+.meeting-fx__float { position: absolute; bottom: 14px; display: flex; flex-direction: column; align-items: center; gap: 2px; opacity: 0; }
+.meeting-fx__emoji { font-size: 44px; line-height: 1; filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.4)); }
+.meeting-fx__name { font-size: 11px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); color: #fff; }
+
+/* ---- file preview (images / video / audio) ---- */
+.meeting-preview { position: fixed; inset: 0; z-index: 700; display: flex; align-items: center; justify-content: center; padding: clamp(8px, 2vw, 24px); background: rgba(0, 0, 0, 0.7); }
+.meeting-preview__box { display: flex; flex-direction: column; width: min(1000px, 100%); max-height: 92vh; border-radius: 16px; overflow: hidden; background: #14161d; color: #fff; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5); }
+.meeting-preview__head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+.meeting-preview__head strong { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.meeting-preview__size { font-size: 12px; opacity: 0.7; }
+.meeting-preview__btn { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: none; border-radius: 50%; background: rgba(255, 255, 255, 0.1); color: #fff; cursor: pointer; }
+.meeting-preview__btn:hover { background: rgba(255, 255, 255, 0.2); }
+.meeting-preview__body { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 12px; overflow: auto; }
+.meeting-preview__body img, .meeting-preview__body video { max-width: 100%; max-height: 74vh; border-radius: 8px; }
+.meeting-preview__body audio { width: min(480px, 100%); }
+.meeting-preview__msg { margin: 24px; opacity: 0.8; }

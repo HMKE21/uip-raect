@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { attachNoiseSuppressor, noiseSuppressSupported } from '../lib/calls/noiseSuppress';
 import { createCameraFx, cameraFxSupported } from '../lib/cameraFx';
-import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, filesApi, notesApi, pollsApi, recordingsApi } from '../lib/meetingSignaling';
+import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, meetingLifecycleApi, filesApi, notesApi, pollsApi, recordingsApi } from '../lib/meetingSignaling';
 
 /**
  * Round 3 (Signaling) + Round 4 (WebRTC Core). Owns:
@@ -1159,48 +1159,62 @@ export function useMeetingRoom({
     });
   }, [meetingUuid, guestToken]);
 
-  /** Swap the video track we send on every peer connection (and in our local stream) without renegotiating. */
+  /**
+   * Swap the video track we send on every peer connection (and in our local stream) without renegotiating.
+   * The SAME MediaStream object is kept (new track added before the old one is removed): the <video> that shows us follows the
+   * track change by itself, so picking a filter no longer re-binds the preview and no longer flashes black / "refreshes".
+   */
   const swapCameraTrack = useCallback((newTrack, keepOld = false) => {
     const local = localStreamRef.current;
     if (!local) return;
-    local.getVideoTracks().forEach((old) => { local.removeTrack(old); if (old !== newTrack && !keepOld) old.stop(); });
-    local.addTrack(newTrack);
+    const olds = local.getVideoTracks().filter((o) => o !== newTrack);
+    if (!local.getVideoTracks().includes(newTrack)) local.addTrack(newTrack);
+    olds.forEach((old) => { local.removeTrack(old); if (!keepOld) old.stop(); });
     // while presenting, peers keep receiving the screen; the camera comes back when the presentation stops
     if (!screenTrackRef.current) {
       Object.values(cameraTrackSendersRef.current).forEach((sender) => sender.replaceTrack(newTrack).catch(() => {}));
     }
-    setLocalStream(new MediaStream(local.getTracks())); // new object so React re-binds the preview
-    localStreamRef.current = local;
   }, []);
 
   /**
    * Camera look = colour filter + background (none / blur / generated scene / your own picture). Sends a processed track while any
    * of it is active and the raw camera track again when everything is "none". Resolves false (and keeps the previous look) on failure.
    */
+  const lookBusyRef = useRef(false);
   const setCameraLook = useCallback(async (look) => {
-    const raw = rawCameraTrackRef.current;
-    if (!raw || raw.readyState === 'ended') { setNotice({ type: 'camera_unavailable' }); return false; }
-    const next = { filter: look.filter || 'none', background: look.background || 'none' };
-    if (next.filter === 'none' && next.background === 'none') {
-      swapCameraTrack(raw, true);
-      raw.enabled = cameraEnabledRef.current;
+    if (lookBusyRef.current) return false; // one change at a time: a second tap while the first is still applying is ignored
+    lookBusyRef.current = true;
+    try {
+      const raw = rawCameraTrackRef.current;
+      if (!raw || raw.readyState === 'ended') { setNotice({ type: 'camera_unavailable' }); return false; }
+      const next = { filter: look.filter || 'none', background: look.background || 'none' };
+      if (next.filter === 'none' && next.background === 'none') {
+        swapCameraTrack(raw, true);
+        raw.enabled = cameraEnabledRef.current;
+        setCameraLookState(next);
+        return true;
+      }
+      if (!cameraFxSupported()) { setNotice({ type: 'effect_unavailable' }); return false; }
+      try {
+        if (!cameraFxRef.current) cameraFxRef.current = createCameraFx(raw);
+        await cameraFxRef.current.setLook({ ...next, image: look.image });
+      } catch (err) {
+        dbg('camera look failed', err?.message);
+        if (next.background !== 'none') setNotice({ type: 'effect_unavailable' });
+        return false;
+      }
+      const fxTrack = cameraFxRef.current.track;
+      fxTrack.enabled = cameraEnabledRef.current;
+      swapCameraTrack(fxTrack, true);
       setCameraLookState(next);
       return true;
-    }
-    if (!cameraFxSupported()) return false;
-    try {
-      if (!cameraFxRef.current) cameraFxRef.current = createCameraFx(raw);
-      await cameraFxRef.current.setLook({ ...next, image: look.image });
     } catch (err) {
-      dbg('camera look failed', err?.message);
-      if (next.background !== 'none') setNotice({ type: 'effect_unavailable' });
+      dbg('camera look crashed', err?.message);
+      setNotice({ type: 'effect_unavailable' });
       return false;
+    } finally {
+      lookBusyRef.current = false;
     }
-    const fxTrack = cameraFxRef.current.track;
-    fxTrack.enabled = cameraEnabledRef.current;
-    swapCameraTrack(fxTrack, true);
-    setCameraLookState(next);
-    return true;
   }, [swapCameraTrack]);
 
   const toggleCamera = useCallback(async () => {
@@ -1310,17 +1324,25 @@ export function useMeetingRoom({
     signalingApi.leave(meetingUuid, guestToken).catch(() => {});
   }, [meetingUuid, guestToken]);
 
+  /** Host / co-host: close the meeting for everybody (they all get the "meeting ended" screen), then leave it ourselves. */
+  const endMeetingForAll = useCallback(async () => {
+    await meetingLifecycleApi.end(meetingUuid);
+    leftRef.current = true;
+    signalingApi.leave(meetingUuid, guestToken).catch(() => {});
+  }, [meetingUuid, guestToken]);
+
   const clearNotice = useCallback(() => setNotice(null), []);
 
   // ---- بند 7/8 (Chat) ----------------------------------------------------
   // recipientKey=null → رسالة عامة. الرد المباشر من REST بيتضاف فورًا
   // (appendChatMessage بيتكفل بمنع التكرار لما نفس الرسالة ترجع تاني عبر
   // الـ broadcast — راجع docblock appendChatMessage وseenChatIdsRef فوق).
-  const sendChatMessage = useCallback(async (body, { recipientKey = null, replyToMessageId = null, mentionedKeys = null } = {}) => {
+  const sendChatMessage = useCallback(async (body, { recipientKey = null, replyToMessageId = null, mentionedKeys = null, file = null } = {}) => {
     const trimmed = (body || '').trim();
-    if (!trimmed) return;
+    if (!trimmed && !file) return;
     const json = await chatApi.send(meetingUuid, guestToken, {
       body: trimmed,
+      file: file || undefined,
       recipient_key: recipientKey,
       reply_to_message_id: replyToMessageId,
       mentioned_keys: mentionedKeys,
@@ -1482,7 +1504,7 @@ export function useMeetingRoom({
     status, error, meetingStatus, notice, clearNotice,
     localStream, screenStream, hasCamera, micEnabled, cameraEnabled, screenSharing, canShareScreen,
     participants, meshCapacity, hasTurn,
-    toggleMic, toggleCamera, toggleScreenShare, leave,
+    toggleMic, toggleCamera, toggleScreenShare, leave, endMeetingForAll,
     myDisplayName, isHost,
 
     // بند 7/8 — Chat.

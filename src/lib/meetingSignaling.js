@@ -153,8 +153,19 @@ export const chatApi = {
     return api.get(`/api/v1/meetings/${meetingUuid}/chat${s ? `?${s}` : ''}`);
   },
   /** رسالة عامة (recipient_key فاضي) أو خاصة (recipient_key = actor key المستقبل). */
-  send: (meetingUuid, guestToken, data) =>
-    api.post(`/api/v1/meetings/${meetingUuid}/chat`, withGuestToken(guestToken, data)),
+  send: (meetingUuid, guestToken, data) => {
+    // With an attachment the request is multipart (any file type; the server scans it before accepting it).
+    if (data && data.file) {
+      const form = new FormData();
+      form.append('file', data.file);
+      if (data.body) form.append('body', data.body);
+      if (data.recipient_key) form.append('recipient_key', data.recipient_key);
+      if (data.reply_to_message_id) form.append('reply_to_message_id', String(data.reply_to_message_id));
+      if (guestToken) form.append('guest_token', guestToken);
+      return api.postForm(`/api/v1/meetings/${meetingUuid}/chat`, form);
+    }
+    return api.post(`/api/v1/meetings/${meetingUuid}/chat`, withGuestToken(guestToken, data));
+  },
   /** toggle: نفس الإيموجي تاني من نفس الشخص بيشيلها. */
   react: (meetingUuid, guestToken, messageId, emoji) =>
     api.post(`/api/v1/meetings/${meetingUuid}/chat/${messageId}/react`, withGuestToken(guestToken, { emoji })),
@@ -168,6 +179,11 @@ export const chatApi = {
  * docblock for the 403-vs-404 distinction on failure (not modeled here —
  * the caller just surfaces err.message from the api client as-is).
  */
+/** POST /meetings/{uuid}/end — host/co-host only: closes the meeting for EVERYONE (everybody gets the "meeting ended" screen). */
+export const meetingLifecycleApi = {
+  end: (meetingUuid) => api.post(`/api/v1/meetings/${meetingUuid}/end`, {}),
+};
+
 export const hostControlApi = {
   lock: (meetingUuid, locked) =>
     api.post(`/api/v1/meetings/${meetingUuid}/host-controls/lock`, { locked }),

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { TileReaction } from './ReactionFx';
 import Icon from '../../Icon';
 import VolumeBoost from '../../VolumeBoost';
 import { useVolumeBoost } from '../../../lib/volumeBoost';
@@ -197,8 +198,8 @@ export default function ParticipantTile({
       )}
 
       {reaction && (
-        // keyed by the reaction id so every new reaction replays the pop animation
-        <span key={reaction.id} className="meeting-tile__reaction" aria-hidden="true">{reaction.emoji || '👍'}</span>
+        // keyed by the reaction id so every new reaction replays the pop (Web Animations: still visible when the platform's animations are off)
+        <TileReaction key={reaction.id} reaction={reaction} />
       )}
 
       <div className="meeting-tile__badges">

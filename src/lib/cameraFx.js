@@ -7,14 +7,17 @@
  * picture). The raw camera track is never touched, so "No effect" is just swapping the sender back to it. Frames are pumped by a
  * Worker timer (not requestAnimationFrame) so the picture does not freeze while the meeting tab is in the background.
  *
- * Backgrounds other than "none" need person segmentation (MediaPipe selfie model, fetched on demand the first time from a CDN).
- * If it cannot load, setLook() throws and the caller keeps the plain camera.
+ * Backgrounds other than "none" need person segmentation: the MediaPipe selfie-segmentation build that ships with the app in
+ * /public/mediapipe (same files the 1:1 calls use). It is loaded from OUR OWN origin on demand — the page's Content-Security-Policy
+ * (script-src 'self') blocks any CDN, which is why the old CDN loader never worked. If it still cannot load, setLook() throws and the
+ * caller keeps the plain camera; colour filters never need it.
  */
 
 export const CAMERA_FILTERS = [
   { id: 'none', label: 'No effect', css: '' },
-  { id: 'enhance', label: 'Enhance', css: 'brightness(1.06) contrast(1.1) saturate(1.18)' },
-  { id: 'lowlight', label: 'Low light', css: 'brightness(1.35) contrast(1.08) saturate(1.05)' },
+  { id: 'enhance', label: 'Enhance', css: 'brightness(1.06) contrast(1.1) saturate(1.18)', auto: 0.6 },
+  // "Low light" measures the room and lifts the picture by however much it needs (more in a dark room, nothing in a bright one).
+  { id: 'lowlight', label: 'Low light', css: 'brightness(1.12) contrast(1.08) saturate(1.05)', auto: 1 },
   { id: 'soft', label: 'Soft skin', css: 'brightness(1.05) saturate(1.05)', soften: true },
   { id: 'warm', label: 'Warm', css: 'sepia(0.22) saturate(1.2) brightness(1.05)' },
   { id: 'cool', label: 'Cool', css: 'hue-rotate(-10deg) saturate(1.1) brightness(1.04)' },
@@ -126,21 +129,38 @@ export function scenePreview(sceneId) {
 export const cameraFxSupported = () => typeof document !== 'undefined'
   && typeof HTMLCanvasElement !== 'undefined' && typeof HTMLCanvasElement.prototype.captureStream === 'function';
 
-const MP_VERSION = '0.10.14';
-const MP_BASE = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MP_VERSION}`;
-const MP_MODEL = 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite';
-let segmenterPromise = null;
+const SEG_BASE = '/mediapipe/';
+const MASK_W = 256;
+const MASK_H = 144;
+let segLoad = null;
 
+/** Loads /mediapipe/selfie_segmentation.js once (a classic script that defines window.SelfieSegmentation). */
+function loadSegScript() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
+  if (window.SelfieSegmentation) return Promise.resolve(window.SelfieSegmentation);
+  if (segLoad) return segLoad;
+  segLoad = new Promise((resolve, reject) => {
+    const el = document.createElement('script');
+    el.src = `${SEG_BASE}selfie_segmentation.js`;
+    el.async = true;
+    el.onload = () => (window.SelfieSegmentation ? resolve(window.SelfieSegmentation) : reject(new Error('segmentation missing')));
+    el.onerror = () => reject(new Error('segmentation script failed'));
+    document.head.appendChild(el);
+  }).catch((e) => { segLoad = null; throw e; });
+  return segLoad;
+}
+
+let segmenterPromise = null;
+/** One shared segmenter for the whole tab. The result handler is swapped per camera-fx instance. */
 function loadSegmenter() {
   if (!segmenterPromise) {
     segmenterPromise = (async () => {
-      const vision = await import(/* @vite-ignore */ `${MP_BASE}/vision_bundle.mjs`);
-      const files = await vision.FilesetResolver.forVisionTasks(`${MP_BASE}/wasm`);
-      const make = (delegate) => vision.ImageSegmenter.createFromOptions(files, {
-        baseOptions: { modelAssetPath: MP_MODEL, delegate },
-        runningMode: 'VIDEO', outputCategoryMask: false, outputConfidenceMasks: true,
-      });
-      try { return await make('GPU'); } catch { return make('CPU'); }
+      const SS = await loadSegScript();
+      const seg = new SS({ locateFile: (f) => `${SEG_BASE}${f}` });
+      seg.setOptions({ modelSelection: 1, selfieMode: false });
+      seg.onResults((res) => { try { seg.__onResults && seg.__onResults(res); } catch { /* ignore a bad frame */ } });
+      await seg.initialize();
+      return seg;
     })().catch((e) => { segmenterPromise = null; throw e; });
   }
   return segmenterPromise;
@@ -192,8 +212,13 @@ export function createCameraFx(rawTrack) {
   const pctx = personCanvas.getContext('2d');
   const bgCanvas = document.createElement('canvas'); bgCanvas.width = W; bgCanvas.height = H; // generated scene / custom picture, painted once
   const bctx = bgCanvas.getContext('2d');
-  const maskCanvas = document.createElement('canvas');
+  const maskCanvas = document.createElement('canvas'); // the smoothed person mask, as alpha, drawn with destination-in
+  maskCanvas.width = MASK_W; maskCanvas.height = MASK_H;
   const mctx = maskCanvas.getContext('2d');
+  const rawMask = document.createElement('canvas'); // the segmenter's own mask, read back to pixels
+  rawMask.width = MASK_W; rawMask.height = MASK_H;
+  const rctx = rawMask.getContext('2d', { willReadFrequently: true });
+  let useAlpha = null;
   let prevAlpha = null;
   let segmenter = null;
   let haveMask = false;
@@ -205,20 +230,28 @@ export function createCameraFx(rawTrack) {
   let stopped = false;
 
   function updateMask(result) {
-    const m = result && result.confidenceMasks && result.confidenceMasks[0];
+    const m = result && result.segmentationMask;
     if (!m) return;
-    const w = m.width; const h = m.height;
-    const data = m.getAsFloat32Array();
-    if (maskCanvas.width !== w || maskCanvas.height !== h) { maskCanvas.width = w; maskCanvas.height = h; prevAlpha = null; }
+    rctx.clearRect(0, 0, MASK_W, MASK_H);
+    rctx.drawImage(m, 0, 0, MASK_W, MASK_H);
+    const d = rctx.getImageData(0, 0, MASK_W, MASK_H).data;
+    if (useAlpha === null) {
+      let minA = 255;
+      for (let i = 3; i < d.length; i += 4) { if (d[i] < minA) minA = d[i]; }
+      useAlpha = minA < 250; // the confidence lives either in alpha or in the red channel, depending on the build
+    }
+    const off = useAlpha ? 3 : 0;
+    const n = MASK_W * MASK_H;
+    if (!prevAlpha || prevAlpha.length !== n) prevAlpha = new Float32Array(n);
     // Polarity differs between model builds (mask = "person" vs "background"); the person is whatever sits in the middle of the frame.
     let centre = 0; let corners = 0; let nc = 0; let nk = 0;
-    for (let y = Math.floor(h * 0.35); y < Math.floor(h * 0.75); y += 4) for (let x = Math.floor(w * 0.4); x < Math.floor(w * 0.6); x += 4) { centre += data[y * w + x]; nc += 1; }
-    for (let y = 0; y < Math.floor(h * 0.2); y += 4) for (let x = 0; x < Math.floor(w * 0.15); x += 4) { corners += data[y * w + x]; nk += 1; }
+    for (let y = Math.floor(MASK_H * 0.35); y < Math.floor(MASK_H * 0.75); y += 4) for (let x = Math.floor(MASK_W * 0.4); x < Math.floor(MASK_W * 0.6); x += 4) { centre += d[(y * MASK_W + x) * 4 + off]; nc += 1; }
+    for (let y = 0; y < Math.floor(MASK_H * 0.2); y += 4) for (let x = 0; x < Math.floor(MASK_W * 0.15); x += 4) { corners += d[(y * MASK_W + x) * 4 + off]; nk += 1; }
     const invert = nc && nk ? (centre / nc) < (corners / nk) : false;
-    const img = mctx.createImageData(w, h);
-    if (!prevAlpha || prevAlpha.length !== data.length) prevAlpha = new Float32Array(data.length);
-    for (let i = 0; i < data.length; i += 1) {
-      const p = invert ? 1 - data[i] : data[i];
+    const img = mctx.createImageData(MASK_W, MASK_H);
+    for (let i = 0; i < n; i += 1) {
+      let p = d[i * 4 + off] / 255;
+      if (invert) p = 1 - p;
       const a = Math.max(0, Math.min(1, (p - 0.4) / 0.25));       // soft threshold
       prevAlpha[i] = prevAlpha[i] * 0.4 + a * 0.6;                  // temporal smoothing: no flicker on the edges
       img.data[i * 4 + 3] = Math.round(prevAlpha[i] * 255);
@@ -234,8 +267,31 @@ export function createCameraFx(rawTrack) {
     else if (look.scene) SCENES[look.scene](bctx, W, H);
   }
 
+  // ---- auto exposure for the "Low light" / "Enhance" filters: a 16x9 thumbnail every ~15 frames, eased so the picture never "pumps" ----
+  const probe = document.createElement('canvas'); probe.width = 16; probe.height = 9;
+  const pr = probe.getContext('2d', { willReadFrequently: true });
+  let autoGain = 1; let frameNo = 0;
+  function measureLight() {
+    try {
+      pr.drawImage(video, 0, 0, 16, 9);
+      const d = pr.getImageData(0, 0, 16, 9).data;
+      let sum = 0;
+      for (let i = 0; i < d.length; i += 4) sum += (0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]) / 255;
+      const avg = Math.max(0.05, sum / (d.length / 4));
+      const target = Math.min(1.9, Math.max(1, 0.5 / avg)); // aim for a comfortably lit face, never blow out
+      autoGain += (target - autoGain) * 0.25;
+    } catch { /* keep the last value */ }
+  }
+
   function drawFiltered(c) {
-    c.filter = filter.css || 'none';
+    frameNo += 1;
+    let css = filter.css || '';
+    if (filter.auto) {
+      if (frameNo % 15 === 1) measureLight();
+      const gain = 1 + (autoGain - 1) * filter.auto;
+      css = `${css} brightness(${gain.toFixed(3)})`.trim();
+    }
+    c.filter = css || 'none';
     c.drawImage(video, 0, 0, W, H);
     c.filter = 'none';
     if (filter.soften) {
@@ -254,7 +310,10 @@ export function createCameraFx(rawTrack) {
 
     if (wantsBg && segmenter && now - lastSeg > 50 && !segBusy) {
       segBusy = true; lastSeg = now;
-      try { segmenter.segmentForVideo(video, now, (res) => { updateMask(res); segBusy = false; }); } catch { segBusy = false; }
+      try {
+        segmenter.__onResults = (res) => { updateMask(res); segBusy = false; };
+        Promise.resolve(segmenter.send({ image: video })).catch(() => { segBusy = false; });
+      } catch { segBusy = false; }
     }
 
     if (wantsBg && segmenter && haveMask) {
@@ -286,7 +345,7 @@ export function createCameraFx(rawTrack) {
         : (CAMERA_BACKGROUNDS.find((b) => b.id === (look.background || 'none')) || CAMERA_BACKGROUNDS[0]);
       if (nextBg.id !== 'none' && !segmenter) segmenter = await loadSegmenter(); // throws if the model cannot be fetched
       if (nextBg.scene || nextBg.image) paintBackground({ scene: nextBg.scene, image: nextBg.image });
-      haveMask = false; prevAlpha = null;
+      if (nextBg.id !== bg.id) { haveMask = false; prevAlpha = null; } // a filter-only change keeps the current mask: no flash of the plain camera
       filter = nextFilter;
       bg = nextBg;
     },
