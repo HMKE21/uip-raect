@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { attachNoiseSuppressor, noiseSuppressSupported } from '../lib/calls/noiseSuppress';
+import { attachEchoGate, echoGateEnabled, setRemoteAudio, clearRemoteAudio } from '../lib/calls/echoGate';
 import { createCameraFx, cameraFxSupported } from '../lib/cameraFx';
 import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, meetingLifecycleApi, filesApi, notesApi, pollsApi, recordingsApi } from '../lib/meetingSignaling';
 
@@ -571,6 +572,7 @@ export function useMeetingRoom({
     delete cameraTrackSendersRef.current[key];
     delete remoteStreamsRef.current[key];
     delete offeredRef.current[key];
+    setRemoteAudio(`meeting:${key}`, null); // the echo gate stops listening to this person
   }, []);
 
   const createPeer = useCallback((key) => {
@@ -618,6 +620,8 @@ export function useMeetingRoom({
         if (!stream.getTracks().includes(e.track)) stream.addTrack(e.track);
       }
       remoteStreamsRef.current[key] = stream;
+      // echo gate: analysis-only copy of this person's voice, so our mic closes while they are audible
+      if (e.track.kind === 'audio') setRemoteAudio(`meeting:${key}`, new MediaStream([e.track]));
       patchParticipant(key, { remoteStream: stream });
       // a track can be muted at first and unmute when media starts flowing — nudge React so tiles re-bind
       e.track.onunmute = () => patchParticipant(key, { remoteStream: stream });
@@ -728,6 +732,14 @@ export function useMeetingRoom({
           setHasCamera(false);
           setCameraEnabled(false);
           signalingApi.mediaState(meetingUuid, guestToken, { camera_enabled: false }).catch(() => {});
+        }
+        // Forced echo breaker (half-duplex gate, see lib/calls/echoGate.js): the mic is muted while anyone else is audible, so the
+        // speaker can never leak back into what we send — no repeating voice, no whistle, even when the browser's canceller is inactive.
+        if (stream.getAudioTracks().length && echoGateEnabled()) {
+          const gate = await attachEchoGate(stream);
+          if (cancelled) { (gate ? gate.stream : stream).getTracks().forEach((t) => t.stop()); return; }
+          if (gate) stream = gate.stream;
+          dbg('echo gate', gate ? 'on' : 'unavailable, plain mic');
         }
         stream.getVideoTracks().forEach((t) => { t.enabled = hasCameraRef.current ? cameraEnabled : false; });
         stream.getAudioTracks().forEach((t) => { t.enabled = micEnabled; });
@@ -1061,6 +1073,7 @@ export function useMeetingRoom({
     return () => {
       cancelled = true;
       Object.keys(peersRef.current).forEach(closePeer);
+      clearRemoteAudio('meeting:');
       channelRef.current?.stopListening('.media.state.changed');
       if (echoRef.current) {
         echoRef.current.leave(presenceChannelName(meetingUuid));

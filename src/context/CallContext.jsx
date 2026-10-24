@@ -5,6 +5,7 @@ import { useLanguage } from './LanguageContext';
 import { createCallEngine } from '../lib/calls/callEngine';
 import { startTone, stopTone, blip, unlockAudio } from '../lib/calls/ringtone';
 import { attachNoiseSuppressor, noiseSuppressSupported } from '../lib/calls/noiseSuppress';
+import { attachEchoGate, echoGateEnabled, setRemoteAudio } from '../lib/calls/echoGate';
 import { createVideoFx } from '../lib/calls/videoFx';
 import CallUI from '../components/calls/CallUI';
 import { CallCtx, IDLE, useCall } from './callCtx';
@@ -71,18 +72,24 @@ function getUserMedia(opts = {}) {
     else if (opts.facingExact) video.facingMode = { exact: opts.facingExact };
     else video.facingMode = { ideal: opts.facing === 'environment' ? 'environment' : 'user' };
   }
+  // Forced echo breaker: whatever mic stream we end up with goes through the half-duplex gate (see lib/calls/echoGate.js).
+  const withGate = async (s) => {
+    if (!audio || !echoGateEnabled() || !s.getAudioTracks().length) return s;
+    const g = await attachEchoGate(s);
+    return g ? g.stream : s;
+  };
   return navigator.mediaDevices.getUserMedia({ audio, video }).then(async (stream) => {
     if (!audio || !stream.getAudioTracks().length) return stream;
     // The browser already cancels echo and suppresses noise: stacking the neural filter on top of that is what made the voice
     // sound robotic. It is only added where the browser did NOT apply its own suppression.
     let st = {};
     try { st = stream.getAudioTracks()[0].getSettings() || {}; } catch { st = {}; }
-    if (st.noiseSuppression === true && st.echoCancellation !== false) { activeSuppressor = null; return stream; }
+    if (st.noiseSuppression === true && st.echoCancellation !== false) { activeSuppressor = null; return withGate(stream); }
     // Never let the optional filter hold the call at "Starting…": give it a few seconds, then go on with the plain microphone.
     const ns = await withTimeout(attachNoiseSuppressor(stream, noise), 4000, null);
-    if (!ns) { activeSuppressor = null; return stream; }
+    if (!ns) { activeSuppressor = null; return withGate(stream); }
     activeSuppressor = ns;
-    return ns.stream;
+    return withGate(ns.stream);
   });
 }
 
@@ -252,6 +259,8 @@ export function CallProvider({ children }) {
       setRemoteStream: (stream, track) => {
         const el = audioRef.current;
         if (!el) return;
+        // the echo gate listens to the remote voice (analysis only) to know when to close the mic
+        try { setRemoteAudio('call', track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null)); } catch { /* optional */ }
         // Voice only: hand the <audio> a stream with just the audio track, so the video track riding in the same remote stream can never interfere.
         const src = track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null);
         const cur = el.srcObject;
