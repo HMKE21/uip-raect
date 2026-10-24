@@ -100,8 +100,14 @@ export default function InfoPanel({
           <div>
             <div className="msg-info__section-title">{t('Chat background', 'خلفية المحادثة')}</div>
             <div className="msg-wall-picker" role="group" aria-label={t('Chat background', 'خلفية المحادثة')}>
-              {[['dots', t('Calm dots', 'نقاط هادئة')], ['sunset', t('Sunset', 'غروب')], ['night', t('Night', 'ليلي')], ['mint', t('Mint', 'نعناع')]].map(([id, label]) => (
-                <button key={id} type="button" className={`msg-wall-swatch msg-wall-swatch--${id}`} aria-pressed={wall === id} aria-label={label} title={label} onClick={() => onWall(id)} />
+              {[
+                ['dots', t('Classic', 'كلاسيك')], ['aurora', t('Aurora', 'أورورا')], ['lagoon', t('Lagoon', 'لاجون')], ['forest', t('Forest', 'غابة')],
+                ['rose', t('Rose', 'وردي')], ['amber', t('Amber', 'عنبري')], ['graphite', t('Graphite', 'جرافيت')], ['midnight', t('Midnight', 'منتصف الليل')],
+              ].map(([id, label]) => (
+                <button key={id} type="button" className="msg-wall-opt" aria-pressed={wall === id} aria-label={label} title={label} onClick={() => onWall(id)}>
+                  <span className={`msg-wall-swatch msg-wall-swatch--${id}`} />
+                  <em>{label}</em>
+                </button>
               ))}
             </div>
             {onWallAnim && (

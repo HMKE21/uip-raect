@@ -106,7 +106,8 @@ const INFO_KEY = 'uip_msg_info_open';
 const WALL_KEY = 'uip_msg_wallpaper';
 const WALL_ANIM_KEY = 'uip_msg_wallpaper_anim'; // animated wallpaper: off unless the person turns it on
 const WIDE_INFO_MIN = 1480; // from this width the details panel is a real column, below it an overlay
-const WALLPAPERS = ['dots', 'sunset', 'night', 'mint'];
+const WALLPAPERS = ['dots', 'aurora', 'lagoon', 'forest', 'rose', 'amber', 'graphite', 'midnight'];
+const WALL_LEGACY = { sunset: 'rose', night: 'midnight', mint: 'forest' }; // themes saved by the previous version keep working
 const readInfoPref = () => {
   try {
     const v = localStorage.getItem(INFO_KEY);
@@ -117,7 +118,8 @@ const readInfoPref = () => {
 };
 const readWall = () => {
   try {
-    const v = localStorage.getItem(WALL_KEY);
+    const raw = localStorage.getItem(WALL_KEY);
+    const v = WALL_LEGACY[raw] || raw;
     return WALLPAPERS.includes(v) ? v : 'dots';
   } catch { return 'dots'; }
 };
