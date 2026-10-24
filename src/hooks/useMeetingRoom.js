@@ -1335,11 +1335,13 @@ export function useMeetingRoom({
    * Every peer connection always owns one video sender (the camera track, or the black placeholder when there's no camera),
    * and presenting just swaps what that sender carries; stopping swaps the camera (or placeholder) back.
    */
+  const screenBusyRef = useRef(false); // the picker is open / the share is being set up: ignore extra clicks (they used to queue up and freeze the button)
   const toggleScreenShare = useCallback(async () => {
     if (screenSharing) {
       stopScreenShareTrackRef.current?.();
       return;
     }
+    if (screenBusyRef.current) return;
     if (!canShareScreen) {
       setNotice({ type: 'screen_share_locked' });
       return;
@@ -1348,30 +1350,19 @@ export function useMeetingRoom({
       setNotice({ type: 'screen_share_unsupported' });
       return;
     }
+    screenBusyRef.current = true;
     let displayStream = null;
+    let screenTrack = null;
     try {
+      // 1080p / 30 fps made weaker laptops and phones stall (the encoder, not the network). Slides, documents and code stay sharp at
+      // 15 fps, so cap there; the browser still downscales further on its own if the machine struggles.
       displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 15, max: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        video: { frameRate: { ideal: 12, max: 15 }, width: { ideal: 1600, max: 1920 }, height: { ideal: 900, max: 1080 } },
         audio: false,
       });
-      const screenTrack = displayStream.getVideoTracks()[0];
+      screenTrack = displayStream.getVideoTracks()[0];
       if (!screenTrack) throw new Error('No screen track');
       try { screenTrack.contentHint = 'detail'; } catch { /* unsupported — harmless */ }
-
-      await signalingApi.mediaState(meetingUuid, guestToken, { screen_sharing: true });
-
-      screenTrackRef.current = screenTrack;
-      const senders = Object.values(cameraTrackSendersRef.current);
-      await Promise.all(senders.map(async (sender) => {
-        await sender.replaceTrack(screenTrack).catch((e) => dbg('replaceTrack(screen) failed', e?.message));
-        try {
-          const params = sender.getParameters();
-          params.degradationPreference = 'maintain-resolution'; // text must stay sharp; drop frames, not pixels
-          await sender.setParameters(params);
-        } catch { /* not supported everywhere */ }
-      }));
-      setScreenStream(new MediaStream([screenTrack]));
-      setScreenSharing(true);
 
       const stopSharing = () => {
         screenTrack.onended = null;
@@ -1384,16 +1375,41 @@ export function useMeetingRoom({
         signalingApi.mediaState(meetingUuid, guestToken, { screen_sharing: false }).catch(() => {});
         stopScreenShareTrackRef.current = null;
       };
+
+      // Show it on OUR screen straight away — nothing below waits for the server or for the peers.
+      screenTrackRef.current = screenTrack;
+      setScreenStream(new MediaStream([screenTrack]));
+      setScreenSharing(true);
       screenTrack.onended = stopSharing;
       stopScreenShareTrackRef.current = stopSharing;
+      screenBusyRef.current = false;
+
+      // Tell the server and swap every peer's sender IN PARALLEL, in the background. If the server refuses (policy), roll back.
+      const announce = signalingApi.mediaState(meetingUuid, guestToken, { screen_sharing: true }).catch((e) => {
+        if (stopScreenShareTrackRef.current === stopSharing) { stopSharing(); setNotice({ type: 'screen_share_failed' }); }
+        dbg('mediaState(screen) failed', e?.message);
+      });
+      const swap = Promise.all(Object.values(cameraTrackSendersRef.current).map(async (sender) => {
+        await sender.replaceTrack(screenTrack).catch((e) => dbg('replaceTrack(screen) failed', e?.message));
+        try {
+          const params = sender.getParameters();
+          params.degradationPreference = 'balanced'; // 'maintain-resolution' froze the share on slow machines; balanced trades fps/pixels as needed
+          if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+          params.encodings[0].maxBitrate = 2_500_000; // a bounded bitrate keeps the uplink (and the encoder) from choking
+          await sender.setParameters(params);
+        } catch { /* not supported everywhere */ }
+      }));
+      await Promise.all([announce, swap]);
     } catch (err) {
       // never leave a capture running (browser "sharing" banner) if we failed after the picker closed
       displayStream?.getTracks().forEach((t) => t.stop());
-      screenTrackRef.current = null;
+      if (screenTrackRef.current === screenTrack) { screenTrackRef.current = null; stopScreenShareTrackRef.current = null; setScreenStream(null); setScreenSharing(false); }
       if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
         setNotice({ type: 'screen_share_failed' });
         signalingApi.mediaState(meetingUuid, guestToken, { screen_sharing: false }).catch(() => {});
       }
+    } finally {
+      screenBusyRef.current = false;
     }
   }, [screenSharing, canShareScreen, meetingUuid, guestToken]);
 
