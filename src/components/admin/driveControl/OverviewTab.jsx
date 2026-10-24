@@ -4,7 +4,7 @@ import { api, errorMessage } from '../../../api/client';
 import Icon from '../../Icon';
 import { ConfirmModal } from '../adminUi';
 import { ErrorState, Kpi, KpiGrid, Skeleton } from '../AdminPage';
-import { BASE, SETTING_META, UsageBar, catLabel, fmtBytes, useBanner, useL } from './shared';
+import { BASE, SETTING_META, Switch, UsageBar, catLabel, fmtBytes, useBanner, useL } from './shared';
 
 const FEATURES = { uploads: 'feature_uploads', sharing: 'feature_sharing', archive: 'feature_archive', terminal: 'feature_terminal' };
 
