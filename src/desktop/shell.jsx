@@ -306,7 +306,7 @@ export function StartMenu({ ar, tt, user, apps, desktopItems, onOpenApp, onOpenN
   const [q, setQ] = useState('');
   const [found, setFound] = useState([]);
   const content = useContentSearch(q); // text inside your files
-  const name = user?.full_name || user?.email || tt('Student', 'طالب');
+  const name = user?.full_name || user?.email || tt('User', 'مستخدم');
   const list = useMemo(() => apps.filter((a) => `${a.en} ${a.ar} ${a.id}`.toLowerCase().includes(q.trim().toLowerCase())), [apps, q]);
   useEffect(() => {
     const t = q.trim();

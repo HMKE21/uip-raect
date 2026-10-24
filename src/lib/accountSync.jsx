@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { drive, fetchDriveBlob } from './driveApi';
+import { hasMyPc } from '../config/myPc';
 
 /**
  * Per-account UI settings that follow the student to every device.
@@ -140,10 +141,10 @@ function createEngine(uid) {
   };
 }
 
-/** Mount once inside <AuthProvider>; renders nothing. Students only (they own a My PC drive). */
+/** Mount once inside <AuthProvider>; renders nothing. Every role that owns a My PC drive (all portals). */
 export default function AccountSettingsSync() {
   const { user } = useAuth();
-  const uid = user?.role === 'student' ? user.id : null;
+  const uid = hasMyPc(user?.role) ? user.id : null;
   useEffect(() => (uid ? createEngine(uid) : undefined), [uid]);
   return null;
 }

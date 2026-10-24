@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 /**
  * Drop-in replacement for react-router's useSearchParams() for pages whose parameters (a folder id, a file id…)
  * should NOT appear in the address bar. The values live in the history entry's `state` instead, so Back / Forward
- * and a page refresh still work, but the URL stays a clean `/student/my-pc` (nothing to read over a shoulder,
+ * and a page refresh still work, but the URL stays a clean `/<portal>/my-pc` (nothing to read over a shoulder,
  * paste into a chat or leave in browser history / screenshots). An old link that still carries `?folder=26` is
  * accepted once and the query is stripped from the address bar right away.
  */

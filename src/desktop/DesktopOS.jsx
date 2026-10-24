@@ -521,7 +521,7 @@ export default function DesktopOS() {
     setOverlay(null);
     if (!link) { if (it.src === 'local' || it.localId) openApp('explorer'); return; } // an upload entry → the file explorer
     if (/^(https?:)?\/\//i.test(link)) { window.open(link, '_blank', 'noopener,noreferrer'); return; }
-    if (link.startsWith('/student/my-pc')) { navigate(link); return; }
+    if (/^\/[a-z-]+\/my-pc(\/|$)/.test(link)) { navigate(link); return; }
     ask({ kind: 'confirm', title: tt('Open this in the portal?', 'فتح ده في البوابة؟'), text: tt('You will leave the desktop and go to the portal page. Your files stay saved.', 'هتخرج من سطح المكتب وتروح لصفحة في البوابة. ملفاتك فاضلة محفوظة.'), action: tt('Open', 'فتح'), icon: 'logout' })
       .then((ok) => { if (ok) navigate(link); });
   }, [ask, navigate, nc, openApp, tt]);
@@ -980,7 +980,7 @@ export default function DesktopOS() {
       case 'taskmgr': return <TaskManagerApp list={wm.list} ar={ar} tt={tt} usage={desk.usage} onEnd={(id) => dispatch({ type: 'close', id })} onFocus={(id) => dispatch({ type: 'focus', id })} />;
       case 'shortcuts': return <ShortcutsApp ar={ar} tt={tt} />;
       case 'notes': return <NotesApp uid={user?.id} tt={tt} ar={ar} />;
-      case 'calendar': return <CalendarApp uid={user?.id} tt={tt} ar={ar} onGo={(p) => navigate(p)} />;
+      case 'calendar': return <CalendarApp uid={user?.id} role={user?.role} tt={tt} ar={ar} onGo={(p) => navigate(p)} />;
       case 'calculator': return <SciCalc tt={tt} />;
       case 'terminal': return <Suspense fallback={WinFallback}><TerminalApp tt={tt} /></Suspense>;
       default: return null;

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../components/Icon';
 import { api } from '../api/client';
 import { toDate } from '../components/exam/examUi';
+import { showsExams } from '../config/myPc';
+import { portalPrefix } from '../config/navConfig';
 import './miniApps.css';
 
 /* ------------------------------------------------------------------------------------------------------------------
@@ -90,7 +92,8 @@ const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0
 const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const KIND_COLOR = { exam: '#ff453a', meeting: '#0a84ff', task: '#30d158' };
 
-export function CalendarApp({ uid, tt, ar, onGo }) {
+export function CalendarApp({ uid, role, tt, ar, onGo }) {
+  const withExams = showsExams(role);
   const lc = ar ? 'ar-EG' : 'en-US';
   const today = useMemo(() => new Date(), []);
   const [cur, setCur] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
@@ -104,9 +107,10 @@ export function CalendarApp({ uid, tt, ar, onGo }) {
   // exams: the student's list (all windows); meetings / lectures: the month being shown (a little padding on both sides)
   useEffect(() => {
     let live = true;
+    if (!showsExams(role)) return undefined; // only students sit exams; every other role just sees meetings, lectures and their own tasks
     api.get('/api/v1/exam-system/my-exams').then((j) => { if (live) setExams(Array.isArray(j.data) ? j.data : []); }).catch(() => { if (live) setState('partial'); });
     return () => { live = false; };
-  }, []);
+  }, [role]);
   useEffect(() => {
     let live = true;
     const start = new Date(cur.getFullYear(), cur.getMonth() - 1, 20); const end = new Date(cur.getFullYear(), cur.getMonth() + 1, 12);
@@ -117,7 +121,7 @@ export function CalendarApp({ uid, tt, ar, onGo }) {
 
   const events = useMemo(() => {
     const out = [];
-    exams.forEach((e) => { const s = toDate(e.start_at); if (s) out.push({ id: `x${e.id}`, kind: 'exam', at: s, end: toDate(e.end_at), title: e.title, sub: e.subject || '', go: `/student/my-exams/${e.id}` }); });
+    exams.forEach((e) => { const s = toDate(e.start_at); if (s) out.push({ id: `x${e.id}`, kind: 'exam', at: s, end: toDate(e.end_at), title: e.title, sub: e.subject || '', go: `/${portalPrefix(role)}/my-exams/${e.id}` }); });
     meetings.forEach((m) => { const s = toDate(m.scheduled_start_at || m.started_at); if (s) out.push({ id: `m${m.id ?? m.uuid}`, kind: 'meeting', at: s, end: toDate(m.scheduled_end_at), title: m.title, sub: '', go: null }); });
     tasks.forEach((t) => { const [h, mi] = (t.time || '').split(':').map(Number); const d = new Date(`${t.date}T00:00:00`); if (!Number.isNaN(h)) d.setHours(h, mi || 0); out.push({ id: t.id, kind: 'task', at: d, end: null, title: t.title, sub: '', hasTime: !!t.time }); });
     return out.sort((a, b) => a.at - b.at);
@@ -174,12 +178,12 @@ export function CalendarApp({ uid, tt, ar, onGo }) {
             );
           })}
         </div>
-        <footer className="os-cal2__legend">{Object.keys(KIND_COLOR).map((k) => <span key={k}><u style={{ background: KIND_COLOR[k] }} />{kindLabel[k]}</span>)}</footer>
+        <footer className="os-cal2__legend">{Object.keys(KIND_COLOR).filter((k) => withExams || k !== 'exam').map((k) => <span key={k}><u style={{ background: KIND_COLOR[k] }} />{kindLabel[k]}</span>)}</footer>
       </section>
       <aside className="os-cal2__side">
         <h4>{day.toLocaleDateString(lc, { weekday: 'long', day: 'numeric', month: 'long' })}</h4>
-        {state === 'loading' && <p className="os-cal2__note">{tt('Loading your exams and lectures…', 'بيحمّل الامتحانات والمحاضرات…')}</p>}
-        {state === 'offline' && <p className="os-cal2__note">{tt('Could not load exams and lectures. Your own tasks still work.', 'مقدرتش أحمّل الامتحانات والمحاضرات. مهامك الشخصية شغالة.')}</p>}
+        {state === 'loading' && <p className="os-cal2__note">{(withExams ? tt('Loading your exams and lectures…', 'بيحمّل الامتحانات والمحاضرات…') : tt('Loading your meetings and lectures…', 'بيحمّل الاجتماعات والمحاضرات…'))}</p>}
+        {state === 'offline' && <p className="os-cal2__note">{(withExams ? tt('Could not load exams and lectures. Your own tasks still work.', 'مقدرتش أحمّل الامتحانات والمحاضرات. مهامك الشخصية شغالة.') : tt('Could not load meetings and lectures. Your own tasks still work.', 'مقدرتش أحمّل الاجتماعات والمحاضرات. مهامك الشخصية شغالة.'))}</p>}
         {state === 'partial' && <p className="os-cal2__note">{tt('Part of the schedule could not be loaded.', 'جزء من الجدول ماتحمّلش.')}</p>}
         <ul className="os-cal2__events">
           {dayEvents.length === 0 && state !== 'loading' && <li className="os-cal2__none">{tt('Nothing scheduled.', 'مفيش حاجة في اليوم ده.')}</li>}

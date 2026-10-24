@@ -54,7 +54,7 @@ function Tile({ on, icon, label, sub, onClick, disabled }) {
 
 /** Quick settings flyout (network / theme / language / full screen / lock + brightness + battery). Every control does something real. */
 export function QuickSettings({ tt, ar, theme, online, battery, brightness, setBrightness, onTheme, onLocale, onFullscreen, onLock, onSettings, fullscreen, user }) {
-  const name = user?.full_name || user?.email || tt('Student', 'طالب');
+  const name = user?.full_name || user?.email || tt('User', 'مستخدم');
   return (
     <div className="os-fly os-qs" role="dialog" aria-label={tt('Quick settings', 'الإعدادات السريعة')} onPointerDown={(e) => e.stopPropagation()}>
       <div className="os-qs__grid">
