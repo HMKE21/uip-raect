@@ -4,6 +4,7 @@ import { useAuth } from './AuthContext';
 import { useLanguage } from './LanguageContext';
 import { createCallEngine } from '../lib/calls/callEngine';
 import { startTone, stopTone, blip, unlockAudio } from '../lib/calls/ringtone';
+import { attachNoiseSuppressor, noiseSuppressSupported } from '../lib/calls/noiseSuppress';
 import { createVideoFx } from '../lib/calls/videoFx';
 import CallUI from '../components/calls/CallUI';
 import { CallCtx, IDLE, useCall } from './callCtx';
@@ -37,6 +38,9 @@ const readNoisePref = () => { try { return localStorage.getItem(NOISE_KEY) !== '
  * Noise suppression / echo cancellation / auto gain are the browser's built-in processing (the same engine Meet-style
  * web calls use); `voiceIsolation` is picked up by browsers that support it and ignored elsewhere.
  */
+// The active noise-isolation graph of the current call (one mic at a time); the engine's on/off switch flips it.
+let activeSuppressor = null;
+
 function getUserMedia(opts = {}) {
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     const e = new Error('unsupported');
@@ -49,7 +53,9 @@ function getUserMedia(opts = {}) {
     echoCancellation: true,
     noiseSuppression: noise,
     // auto-gain keeps raising a quiet mic, which feeds speaker->mic howl when two devices are close: only with the noise switch on
-    autoGainControl: noise,
+    // AGC keeps raising the gain on a quiet mic - that is what turns room noise into a loud hiss and lets two nearby devices start whistling.
+    // With the neural isolation available it is not needed (the browser's own filter + AEC stay on).
+    autoGainControl: noise && !noiseSuppressSupported(),
     voiceIsolation: { ideal: noise },
     channelCount: { ideal: 1 },
   };
@@ -59,7 +65,14 @@ function getUserMedia(opts = {}) {
     width: { ideal: mobile ? 960 : 1280 }, height: { ideal: mobile ? 540 : 720 }, frameRate: mobile ? { ideal: 20, max: 24 } : { ideal: 24, max: 30 },
     facingMode: { ideal: opts.facing === 'environment' ? 'environment' : 'user' },
   } : false;
-  return navigator.mediaDevices.getUserMedia({ audio, video });
+  return navigator.mediaDevices.getUserMedia({ audio, video }).then(async (stream) => {
+    if (!audio || !stream.getAudioTracks().length) return stream;
+    // Neural noise isolation (RNNoise). Always built when supported, so the in-call switch can turn it on/off instantly.
+    const ns = await attachNoiseSuppressor(stream, noise);
+    if (!ns) { activeSuppressor = null; return stream; }
+    activeSuppressor = ns;
+    return ns.stream;
+  });
 }
 
 function getDisplayMedia() {
@@ -215,7 +228,7 @@ export function CallProvider({ children }) {
       setLocalVideo: (stream) => setMedia((m) => (m.local === stream ? m : { ...m, local: stream })),
       setRemoteVideo: (stream) => setMedia((m) => (m.remote === stream ? m : { ...m, remote: stream })),
       initialNoise: readNoisePref(),
-      onPref: (key, value) => { if (key === 'noise') { try { localStorage.setItem(NOISE_KEY, value ? '1' : '0'); } catch { /* private mode */ } } },
+      onPref: (key, value) => { if (key === 'noise') { try { activeSuppressor && activeSuppressor.setEnabled(!!value); } catch { /* ignore */ } try { localStorage.setItem(NOISE_KEY, value ? '1' : '0'); } catch { /* private mode */ } } },
       createPc: (cfg) => new RTCPeerConnection(cfg),
       tones: { start: startTone, stop: stopTone, blip },
       setRemoteStream: (stream, track) => {
