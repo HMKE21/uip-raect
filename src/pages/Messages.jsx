@@ -265,6 +265,30 @@ export default function Messages() {
     return () => document.body.classList.remove('msg-thread-open');
   }, [activeId]);
 
+  // Mobile browsers resize the visible area as the address / bottom bars slide in and out (and when the keyboard opens). Feed the real
+  // visible height to the CSS so the open chat always fills exactly what the user sees (see messaging-mobile.css).
+  useEffect(() => {
+    if (!activeId) return undefined;
+    const vv = window.visualViewport;
+    const root = document.documentElement;
+    const apply = () => {
+      const h = vv ? vv.height : window.innerHeight;
+      root.style.setProperty('--vvh', `${Math.round(h)}px`);
+      root.style.setProperty('--vvt', `${Math.round(vv ? vv.offsetTop : 0)}px`);
+    };
+    apply();
+    if (vv) { vv.addEventListener('resize', apply); vv.addEventListener('scroll', apply); }
+    window.addEventListener('resize', apply);
+    window.addEventListener('orientationchange', apply);
+    return () => {
+      if (vv) { vv.removeEventListener('resize', apply); vv.removeEventListener('scroll', apply); }
+      window.removeEventListener('resize', apply);
+      window.removeEventListener('orientationchange', apply);
+      root.style.removeProperty('--vvh');
+      root.style.removeProperty('--vvt');
+    };
+  }, [activeId]);
+
   const onBack = useCallback(() => {
     // Drop /:conversationId from the URL so re-opening the same link
     // (e.g. from a notification) works again.

@@ -12,7 +12,9 @@ const MediaEditorModal = lazy(() => import('../messaging/MediaEditorModal'));
 import { AI_STRINGS, isTempId, renderMarkdown, fmtTime, roleContent, greeting, groupConversations, relTime } from './aiAssistantUtils';
 
 const API = '/api/v1/ai-assistant';
-const AI_WALLS = ['none', 'dots', 'sunset', 'night', 'mint', 'ocean'];
+const AI_WALLS = ['none', 'aurora', 'lagoon', 'forest', 'rose', 'amber', 'graphite', 'midnight'];
+// themes saved by the previous version keep working
+const AI_WALL_LEGACY = { dots: 'none', sunset: 'amber', night: 'midnight', mint: 'forest', ocean: 'lagoon' };
 const readPref = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
 const writePref = (k, v) => { try { localStorage.setItem(k, v); } catch { /* not remembered */ } };
 
@@ -62,7 +64,7 @@ export default function AiAssistantWidget({ role, user }) {
   const [historyHidden, setHistoryHidden] = useState(() => readPref('uip_ai_history_hidden') === '1');
   const toggleHistory = () => setHistoryHidden((h) => { writePref('uip_ai_history_hidden', h ? '0' : '1'); return !h; });
   // Chat background theme (same idea as the people-to-people messenger).
-  const [wall, setWall] = useState(() => { const v = readPref('uip_ai_wallpaper'); return AI_WALLS.includes(v) ? v : 'none'; });
+  const [wall, setWall] = useState(() => { const raw = readPref('uip_ai_wallpaper'); const v = AI_WALL_LEGACY[raw] || raw; return AI_WALLS.includes(v) ? v : 'none'; });
   const [wallOpen, setWallOpen] = useState(false);
   const pickWall = (id) => { setWall(id); writePref('uip_ai_wallpaper', id); setWallOpen(false); };
   // Multi-select + bulk delete of conversations.
