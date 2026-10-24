@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBackLayer } from '../../../lib/backStack';
 import { useMeetingRoom, meetingLog } from '../../../hooks/useMeetingRoom';
 import ParticipantTile from './ParticipantTile';
-import { CAMERA_EFFECTS } from '../../../lib/cameraFx';
+import { CAMERA_FILTERS, CAMERA_BACKGROUNDS, scenePreview } from '../../../lib/cameraFx';
 import ChatPanel from './ChatPanel';
 import ParticipantsPanel from './ParticipantsPanel';
 import FilesPanel from './FilesPanel';
@@ -108,6 +108,27 @@ export default function MeetingRoomShell({
   const [moreOpen, setMoreOpen] = useState(false);
   const [fxOpen, setFxOpen] = useState(false);
   const [fxBusy, setFxBusy] = useState(null);
+  const fxFileRef = useRef(null);
+  const fxImageRef = useRef(null); // the picture picked with "Upload your own" (kept so a filter change doesn't lose it)
+  async function applyLook(patch) {
+    const id = patch.background ?? patch.filter;
+    setFxBusy(id);
+    try {
+      const next = { ...room.cameraLook, ...patch };
+      if (next.background === 'custom' && !fxImageRef.current) next.background = 'none';
+      await room.setCameraLook({ ...next, image: next.background === 'custom' ? fxImageRef.current : undefined });
+    } finally { setFxBusy(null); }
+  }
+  async function onPickBackground(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setFxBusy('custom');
+    try {
+      fxImageRef.current = await createImageBitmap(file);
+      await room.setCameraLook({ ...room.cameraLook, background: 'custom', image: fxImageRef.current });
+    } catch { /* unreadable image: keep the current look */ } finally { setFxBusy(null); }
+  }
   const dockRef = useRef(null);
   const [elapsed, setElapsed] = useState('00:00');
   useEffect(() => {
@@ -269,7 +290,7 @@ export default function MeetingRoomShell({
       return `${t('You were muted by the host.')}${notice.by ? ` (${notice.by})` : ''}`;
     }
     if (notice.type === 'echo_detected') return t('Audio feedback detected — another device nearby is looping your voice, so your mic was muted. Use headphones, or turn Speakers off in More if you are in the same room as them.');
-    if (notice.type === 'effect_unavailable') return t("Background blur couldn't load (it needs an internet connection to its model). A colour effect still works.");
+    if (notice.type === 'effect_unavailable') return t("Backgrounds and blur couldn't load (they need an internet connection to download their model). Colour filters still work.");
     if (notice.type === 'camera_unavailable') return t("Couldn't open a camera. Check the browser's camera permission and that no other app is using it.");
     if (notice.type === 'screen_share_unsupported') return t("This browser can't share your screen.");
     if (notice.type === 'screen_share_failed') return t('Screen sharing could not start. Please try again.');
@@ -533,21 +554,44 @@ export default function MeetingRoomShell({
                 icon="ai-spark"
                 label={t('Effects')}
                 title={t('Camera effects')}
-                state={fxOpen || room.cameraEffect !== 'none' ? 'is-active' : ''}
+                state={fxOpen || room.cameraLook.filter !== 'none' || room.cameraLook.background !== 'none' ? 'is-active' : ''}
                 disabled={!room.hasCamera}
                 onClick={() => { setFxOpen((v) => !v); setMoreOpen(false); setReactionsOpen(false); }}
               />
               {fxOpen && (
                 <div className="meeting-room__menu meeting-room__fx" role="menu">
-                  <div className="meeting-room__fx-title">{t('Camera effects')}</div>
+                  <div className="meeting-room__fx-title">{t('Backgrounds')}</div>
+                  <div className="meeting-room__fx-bgs">
+                    {CAMERA_BACKGROUNDS.map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        title={t(b.label)}
+                        disabled={fxBusy !== null}
+                        className={`meeting-room__fx-bg ${room.cameraLook.background === b.id ? 'is-on' : ''}`}
+                        onClick={() => applyLook({ background: b.id })}
+                      >
+                        {b.scene
+                          ? <img src={scenePreview(b.scene)} alt="" />
+                          : <span className={`meeting-room__fx-bg-ico ${b.blur ? 'is-blur' : ''}`}>{b.blur ? <Icon name="eye-off" size={16} /> : <Icon name="x" size={16} />}</span>}
+                        <em>{fxBusy === b.id ? '…' : t(b.label)}</em>
+                      </button>
+                    ))}
+                    <button type="button" className={`meeting-room__fx-bg ${room.cameraLook.background === 'custom' ? 'is-on' : ''}`} disabled={fxBusy !== null} onClick={() => fxFileRef.current?.click()} title={t('Upload your own')}>
+                      <span className="meeting-room__fx-bg-ico"><Icon name="plus" size={16} /></span>
+                      <em>{fxBusy === 'custom' ? '…' : t('Upload your own')}</em>
+                    </button>
+                    <input ref={fxFileRef} type="file" accept="image/*" hidden onChange={onPickBackground} />
+                  </div>
+                  <div className="meeting-room__fx-title">{t('Filters')}</div>
                   <div className="meeting-room__fx-grid">
-                    {CAMERA_EFFECTS.map((fx) => (
+                    {CAMERA_FILTERS.map((fx) => (
                       <button
                         key={fx.id}
                         type="button"
-                        className={`meeting-room__fx-chip ${room.cameraEffect === fx.id ? 'is-on' : ''}`}
+                        className={`meeting-room__fx-chip ${room.cameraLook.filter === fx.id ? 'is-on' : ''}`}
                         disabled={fxBusy !== null}
-                        onClick={async () => { setFxBusy(fx.id); await room.setCameraEffect(fx.id); setFxBusy(null); }}
+                        onClick={() => applyLook({ filter: fx.id })}
                       >
                         {fxBusy === fx.id ? '…' : t(fx.label)}
                       </button>

@@ -105,3 +105,13 @@
 .meeting-room__fx-chip:hover:not(:disabled) { background: var(--mr-fill-2); }
 .meeting-room__fx-chip.is-on { background: var(--mr-primary); border-color: var(--mr-primary); color: #fff; }
 .meeting-room__fx-chip:disabled { opacity: 0.6; cursor: wait; }
+
+.meeting-room__fx { min-width: 300px; max-width: min(340px, 92vw); max-height: 70vh; overflow-y: auto; }
+.meeting-room__fx-bgs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+.meeting-room__fx-bg { position: relative; display: flex; flex-direction: column; gap: 4px; padding: 0; border: 2px solid transparent; border-radius: 12px; background: none; cursor: var(--cur-pointer, pointer); color: var(--mr-text); font-family: inherit; }
+.meeting-room__fx-bg img, .meeting-room__fx-bg-ico { width: 100%; aspect-ratio: 16 / 10; border-radius: 9px; object-fit: cover; background: var(--mr-fill-2); display: flex; align-items: center; justify-content: center; }
+.meeting-room__fx-bg-ico.is-blur { background: linear-gradient(135deg, var(--mr-fill-2), var(--mr-fill-3)); }
+.meeting-room__fx-bg em { font-style: normal; font-size: 11px; font-weight: 600; text-align: center; padding-bottom: 2px; }
+.meeting-room__fx-bg:hover:not(:disabled) { border-color: var(--mr-line-strong); }
+.meeting-room__fx-bg.is-on { border-color: var(--mr-primary); }
+.meeting-room__fx-bg:disabled { opacity: 0.6; cursor: wait; }

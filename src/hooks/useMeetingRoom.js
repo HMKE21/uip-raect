@@ -270,7 +270,7 @@ export function useMeetingRoom({
   // Round 5 — بند 11 (Raise Hand + Reactions).
   const [handRaised, setHandRaised] = useState(false);
   const [reactions, setReactions] = useState([]); // ephemeral: [{id, key, displayName, type, emoji}], auto-pruned
-  const [cameraEffect, setCameraEffectState] = useState('none');
+  const [cameraLook, setCameraLookState] = useState({ filter: 'none', background: 'none' });
   const [reactionLog, setReactionLog] = useState([]); // same events, kept (capped) so the chat panel can list "X reacted 👍" like Zoom
   // Noise isolation (RNNoise) — `noiseOn` is the switch, `noiseAvailable` is whether the neural graph could be built here.
   const [noiseOn, setNoiseOn] = useState(readNoisePref);
@@ -1173,29 +1173,33 @@ export function useMeetingRoom({
     localStreamRef.current = local;
   }, []);
 
-  /** Camera effects: send a processed track (filter / blur) instead of the raw camera, or switch back to the raw one. */
-  const setCameraEffect = useCallback(async (id) => {
+  /**
+   * Camera look = colour filter + background (none / blur / generated scene / your own picture). Sends a processed track while any
+   * of it is active and the raw camera track again when everything is "none". Resolves false (and keeps the previous look) on failure.
+   */
+  const setCameraLook = useCallback(async (look) => {
     const raw = rawCameraTrackRef.current;
     if (!raw || raw.readyState === 'ended') { setNotice({ type: 'camera_unavailable' }); return false; }
-    if (id === 'none') {
+    const next = { filter: look.filter || 'none', background: look.background || 'none' };
+    if (next.filter === 'none' && next.background === 'none') {
       swapCameraTrack(raw, true);
       raw.enabled = cameraEnabledRef.current;
-      setCameraEffectState('none');
+      setCameraLookState(next);
       return true;
     }
     if (!cameraFxSupported()) return false;
     try {
       if (!cameraFxRef.current) cameraFxRef.current = createCameraFx(raw);
-      await cameraFxRef.current.setEffect(id);
+      await cameraFxRef.current.setLook({ ...next, image: look.image });
     } catch (err) {
-      dbg('camera effect failed', err?.message);
-      if (id === 'blur') setNotice({ type: 'effect_unavailable' });
+      dbg('camera look failed', err?.message);
+      if (next.background !== 'none') setNotice({ type: 'effect_unavailable' });
       return false;
     }
     const fxTrack = cameraFxRef.current.track;
     fxTrack.enabled = cameraEnabledRef.current;
     swapCameraTrack(fxTrack, true);
-    setCameraEffectState(id);
+    setCameraLookState(next);
     return true;
   }, [swapCameraTrack]);
 
@@ -1486,7 +1490,7 @@ export function useMeetingRoom({
 
     // بند 11 — Raise Hand + Reactions.
     handRaised, toggleHand, reactions, reactionLog, sendReaction,
-    cameraEffect, setCameraEffect,
+    cameraLook, setCameraLook,
 
     // Audio — noise isolation switch.
     noiseOn, noiseAvailable, toggleNoise, speakersMuted, toggleSpeakers,
