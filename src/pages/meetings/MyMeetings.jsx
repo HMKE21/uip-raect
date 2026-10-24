@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import Icon from '../../components/Icon';
 import { useTranslations } from '../../context/LanguageContext';
 import { portalPrefix } from '../../config/navConfig';
+import { DurationPicker, ToggleRow, durationPayload } from '../../components/meetings/MeetingFormParts';
 import i18nCommon from '../../i18n/common';
 import i18nMeetings from '../../i18n/shared/meetings';
 
@@ -55,7 +56,7 @@ function CreateMeetingModal({ onClose, onCreated }) {
   const [description, setDescription] = useState('');
   const [type, setType] = useState('instant');
   const [scheduledStartAt, setScheduledStartAt] = useState('');
-  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [durationMinutes, setDurationMinutes] = useState(null); // null = open-ended (no end time)
   const [maxParticipants, setMaxParticipants] = useState('');
   const [waitingRoomEnabled, setWaitingRoomEnabled] = useState(true);
   const [allowGuests, setAllowGuests] = useState(true); // link-first: anyone with the link can join without an account
@@ -73,7 +74,7 @@ function CreateMeetingModal({ onClose, onCreated }) {
         description: description.trim() || null,
         type,
         scheduled_start_at: type === 'scheduled' && scheduledStartAt ? scheduledStartAt : null,
-        duration_minutes: Number(durationMinutes) || 60,
+        duration_minutes: durationPayload(durationMinutes),
         max_participants: maxParticipants ? Number(maxParticipants) : null,
         waiting_room_enabled: waitingRoomEnabled,
         allow_guests: allowGuests,
@@ -88,71 +89,71 @@ function CreateMeetingModal({ onClose, onCreated }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-box card glass-panel" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
-        <h2 className="modal-box__title text-h3">{t('Create Meeting')}</h2>
-        <form onSubmit={handleSubmit} style={CARD}>
-          <div className="form-group">
-            <label className="form-label">{t('Title')}</label>
-            <input className="form-input" required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">{t('Description')}</label>
-            <textarea className="form-input" rows={3} maxLength={5000} value={description} onChange={(e) => setDescription(e.target.value)} />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">{t('Type')}</label>
-            <div style={{ display: 'flex', gap: 'var(--space-4)' }}>
-              <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input type="radio" name="meeting-type" checked={type === 'instant'} onChange={() => setType('instant')} />
-                {t('Instant')}
-              </label>
-              <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <input type="radio" name="meeting-type" checked={type === 'scheduled'} onChange={() => setType('scheduled')} />
-                {t('Scheduled')}
-              </label>
+      <div className="modal-box card glass-panel mtg-dialog" onClick={(e) => e.stopPropagation()}>
+        <div className="mtg-dialog__head">
+          <h2>{t('Create Meeting')}</h2>
+          <p>{t('Set it up in a few seconds — you can change everything later.')}</p>
+        </div>
+        <form onSubmit={handleSubmit} style={{ display: 'contents' }}>
+          <div className="mtg-dialog__body">
+            <div className="mtg-field">
+              <label>{t('Title')}</label>
+              <input className="form-input" required autoFocus maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} />
             </div>
+
+            <div className="mtg-field">
+              <label>{t('Description')}</label>
+              <textarea className="form-input" rows={2} maxLength={5000} value={description} onChange={(e) => setDescription(e.target.value)} />
+            </div>
+
+            <div className="mtg-field">
+              <span className="mtg-label">{t('Type')}</span>
+              <div className="mtg-seg">
+                <label className={`mtg-seg__opt ${type === 'instant' ? 'is-on' : ''}`}>
+                  <input type="radio" name="meeting-type" checked={type === 'instant'} onChange={() => setType('instant')} />
+                  <span className="mtg-seg__ico"><Icon name="video" size={18} /></span>
+                  <span className="mtg-seg__txt"><strong>{t('Instant')}</strong><span>{t('Start right now')}</span></span>
+                </label>
+                <label className={`mtg-seg__opt ${type === 'scheduled' ? 'is-on' : ''}`}>
+                  <input type="radio" name="meeting-type" checked={type === 'scheduled'} onChange={() => setType('scheduled')} />
+                  <span className="mtg-seg__ico"><Icon name="calendar" size={18} /></span>
+                  <span className="mtg-seg__txt"><strong>{t('Scheduled')}</strong><span>{t('Pick a date and time')}</span></span>
+                </label>
+              </div>
+            </div>
+
+            {type === 'scheduled' && (
+              <div className="mtg-field">
+                <label>{t('Scheduled Start')}</label>
+                <input className="form-input" type="datetime-local" required value={scheduledStartAt} onChange={(e) => setScheduledStartAt(e.target.value)} />
+              </div>
+            )}
+
+            <div className="mtg-field">
+              <span className="mtg-label">{t('Duration')}</span>
+              <DurationPicker value={durationMinutes} onChange={setDurationMinutes} />
+            </div>
+
+            <div className="mtg-row">
+              <div className="mtg-field">
+                <label>{t('Max Participants')}</label>
+                <input className="form-input" type="number" min="2" placeholder={t('No limit')} value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)} />
+              </div>
+              <div className="mtg-field">
+                <label>{t('Password (optional)')}</label>
+                <input className="form-input" type="text" maxLength={100} placeholder={t('Leave blank for no password')} value={password} onChange={(e) => setPassword(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="mtg-toggles">
+              <ToggleRow checked={waitingRoomEnabled} onChange={setWaitingRoomEnabled} title={t('Waiting Room')} hint={t('Enable a waiting room — you approve each participant before they join.')} />
+              <ToggleRow checked={allowGuests} onChange={setAllowGuests} title={t('Allow Guests')} hint={t('Allow people without an account to join with a link.')} />
+            </div>
+
+            {error && <p className="form-error" style={{ margin: 0 }}>{error}</p>}
           </div>
 
-          {type === 'scheduled' && (
-            <div className="form-group">
-              <label className="form-label">{t('Scheduled Start')}</label>
-              <input className="form-input" type="datetime-local" required={type === 'scheduled'} value={scheduledStartAt} onChange={(e) => setScheduledStartAt(e.target.value)} />
-            </div>
-          )}
-
-          <div className="grid-2" style={{ gap: 'var(--space-4)' }}>
-            <div className="form-group">
-              <label className="form-label">{t('Duration (minutes)')}</label>
-              <input className="form-input" type="number" min="5" required value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">{t('Max Participants')}</label>
-              <input className="form-input" type="number" min="2" placeholder={t('No limit')} value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)} />
-            </div>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">{t('Password (optional)')}</label>
-            <input className="form-input" type="text" maxLength={100} placeholder={t('Leave blank for no password')} value={password} onChange={(e) => setPassword(e.target.value)} />
-          </div>
-
-          <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="checkbox" checked={waitingRoomEnabled} onChange={(e) => setWaitingRoomEnabled(e.target.checked)} />
-            {t('Waiting Room')}
-            <span className="text-caption" style={{ margin: 0 }}>— {t('Enable a waiting room — you approve each participant before they join.')}</span>
-          </label>
-
-          <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <input type="checkbox" checked={allowGuests} onChange={(e) => setAllowGuests(e.target.checked)} />
-            {t('Allow Guests')}
-            <span className="text-caption" style={{ margin: 0 }}>— {t('Allow people without an account to join with a link.')}</span>
-          </label>
-
-          {error && <p className="form-error">{error}</p>}
-
-          <div className="modal-box__actions">
+          <div className="mtg-dialog__foot">
             <button type="button" className="btn btn-outline" onClick={onClose}>{t('Cancel')}</button>
             <button type="submit" className="btn btn-primary" disabled={saving || !title.trim()}>{saving ? '…' : t('Create Meeting')}</button>
           </div>

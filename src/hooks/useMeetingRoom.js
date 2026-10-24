@@ -264,6 +264,7 @@ export function useMeetingRoom({
   // Round 5 — بند 11 (Raise Hand + Reactions).
   const [handRaised, setHandRaised] = useState(false);
   const [reactions, setReactions] = useState([]); // ephemeral: [{id, key, displayName, type, emoji}], auto-pruned
+  const [reactionLog, setReactionLog] = useState([]); // same events, kept (capped) so the chat panel can list "X reacted 👍" like Zoom
   // Noise isolation (RNNoise) — `noiseOn` is the switch, `noiseAvailable` is whether the neural graph could be built here.
   const [noiseOn, setNoiseOn] = useState(readNoisePref);
   const [noiseAvailable, setNoiseAvailable] = useState(false);
@@ -1312,6 +1313,7 @@ export function useMeetingRoom({
     const shown = emoji || REACTION_EMOJI[type] || '👍';
     // cap what is on screen so a spammed reaction can't pile up hundreds of animated nodes
     setReactions((prev) => [...prev.slice(-11), { id, key, displayName, type, emoji: shown }]);
+    setReactionLog((prev) => [...prev.slice(-79), { id: `reaction-${id}`, key, displayName, emoji: shown, created_at: new Date().toISOString() }]);
     setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 3200);
     return id;
   }, []);
@@ -1437,7 +1439,7 @@ export function useMeetingRoom({
     chatMessages, chatUnreadCount, chatEnabled, sendChatMessage, reactToChatMessage, markChatRead,
 
     // بند 11 — Raise Hand + Reactions.
-    handRaised, toggleHand, reactions, sendReaction,
+    handRaised, toggleHand, reactions, reactionLog, sendReaction,
 
     // Audio — noise isolation switch.
     noiseOn, noiseAvailable, toggleNoise, speakersMuted, toggleSpeakers,

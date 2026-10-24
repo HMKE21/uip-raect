@@ -353,110 +353,105 @@ export default function MeetingPreJoin() {
       )}
 
       {phase === 'prejoin' && info && (
-        <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-          <div style={{ textAlign: 'center' }}>
-            <h1 className="text-h2" style={{ margin: 0 }}>{info.meeting.title}</h1>
-            {info.host?.full_name && (
-              <p className="text-small" style={{ color: 'var(--text-secondary)' }}>{t('Hosted by')} {info.host.full_name}</p>
-            )}
+        <div className="mtg-join">
+          <div className="mtg-join__head">
+            <h1>{info.meeting.title}</h1>
+            <p>
+              {info.host?.full_name ? `${t('Hosted by')} ${info.host.full_name} · ` : ''}
+              {t('Check your camera and microphone, then join.')}
+            </p>
           </div>
 
-          <div className="card glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <h2 className="text-h3" style={{ margin: 0 }}>{t('Camera & Microphone')}</h2>
+          <div className="mtg-join__grid">
+            <div className="card glass-panel mtg-join__card">
+              <div className="mtg-preview">
+                <video ref={videoRef} autoPlay playsInline muted style={{ display: cameraEnabled ? 'block' : 'none' }} />
+                {!cameraEnabled && (
+                  <div className="mtg-preview__off">
+                    <span className="mtg-preview__avatar">{(displayName || user?.full_name || '?').trim().charAt(0).toUpperCase() || '?'}</span>
+                    <span>{t('Camera is off')}</span>
+                  </div>
+                )}
+                <div className="mtg-preview__ctrls">
+                  <button type="button" className={`mtg-ctrl ${micEnabled ? '' : 'is-off'}`} onClick={() => setMicEnabled((v) => !v)}
+                    title={micEnabled ? t('Mute') : t('Unmute')} aria-label={micEnabled ? t('Mute') : t('Unmute')}>
+                    <Icon name={micEnabled ? 'mic' : 'mic-off'} size={20} />
+                  </button>
+                  <button type="button" className={`mtg-ctrl ${cameraEnabled ? '' : 'is-off'}`} onClick={() => setCameraEnabled((v) => !v)}
+                    title={cameraEnabled ? t('Turn camera off') : t('Turn camera on')} aria-label={cameraEnabled ? t('Turn camera off') : t('Turn camera on')}>
+                    <Icon name={cameraEnabled ? 'video' : 'video-off'} size={20} />
+                  </button>
+                </div>
+              </div>
 
-            <div
-              style={{
-                position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 'var(--radius-md)',
-                background: '#111', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', display: cameraEnabled ? 'block' : 'none' }} />
-              {!cameraEnabled && (
-                <div style={{ color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                  <Icon name="user" size={40} />
-                  <span className="text-caption" style={{ color: '#fff' }}>{t('Camera is off')}</span>
+              <div className="mtg-meter">
+                <Icon name="mic" size={15} />
+                <div className="mtg-meter__bar"><div ref={meterRef} /></div>
+              </div>
+
+              {mediaError && <p className="form-error" style={{ margin: 0 }}>{mediaError}</p>}
+
+              {(devices.cameras.length > 0 || devices.microphones.length > 0) && (
+                <div className="mtg-devices">
+                  {devices.cameras.length > 0 && (
+                    <div className="mtg-field">
+                      <label>{t('Camera')}</label>
+                      <select className="form-input" value={cameraId} onChange={(e) => switchDevice('camera', e.target.value)}>
+                        {devices.cameras.map((d, i) => (
+                          <option key={d.deviceId || i} value={d.deviceId}>{d.label || `${t('Camera')} ${i + 1}`}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {devices.microphones.length > 0 && (
+                    <div className="mtg-field">
+                      <label>{t('Microphone')}</label>
+                      <select className="form-input" value={microphoneId} onChange={(e) => switchDevice('microphone', e.target.value)}>
+                        {devices.microphones.map((d, i) => (
+                          <option key={d.deviceId || i} value={d.deviceId}>{d.label || `${t('Microphone')} ${i + 1}`}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  {devices.speakers.length > 0 && (
+                    <div className="mtg-field">
+                      <label>{t('Speaker')}</label>
+                      <select className="form-input" value={speakerId} onChange={(e) => switchDevice('speaker', e.target.value)}>
+                        {devices.speakers.map((d, i) => (
+                          <option key={d.deviceId || i} value={d.deviceId}>{d.label || `${t('Speaker')} ${i + 1}`}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               )}
-              <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 'var(--space-2)' }}>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${micEnabled ? 'btn-outline' : 'btn-danger'}`}
-                  onClick={() => setMicEnabled((v) => !v)}
-                  title={micEnabled ? t('Mute') : t('Unmute')}
-                >
-                  <Icon name="mic" size={16} />
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-sm ${cameraEnabled ? 'btn-outline' : 'btn-danger'}`}
-                  onClick={() => setCameraEnabled((v) => !v)}
-                  title={cameraEnabled ? t('Turn camera off') : t('Turn camera on')}
-                >
-                  <Icon name="monitor" size={16} />
-                </button>
-              </div>
             </div>
 
-            <div style={{ height: 6, borderRadius: 999, background: 'var(--surface-2, rgba(0,0,0,0.08))', overflow: 'hidden' }}>
-              <div ref={meterRef} style={{ height: '100%', width: '0%', background: 'var(--color-success, #22c55e)', transition: 'width 80ms linear' }} />
-            </div>
-
-            {mediaError && <p className="form-error">{mediaError}</p>}
-
-            {(devices.cameras.length > 0 || devices.microphones.length > 0) && (
-              <div className="grid-2" style={{ gap: 'var(--space-3)' }}>
-                {devices.cameras.length > 0 && (
-                  <div className="form-group">
-                    <label className="form-label">{t('Camera')}</label>
-                    <select className="form-input" value={cameraId} onChange={(e) => switchDevice('camera', e.target.value)}>
-                      {devices.cameras.map((d, i) => (
-                        <option key={d.deviceId || i} value={d.deviceId}>{d.label || `${t('Camera')} ${i + 1}`}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {devices.microphones.length > 0 && (
-                  <div className="form-group">
-                    <label className="form-label">{t('Microphone')}</label>
-                    <select className="form-input" value={microphoneId} onChange={(e) => switchDevice('microphone', e.target.value)}>
-                      {devices.microphones.map((d, i) => (
-                        <option key={d.deviceId || i} value={d.deviceId}>{d.label || `${t('Microphone')} ${i + 1}`}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                {devices.speakers.length > 0 && (
-                  <div className="form-group">
-                    <label className="form-label">{t('Speaker')}</label>
-                    <select className="form-input" value={speakerId} onChange={(e) => switchDevice('speaker', e.target.value)}>
-                      {devices.speakers.map((d, i) => (
-                        <option key={d.deviceId || i} value={d.deviceId}>{d.label || `${t('Speaker')} ${i + 1}`}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+            <form onSubmit={handleJoin} className="card glass-panel mtg-join__card mtg-join__side">
+              <h2>{t('Ready to join?')}</h2>
+              <div className="mtg-join__facts">
+                {info.waiting_room_enabled && <span className="mtg-fact"><Icon name="clock" size={13} /> {t('Waiting room on')}</span>}
+                {info.requires_password && <span className="mtg-fact"><Icon name="lock" size={13} /> {t('This meeting is password protected')}</span>}
               </div>
-            )}
+
+              {!info.is_authenticated && (
+                <div className="mtg-field">
+                  <label>{t('Your name')}</label>
+                  <input className="form-input" required maxLength={100} autoFocus value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+                  <p className="mtg-hint">{t('This is how other participants will see you.')}</p>
+                  <p className="mtg-hint">
+                    {t('Continue as guest, or')} <Link to="/auth/login" state={{ from: { pathname: `/join/${joinToken}` } }}>{t('log in to your account')}</Link>
+                  </p>
+                </div>
+              )}
+
+              {submitError && <p className="form-error" style={{ margin: 0 }}>{submitError}</p>}
+
+              <button type="submit" className="btn btn-primary mtg-join__go" disabled={submitting || (!info.is_authenticated && !displayName.trim())}>
+                {submitting ? '…' : t('Join Meeting')}
+              </button>
+            </form>
           </div>
-
-          <form onSubmit={handleJoin} className="card glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            {!info.is_authenticated && (
-              <div className="form-group">
-                <label className="form-label">{t('Your name')}</label>
-                <input className="form-input" required maxLength={100} autoFocus value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
-                <p className="text-caption" style={{ margin: 'var(--space-1) 0 0' }}>{t('This is how other participants will see you.')}</p>
-                <p className="text-caption" style={{ margin: 'var(--space-1) 0 0' }}>
-                  {t('Continue as guest, or')} <Link to="/auth/login" state={{ from: { pathname: `/join/${joinToken}` } }}>{t('log in to your account')}</Link>
-                </p>
-              </div>
-            )}
-
-            {submitError && <p className="form-error">{submitError}</p>}
-
-            <button type="submit" className="btn btn-primary" disabled={submitting || (!info.is_authenticated && !displayName.trim())}>
-              {submitting ? '…' : t('Join Meeting')}
-            </button>
-          </form>
         </div>
       )}
 

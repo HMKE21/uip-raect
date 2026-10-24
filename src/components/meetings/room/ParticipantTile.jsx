@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from '../../Icon';
 import VolumeBoost from '../../VolumeBoost';
 import { useVolumeBoost } from '../../../lib/volumeBoost';
@@ -79,6 +80,36 @@ export default function ParticipantTile({
   const vb = useVolumeBoost(videoRef, { stream });   // louder remote participants (never for your own mic)
   const t = useTranslations(translations);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuBtnRef = useRef(null);
+  const menuRef = useRef(null);
+  const [menuPos, setMenuPos] = useState(null);
+
+  // The tile clips its children (rounded video), so the host menu is portalled into the room layer and placed beside the button.
+  useLayoutEffect(() => {
+    if (!menuOpen) { setMenuPos(null); return undefined; }
+    const place = () => {
+      const btn = menuBtnRef.current;
+      if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      const mh = menuRef.current?.offsetHeight || 260;
+      const mw = menuRef.current?.offsetWidth || 230;
+      const rtl = document.documentElement.dir === 'rtl';
+      let left = rtl ? r.left : r.right - mw;
+      left = Math.max(8, Math.min(left, window.innerWidth - mw - 8));
+      let top = r.bottom + 6;
+      if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+      setMenuPos({ top, left });
+    };
+    place();
+    const raf = requestAnimationFrame(place);
+    const close = (e) => {
+      if (menuRef.current?.contains(e.target) || menuBtnRef.current?.contains(e.target)) return;
+      setMenuOpen(false);
+    };
+    window.addEventListener('resize', place);
+    document.addEventListener('pointerdown', close, true);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', place); document.removeEventListener('pointerdown', close, true); };
+  }, [menuOpen]);
   const [audioBlocked, setAudioBlocked] = useState(false); // browser refused autoplay-with-sound until the user interacts
   const speaking = useSpeaking(stream, micEnabled !== false);
 
@@ -200,11 +231,11 @@ export default function ParticipantTile({
         )}
         {canManage && (
           <div style={{ position: 'relative' }}>
-            <button type="button" className="meeting-tile__icon-btn" onClick={() => setMenuOpen((v) => !v)} title={t('Host controls')}>
+            <button ref={menuBtnRef} type="button" className="meeting-tile__icon-btn" onClick={() => setMenuOpen((v) => !v)} title={t('Host controls')}>
               <Icon name="more-horizontal" size={15} />
             </button>
-            {menuOpen && (
-              <div className="meeting-tile__host-menu">
+            {menuOpen && createPortal(
+              <div ref={menuRef} className="meeting-tile__host-menu is-floating" style={menuPos ? { top: menuPos.top, left: menuPos.left } : { visibility: 'hidden', top: 0, left: 0 }}>
                 {screenShareAllowed !== true && (
                   <button type="button" onClick={() => { onAllowScreenShare?.(); setMenuOpen(false); }}>{t('Allow screen sharing')}</button>
                 )}
@@ -236,7 +267,8 @@ export default function ParticipantTile({
                 {(canPrimaryManage || role !== 'co_host') && onRemove && (
                   <button type="button" className="is-danger" onClick={() => { onRemove?.(); setMenuOpen(false); }}>{t('Remove from meeting')}</button>
                 )}
-              </div>
+              </div>,
+              menuBtnRef.current?.closest('.meeting-room') || document.body,
             )}
           </div>
         )}

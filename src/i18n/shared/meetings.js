@@ -8,6 +8,23 @@
 // prefix" convention as Messages/Notifications) plus the dashboard widget,
 // so keys stay generic rather than duplicated per page.
 export default {
+  'Open-ended': 'بدون نهاية',
+  'Custom': 'مخصص',
+  'No end time — the meeting stays open until the host ends it.': 'من غير وقت انتهاء — الاجتماع يفضل مفتوح لحد ما الهوست يقفله.',
+  'The duration is a planning estimate; the meeting is never cut off automatically.': 'المدة تقدير للتخطيط بس؛ الاجتماع عمره ما بيتقفل لوحده.',
+  'Set it up in a few seconds — you can change everything later.': 'جهّزه في ثواني — تقدر تعدّل أي حاجة بعدين.',
+  'Start right now': 'ابدأ دلوقتي',
+  'Pick a date and time': 'اختار اليوم والوقت',
+  'Meeting details': 'تفاصيل الاجتماع',
+  'Check your camera and microphone, then join.': 'اتأكد من الكاميرا والمايك وبعدين ادخل.',
+  'Ready to join?': 'جاهز تدخل؟',
+  'Mic': 'المايك',
+  'Camera on': 'الكاميرا شغالة',
+  'Mic level': 'مستوى الصوت',
+  'Speak and watch the bar move.': 'اتكلم وشوف الشريط بيتحرك.',
+  'Waiting room on': 'غرفة انتظار مفعّلة',
+  'Open-ended meeting': 'اجتماع مفتوح',
+  'reacted': 'تفاعل',
   // — room redesign —
   'Noise isolation': 'عزل الضوضاء',
   'Speakers off (same room)': 'إيقاف السماعات (نفس الأوضة)',

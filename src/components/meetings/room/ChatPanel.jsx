@@ -36,7 +36,7 @@ function avatarColor(name) {
  * and persist in history.
  */
 export default function ChatPanel({
-  messages, unreadCount, enabled, myKey, recipientOptions, isOpen, onClose, onSend, onReact, onMarkRead,
+  messages, reactionLog = [], unreadCount, enabled, myKey, recipientOptions, isOpen, onClose, onSend, onReact, onMarkRead,
 }) {
   const t = useTranslations(translations);
   const [body, setBody] = useState('');
@@ -68,10 +68,10 @@ export default function ChatPanel({
   // new message: follow it if the reader was at the bottom (or it is mine), otherwise offer a "new messages" jump chip
   const lastMessage = messages[messages.length - 1];
   useEffect(() => {
-    if (!isOpen || !lastMessage) return;
-    if (stickRef.current || lastMessage.sender_key === myKey) scrollToBottom(true);
+    if (!isOpen || (!lastMessage && reactionLog.length === 0)) return;
+    if (stickRef.current || lastMessage?.sender_key === myKey) scrollToBottom(true);
     else setShowJump(true);
-  }, [isOpen, messages.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, messages.length, reactionLog.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // grow the composer with its text (up to ~5 lines)
   useLayoutEffect(() => {
@@ -132,9 +132,14 @@ export default function ChatPanel({
   const sameRun = (a, b) => a && b && a.type !== 'system' && b.type !== 'system'
     && a.sender_key === b.sender_key && !!a.is_private === !!b.is_private
     && Math.abs(new Date(b.created_at) - new Date(a.created_at)) < GROUP_WINDOW_MS;
-  const rows = messages.map((m, i) => {
-    const isSystem = m.type === 'system';
-    return { m, isSystem, first: !isSystem && !sameRun(messages[i - 1], m), last: !isSystem && !sameRun(m, messages[i + 1]) };
+  // live emoji reactions ("Name 👍") are interleaved with the messages by time, so the chat tells the whole story of the call
+  const timeline = reactionLog.length === 0
+    ? messages
+    : [...messages, ...reactionLog.map((r) => ({ ...r, type: 'reaction' }))]
+      .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const rows = timeline.map((m, i) => {
+    const special = m.type === 'system' || m.type === 'reaction';
+    return { m, isSystem: special, first: !special && !sameRun(timeline[i - 1], m), last: !special && !sameRun(m, timeline[i + 1]) };
   });
 
   return (
@@ -149,7 +154,7 @@ export default function ChatPanel({
       </div>
 
       <div className="meeting-chat-panel__list" ref={listRef} onScroll={handleScroll}>
-        {messages.length === 0 && (
+        {messages.length === 0 && reactionLog.length === 0 && (
           <div className="meeting-chat-panel__empty">
             <span className="meeting-chat-panel__empty-ico"><Icon name="message-square" size={26} /></span>
             <p>{t('No messages yet — say hello.')}</p>
@@ -157,6 +162,13 @@ export default function ChatPanel({
         )}
 
         {rows.map(({ m, isSystem, first, last }) => {
+          if (m.type === 'reaction') {
+            return (
+              <div key={m.id} className="meeting-chat-react-line">
+                <span><b>{m.emoji}</b> {m.key === myKey ? t('You') : m.displayName} {t('reacted')}</span>
+              </div>
+            );
+          }
           if (isSystem) {
             return (
               <div key={m.id} className="meeting-chat-sys"><span dir="auto">{m.body}</span></div>

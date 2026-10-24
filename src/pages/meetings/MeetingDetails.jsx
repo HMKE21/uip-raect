@@ -12,6 +12,7 @@ import InviteModal from '../../components/meetings/InviteModal';
 import RecordingPlayerModal, { downloadRecording } from '../../components/meetings/RecordingPlayerModal';
 import { useTranslations } from '../../context/LanguageContext';
 import { portalPrefix } from '../../config/navConfig';
+import { DurationPicker, durationPayload } from '../../components/meetings/MeetingFormParts';
 import i18nCommon from '../../i18n/common';
 import i18nMeetings from '../../i18n/shared/meetings';
 import '../../styles/css/pages/meeting-details.css';
@@ -100,7 +101,7 @@ function EditMeetingModal({ meeting, onClose, onSaved }) {
   const [scheduledStartAt, setScheduledStartAt] = useState(
     meeting.scheduled_start_at ? meeting.scheduled_start_at.slice(0, 16) : ''
   );
-  const [durationMinutes, setDurationMinutes] = useState(meeting.duration_minutes || 60);
+  const [durationMinutes, setDurationMinutes] = useState(meeting.duration_minutes ?? null);
   const [maxParticipants, setMaxParticipants] = useState(meeting.max_participants || '');
   const [waitingRoomEnabled, setWaitingRoomEnabled] = useState(!!meeting.waiting_room_enabled);
   const [allowGuests, setAllowGuests] = useState(!!meeting.allow_guests);
@@ -116,7 +117,7 @@ function EditMeetingModal({ meeting, onClose, onSaved }) {
         title: title.trim(),
         description: description.trim() || null,
         scheduled_start_at: meeting.type === 'scheduled' && scheduledStartAt ? scheduledStartAt : null,
-        duration_minutes: Number(durationMinutes) || 60,
+        duration_minutes: durationPayload(durationMinutes),
         max_participants: maxParticipants ? Number(maxParticipants) : null,
         waiting_room_enabled: waitingRoomEnabled,
         allow_guests: allowGuests,
@@ -150,15 +151,13 @@ function EditMeetingModal({ meeting, onClose, onSaved }) {
             </div>
           )}
 
-          <div className="grid-2" style={{ gap: 'var(--space-4)' }}>
-            <div className="form-group">
-              <label className="form-label">{t('Duration (minutes)')}</label>
-              <input className="form-input" type="number" min="5" required value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">{t('Max Participants')}</label>
-              <input className="form-input" type="number" min="2" placeholder={t('No limit')} value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)} />
-            </div>
+          <div className="form-group">
+            <label className="form-label">{t('Duration')}</label>
+            <DurationPicker value={durationMinutes} onChange={setDurationMinutes} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">{t('Max Participants')}</label>
+            <input className="form-input" type="number" min="2" placeholder={t('No limit')} value={maxParticipants} onChange={(e) => setMaxParticipants(e.target.value)} />
           </div>
 
           <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -419,7 +418,7 @@ export default function MeetingDetails() {
   const facts = [
     { icon: 'meeting-type', label: t('Type'), value: t(meeting.type === 'scheduled' ? 'Scheduled' : 'Instant') },
     { icon: 'calendar', label: t('Scheduled Start'), value: meeting.scheduled_start_at ? new Date(meeting.scheduled_start_at).toLocaleString() : t('Opens right away') },
-    { icon: 'clock', label: t('Duration'), value: `${meeting.duration_minutes} ${t('minutes')}` },
+    { icon: 'clock', label: t('Duration'), value: meeting.duration_minutes ? `${meeting.duration_minutes} ${t('minutes')}` : t('Open-ended') },
     { icon: 'users', label: t('Max Participants'), value: meeting.max_participants ?? t('No limit') },
     { icon: 'inbox', label: t('Waiting Room'), value: meeting.waiting_room_enabled ? t('On') : t('Off'), on: !!meeting.waiting_room_enabled },
     { icon: 'user', label: t('Allow Guests'), value: meeting.allow_guests ? t('On') : t('Off'), on: !!meeting.allow_guests },
