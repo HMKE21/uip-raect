@@ -8,6 +8,15 @@
 // prefix" convention as Messages/Notifications) plus the dashboard widget,
 // so keys stay generic rather than duplicated per page.
 export default {
+  // — room redesign —
+  'Presenting': 'يعرض الشاشة',
+  'is presenting': 'بيعرض شاشته',
+  'You are presenting your screen': 'إنت بتشارك شاشتك',
+  'Everyone in the meeting can see it, even with your camera off.': 'كل اللي في الاجتماع شايفينها، حتى لو الكاميرا مقفولة.',
+  'Weak connection': 'اتصال ضعيف',
+  "Couldn't open a camera. Check the browser's camera permission and that no other app is using it.": 'مقدرناش نفتح الكاميرا. اتأكد من صلاحية الكاميرا في المتصفح وإن مفيش برنامج تاني بيستخدمها.',
+  "This browser can't share your screen.": 'المتصفح ده مبيدعمش مشاركة الشاشة.',
+  'Screen sharing could not start. Please try again.': 'مقدرناش نبدأ مشاركة الشاشة. جرّب تاني.',
   'Meetings': 'الاجتماعات',
   'My Meetings': 'اجتماعاتي',
   'New Meeting': 'اجتماع جديد',

@@ -120,6 +120,23 @@ function preferLightCodecs(pc) {
   } catch (e) { dbg('codec preferences skipped', e?.message); }
 }
 
+/**
+ * A silent, black video track used when this participant has no camera (none attached, denied, busy) or hasn't turned one on yet.
+ * Every peer connection then always has a real, replaceable video sender — which is what lets screen sharing work with the
+ * camera off or missing (it used to piggy-back on the camera's sender and silently did nothing without one).
+ */
+function makePlaceholderVideoTrack() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 640;
+  canvas.height = 360;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const track = canvas.captureStream(1).getVideoTracks()[0];
+  track.__placeholder = true;
+  return track;
+}
+
 /** Single place that sends a signaling message, so size and delivery can be seen in the console. */
 function sendSignal(channel, to, from, kind, data) {
   const payload = { to, from, kind, data };
@@ -146,6 +163,8 @@ export function useMeetingRoom({
   const [micEnabled, setMicEnabled] = useState(!(deviceDefaults?.mute_on_entry ?? false));
   const [cameraEnabled, setCameraEnabled] = useState(deviceDefaults?.camera_on_entry ?? true);
   const [screenSharing, setScreenSharing] = useState(false);
+  const [screenStream, setScreenStream] = useState(null); // local preview of what we are presenting (the camera stream is untouched)
+  const [hasCamera, setHasCamera] = useState(true); // false when no real camera track exists (only the black placeholder)
   const [meshCapacity, setMeshCapacity] = useState(null);
   const [hasTurn, setHasTurn] = useState(null); // null = unknown yet; false = server has no TURN relay configured
   const [status, setStatus] = useState('connecting'); // connecting | connected | error
@@ -202,6 +221,8 @@ export function useMeetingRoom({
   const peersRef = useRef({}); // key -> RTCPeerConnection
   const pendingCandidatesRef = useRef({}); // key -> RTCIceCandidateInit[] queued before remote description is set
   const localStreamRef = useRef(null);
+  const screenTrackRef = useRef(null); // the live screen-capture track while we present, else null
+  const hasCameraRef = useRef(true);
   const cameraTrackSendersRef = useRef({}); // key -> RTCRtpSender, for screen-share track swapping
   const iceServersRef = useRef([]);
   const remoteStreamsRef = useRef({}); // key -> MediaStream (fallback when ontrack gives no stream)
@@ -262,7 +283,7 @@ export function useMeetingRoom({
 
   useEffect(() => {
     const wanted = new Map();
-    if (localStream) wanted.set('local', localStream);
+    if (screenStream || localStream) wanted.set('local', screenStream || localStream);
     Object.entries(participants).forEach(([key, p]) => { if (p.remoteStream) wanted.set(key, p.remoteStream); });
 
     for (const [key, el] of videoElsRef.current) {
@@ -285,7 +306,7 @@ export function useMeetingRoom({
       if (el.srcObject !== stream) el.srcObject = stream;
       el.play?.().catch(() => {});
     });
-  }, [localStream, participants]);
+  }, [localStream, screenStream, participants]);
 
   /** Re-syncs the Web Audio mix to whoever's actually here right now — called once at recording start, then again whenever `participants`/`localStream` change while a recording is running. */
   const syncRecordingAudioGraph = useCallback(() => {
@@ -462,7 +483,11 @@ export function useMeetingRoom({
     if (local) {
       local.getTracks().forEach((track) => {
         const sender = pc.addTrack(track, local);
-        if (track.kind === 'video') cameraTrackSendersRef.current[key] = sender;
+        if (track.kind === 'video') {
+          cameraTrackSendersRef.current[key] = sender;
+          // someone joined while we are presenting: they must get the screen, not the camera
+          if (screenTrackRef.current) sender.replaceTrack(screenTrackRef.current).catch(() => {});
+        }
       });
     }
     // No camera/mic here (denied, or none attached)? We must still RECEIVE everyone else — an offer/answer with no media
@@ -577,7 +602,14 @@ export function useMeetingRoom({
           catch { stream = await navigator.mediaDevices.getUserMedia({ video: true }); }
         }
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-        stream.getVideoTracks().forEach((t) => { t.enabled = cameraEnabled; });
+        if (stream.getVideoTracks().length === 0) {
+          stream.addTrack(makePlaceholderVideoTrack());
+          hasCameraRef.current = false;
+          setHasCamera(false);
+          setCameraEnabled(false);
+          signalingApi.mediaState(meetingUuid, guestToken, { camera_enabled: false }).catch(() => {});
+        }
+        stream.getVideoTracks().forEach((t) => { t.enabled = hasCameraRef.current ? cameraEnabled : false; });
         stream.getAudioTracks().forEach((t) => { t.enabled = micEnabled; });
         dbg('local media', stream.getTracks().map((t) => t.kind).join('+') || 'none');
         localStreamRef.current = stream;
@@ -585,8 +617,16 @@ export function useMeetingRoom({
       } catch (gumErr) {
         dbg('getUserMedia failed', gumErr?.name, gumErr?.message);
         signalingApi.reportFailure(meetingUuid, guestToken, 'camera', 'getUserMedia failed in the meeting room.').catch(() => {});
-        // Still proceed audio/video-less — a participant with devices
-        // denied should still be able to see + hear everyone else.
+        // Still proceed without a camera/mic — a participant with devices denied should still be able to see + hear everyone
+        // else, and to present their screen: give them the placeholder video track so there is a sender to present through.
+        try {
+          const fallback = new MediaStream([makePlaceholderVideoTrack()]);
+          hasCameraRef.current = false;
+          setHasCamera(false);
+          setCameraEnabled(false);
+          localStreamRef.current = fallback;
+          setLocalStream(fallback);
+        } catch { /* canvas capture unavailable: the old recv-only path below still works */ }
       }
 
       try {
@@ -909,6 +949,7 @@ export function useMeetingRoom({
       }
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
+      if (screenTrackRef.current) { screenTrackRef.current.onended = null; screenTrackRef.current.stop(); screenTrackRef.current = null; }
       teardownLocalRecorder();
       if (!leftRef.current) signalingApi.leave(meetingUuid, guestToken).catch(() => {});
     };
@@ -987,14 +1028,43 @@ export function useMeetingRoom({
     });
   }, [meetingUuid, guestToken]);
 
-  const toggleCamera = useCallback(() => {
+  /** Swap the video track we send on every peer connection (and in our local stream) without renegotiating. */
+  const swapCameraTrack = useCallback((newTrack) => {
+    const local = localStreamRef.current;
+    if (!local) return;
+    local.getVideoTracks().forEach((old) => { local.removeTrack(old); if (old !== newTrack) old.stop(); });
+    local.addTrack(newTrack);
+    // while presenting, peers keep receiving the screen; the camera comes back when the presentation stops
+    if (!screenTrackRef.current) {
+      Object.values(cameraTrackSendersRef.current).forEach((sender) => sender.replaceTrack(newTrack).catch(() => {}));
+    }
+    setLocalStream(new MediaStream(local.getTracks())); // new object so React re-binds the preview
+    localStreamRef.current = local;
+  }, []);
+
+  const toggleCamera = useCallback(async () => {
+    // No real camera yet (denied / none / joined without one): try to open one now instead of toggling a black placeholder.
+    if (!hasCameraRef.current) {
+      try {
+        const cam = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
+        const track = cam.getVideoTracks()[0];
+        hasCameraRef.current = true;
+        setHasCamera(true);
+        swapCameraTrack(track);
+        setCameraEnabled(true);
+        signalingApi.mediaState(meetingUuid, guestToken, { camera_enabled: true }).catch(() => {});
+      } catch (err) {
+        setNotice({ type: 'camera_unavailable' });
+      }
+      return;
+    }
     setCameraEnabled((prev) => {
       const next = !prev;
       localStreamRef.current?.getVideoTracks().forEach((t) => { t.enabled = next; });
       signalingApi.mediaState(meetingUuid, guestToken, { camera_enabled: next }).catch(() => {});
       return next;
     });
-  }, [meetingUuid, guestToken]);
+  }, [meetingUuid, guestToken, swapCameraTrack]);
 
   const stopScreenShareTrackRef = useRef(null);
 
@@ -1005,6 +1075,11 @@ export function useMeetingRoom({
   // عشان الزرار يبان معطّل بدل ما المستخدم يفتح شاشة مشاركة وتتقفله فجأة.
   const canShareScreen = isHost || myScreenShareAllowed === true || (myScreenShareAllowed !== false && !screenSharingLocked);
 
+  /**
+   * Presenting is independent of the camera: it works with the camera off, with no camera at all, or with the camera on.
+   * Every peer connection always owns one video sender (the camera track, or the black placeholder when there's no camera),
+   * and presenting just swaps what that sender carries; stopping swaps the camera (or placeholder) back.
+   */
   const toggleScreenShare = useCallback(async () => {
     if (screenSharing) {
       stopScreenShareTrackRef.current?.();
@@ -1014,23 +1089,42 @@ export function useMeetingRoom({
       setNotice({ type: 'screen_share_locked' });
       return;
     }
-    if (!navigator.mediaDevices.getDisplayMedia) {
-      setError(new Error("This browser can't share your screen."));
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      setNotice({ type: 'screen_share_unsupported' });
       return;
     }
+    let displayStream = null;
     try {
-      const displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      displayStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 15, max: 30 }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
       const screenTrack = displayStream.getVideoTracks()[0];
+      if (!screenTrack) throw new Error('No screen track');
+      try { screenTrack.contentHint = 'detail'; } catch { /* unsupported — harmless */ }
 
       await signalingApi.mediaState(meetingUuid, guestToken, { screen_sharing: true });
 
-      Object.values(cameraTrackSendersRef.current).forEach((sender) => sender.replaceTrack(screenTrack).catch(() => {}));
+      screenTrackRef.current = screenTrack;
+      const senders = Object.values(cameraTrackSendersRef.current);
+      await Promise.all(senders.map(async (sender) => {
+        await sender.replaceTrack(screenTrack).catch((e) => dbg('replaceTrack(screen) failed', e?.message));
+        try {
+          const params = sender.getParameters();
+          params.degradationPreference = 'maintain-resolution'; // text must stay sharp; drop frames, not pixels
+          await sender.setParameters(params);
+        } catch { /* not supported everywhere */ }
+      }));
+      setScreenStream(new MediaStream([screenTrack]));
       setScreenSharing(true);
 
       const stopSharing = () => {
-        const cameraTrack = localStreamRef.current?.getVideoTracks()[0];
-        Object.values(cameraTrackSendersRef.current).forEach((sender) => sender.replaceTrack(cameraTrack || null).catch(() => {}));
+        screenTrack.onended = null;
+        screenTrackRef.current = null;
+        const cameraTrack = localStreamRef.current?.getVideoTracks()[0] || null;
+        Object.values(cameraTrackSendersRef.current).forEach((sender) => sender.replaceTrack(cameraTrack).catch(() => {}));
         screenTrack.stop();
+        setScreenStream(null);
         setScreenSharing(false);
         signalingApi.mediaState(meetingUuid, guestToken, { screen_sharing: false }).catch(() => {});
         stopScreenShareTrackRef.current = null;
@@ -1038,8 +1132,12 @@ export function useMeetingRoom({
       screenTrack.onended = stopSharing;
       stopScreenShareTrackRef.current = stopSharing;
     } catch (err) {
-      if (err?.name !== 'NotAllowedError') {
-        setError(err instanceof Error ? err : new Error('Failed to start screen sharing.'));
+      // never leave a capture running (browser "sharing" banner) if we failed after the picker closed
+      displayStream?.getTracks().forEach((t) => t.stop());
+      screenTrackRef.current = null;
+      if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
+        setNotice({ type: 'screen_share_failed' });
+        signalingApi.mediaState(meetingUuid, guestToken, { screen_sharing: false }).catch(() => {});
       }
     }
   }, [screenSharing, canShareScreen, meetingUuid, guestToken]);
@@ -1169,7 +1267,7 @@ export function useMeetingRoom({
 
   return {
     status, error, meetingStatus, notice, clearNotice,
-    localStream, micEnabled, cameraEnabled, screenSharing, canShareScreen,
+    localStream, screenStream, hasCamera, micEnabled, cameraEnabled, screenSharing, canShareScreen,
     participants, meshCapacity, hasTurn,
     toggleMic, toggleCamera, toggleScreenShare, leave,
     myDisplayName, isHost,

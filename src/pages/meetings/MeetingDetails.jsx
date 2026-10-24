@@ -13,6 +13,7 @@ import { useTranslations } from '../../context/LanguageContext';
 import { portalPrefix } from '../../config/navConfig';
 import i18nCommon from '../../i18n/common';
 import i18nMeetings from '../../i18n/shared/meetings';
+import '../../styles/css/pages/meeting-details.css';
 
 const translations = { ...i18nCommon, ...i18nMeetings };
 
@@ -395,82 +396,71 @@ export default function MeetingDetails() {
   const joinAppUrl = joinToken ? `${publicOrigin()}/join/${joinToken}` : null;
   const waitingRoomActive = isHost && meeting.waiting_room_enabled && !['ended', 'cancelled'].includes(meeting.status);
 
+  const hostEntry = participants.find((p) => p.role === 'host');
+  const hostName = isHost ? t('You') : (hostEntry?.user?.full_name || hostEntry?.user?.email || `#${meeting.host_user_id}`);
+  const roleLabel = (role) => (role === 'host' ? t('Host') : role === 'co_host' ? t('Moderator') : role === 'guest' ? t('Guest') : t('Participant'));
+  const facts = [
+    { icon: 'meeting-type', label: t('Type'), value: t(meeting.type === 'scheduled' ? 'Scheduled' : 'Instant') },
+    { icon: 'calendar', label: t('Scheduled Start'), value: meeting.scheduled_start_at ? new Date(meeting.scheduled_start_at).toLocaleString() : t('Opens right away') },
+    { icon: 'clock', label: t('Duration'), value: `${meeting.duration_minutes} ${t('minutes')}` },
+    { icon: 'users', label: t('Max Participants'), value: meeting.max_participants ?? t('No limit') },
+    { icon: 'inbox', label: t('Waiting Room'), value: meeting.waiting_room_enabled ? t('On') : t('Off'), on: !!meeting.waiting_room_enabled },
+    { icon: 'user', label: t('Allow Guests'), value: meeting.allow_guests ? t('On') : t('Off'), on: !!meeting.allow_guests },
+  ];
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
+    <div className="md-page">
       <div>
-        <Link to={`/${prefix}/meetings`} className="text-small" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <Icon name="chevron-left" size={14} /> {t('Back to My Meetings')}
+        <Link to={`/${prefix}/meetings`} className="md-back">
+          <Icon name="chevron-right" size={14} className="md-back__ico" /> {t('Back to My Meetings')}
         </Link>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h1 className="text-h2" style={{ margin: 0 }}>{meeting.title}</h1>
-          <p className="text-small" style={{ margin: 'var(--space-1) 0 0', color: 'var(--text-secondary)' }}>
-            {t('Host')}: {isHost ? t('You') : `#${meeting.host_user_id}`}
+      <section className="md-hero">
+        <div className="md-hero__main">
+          <div className="md-hero__badges">
+            <span className={`badge ${meta.cls}`}>{meeting.status === 'live' && <span className="md-live-dot" />}{t(meta.key)}</span>
+            {meeting.has_password && <span className="badge badge-neutral"><Icon name="lock" size={12} /> {t('Password protected')}</span>}
+          </div>
+          <h1 className="md-hero__title">{meeting.title}</h1>
+          <p className="md-hero__host">
+            <span className="md-avatar md-avatar--sm">{String(hostName).trim().charAt(0).toUpperCase()}</span>
+            {t('Host')}: <strong>{hostName}</strong>
           </p>
+          {meeting.description && <p className="md-hero__desc">{meeting.description}</p>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          {meeting.has_password && <span className="badge badge-neutral"><Icon name="lock" size={12} /> {t('Password protected')}</span>}
-          <span className={`badge ${meta.cls}`}>{t(meta.key)}</span>
-          {meeting.status === 'live' && (
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(`/${prefix}/meetings/${uuid}/room`)}>
-              <Icon name="monitor" size={14} /> {t('Join Room')}
-            </button>
-          )}
-        </div>
-      </div>
+        {meeting.status === 'live' && (
+          <button type="button" className="btn btn-primary md-hero__cta" onClick={() => navigate(`/${prefix}/meetings/${uuid}/room`)}>
+            <Icon name="meeting-type" size={16} /> {t('Join Room')}
+          </button>
+        )}
+      </section>
 
       {actionError && <p className="form-error">{actionError}</p>}
 
-      {meeting.description && (
-        <div className="card glass-panel">
-          <p className="text-small" style={{ margin: 0 }}>{meeting.description}</p>
-        </div>
-      )}
-
-      <div className="card glass-panel">
-        <div className="grid-3">
-          <div>
-            <p className="text-caption" style={{ margin: 0 }}>{t('Type')}</p>
-            <p className="text-small" style={{ margin: 0, fontWeight: 600 }}>{t(meeting.type === 'scheduled' ? 'Scheduled' : 'Instant')}</p>
+      <section className="md-facts">
+        {facts.map((f) => (
+          <div key={f.label} className="md-fact">
+            <span className="md-fact__ico"><Icon name={f.icon} size={16} /></span>
+            <span className="md-fact__text">
+              <span className="md-fact__label">{f.label}</span>
+              <span className={`md-fact__value ${f.on === true ? 'is-on' : ''}`}>{f.value}</span>
+            </span>
           </div>
-          <div>
-            <p className="text-caption" style={{ margin: 0 }}>{t('Scheduled Start')}</p>
-            <p className="text-small" style={{ margin: 0, fontWeight: 600 }}>
-              {meeting.scheduled_start_at ? new Date(meeting.scheduled_start_at).toLocaleString() : t('Opens right away')}
-            </p>
-          </div>
-          <div>
-            <p className="text-caption" style={{ margin: 0 }}>{t('Duration')}</p>
-            <p className="text-small" style={{ margin: 0, fontWeight: 600 }}>{meeting.duration_minutes} {t('minutes')}</p>
-          </div>
-          <div>
-            <p className="text-caption" style={{ margin: 0 }}>{t('Max Participants')}</p>
-            <p className="text-small" style={{ margin: 0, fontWeight: 600 }}>{meeting.max_participants ?? t('No limit')}</p>
-          </div>
-          <div>
-            <p className="text-caption" style={{ margin: 0 }}>{t('Waiting Room')}</p>
-            <p className="text-small" style={{ margin: 0, fontWeight: 600 }}>{meeting.waiting_room_enabled ? t('On') : t('Off')}</p>
-          </div>
-          <div>
-            <p className="text-caption" style={{ margin: 0 }}>{t('Allow Guests')}</p>
-            <p className="text-small" style={{ margin: 0, fontWeight: 600 }}>{meeting.allow_guests ? t('On') : t('Off')}</p>
-          </div>
-        </div>
-      </div>
+        ))}
+      </section>
 
       {isHost && joinAppUrl && (
-        <div className="card glass-panel" style={CARD}>
-          <h2 className="text-h3" style={{ margin: 0 }}>{t('Join Link')}</h2>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
-            <code className="text-small" style={{ flex: 1, minWidth: 200, wordBreak: 'break-all' }}>{joinAppUrl}</code>
-            <button type="button" className="btn btn-outline btn-sm" onClick={copyJoinLink}>
-              <Icon name="copy" size={14} /> {copied ? t('Copied!') : t('Copy')}
+        <div className="card glass-panel md-card">
+          <h2 className="md-card__title">{t('Join Link')}</h2>
+          <div className="md-link-row">
+            <code className="md-link-row__url" dir="ltr">{joinAppUrl}</code>
+            <button type="button" className={`btn btn-sm ${copied ? 'btn-primary' : 'btn-outline'}`} onClick={copyJoinLink}>
+              <Icon name={copied ? 'check' : 'copy'} size={14} /> {copied ? t('Copied!') : t('Copy')}
             </button>
           </div>
           {meeting.meeting_code && (
-            <p className="text-caption" style={{ margin: 0 }}>{t('Meeting Code')}: <strong>{meeting.meeting_code}</strong></p>
+            <p className="md-card__hint">{t('Meeting Code')}: <strong dir="ltr" style={{ unicodeBidi: 'isolate' }}>{meeting.meeting_code}</strong></p>
           )}
         </div>
       )}
@@ -479,18 +469,22 @@ export default function MeetingDetails() {
         <MeetingWaitingRoomPanel meetingUuid={uuid} onAdmitted={load} />
       )}
 
-      <div className="card glass-panel" style={CARD}>
-        <h2 className="text-h3" style={{ margin: 0 }}>{t('Participants')}</h2>
+      <div className="card glass-panel md-card">
+        <h2 className="md-card__title">{t('Participants')} <span className="md-count">{participants.length}</span></h2>
         {participants.length === 0 ? (
-          <p className="text-small" style={{ color: 'var(--text-secondary)' }}>{t('No participants yet.')}</p>
+          <p className="md-empty">{t('No participants yet.')}</p>
         ) : (
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-            {participants.map((p) => (
-              <li key={p.id} className="text-small" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>{p.user?.full_name || p.user?.email || `#${p.user_id}`}</span>
-                <span className="text-caption">{p.role}</span>
-              </li>
-            ))}
+          <ul className="md-people">
+            {participants.map((p) => {
+              const name = p.user?.full_name || p.user?.email || `#${p.user_id}`;
+              return (
+                <li key={p.id} className="md-person">
+                  <span className="md-avatar">{String(name).trim().charAt(0).toUpperCase()}</span>
+                  <span className="md-person__name">{name}</span>
+                  <span className={`badge ${p.role === 'host' ? 'badge-primary' : 'badge-neutral'}`}>{roleLabel(p.role)}</span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
@@ -546,34 +540,34 @@ export default function MeetingDetails() {
           {analyticsLoading && <p className="text-small" style={{ color: 'var(--text-secondary)' }}>{t('Loading…')}</p>}
           {analyticsError && <p className="form-error">{analyticsError}</p>}
           {!analyticsLoading && !analyticsError && analytics && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 'var(--space-3)' }}>
-              <div>
-                <p className="text-caption" style={{ margin: 0 }}>{t('Joined')}</p>
-                <p className="text-h3" style={{ margin: 0 }}>{analytics.joined_count ?? 0}</p>
+            <div className="md-stats">
+              <div className="md-stat">
+                <p className="md-stat__label">{t('Joined')}</p>
+                <p className="md-stat__value">{analytics.joined_count ?? 0}</p>
               </div>
-              <div>
-                <p className="text-caption" style={{ margin: 0 }}>{t('Peak Participants')}</p>
-                <p className="text-h3" style={{ margin: 0 }}>{analytics.peak_participants ?? 0}</p>
+              <div className="md-stat">
+                <p className="md-stat__label">{t('Peak Participants')}</p>
+                <p className="md-stat__value">{analytics.peak_participants ?? 0}</p>
               </div>
-              <div>
-                <p className="text-caption" style={{ margin: 0 }}>{t('Duration')}</p>
-                <p className="text-h3" style={{ margin: 0 }}>{analytics.duration_minutes != null ? `${analytics.duration_minutes} ${t('min')}` : '—'}</p>
+              <div className="md-stat">
+                <p className="md-stat__label">{t('Duration')}</p>
+                <p className="md-stat__value">{analytics.duration_minutes != null ? `${analytics.duration_minutes} ${t('min')}` : '—'}</p>
               </div>
-              <div>
-                <p className="text-caption" style={{ margin: 0 }}>{t('Chat Messages')}</p>
-                <p className="text-h3" style={{ margin: 0 }}>{analytics.chat_messages_count ?? 0}</p>
+              <div className="md-stat">
+                <p className="md-stat__label">{t('Chat Messages')}</p>
+                <p className="md-stat__value">{analytics.chat_messages_count ?? 0}</p>
               </div>
-              <div>
-                <p className="text-caption" style={{ margin: 0 }}>{t('Files Shared')}</p>
-                <p className="text-h3" style={{ margin: 0 }}>{analytics.files_shared_count ?? 0}</p>
+              <div className="md-stat">
+                <p className="md-stat__label">{t('Files Shared')}</p>
+                <p className="md-stat__value">{analytics.files_shared_count ?? 0}</p>
               </div>
-              <div>
-                <p className="text-caption" style={{ margin: 0 }}>{t('Recordings')}</p>
-                <p className="text-h3" style={{ margin: 0 }}>{analytics.recordings_count ?? 0}</p>
+              <div className="md-stat">
+                <p className="md-stat__label">{t('Recordings')}</p>
+                <p className="md-stat__value">{analytics.recordings_count ?? 0}</p>
               </div>
-              <div>
-                <p className="text-caption" style={{ margin: 0 }}>{t('Failed Connections')}</p>
-                <p className="text-h3" style={{ margin: 0 }}>{analytics.failed_connections ?? 0}</p>
+              <div className="md-stat">
+                <p className="md-stat__label">{t('Failed Connections')}</p>
+                <p className="md-stat__value">{analytics.failed_connections ?? 0}</p>
               </div>
             </div>
           )}
@@ -653,28 +647,30 @@ export default function MeetingDetails() {
       )}
 
       {isHost && (
-        <div className="card glass-panel">
-          <h2 className="text-h3" style={{ marginTop: 0 }}>{t('Host')}</h2>
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            {meeting.status === 'scheduled' && (
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => runAction('start')}>
-                <Icon name="play" size={14} /> {t('Start Meeting')}
+        <div className="card glass-panel md-card">
+          <h2 className="md-card__title">{t('Host controls')}</h2>
+          <div className="md-actions">
+            <div className="md-actions__main">
+              {meeting.status === 'scheduled' && (
+                <button type="button" className="btn btn-primary" disabled={busy} onClick={() => runAction('start')}>
+                  <Icon name="play" size={14} /> {t('Start Meeting')}
+                </button>
+              )}
+              {meeting.status === 'live' && (
+                <button type="button" className="btn btn-outline" disabled={busy} onClick={() => runAction('end', 'Are you sure you want to end this meeting?')}>
+                  <Icon name="stop" size={14} /> {t('End Meeting')}
+                </button>
+              )}
+              {['scheduled', 'lobby'].includes(meeting.status) && (
+                <button type="button" className="btn btn-outline" disabled={busy} onClick={() => runAction('cancel', 'Are you sure you want to cancel this meeting?')}>
+                  {t('Cancel Meeting')}
+                </button>
+              )}
+              <button type="button" className="btn btn-outline" disabled={busy} onClick={() => setEditing(true)}>
+                <Icon name="edit" size={14} /> {t('Edit')}
               </button>
-            )}
-            {meeting.status === 'live' && (
-              <button type="button" className="btn btn-outline" disabled={busy} onClick={() => runAction('end', 'Are you sure you want to end this meeting?')}>
-                <Icon name="stop" size={14} /> {t('End Meeting')}
-              </button>
-            )}
-            {['scheduled', 'lobby'].includes(meeting.status) && (
-              <button type="button" className="btn btn-outline" disabled={busy} onClick={() => runAction('cancel', 'Are you sure you want to cancel this meeting?')}>
-                {t('Cancel Meeting')}
-              </button>
-            )}
-            <button type="button" className="btn btn-outline" disabled={busy} onClick={() => setEditing(true)}>
-              <Icon name="edit" size={14} /> {t('Edit')}
-            </button>
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={handleDelete}>
+            </div>
+            <button type="button" className="btn btn-danger md-actions__danger" disabled={busy} onClick={handleDelete}>
               <Icon name="trash" size={14} /> {t('Delete Meeting')}
             </button>
           </div>
