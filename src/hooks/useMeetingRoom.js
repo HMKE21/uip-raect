@@ -123,17 +123,20 @@ function buildAudioConstraints(noise) {
   return {
     echoCancellation: true,
     noiseSuppression: noise,
-    autoGainControl: true, // a quiet mic (laptop arrays especially) must be lifted; the sender chain below limits peaks, so this no longer risks hiss/howl
+    // ONE gain stage only. With neural isolation the leveler + make-up gain inside the isolation graph already lift a quiet mic, so the
+    // browser's AGC must stay off: AGC + compressor + make-up stacked on top of each other made the voice pump, hiss and clip.
+    autoGainControl: noise && !noiseSuppressSupported(),
     voiceIsolation: { ideal: noise },
     channelCount: { ideal: 1 },
     sampleRate: { ideal: 48000 },
+    latency: { ideal: 0.01 },
     advanced: [{ googEchoCancellation: true, googHighpassFilter: true, googNoiseSuppression: noise, googNoiseSuppression2: noise, googTypingNoiseDetection: true }],
   };
 }
 
 /**
  * Opus tuning on MY description (the other side's encoder reads it): in-band FEC (a lost packet is rebuilt instead of leaving a
- * gap), mono, ~40 kbps (plenty for speech), no DTX (DTX makes the voice "pump" next to noise isolation). Audio only — video
+ * gap), mono, 64 kbps max (plenty for speech), no DTX (DTX makes the voice "pump" next to noise isolation). Audio only — video
  * bitrate is handled per-peer by tuneSenders(). Anything unexpected returns the SDP untouched.
  */
 function tuneAudioSdp(sdp) {
@@ -167,7 +170,9 @@ function tuneAudioSdp(sdp) {
  * small fixed budget and top priority; video is capped and shrinks as the room grows. Must run after the local description is set.
  */
 async function tuneSenders(pc, peerCount) {
-  const videoCap = Math.max(600000, Math.min(2800000, Math.floor(3800000 / Math.max(1, peerCount))));
+  // Total video upload budget ~1.6 Mbps split across peers (a typical home / ADSL / mobile uplink is 1-5 Mbps; going over it makes the
+  // router queue packets and the voice stutters, lags and turns robotic). 1 peer: up to 1.5 Mbps, 4 peers: 400 kbps each.
+  const videoCap = Math.max(200000, Math.min(1500000, Math.floor(1600000 / Math.max(1, peerCount))));
   for (const sender of pc.getSenders()) {
     try {
       if (!sender.track) continue;
@@ -183,7 +188,8 @@ async function tuneSenders(pc, peerCount) {
         enc.networkPriority = 'low';
         enc.scaleResolutionDownBy = 1;          // never shrink the picture on purpose
         enc.maxFramerate = 30;
-        if (sender.track.contentHint !== 'detail') params.degradationPreference = 'maintain-resolution'; // camera: keep it sharp, drop fps first if the link is tight
+        // camera: with 1-2 peers keep it sharp and drop fps first; in bigger rooms let resolution fall too (a 720p picture can't fit 300 kbps)
+        if (sender.track.contentHint !== 'detail') params.degradationPreference = peerCount <= 2 ? 'maintain-resolution' : 'balanced';
       }
       await sender.setParameters(params);
     } catch (e) { dbg('sender tuning skipped', e?.message); }
@@ -711,7 +717,7 @@ export function useMeetingRoom({
         // Neural noise isolation (RNNoise): always built when supported so the in-room switch can flip it instantly. If it is
         // unavailable we keep the browser's own suppression + echo cancellation (set above) — never break joining.
         if (stream.getAudioTracks().length) {
-          const ns = await attachNoiseSuppressor(stream, noisePref, { onFeedback: (hz) => onFeedbackRef.current?.(hz) });
+          const ns = await attachNoiseSuppressor(stream, noisePref, { makeupGain: 1.8, onFeedback: (hz) => onFeedbackRef.current?.(hz) });
           if (cancelled) { (ns ? ns.stream : stream).getTracks().forEach((t) => t.stop()); return; }
           if (ns) { noiseRef.current = ns; stream = ns.stream; setNoiseAvailable(true); }
           dbg('noise isolation', ns ? 'on (RNNoise graph)' : 'unavailable, browser filter only');
