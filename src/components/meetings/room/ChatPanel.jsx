@@ -3,6 +3,9 @@ import Icon from '../../Icon';
 import { useTranslations } from '../../../context/LanguageContext';
 import i18nCommon from '../../../i18n/common';
 import i18nMeetings from '../../../i18n/shared/meetings';
+import AttachMenu from '../../messaging/AttachMenu';
+import CameraCaptureModal from '../../messaging/CameraCaptureModal';
+import MediaEditorModal, { isEditableMedia } from '../../messaging/MediaEditorModal';
 import MeetingFilePreview, { fileKind, fileIcon, formatSize, sameOriginUrl } from './MeetingFilePreview';
 
 const translations = { ...i18nCommon, ...i18nMeetings };
@@ -49,7 +52,11 @@ export default function ChatPanel({
   const [previewFile, setPreviewFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
   const [pickedUrl, setPickedUrl] = useState(null);
+  const [editFile, setEditFile] = useState(null); // image / video open in the media editor (same editor as the platform chat)
+  const [showCamera, setShowCamera] = useState(false);
   const fileInputRef = useRef(null);
+  const mediaInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const listRef = useRef(null);
   const inputRef = useRef(null);
   const stickRef = useRef(true); // true while the reader is at (or near) the bottom — only then do new messages auto-scroll
@@ -113,9 +120,11 @@ export default function ChatPanel({
     if (atBottom) setShowJump(false);
   }
 
-  function pickFile(file) {
+  function pickFile(file, { edit = true } = {}) {
     if (!file) return;
     setSendError(null);
+    // images and videos go through the media editor first (crop / filters / text / subtitles / noise reduction), like the platform chat
+    if (edit && isEditableMedia(file)) { setEditFile(file); return; }
     setPicked(file);
     inputRef.current?.focus();
   }
@@ -131,12 +140,14 @@ export default function ChatPanel({
     pickFile(Array.from(e.dataTransfer?.files || [])[0]);
   }
 
-  async function submit() {
-    if ((!body.trim() && !picked) || sending) return;
+  async function submit(overrideBody = null, overrideFile = null) {
+    const text = overrideBody !== null ? overrideBody : body;
+    const file = overrideFile || picked;
+    if ((!text.trim() && !file) || sending) return;
     setSending(true);
     setSendError(null);
     try {
-      await onSend(body, { recipientKey: recipientKey || null, file: picked || null });
+      await onSend(text, { recipientKey: recipientKey || null, file: file || null });
       setBody('');
       setPicked(null);
       stickRef.current = true;
@@ -295,15 +306,29 @@ export default function ChatPanel({
             <div className="meeting-chat-panel__picked">
               {pickedUrl ? <img src={pickedUrl} alt="" /> : <span className="meeting-chat-panel__picked-ico"><Icon name={fileIcon({ name: picked.name, mime_type: picked.type })} size={18} /></span>}
               <span className="meeting-chat-panel__picked-name" dir="auto" title={picked.name}>{picked.name}<em>{formatSize(picked.size)}</em></span>
+              {isEditableMedia(picked) && (
+                <button type="button" onClick={() => setEditFile(picked)} title={t('Edit')} aria-label={t('Edit')}><Icon name="edit" size={14} /></button>
+              )}
               <button type="button" onClick={() => setPicked(null)} title={t('Remove')} aria-label={t('Remove')}><Icon name="x" size={14} /></button>
             </div>
           )}
 
           <div className="meeting-chat-panel__field">
-            <input ref={fileInputRef} type="file" hidden onChange={(e) => { pickFile(e.target.files && e.target.files[0]); e.target.value = ''; }} />
-            <button type="button" className="meeting-chat-panel__attach" onClick={() => fileInputRef.current?.click()} disabled={sending} title={t('Attach a file')} aria-label={t('Attach a file')}>
-              <Icon name="paperclip" size={17} />
-            </button>
+            <input ref={fileInputRef} type="file" hidden onChange={(e) => { pickFile(e.target.files && e.target.files[0], { edit: false }); e.target.value = ''; }} />
+            <input ref={mediaInputRef} type="file" accept="image/*,video/*" hidden onChange={(e) => { pickFile(e.target.files && e.target.files[0]); e.target.value = ''; }} />
+            <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" hidden onChange={(e) => { pickFile(e.target.files && e.target.files[0]); e.target.value = ''; }} />
+            <AttachMenu
+              ar={t.locale === 'ar'}
+              title={t('Attach a file')}
+              canFiles
+              canMedia
+              onPickFiles={() => fileInputRef.current?.click()}
+              onPickMedia={() => mediaInputRef.current?.click()}
+              onPickCamera={() => {
+                if (navigator.mediaDevices?.getUserMedia) setShowCamera(true);
+                else cameraInputRef.current?.click();
+              }}
+            />
             <textarea
               ref={inputRef}
               rows={1}
@@ -324,6 +349,25 @@ export default function ChatPanel({
         <p className="meeting-chat-panel__disabled">
           <Icon name="lock" size={13} /> {t('Chat is disabled for this meeting.')}
         </p>
+      )}
+
+      {showCamera && (
+        <CameraCaptureModal
+          ar={t.locale === 'ar'}
+          onClose={() => setShowCamera(false)}
+          onCapture={(file) => { setShowCamera(false); pickFile(file); }}
+        />
+      )}
+
+      {editFile && (
+        <MediaEditorModal
+          key={`${editFile.name}-${editFile.size}-${editFile.lastModified}`}
+          file={editFile}
+          initialCaption={body}
+          onCancel={() => setEditFile(null)}
+          onDone={(f, cap) => { setPicked(f); setBody(cap || ''); setEditFile(null); inputRef.current?.focus(); }}
+          onSend={(f, cap) => { setEditFile(null); submit(cap || '', f); }}
+        />
       )}
 
       {previewFile && <MeetingFilePreview file={previewFile} onClose={() => setPreviewFile(null)} />}

@@ -830,3 +830,14 @@ a.meeting-files-panel__name:hover { text-decoration: underline; }
 }
 .meeting-invite__btn.is-done { background: #12a277; }
 .meeting-invite__btn--wide { width: 100%; background: var(--mr-fill-2); color: var(--mr-text); padding: 10px 14px; }
+
+/* ---- meeting chat: WhatsApp-style attach sheet (shared AttachMenu) + media editor ---- */
+.meeting-chat-panel__field .att-wrap { margin-inline-start: -8px; align-self: center; }
+.meeting-chat-panel__field .att-wrap .msg-icon-btn {
+  width: 34px; height: 34px; border-radius: 50%; border: none; display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--mr-muted); cursor: var(--cur-pointer, pointer);
+}
+.meeting-chat-panel__field .att-wrap .msg-icon-btn:hover,
+.meeting-chat-panel__field .att-wrap .msg-icon-btn.is-active { background: var(--mr-fill-2); color: var(--mr-text); }
+.meeting-chat-panel__field .att-sheet { z-index: 30; grid-template-columns: repeat(3, 78px); }
+.meeting-chat-panel__picked button { cursor: var(--cur-pointer, pointer); }
