@@ -76,6 +76,7 @@ const RAW_CONFIGS = {
       { key: 'students', en: 'Students', ar: 'الطلاب', icon: 'users', route: '/university/students', built: true },
       { key: 'academic-staff', en: 'Academic Staff', ar: 'أعضاء هيئة التدريس', icon: 'user', route: '/university/academic-staff', built: true },
       { key: 'join-requests', en: 'Join Requests', ar: 'طلبات الانضمام', icon: 'inbox', route: '/university/join-requests', built: true },
+      { key: 'access', en: 'Access & Pricing', ar: 'الصلاحيات والأسعار', icon: 'key', route: '/university/access', built: true },
       { key: 'verification', en: 'Verification', ar: 'التحقق', icon: 'shield', route: '/university/verification', built: true },
     ],
     academics: [
@@ -115,6 +116,8 @@ const RAW_CONFIGS = {
     people: [
       { key: 'students', en: 'Students', ar: 'الطلاب', icon: 'users', route: '/faculty/students', built: true },
       { key: 'academic-staff', en: 'Academic Staff', ar: 'أعضاء هيئة التدريس', icon: 'user', route: '/faculty/academic-staff', built: true },
+      { key: 'join-requests', en: 'Join Requests', ar: 'طلبات الانضمام', icon: 'inbox', route: '/faculty/join-requests', built: true },
+      { key: 'access', en: 'Access & Pricing', ar: 'الصلاحيات والأسعار', icon: 'key', route: '/faculty/access', built: true },
     ],
     academics: [
       { key: 'courses', en: 'Courses', ar: 'المواد', icon: 'layers', route: '/faculty/courses', built: true },
@@ -273,6 +276,7 @@ const RAW_CONFIGS = {
       { key: 'meetings-control', en: 'Meetings Control', ar: 'التحكم في الاجتماعات', icon: 'meeting-type', route: '/admin/meetings-control', built: true },
       { key: 'drive-control', en: 'My PC Control', ar: 'التحكم في جهازي', icon: 'hard-drive', route: '/admin/drive-control', built: true },
       { key: 'platform-policy', en: 'Platform Policy', ar: 'سياسة المنصة', icon: 'x-circle', route: '/admin/platform-policy', built: true },
+      { key: 'access', en: 'Access & Pricing', ar: 'الصلاحيات والأسعار', icon: 'lock', route: '/admin/access', built: true },
       { key: 'attendance-settings', en: 'Attendance Settings', ar: 'إعدادات الحضور', icon: 'check-circle', route: '/admin/attendance-settings', built: true },
       { key: 'grading-scale', en: 'Grading Scale', ar: 'نظام الدرجات', icon: 'settings', route: '/admin/grading-scale', built: true },
     ],

@@ -15,6 +15,7 @@ import { MY_PC_PREFIXES, myPcPath } from './config/myPc';
 import ErrorBoundary from './components/ErrorBoundary';
 import DeviceGate from './components/DeviceGate';
 import MfaGate from './components/MfaGate';
+import AccessGate from './components/access/AccessGate';
 import AccountSettingsSync from './lib/accountSync';
 import DashboardLayout from './layouts/DashboardLayout';
 import { registerVisit } from './lib/siteVisits';
@@ -233,6 +234,8 @@ const UniversityGraduationReview = lazy(() => import('./pages/university/Univers
 const UniversityGraduationEdit = lazy(() => import('./pages/university/UniversityGraduationEdit'));
 const UniversityGraduationCertificate = lazy(() => import('./pages/university/UniversityGraduationCertificate'));
 const UniversityPortfolio = lazy(() => import('./pages/university/UniversityPortfolio'));
+const AccessManager = lazy(() => import('./pages/access/AccessManager'));
+const FacultyJoinRequests = lazy(() => import('./pages/faculty/FacultyJoinRequests'));
 const UniversityJoinRequests = lazy(() => import('./pages/university/UniversityJoinRequests'));
 const UniversityVerification = lazy(() => import('./pages/university/UniversityVerification'));
 const UniversityProfile = lazy(() => import('./pages/university/UniversityProfile'));
@@ -304,6 +307,8 @@ export default function App() {
           <SaveCenterHost />
           {/* MFA requirements policy: a role that must have 2FA (grace period over) sees the setup page instead of the app. */}
           <MfaGate>
+          {/* University-link gate: a student with no university (and no grant) sees the "waiting for approval" screen. */}
+          <AccessGate>
           {/* Voice calls: rings on every page, owns the single active call. */}
           <CallProvider>
           <ErrorBoundary>
@@ -532,6 +537,7 @@ export default function App() {
                 <Route path="/admin/mobile" element={<AdminMobile />} />
                 <Route path="/admin/mobile/:id" element={<AdminMobileTokenDetail />} />
                 <Route path="/admin/platform-policy" element={<AdminPlatformPolicy />} />
+                <Route path="/admin/access" element={<AccessManager />} />
                 <Route path="/admin/meetings-control" element={<AdminMeetingsControl />} />
                 <Route path="/admin/meetings-control/events/:id" element={<AdminMeetingEventDetail />} />
                 <Route path="/admin/meetings-control/:uuid" element={<AdminMeetingControlDetail />} />
@@ -628,6 +634,7 @@ export default function App() {
                 <Route path="/university/graduation/:id/certificate" element={<UniversityGraduationCertificate />} />
                 <Route path="/university/portfolio" element={<UniversityPortfolio />} />
                 <Route path="/university/join-requests" element={<UniversityJoinRequests />} />
+                <Route path="/university/access" element={<AccessManager />} />
                 <Route path="/university/verification" element={<UniversityVerification />} />
                 <Route path="/university/profile" element={<UniversityProfile />} />
 
@@ -640,6 +647,8 @@ export default function App() {
                     backend surface, already fully registered. */}
                 <Route path="/faculty/dashboard" element={<FacultyDashboard />} />
                 <Route path="/faculty/approvals" element={<FacultyApprovals />} />
+                <Route path="/faculty/join-requests" element={<FacultyJoinRequests />} />
+                <Route path="/faculty/access" element={<AccessManager />} />
                 <Route path="/faculty/approvals/:id" element={<FacultyProjectView />} />
                 <Route path="/faculty/students" element={<FacultyStudents />} />
                 <Route path="/faculty/academic-staff" element={<FacultyAcademicStaff />} />
@@ -786,6 +795,7 @@ export default function App() {
           </Suspense>
           </ErrorBoundary>
           </CallProvider>
+          </AccessGate>
           </MfaGate>
         </AuthProvider>
         </DeviceGate>

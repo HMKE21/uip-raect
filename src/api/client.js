@@ -79,6 +79,16 @@ function notifyMfaRequired(json) {
   window.dispatchEvent(new CustomEvent(MFA_REQUIRED_EVENT, { detail: json?.data || {} }));
 }
 
+/** Fired when the server answers 403 + errors.code === 'university_approval_required' (the account is not linked
+ *  to a university and has no grant for this feature). AccessGate listens: it refreshes the account's access
+ *  status and shows the "needs approval" notice. */
+export const ACCESS_REQUIRED_EVENT = 'uip:access-required';
+
+function notifyAccessRequired(json) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(ACCESS_REQUIRED_EVENT, { detail: { feature: json?.errors?.feature, status: json?.data || {} } }));
+}
+
 export class ApiError extends Error {
   constructor(message, status, payload) {
     super(message);
@@ -296,6 +306,7 @@ async function rawRequest(method, path, { params, body, formData, headers, asRes
   if (json && json.success === false) {
     if (response.status === 403 && json.errors?.code === 'device_blocked') notifyDeviceBlocked(json);
     if (response.status === 403 && json.errors?.code === 'mfa_setup_required') notifyMfaRequired(json);
+    if (response.status === 403 && json.errors?.code === 'university_approval_required') notifyAccessRequired(json);
     if (response.status === 403 && json.errors?.code === 'permission_denied' && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent(PERMISSION_DENIED_EVENT, { detail: { permission: json.errors.permission } }));
     }
@@ -465,6 +476,7 @@ async function parseUploadResponse(status, rawText, channel, method, path) {
   }
   if (status === 403 && json.errors?.code === 'device_blocked') notifyDeviceBlocked(json);
   if (status === 403 && json.errors?.code === 'mfa_setup_required') notifyMfaRequired(json);
+  if (status === 403 && json.errors?.code === 'university_approval_required') notifyAccessRequired(json);
   if (json.success === false || status >= 400) {
     throw new ApiError(json.message || msg('Request failed.', 'فشل الطلب.'), status, json);
   }
