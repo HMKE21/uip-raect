@@ -47,19 +47,25 @@ export async function attachNoiseSuppressor(stream, enabled = true, opts = {}) {
     //   notch (adaptive) -> parks itself on a feedback whistle if one starts, releases when it stops
     //   limiter          -> a sudden loud peak (or the start of a howl) is clipped softly instead of squealing
     const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass'; hp.frequency.value = 90; hp.Q.value = 0.7;
+    hp.type = 'highpass'; hp.frequency.value = 110; hp.Q.value = 0.7;
     const lp = ctx.createBiquadFilter();
     lp.type = 'lowpass'; lp.frequency.value = 9000; lp.Q.value = 0.7;
     const mix = ctx.createGain();
     const howl = ctx.createBiquadFilter();
     howl.type = 'notch'; howl.frequency.value = 20000; howl.Q.value = 28;
+    // Loudness: RNNoise (and a laptop mic array) hand back a quiet voice. A gentle compressor evens out soft/loud speech, then a
+    // make-up gain brings it to a normal call level; the limiter right after it catches peaks so the boost can never clip or squeal.
+    const leveler = ctx.createDynamicsCompressor();
+    leveler.threshold.value = -34; leveler.knee.value = 24; leveler.ratio.value = 3.5; leveler.attack.value = 0.006; leveler.release.value = 0.22;
+    const makeup = ctx.createGain();
+    makeup.gain.value = (opts && typeof opts.makeupGain === 'number') ? opts.makeupGain : 2.4;
     const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -4; limiter.knee.value = 3; limiter.ratio.value = 12; limiter.attack.value = 0.003; limiter.release.value = 0.12;
+    limiter.threshold.value = -3; limiter.knee.value = 2; limiter.ratio.value = 20; limiter.attack.value = 0.002; limiter.release.value = 0.1;
 
     src.connect(hp);
     hp.connect(rnnoise); rnnoise.connect(gainClean); gainClean.connect(mix);
     hp.connect(gainRaw); gainRaw.connect(mix);
-    mix.connect(lp); lp.connect(howl); howl.connect(limiter); limiter.connect(dest);
+    mix.connect(lp); lp.connect(howl); howl.connect(leveler); leveler.connect(makeup); makeup.connect(limiter); limiter.connect(dest);
 
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;

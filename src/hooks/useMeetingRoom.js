@@ -122,7 +122,7 @@ function buildAudioConstraints(noise) {
   return {
     echoCancellation: true,
     noiseSuppression: noise,
-    autoGainControl: noise && !noiseSuppressSupported(),
+    autoGainControl: true, // a quiet mic (laptop arrays especially) must be lifted; the sender chain below limits peaks, so this no longer risks hiss/howl
     voiceIsolation: { ideal: noise },
     channelCount: { ideal: 1 },
     sampleRate: { ideal: 48000 },
@@ -142,7 +142,7 @@ function tuneAudioSdp(sdp) {
     const lines = sdp.split(/\r?\n/);
     const opus = lines.map((l) => /^a=rtpmap:(\d+) opus\/48000/i.exec(l)).filter(Boolean).map((m) => m[1]);
     if (!opus.length) return sdp;
-    const extra = { useinbandfec: '1', stereo: '0', 'sprop-stereo': '0', usedtx: '0', maxaveragebitrate: '40000', maxplaybackrate: '48000' };
+    const extra = { useinbandfec: '1', stereo: '0', 'sprop-stereo': '0', usedtx: '0', maxaveragebitrate: '64000', maxplaybackrate: '48000' };
     const merge = (existing) => {
       const map = new Map(existing.split(';').filter(Boolean).map((x) => { const [k, ...v] = x.split('='); return [k.trim(), v.join('=')]; }));
       Object.entries(extra).forEach(([k, v]) => map.set(k, v));
@@ -174,7 +174,7 @@ async function tuneSenders(pc, peerCount) {
       if (!params.encodings || !params.encodings.length) params.encodings = [{}];
       const enc = params.encodings[0];
       if (sender.track.kind === 'audio') {
-        enc.maxBitrate = 48000;
+        enc.maxBitrate = 64000;
         enc.priority = 'high';
         enc.networkPriority = 'high';
       } else {
