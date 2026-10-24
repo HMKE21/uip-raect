@@ -163,3 +163,29 @@ html body .ai-panel .ai-wall-swatch[aria-pressed="true"] { outline: 2.5px solid 
 
 /* ---------------- floating button ---------------- */
 html body .ai-fab { background: var(--ai-grad, linear-gradient(135deg, #5b6cff, #8b5cf6)); box-shadow: 0 14px 30px -10px rgba(91, 108, 255, .7); }
+
+/* ---- Small screens: the header tools and the chat list must stay reachable ----
+   Before: below 860px the "chat list" button was display:none and the docked list was display:none, so in the wide / full-screen
+   views there was no way to open the conversations at all. Now the list becomes a slide-over drawer opened by that button. */
+.ai-panel__header-actions { flex-shrink: 0; }
+@media (max-width: 860px) {
+  html body .ai-history-toggle { display: flex; }
+  html body .ai-panel.is-fullscreen .ai-sidebar {
+    display: flex; position: absolute; inset-block: 0; inset-inline-start: 0; z-index: 6;
+    width: min(320px, 88%); flex: none; background: var(--bg-surface);
+    border-inline-end: 1px solid var(--border-subtle); box-shadow: 0 0 40px rgba(10, 15, 30, .28);
+    transform: none; visibility: visible; transition: transform var(--duration-normal) var(--ease-standard);
+  }
+  html body .ai-panel.is-fullscreen .ai-sidebar.is-collapsed {
+    display: flex; visibility: hidden; transform: translateX(-105%); box-shadow: none;
+  }
+  [dir="rtl"] html body .ai-panel.is-fullscreen .ai-sidebar.is-collapsed,
+  html[dir="rtl"] body .ai-panel.is-fullscreen .ai-sidebar.is-collapsed { transform: translateX(105%); }
+}
+@media (max-width: 520px) {
+  html body .ai-panel__header { padding: 10px 10px; gap: 6px; }
+  html body .ai-panel__header-actions { gap: 2px; }
+  html body .ai-panel__icon-btn { width: 34px; height: 34px; }
+  html body .ai-panel__title-text small { display: none; }
+  html body .ai-panel .ai-avatar { width: 30px; height: 30px; }
+}

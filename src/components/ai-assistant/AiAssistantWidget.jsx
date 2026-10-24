@@ -61,7 +61,12 @@ export default function AiAssistantWidget({ role, user }) {
   const isMaximized = size === 'full';
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   // Wide / full-screen: the chat list can be hidden (remembered per browser).
-  const [historyHidden, setHistoryHidden] = useState(() => readPref('uip_ai_history_hidden') === '1');
+  const [historyHidden, setHistoryHidden] = useState(() => {
+    const pref = readPref('uip_ai_history_hidden');
+    if (pref === '1' || pref === '0') return pref === '1';
+    return typeof window !== 'undefined' && window.innerWidth <= 860; // small screens: the list is a drawer, closed at first
+  });
+  const isNarrow = () => typeof window !== 'undefined' && window.innerWidth <= 860;
   const toggleHistory = () => setHistoryHidden((h) => { writePref('uip_ai_history_hidden', h ? '0' : '1'); return !h; });
   // Chat background theme (same idea as the people-to-people messenger).
   const [wall, setWall] = useState(() => { const raw = readPref('uip_ai_wallpaper'); const v = AI_WALL_LEGACY[raw] || raw; return AI_WALLS.includes(v) ? v : 'none'; });
@@ -198,6 +203,7 @@ export default function AiAssistantWidget({ role, user }) {
     setMessages([]);
     setPendingFiles([]);
     setSidebarCollapsed(true);
+    if (isNarrow()) setHistoryHidden(true);
     setDraft('');
     setTimeout(() => textareaRef.current && textareaRef.current.focus(), 0);
   }
@@ -206,6 +212,7 @@ export default function AiAssistantWidget({ role, user }) {
     stopStreaming();
     setActiveId(id);
     setSidebarCollapsed(true);
+    if (isNarrow()) setHistoryHidden(true);
     setMessagesLoading(true);
     setBanner(null);
     api.get(`${API}/conversations/${id}`).then((res) => {
