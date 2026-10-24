@@ -80,6 +80,8 @@ const AdminMobileTokenDetail = lazy(() => import('./pages/admin/AdminMobileToken
 const AdminMeetingEventDetail = lazy(() => import('./pages/admin/AdminMeetingEventDetail'));
 const AdminMeetingControlDetail = lazy(() => import('./pages/admin/AdminMeetingControlDetail'));
 const AdminMeetingsControl = lazy(() => import('./pages/admin/AdminMeetingsControl'));
+const AdminDriveControl = lazy(() => import('./pages/admin/AdminDriveControl'));
+const AdminDriveUserDetail = lazy(() => import('./pages/admin/AdminDriveUserDetail'));
 const AdminMeetingsMonitoring = lazy(() => import('./pages/admin/AdminMeetingsMonitoring'));
 const AdminPlatformPolicy = lazy(() => import('./pages/admin/AdminPlatformPolicy'));
 const AdminNotificationSettings = lazy(() => import('./pages/admin/AdminNotificationSettings'));
@@ -533,6 +535,8 @@ export default function App() {
                 <Route path="/admin/meetings-control" element={<AdminMeetingsControl />} />
                 <Route path="/admin/meetings-control/events/:id" element={<AdminMeetingEventDetail />} />
                 <Route path="/admin/meetings-control/:uuid" element={<AdminMeetingControlDetail />} />
+                <Route path="/admin/drive-control" element={<AdminDriveControl />} />
+                <Route path="/admin/drive-control/users/:id" element={<AdminDriveUserDetail />} />
                 <Route path="/admin/meetings/monitoring" element={<AdminMeetingsMonitoring />} />
                 <Route path="/admin/attendance-settings" element={<AdminAttendanceSettings />} />
                 <Route path="/admin/grading-scale" element={<AdminGradingScale />} />
