@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, errorMessage } from '../../api/client';
 import Icon from '../../components/Icon';
 import { useTranslations } from '../../context/LanguageContext';
@@ -39,6 +40,7 @@ function StatCard({ label, value, icon }) {
 
 export default function AdminMeetingsMonitoring() {
   const t = useTranslations(translations);
+  const navigate = useNavigate();
   const [m, setM] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -141,7 +143,7 @@ export default function AdminMeetingsMonitoring() {
             </thead>
             <tbody>
               {securityEvents.map((ev) => (
-                <tr key={ev.id}>
+                <tr key={ev.id} className="mtc-row-click" tabIndex={0} onClick={() => navigate(`/admin/meetings-control/events/${ev.id}`)} onKeyDown={(k) => { if (k.key === 'Enter') navigate(`/admin/meetings-control/events/${ev.id}`); }}>
                   <td><span className="badge badge-warning">{t(SECURITY_ACTION_LABELS[ev.action] || ev.action)}</span></td>
                   <td><span className="text-mono">#{ev.meeting_id ?? '—'}</span></td>
                   <td><span className="text-mono">{ev.user_id ?? '—'}</span></td>

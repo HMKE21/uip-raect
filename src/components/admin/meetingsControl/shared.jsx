@@ -128,3 +128,17 @@ export const ROLE_LABELS = {
   data_analyst: ['Data analyst', 'محلل بيانات'], supervisor: ['Supervisor', 'مشرف'],
   academic_staff: ['Academic staff', 'هيئة أكاديمية'], faculty: ['Faculty', 'كلية'],
 };
+
+/** Human names for audit actions (falls back to the raw action key). [en, ar] */
+export const ACTION_LABELS = {
+  'meetings.meeting_created': ['Meeting created', 'إنشاء اجتماع'], 'meetings.meeting_ended': ['Meeting ended', 'إنهاء اجتماع'],
+  'meetings.meeting_deleted': ['Meeting deleted', 'حذف اجتماع'], 'meetings.join_requested': ['Join requested', 'طلب انضمام'],
+  'meetings.signaling_left': ['Left the meeting', 'مغادرة الاجتماع'], 'meetings.screen_share_started': ['Screen share started', 'بدء مشاركة الشاشة'],
+  'meetings.screen_share_stopped': ['Screen share stopped', 'إيقاف مشاركة الشاشة'], 'meetings.connection_failure': ['Connection failure', 'فشل اتصال'],
+  'meetings.locked': ['Meeting locked', 'قفل الاجتماع'], 'meetings.participant_removed': ['Participant removed', 'إزالة مشارك'],
+  'meetings.join_failed_wrong_password': ['Wrong password attempt', 'محاولة باسورد خاطئ'],
+};
+export function actionLabel(action, ar) {
+  const l = ACTION_LABELS[action];
+  return l ? l[ar ? 1 : 0] : action;
+}

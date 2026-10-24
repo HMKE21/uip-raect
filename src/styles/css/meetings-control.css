@@ -111,3 +111,7 @@
 .mtc-person-actions { min-width: 230px; max-width: 340px; }
 @media (max-width: 768px) { .mtc-person-actions { min-width: 0; max-width: none; } .mtc-page { gap: 12px; } }
 .mtc-person-actions .btn { height: 30px; padding-inline: 9px; }
+
+/* clickable event rows */
+.mtc-row-click { cursor: pointer; }
+.mtc-row-click:hover td, .mtc-row-click:focus-visible td { background: color-mix(in srgb, var(--primary, #4f46e5) 6%, transparent); }
