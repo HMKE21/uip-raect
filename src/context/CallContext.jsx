@@ -145,6 +145,37 @@ export function CallProvider({ children }) {
     else setAudioBlocked(false);
   };
 
+  // Sound watchdog. "Connected" + a live remote audio track does not prove the <audio> element is really playing (autoplay refusal,
+  // a stalled element after the video track joined the same stream, ...). While a call is active, check that playback time advances;
+  // if it doesn't: retry play(), then re-attach the stream, and finally show the "tap to enable sound" button.
+  useEffect(() => {
+    if (state.phase !== 'active') return undefined;
+    let last = -1;
+    let still = 0;
+    const id = setInterval(() => {
+      const el = audioRef.current;
+      const stream = el && el.srcObject;
+      const track = stream && stream.getAudioTracks && stream.getAudioTracks()[0];
+      if (!el || !track || track.readyState !== 'live' || track.muted) { still = 0; return; } // nothing arriving yet: not our problem
+      if (el.muted) el.muted = false;
+      if (el.volume < 1) el.volume = 1;
+      const moving = !el.paused && el.currentTime > last;
+      last = el.currentTime;
+      if (moving) { if (still > 0) setAudioBlocked(false); still = 0; return; }
+      still += 1;
+      try { console.warn('[call] remote audio is not playing, attempt', still); } catch { /* diagnostics only */ }
+      if (still === 1) {
+        const p = el.play();
+        if (p && p.catch) p.catch(() => {});
+      } else if (still === 2) {
+        try { el.srcObject = null; el.srcObject = stream; const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch { /* ignore */ }
+      } else {
+        setAudioBlocked(true);
+      }
+    }, 2000);
+    return () => clearInterval(id);
+  }, [state.phase]);
+
   // Browsers only start audio after a gesture: unlock the ringtone context on the first interaction.
   useEffect(() => {
     const unlock = () => unlockAudio();
@@ -181,7 +212,10 @@ export function CallProvider({ children }) {
         const src = track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null);
         const cur = el.srcObject;
         const same = cur && src && cur.getAudioTracks && src.getAudioTracks && cur.getAudioTracks()[0] === src.getAudioTracks()[0];
-        if (!same) { el.srcObject = src; } // an unmute re-attach hands us the same track: don't restart playback
+        if (!same) {
+          if (el.getAttribute('src')) el.removeAttribute('src'); // the silent unlock clip must not linger next to the live stream
+          el.srcObject = src;
+        } // an unmute re-attach hands us the same track: don't restart playback
         if (!src) { setAudioBlocked(false); return; }
         el.muted = false;
         el.volume = 1;
