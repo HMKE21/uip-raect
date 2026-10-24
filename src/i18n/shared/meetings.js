@@ -323,6 +323,7 @@ export default {
   'Files Shared': 'ملفات مشارَكة',
   'Failed Connections': 'محاولات اتصال فاشلة',
   'Tap to enable sound': 'اضغط لتشغيل الصوت',
+  'Diagnostics': 'تشخيص الاتصال',
   'Reconnecting…': 'جاري إعادة الاتصال…',
   'Connection failed': 'فشل الاتصال',
   'Pinned': 'مثبّت',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useBackLayer } from '../../../lib/backStack';
-import { useMeetingRoom } from '../../../hooks/useMeetingRoom';
+import { useMeetingRoom, meetingLog } from '../../../hooks/useMeetingRoom';
 import ParticipantTile from './ParticipantTile';
 import ChatPanel from './ChatPanel';
 import ParticipantsPanel from './ParticipantsPanel';
@@ -78,6 +78,15 @@ export default function MeetingRoomShell({
 }) {
   const t = useTranslations(translations);
   const [reactionsOpen, setReactionsOpen] = useState(false);
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagLines, setDiagLines] = useState([]);
+  useEffect(() => {
+    if (!diagOpen) return undefined;
+    const tick = () => setDiagLines(meetingLog());
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [diagOpen]);
   const [pinnedKey, setPinnedKey] = useState(null); // double-click a tile to pin it large
   // Round 7 — one slide-in panel open at a time (Chat/Participants/Files/
   // Notes/Polls); replaces the separate per-panel booleans Round 5/6 used,
@@ -241,12 +250,27 @@ export default function MeetingRoomShell({
               <Icon name="lock" size={16} />
             </button>
           )}
+          <button type="button" className={`meeting-room__control-btn ${diagOpen ? 'is-active' : ''}`} onClick={() => setDiagOpen((v) => !v)} title={t('Diagnostics')} aria-label={t('Diagnostics')}>
+            <Icon name="pulse" size={16} />
+          </button>
           <button type="button" className="meeting-room__control-btn is-leave meeting-room__topbar-leave" onClick={handleLeave} title={t('Leave Meeting')} aria-label={t('Leave Meeting')}>
             <Icon name="logout" size={16} />
           </button>
         </div>
       </div>
 
+      {diagOpen && (
+        <div className="meeting-room__diag">
+          <div className="meeting-room__diag-head">
+            <strong>{t('Diagnostics')}</strong>
+            <span>
+              <button type="button" onClick={() => { try { navigator.clipboard.writeText(diagLines.join('\n')); } catch { /* clipboard blocked */ } }}>{t('Copy')}</button>
+              <button type="button" onClick={() => setDiagOpen(false)}>{t('Close')}</button>
+            </span>
+          </div>
+          <pre>{diagLines.length ? diagLines.join('\n') : '…'}</pre>
+        </div>
+      )}
       {noticeText(room.notice) && (
         <p
           className="text-caption"

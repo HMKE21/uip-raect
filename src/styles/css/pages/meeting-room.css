@@ -178,6 +178,10 @@ body.meeting-room-active .app-shell { overflow: hidden; }
 .meeting-room__control-btn.is-leave { background: #ef4444; border-color: #ef4444; }
 .meeting-room__control-btn.is-leave:hover { background: #dc2626; }
 .meeting-room__topbar-leave { display: none; }
+.meeting-room__diag { position: absolute; z-index: 60; top: 56px; inset-inline-end: 12px; width: min(560px, calc(100% - 24px)); max-height: 60dvh; display: flex; flex-direction: column; background: #0b0c10; border: 1px solid rgba(255,255,255,0.18); border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.55); }
+.meeting-room__diag-head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.meeting-room__diag-head button { margin-inline-start: 6px; background: rgba(255,255,255,0.1); border: none; color: #fff; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.meeting-room__diag pre { margin: 0; padding: 10px 12px; overflow: auto; font-size: 11px; line-height: 1.5; color: #a7f3d0; white-space: pre-wrap; word-break: break-all; direction: ltr; text-align: left; }
 
 /* Side panels dock over the stage, under the control bar. */
 .meeting-chat-panel, .meeting-participants-panel { z-index: 30; }

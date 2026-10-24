@@ -93,7 +93,17 @@ import { createMeetingEcho, presenceChannelName, personalChannelName, signalingA
  * RecordingsPanel doesn't offer them a stop button (see its own
  * docblock).
  */
-const dbg = (...a) => { try { console.info('[meeting]', ...a); } catch { /* no console */ } };
+// Rolling log, readable from the in-room "Diagnostics" panel (so a problem can be reported with one copy/paste, no devtools needed).
+const logBuf = [];
+export const meetingLog = () => logBuf.slice();
+const dbg = (...a) => {
+  try {
+    const line = `${new Date().toTimeString().slice(0, 8)} ${a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' ')}`;
+    logBuf.push(line);
+    if (logBuf.length > 120) logBuf.shift();
+    console.info('[meeting]', ...a);
+  } catch { /* no console */ }
+};
 
 /** Keep video offers small: Chrome lists AV1/VP9/H264/VP8 + rtx/red/ulpfec variants, which can push an SDP past a signaling server's message limit. VP8/H264 are enough. */
 function preferLightCodecs(pc) {
@@ -436,7 +446,14 @@ export function useMeetingRoom({
   }, []);
 
   const createPeer = useCallback((key) => {
-    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
+    let pc;
+    try {
+      pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
+    } catch (e) {
+      // a malformed TURN entry makes the constructor throw -> fall back to plain STUN rather than having no connection at all
+      dbg('bad iceServers, using STUN only:', e?.message);
+      pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+    }
     peersRef.current[key] = pc;
     pendingCandidatesRef.current[key] = pendingCandidatesRef.current[key] || []; // keep candidates that raced ahead of the offer
 
@@ -504,6 +521,7 @@ export function useMeetingRoom({
   const handleSignal = useCallback(async ({ to, from, kind, data }) => {
     if (to !== myKey || from === myKey) return;
     dbg('recv', kind, 'from', from);
+    try {
 
     if (kind === 'offer') {
       // a new offer == that person (re)joined or restarted: never reuse an old, possibly dead, connection
@@ -535,6 +553,9 @@ export function useMeetingRoom({
         return;
       }
       await pc.addIceCandidate(new RTCIceCandidate(data)).catch(() => {});
+    }
+    } catch (err) {
+      dbg('signal handling failed', kind, err?.message || String(err));
     }
   }, [myKey, createPeer]);
 
@@ -644,6 +665,14 @@ export function useMeetingRoom({
           setStatus('connected');
           // The roster is a DB snapshot (can include people who closed their tab without leaving); the presence list is the truth.
           const present = members.map(normMember).filter((m) => m.id);
+          // Tell everyone (and the server) what we are ACTUALLY sending. Until now this was only sent on a toggle, so the server
+          // kept its defaults and other people saw "camera off / muted" for a perfectly working camera.
+          {
+            const ls = localStreamRef.current;
+            const a = ls?.getAudioTracks()[0];
+            const v = ls?.getVideoTracks()[0];
+            signalingApi.mediaState(meetingUuid, guestToken, { mic_enabled: !!(a && a.enabled), camera_enabled: !!(v && v.enabled) }).catch(() => {});
+          }
           dbg('presence here', present.map((m) => m.id).join(', ') || '(none with id)', 'me =', myKey);
           const presentIds = new Set(present.map((m) => m.id));
           if (presentIds.size > 0) {
@@ -663,7 +692,7 @@ export function useMeetingRoom({
                 screenShareAllowed: null, connectionState: 'connecting', connectionQuality: 'good', remoteStream: null,
               },
             }));
-            offerTo(m.id);
+            offerTo(m.id).catch((err) => dbg('offer failed', m.id, err?.message || String(err)));
           });
         })
         .joining((raw) => {
