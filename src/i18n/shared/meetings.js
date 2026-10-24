@@ -355,6 +355,7 @@ export default {
   'Week': 'أسبوع',
   'Month': 'شهر',
   'Today': 'اليوم',
+  'Yesterday': 'أمس',
   'No meetings in this range.': 'لا توجد اجتماعات في هذه الفترة.',
   'more': 'أكتر',
   'Failed to load the calendar.': 'تعذّر تحميل التقويم.',

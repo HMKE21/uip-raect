@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Icon from '../../Icon';
 import { useTranslations } from '../../../context/LanguageContext';
 import i18nCommon from '../../../i18n/common';
@@ -181,9 +181,23 @@ export default function ChatPanel({
     ? messages
     : [...messages, ...reactionLog.map((r) => ({ ...r, type: 'reaction' }))]
       .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const dayKey = (iso) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : d.toDateString(); };
+  const dayLabel = (iso) => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    const today = new Date();
+    const yesterday = new Date(today.getTime() - 86400000);
+    if (d.toDateString() === today.toDateString()) return t('Today');
+    if (d.toDateString() === yesterday.toDateString()) return t('Yesterday');
+    return d.toLocaleDateString(locale, { day: 'numeric', month: 'long' });
+  };
   const rows = timeline.map((m, i) => {
     const special = m.type === 'system' || m.type === 'reaction';
-    return { m, isSystem: special, first: !special && !sameRun(timeline[i - 1], m), last: !special && !sameRun(m, timeline[i + 1]) };
+    return {
+      m, isSystem: special,
+      newDay: i === 0 || dayKey(timeline[i - 1].created_at) !== dayKey(m.created_at),
+      first: !special && !sameRun(timeline[i - 1], m), last: !special && !sameRun(m, timeline[i + 1]),
+    };
   });
 
   return (
@@ -211,23 +225,34 @@ export default function ChatPanel({
           </div>
         )}
 
-        {rows.map(({ m, isSystem, first, last }) => {
+        {rows.map(({ m, isSystem, first, last, newDay }) => {
+          const day = newDay && dayLabel(m.created_at)
+            ? <div className="meeting-chat-day"><span>{dayLabel(m.created_at)}</span></div>
+            : null;
           if (m.type === 'reaction') {
             return (
-              <div key={m.id} className="meeting-chat-react-line">
-                <span><b>{m.emoji}</b> {m.key === myKey ? t('You') : m.displayName} {t('reacted')}</span>
-              </div>
+              <Fragment key={m.id}>
+                {day}
+                <div className="meeting-chat-react-line">
+                  <span><b>{m.emoji}</b> {m.key === myKey ? t('You') : m.displayName} {t('reacted')}</span>
+                </div>
+              </Fragment>
             );
           }
           if (isSystem) {
             return (
-              <div key={m.id} className="meeting-chat-sys"><span dir="auto">{m.body}</span></div>
+              <Fragment key={m.id}>
+                {day}
+                <div className="meeting-chat-sys"><span dir="auto">{m.body}</span></div>
+              </Fragment>
             );
           }
           const mine = m.sender_key === myKey;
           const cls = ['meeting-chat-msg', mine ? 'is-mine' : '', first ? 'is-first' : '', last ? 'is-last' : '', m.is_private ? 'is-private' : ''].filter(Boolean).join(' ');
           return (
-            <div key={m.id} className={cls}>
+            <Fragment key={m.id}>
+            {day}
+            <div className={cls}>
               {!mine && (
                 <span className="meeting-chat-msg__avatar" style={first ? { background: avatarColor(m.sender_display_name) } : undefined} aria-hidden="true">
                   {first ? ((m.sender_display_name || '?').trim().charAt(0).toUpperCase() || '?') : ''}
@@ -251,7 +276,7 @@ export default function ChatPanel({
                   {m.attachment && <ChatAttachment file={m.attachment} onOpen={() => setPreviewFile(m.attachment)} t={t} />}
                   <div className="meeting-chat-msg__quick-react" role="group" aria-label={t('React')}>
                     {QUICK_REACTIONS.map((emoji) => (
-                      <button key={emoji} type="button" onClick={() => onReact(m.id, emoji)} title={t('React')}>{emoji}</button>
+                      <button key={emoji} type="button" onClick={(e) => { onReact(m.id, emoji); e.currentTarget.blur(); }} title={t('React')}>{emoji}</button>
                     ))}
                   </div>
                 </div>
@@ -274,6 +299,7 @@ export default function ChatPanel({
                 {last && <span className="meeting-chat-msg__time">{timeOf(m.created_at)}</span>}
               </div>
             </div>
+            </Fragment>
           );
         })}
       </div>
