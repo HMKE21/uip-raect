@@ -154,38 +154,66 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
  * jsPDF's built-in fonts, so Arabic shaping and right-to-left tables come out
  * correctly. Rows are paginated by measured height, so no row is ever cut.
  */
-async function buildPdf(headers, rows, { title, rtl }) {
+async function buildPdf(headers, rows, { title, rtl, meta = [] }) {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
 
   const landscape = headers.length > 5;
   const pageMm = landscape ? { w: 297, h: 210 } : { w: 210, h: 297 };
   const W = landscape ? 1122 : 794; // px at 96dpi
   const H = Math.round((W * pageMm.h) / pageMm.w);
-  const PAD = 36;
-  const FOOT = 26;
+  const PAD = 40;
+  const FOOT = 30;
+  const FS = landscape ? 14 : 13.5; // table font size (px) - large enough to read comfortably once the page is scaled to the screen
+
+  const ISO_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/;
+  const NUM_RE = /^-?\d+(\.\d+)?%?$/;
+  const loc = rtl ? 'ar-EG' : 'en-GB';
+  // ISO timestamps become "24 Oct 2026 · 12:26" in the reader's own time zone; everything else is shown as-is.
+  const show = (v) => {
+    const sv = cellText(v);
+    if (ISO_RE.test(sv)) {
+      const d = new Date(sv);
+      if (!Number.isNaN(d.getTime())) {
+        return `${d.toLocaleDateString(loc, { day: 'numeric', month: 'short', year: 'numeric' })} · ${d.toLocaleTimeString(loc, { hour: '2-digit', minute: '2-digit' })}`;
+      }
+    }
+    return sv;
+  };
+  const shown = rows.map((r) => headers.map((_, i) => show(r[i])));
+  // numeric / date columns are centred and kept left-to-right; text columns follow their own script
+  const kinds = headers.map((_, i) => {
+    const vals = rows.map((r) => cellText(r[i])).filter((x) => x !== '');
+    if (!vals.length) return 'text';
+    if (vals.every((x) => NUM_RE.test(x))) return 'num';
+    if (vals.every((x) => ISO_RE.test(x))) return 'date';
+    return 'text';
+  });
 
   // Column weights from content length, so a long "description" gets more room than an "id".
   const weights = headers.map((h, i) => {
-    const lens = rows.slice(0, 300).map((r) => cellText(r[i]).length).sort((a, b) => a - b);
+    const lens = shown.slice(0, 300).map((r) => r[i].length).sort((x, y) => x - y);
     const p90 = lens.length ? lens[Math.floor(lens.length * 0.9)] : 0;
-    return Math.min(36, Math.max(6, Math.max(p90, cellText(h).length * 0.9)));
+    const floor = kinds[i] === 'num' ? 8 : 10;
+    return Math.min(36, Math.max(floor, Math.max(p90, cellText(h).length * 0.9)));
   });
-  const totalW = weights.reduce((a, b) => a + b, 0);
+  const totalW = weights.reduce((x, y) => x + y, 0);
 
   const font = getComputedStyle(document.body).fontFamily || 'sans-serif';
   const dir = rtl ? 'rtl' : 'ltr';
-  const stamp = new Date().toLocaleString(rtl ? 'ar-EG' : 'en-GB');
+  const stamp = new Date().toLocaleString(loc, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   const MAX_CELL = 220;
+  const cellStyle = (i, extra = '') => `${kinds[i] === 'text' ? 'text-align:start;unicode-bidi:plaintext;' : 'text-align:center;direction:ltr;font-variant-numeric:tabular-nums;'}${extra}`;
 
   const tableHtml = (list, withHead = true) => `
-    <table style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:11.5px;line-height:1.45">
+    <table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:${FS}px;line-height:1.5;border:1px solid #D5DAF3;border-radius:10px;overflow:hidden">
       <colgroup>${weights.map((w) => `<col style="width:${((w / totalW) * 100).toFixed(2)}%">`).join('')}</colgroup>
-      ${withHead ? `<thead><tr>${headers.map((h) => `<th style="background:#E8ECFF;color:#1B2559;font-weight:700;text-align:start;padding:7px 8px;border:1px solid #CBD2F0;word-break:break-word">${esc(cellText(h))}</th>`).join('')}</tr></thead>` : ''}
-      <tbody>${list.map((r, ri) => `<tr style="background:${ri % 2 ? '#F7F8FD' : '#fff'}">${headers.map((_, i) => {
-        const s = cellText(r[i]);
-        return `<td style="padding:6px 8px;border:1px solid #E1E5F5;vertical-align:top;word-break:break-word;overflow-wrap:anywhere">${esc(s.length > MAX_CELL ? `${s.slice(0, MAX_CELL)}…` : s)}</td>`;
-      }).join('')}</tr>`).join('')}</tbody>
+      ${withHead ? `<thead><tr>${headers.map((h, i) => `<th style="background:#3B47D6;color:#fff;font-weight:700;padding:11px 10px;word-break:break-word;${cellStyle(i === -1 ? 0 : i).replace('direction:ltr;', '')}">${esc(h)}</th>`).join('')}</tr></thead>` : ''}
+      <tbody>${list.map((r, ri) => `<tr style="background:${ri % 2 ? '#F5F6FD' : '#fff'}">${r.map((v, i) => `<td style="padding:10px;border-top:1px solid #E6E9F7;vertical-align:middle;word-break:break-word;overflow-wrap:anywhere;color:#1F2433;${cellStyle(i)}">${esc(v.length > MAX_CELL ? `${v.slice(0, MAX_CELL)}…` : v)}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>`;
+
+  const chips = meta.filter((m) => m && m.value !== undefined && m.value !== '')
+    .map((m) => `<div style="flex:1;min-width:0;background:#F1F3FF;border:1px solid #DDE1F8;border-radius:10px;padding:8px 12px"><div style="font-size:11px;color:#5B6286;margin-bottom:2px">${esc(m.label)}</div><div style="font-size:16px;font-weight:700;color:#1B2559">${esc(m.value)}</div></div>`).join('');
+  const chipsHtml = chips ? `<div style="display:flex;gap:10px;margin:0 0 16px">${chips}</div>` : '';
 
   const stage = document.createElement('div');
   stage.setAttribute('aria-hidden', 'true');
@@ -195,20 +223,20 @@ async function buildPdf(headers, rows, { title, rtl }) {
   try {
     const pageShell = (inner, pageNo, pageCount, first) => `
       <div style="box-sizing:border-box;width:${W}px;height:${H}px;padding:${PAD}px;background:#fff;position:relative;direction:${dir}">
-        ${first ? `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:14px;border-bottom:2px solid #4F5BE8;padding-bottom:8px">
-          <h1 style="margin:0;font-size:20px;color:#1B2559">${esc(title || 'Export')}</h1>
-          <span style="font-size:11px;color:#6B7280">${esc(stamp)} · ${rows.length}</span></div>` : ''}
+        ${first ? `<div style="display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px;padding:16px 20px;border-radius:14px;background:linear-gradient(135deg,#3B47D6,#6D78FF);color:#fff">
+          <h1 style="margin:0;font-size:24px;font-weight:800;line-height:1.3">${esc(title || 'Export')}</h1>
+          <div style="text-align:end;font-size:12px;opacity:.92;line-height:1.6"><div>${esc(stamp)}</div><div>${rows.length} ${rtl ? 'سجل' : (rows.length === 1 ? 'record' : 'records')}</div></div></div>${chipsHtml}` : ''}
         ${inner}
-        <div style="position:absolute;bottom:12px;inset-inline:${PAD}px;display:flex;justify-content:space-between;font-size:10px;color:#9CA3AF">
+        <div style="position:absolute;bottom:14px;inset-inline:${PAD}px;display:flex;justify-content:space-between;font-size:11px;color:#9CA3AF">
           <span>${esc(title || '')}</span><span dir="ltr">${pageNo} / ${pageCount}</span></div>
       </div>`;
 
     // 1) measure header + each row once
-    stage.innerHTML = `<div style="padding:${PAD}px;box-sizing:border-box;width:${W}px">${tableHtml(rows)}</div>`;
+    stage.innerHTML = `<div style="padding:${PAD}px;box-sizing:border-box;width:${W}px">${tableHtml(shown)}</div>`;
     const trs = [...stage.querySelectorAll('tbody tr')];
-    const headH = stage.querySelector('thead')?.offsetHeight || 30;
+    const headH = stage.querySelector('thead')?.offsetHeight || 40;
     const rowH = trs.map((tr) => tr.offsetHeight);
-    const titleH = 58;
+    const titleH = 92 + (chips ? 72 : 0);
     const room = (first) => H - PAD * 2 - FOOT - headH - (first ? titleH : 0);
 
     // 2) paginate by height
@@ -223,7 +251,7 @@ async function buildPdf(headers, rows, { title, rtl }) {
     // 3) render each page
     const pdf = new jsPDF({ orientation: landscape ? 'landscape' : 'portrait', unit: 'mm', format: 'a4', compress: true });
     for (let p = 0; p < pages.length; p += 1) {
-      stage.innerHTML = pageShell(tableHtml(pages[p].map((i) => rows[i])), p + 1, pages.length, p === 0);
+      stage.innerHTML = pageShell(tableHtml(pages[p].map((i) => shown[i])), p + 1, pages.length, p === 0);
       const canvas = await html2canvas(stage.firstElementChild, { scale: 2, backgroundColor: '#ffffff', logging: false, width: W, height: H });
       if (p > 0) pdf.addPage();
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pageMm.w, pageMm.h, undefined, 'FAST');
@@ -245,8 +273,9 @@ async function buildPdf(headers, rows, { title, rtl }) {
  * @param {string}   o.filename   base name, extension optional
  * @param {string}  [o.title]     heading of the PDF / sheet name of the workbook
  * @param {boolean} [o.rtl]       defaults to the page direction
+ * @param {{label:string,value:string}[]} [o.meta]  summary chips shown under the PDF title
  */
-export async function exportTable({ headers, rows, format = 'csv', filename = 'export', title, rtl = isRtl() }) {
+export async function exportTable({ headers, rows, format = 'csv', filename = 'export', title, rtl = isRtl(), meta }) {
   if (!FORMAT_META[format]) throw new Error(`Unsupported export format: ${format}`);
   const safeHeaders = (headers || []).map(cellText);
   const safeRows = rows || [];
@@ -254,17 +283,18 @@ export async function exportTable({ headers, rows, format = 'csv', filename = 'e
   if (format === 'csv') blob = new Blob([toCsv(safeHeaders, safeRows)], { type: FORMAT_META.csv.mime });
   else if (format === 'json') blob = buildJson(safeHeaders, safeRows);
   else if (format === 'xlsx') blob = await buildXlsx(safeHeaders, safeRows, { title: title || filename, rtl });
-  else blob = await buildPdf(safeHeaders, safeRows, { title: title || filename, rtl });
+  else blob = await buildPdf(safeHeaders, safeRows, { title: title || filename, rtl, meta });
   saveBlob(blob, withExtension(filename, format));
 }
 
 /** Convert a CSV file returned by the API into the requested format and download it. */
-export async function exportFromCsvBlob(blob, { format = 'csv', filename = 'export', title, rtl } = {}) {
+export async function exportFromCsvBlob(blob, { format = 'csv', filename = 'export', title, rtl, meta, mapRows } = {}) {
   if (format === 'csv') { saveBlob(blob, withExtension(filename, 'csv')); return; }
   const parsed = parseCsv(await blob.text());
   if (!parsed.length) throw new Error('The export is empty.');
-  const [headers, ...rows] = parsed;
-  await exportTable({ headers, rows, format, filename, title: title || filename, rtl });
+  let [headers, ...rows] = parsed;
+  if (mapRows) ({ headers, rows } = mapRows({ headers, rows }));
+  await exportTable({ headers, rows, format, filename, title: title || filename, rtl, meta });
 }
 
 /**

@@ -9,6 +9,7 @@ import ExportMenu from '../../components/ExportMenu';
 import { exportFromCsvBlob } from '../../lib/exporter';
 import MeetingWaitingRoomPanel from '../../components/meetings/MeetingWaitingRoomPanel';
 import InviteModal from '../../components/meetings/InviteModal';
+import RecordingPlayerModal, { downloadRecording } from '../../components/meetings/RecordingPlayerModal';
 import { useTranslations } from '../../context/LanguageContext';
 import { portalPrefix } from '../../config/navConfig';
 import i18nCommon from '../../i18n/common';
@@ -213,6 +214,7 @@ export default function MeetingDetails() {
   // Round 9 — بند 18 (Recording).
   const [recordings, setRecordings] = useState(null); // null = not yet loaded/unavailable; [] = loaded, empty
   const [recordingsBusyId, setRecordingsBusyId] = useState(null);
+  const [playing, setPlaying] = useState(null); // the recording open in the player modal
 
   // Round 10 — بند 15 (Meeting Analytics widget).
   const [analytics, setAnalytics] = useState(null);
@@ -332,7 +334,22 @@ export default function MeetingDetails() {
     setExporting(true);
     try {
       const response = await attendanceApi.export(uuid);
-      await exportFromCsvBlob(await response.blob(), { format, filename: `attendance-${uuid}`, title: t('Attendance Report') });
+      await exportFromCsvBlob(await response.blob(), {
+        format,
+        filename: `attendance-${uuid}`,
+        title: meeting?.title ? `${t('Attendance Report')} — ${meeting.title}` : t('Attendance Report'),
+        // CSV headers come from the API in English: show them in the reader's language, and add a short summary under the PDF title
+        mapRows: ({ headers, rows }) => ({ headers: headers.map((h) => t(h)), rows }),
+        meta: (() => {
+          const list = attendance || [];
+          if (!list.length) return [];
+          const avg = list.reduce((sum, r) => sum + (Number(r.attendance_percentage) || 0), 0) / list.length;
+          return [
+            { label: t('Participants'), value: String(list.length) },
+            { label: t('Average attendance'), value: `${avg.toFixed(1)}%` },
+          ];
+        })(),
+      });
     } catch {
       alert(t('Export failed. Please try again.'));
     } finally {
@@ -629,9 +646,14 @@ export default function MeetingDetails() {
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                     <span className={`badge ${meta.cls}`}>{t(meta.key)}</span>
                     {r.download_url && (
-                      <a href={r.download_url} target="_blank" rel="noreferrer" className="btn btn-outline btn-sm">
-                        <Icon name="download" size={12} /> {t('Download')}
-                      </a>
+                      <>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => setPlaying(r)} title={t('Preview')}>
+                          <Icon name="play" size={12} /> {t('Preview')}
+                        </button>
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => downloadRecording(r)} title={t('Download')}>
+                          <Icon name="download" size={12} /> {t('Download')}
+                        </button>
+                      </>
                     )}
                     {isManager && (
                       <button type="button" className="btn btn-outline btn-sm" disabled={recordingsBusyId === r.id} onClick={() => handleDeleteRecording(r.id)}>
@@ -645,6 +667,8 @@ export default function MeetingDetails() {
           </ul>
         </div>
       )}
+
+      {playing && <RecordingPlayerModal recording={playing} onClose={() => setPlaying(null)} />}
 
       {isHost && (
         <div className="card glass-panel md-card">

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Icon from '../../Icon';
+import RecordingPlayerModal, { downloadRecording } from '../RecordingPlayerModal';
 import { useTranslations } from '../../../context/LanguageContext';
 import i18nCommon from '../../../i18n/common';
 import i18nMeetings from '../../../i18n/shared/meetings';
@@ -63,6 +64,7 @@ export default function RecordingsPanel({
   const t = useTranslations(translations);
   const [kind, setKind] = useState('video');
   const [busyId, setBusyId] = useState(null);
+  const [playing, setPlaying] = useState(null);
 
   if (!isOpen) return null;
 
@@ -81,6 +83,7 @@ export default function RecordingsPanel({
   const sorted = [...recordings].sort((a, b) => (b.id || 0) - (a.id || 0));
 
   return (
+    <>
     <div className="meeting-chat-panel">
       <div className="meeting-chat-panel__header">
         <strong>{t('Recordings')}</strong>
@@ -114,19 +117,24 @@ export default function RecordingsPanel({
                   {r.size_bytes != null ? ` · ${formatSize(r.size_bytes)}` : ''}
                 </div>
                 {r.status === 'failed' && r.failure_reason && (
-                  <p className="text-caption" style={{ color: '#fca5a5', margin: '2px 0 0' }}>{r.failure_reason}</p>
+                  <p className="text-caption" style={{ color: 'var(--mr-danger-text)', margin: '2px 0 0' }}>{r.failure_reason}</p>
                 )}
               </div>
               {r.download_url && (
-                <a href={r.download_url} target="_blank" rel="noreferrer" className="meeting-room__control-btn" style={{ width: 30, height: 30 }} title={t('Download')}>
-                  <Icon name="download" size={14} />
-                </a>
+                <>
+                  <button type="button" className="meeting-room__control-btn" style={{ width: 30, height: 30 }} onClick={() => setPlaying(r)} title={t('Preview')} aria-label={t('Preview')}>
+                    <Icon name="play" size={14} />
+                  </button>
+                  <button type="button" className="meeting-room__control-btn" style={{ width: 30, height: 30 }} onClick={() => downloadRecording(r)} title={t('Download')} aria-label={t('Download')}>
+                    <Icon name="download" size={14} />
+                  </button>
+                </>
               )}
               {isManager && (
                 <button
                   type="button"
                   className="meeting-room__control-btn"
-                  style={{ width: 30, height: 30, color: '#f87171' }}
+                  style={{ width: 30, height: 30, color: 'var(--mr-danger-text)' }}
                   disabled={busyId === r.id}
                   onClick={() => handleDelete(r.id)}
                   title={t('Remove')}
@@ -157,13 +165,13 @@ export default function RecordingsPanel({
           )}
 
           {activeRecording && isRecordingLocally && (
-            <button type="button" className="btn btn-outline" style={{ width: '100%', borderColor: '#ef4444', color: '#f87171' }} disabled={recordingBusy} onClick={onStopLocal}>
+            <button type="button" className="btn btn-outline" style={{ width: '100%', borderColor: '#ef4444', color: 'var(--mr-danger-text)' }} disabled={recordingBusy} onClick={onStopLocal}>
               <Icon name="stop" size={14} /> {recordingBusy ? t('Stopping…') : t('Stop Recording')}
             </button>
           )}
 
           {activeRecording && !isRecordingLocally && (
-            <p className="text-caption" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, color: '#fca5a5' }}>
+            <p className="text-caption" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--mr-danger-text)' }}>
               <Icon name="record-dot" size={12} />
               {t('Recording in progress — started by')} {activeRecording.started_by_display_name}
             </p>
@@ -171,5 +179,7 @@ export default function RecordingsPanel({
         </div>
       )}
     </div>
+    {playing && <RecordingPlayerModal recording={playing} onClose={() => setPlaying(null)} container={document.querySelector('.meeting-room') || undefined} />}
+    </>
   );
 }
