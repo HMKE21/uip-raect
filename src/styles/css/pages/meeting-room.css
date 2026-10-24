@@ -664,14 +664,22 @@ a.meeting-files-panel__name:hover { text-decoration: underline; }
   .meeting-room__divider { margin: 0 2px; height: 28px; }
   .meeting-room__group { gap: 2px; }
   .meeting-room__leave span { display: none; }
-  .meeting-room__leave { padding: 0; width: 44px; justify-content: center; }
+  .meeting-room__leave { padding: 0; width: 44px; justify-content: center; flex-shrink: 0; }
+  /* the dock never wider than the screen: buttons share the row and shrink, Leave always stays visible at the end */
+  .meeting-room__controls { padding-inline: 8px; }
+  .meeting-room__dock { width: 100%; box-sizing: border-box; justify-content: space-between; }
+  .meeting-room__group { flex: 1 1 auto; min-width: 0; justify-content: space-around; align-items: center; }
+  .meeting-room__group > *, .meeting-room__pop-anchor { flex: 1 1 0; min-width: 0; display: flex; justify-content: center; }
+  .meeting-room__dock-btn { flex: 1 1 0; min-width: 0; }
+  .meeting-room__dock-ico { width: 100%; max-width: 44px; height: auto; aspect-ratio: 1; }
+  .meeting-room__dock-ico svg { max-width: 60%; max-height: 60%; }
   .meeting-room__menu, .meeting-room__reactions-popover { position: fixed; bottom: 92px; inset-inline: 12px; transform: none; min-width: 0; margin-inline: auto; width: auto; max-width: 340px; }
   [dir="rtl"] .meeting-room__menu, [dir="rtl"] .meeting-room__reactions-popover { transform: none; }
   .meeting-room__reactions-popover { justify-content: center; }
 }
 @media (max-width: 400px) {
-  .meeting-room__dock-ico { width: 40px; height: 40px; }
-  .meeting-room__leave { width: 40px; height: 40px; }
+  .meeting-room__dock-ico { max-width: 38px; }
+  .meeting-room__leave { width: 38px; height: 38px; }
   .meeting-room__divider { display: none; }
 }
 

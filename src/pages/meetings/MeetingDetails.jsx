@@ -518,7 +518,7 @@ export default function MeetingDetails() {
               <p className="text-small" style={{ color: 'var(--text-secondary)' }}>{t('No attendance recorded yet.')}</p>
             ) : (
               <div style={{ overflowX: 'auto' }}>
-                <table className="text-small" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table className="text-small md-att" style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ textAlign: 'start' }}>
                       <th style={{ padding: '4px 8px' }}>{t('Participant')}</th>
@@ -533,13 +533,13 @@ export default function MeetingDetails() {
                   <tbody>
                     {attendance.map((row) => (
                       <tr key={row.participant_key} style={{ borderTop: '1px solid var(--border-color, rgba(255,255,255,0.08))' }}>
-                        <td style={{ padding: '4px 8px' }}>{row.display_name}</td>
-                        <td style={{ padding: '4px 8px' }}>{row.joined_at ? new Date(row.joined_at).toLocaleString() : '—'}</td>
-                        <td style={{ padding: '4px 8px' }}>{row.left_at ? new Date(row.left_at).toLocaleString() : t('Still in meeting')}</td>
-                        <td style={{ padding: '4px 8px' }}>{formatDuration(row.duration_seconds)}</td>
-                        <td style={{ padding: '4px 8px' }}>{row.joins}</td>
-                        <td style={{ padding: '4px 8px' }}>{row.leaves}</td>
-                        <td style={{ padding: '4px 8px' }}>{row.attendance_percentage}%</td>
+                        <td data-label={t('Participant')} style={{ padding: '4px 8px' }}>{row.display_name}</td>
+                        <td data-label={t('First Joined')} style={{ padding: '4px 8px' }}>{row.joined_at ? new Date(row.joined_at).toLocaleString() : '—'}</td>
+                        <td data-label={t('Last Left')} style={{ padding: '4px 8px' }}>{row.left_at ? new Date(row.left_at).toLocaleString() : t('Still in meeting')}</td>
+                        <td data-label={t('Duration')} style={{ padding: '4px 8px' }}>{formatDuration(row.duration_seconds)}</td>
+                        <td data-label={t('Joins')} style={{ padding: '4px 8px' }}>{row.joins}</td>
+                        <td data-label={t('Leaves')} style={{ padding: '4px 8px' }}>{row.leaves}</td>
+                        <td data-label={t('Attendance %')} style={{ padding: '4px 8px' }}>{row.attendance_percentage}%</td>
                       </tr>
                     ))}
                   </tbody>

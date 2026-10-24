@@ -79,3 +79,13 @@
   .md-hero__cta { width: 100%; justify-content: center; }
   .md-actions__danger { width: 100%; justify-content: center; }
 }
+
+/* Attendance report: on phones each participant becomes a card (label + value rows) instead of 7 squeezed columns */
+@media (max-width: 640px) {
+  .md-att, .md-att thead, .md-att tbody, .md-att tr, .md-att td { display: block; width: 100%; box-sizing: border-box; }
+  .md-att thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .md-att tbody tr { margin-bottom: 10px; padding: 8px 4px; border: 1px solid var(--border-color, rgba(0,0,0,.08)); border-radius: 12px; }
+  .md-att td { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 5px 10px !important; text-align: end; word-break: normal; overflow-wrap: anywhere; }
+  .md-att td::before { content: attr(data-label); flex-shrink: 0; color: var(--text-secondary, #6b7280); text-align: start; }
+  .md-att td:first-child { font-weight: 700; }
+}
