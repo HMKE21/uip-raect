@@ -251,3 +251,113 @@
 .call-fx__range input[type="range"] { flex: 1; min-width: 0; accent-color: var(--uip-teal-500, #1DB98A); height: 22px; }
 .call-fx__range output { min-width: 38px; text-align: end; font-variant-numeric: tabular-nums; }
 @media (max-height: 640px) { .call-fx { max-height: calc(100vh - 150px); overflow-y: auto; } }
+
+
+/* =====================================================================================================================
+   CALL SCREENS — redesign (glass controls, blurred-photo backdrop, ringing halos, full incoming-call screen)
+   Always dark like a phone dialer. Appended last so it wins over the older rules above (same specificity, later).
+   ===================================================================================================================== */
+.call-layer { color: #fff; }
+html body .call-layer h2, html body .call-layer strong { color: #fff; }   /* base.css paints h1-h4 with --text-primary (dark in the light theme) */
+
+/* ---------- blurred photo backdrop ---------- */
+.call-screen, .call-ring__card { isolation: isolate; }
+.call-backdrop { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: #0b1020; }
+.call-backdrop__img {
+  position: absolute; inset: -60px; background-size: cover; background-position: center;
+  filter: blur(46px) saturate(1.35) brightness(.5); transform: scale(1.12); opacity: .95;
+}
+.call-backdrop__glow {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(70% 55% at 50% 28%, rgba(124, 108, 255, .34), transparent 70%),
+    radial-gradient(80% 60% at 50% 110%, rgba(18, 162, 119, .18), transparent 70%),
+    linear-gradient(180deg, rgba(8, 11, 24, .25), rgba(8, 11, 24, .78));
+}
+
+/* ---------- avatar + halos ---------- */
+.call-rings { position: relative; display: grid; place-items: center; margin: 22px 0 6px; border-radius: 50%; }
+.call-rings .call-avatar--xl {
+  width: 140px; height: 140px; font-size: 48px; position: relative; z-index: 1;
+  border: 3px solid rgba(255, 255, 255, .28); box-shadow: 0 18px 50px rgba(0, 0, 0, .5);
+}
+.call-rings > i {
+  position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, .38); opacity: 0; pointer-events: none;
+}
+.call-rings.is-ringing > i { animation: call-halo 2.6s cubic-bezier(.2, .6, .3, 1) infinite; }
+.call-rings.is-ringing > i:nth-child(2) { animation-delay: .85s; }
+.call-rings.is-ringing > i:nth-child(3) { animation-delay: 1.7s; }
+.call-rings.is-live > i:nth-child(1) { border-color: rgba(29, 185, 138, .55); animation: call-breathe 3.2s ease-in-out infinite; }
+.call-screen__avatar { box-shadow: none !important; animation: none !important; }
+@keyframes call-halo { 0% { transform: scale(1); opacity: .55; } 100% { transform: scale(2.15); opacity: 0; } }
+@keyframes call-breathe { 0%, 100% { transform: scale(1.04); opacity: .35; } 50% { transform: scale(1.22); opacity: .7; } }
+
+/* ---------- chips ---------- */
+.call-ring__kind, .call-screen__kind {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 600; letter-spacing: .01em;
+  color: rgba(255, 255, 255, .9); background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .14); backdrop-filter: blur(10px);
+}
+.call-screen__kind { position: absolute; top: max(24px, calc(env(safe-area-inset-top, 0px) + 12px)); inset-inline: 0; margin-inline: auto; width: max-content; z-index: 1; }
+
+/* ---------- glass round buttons ---------- */
+.call-btn {
+  background: rgba(255, 255, 255, .13); border: 1px solid rgba(255, 255, 255, .14); backdrop-filter: blur(10px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .22); transition: transform .14s ease, background .18s ease, box-shadow .18s ease;
+}
+.call-btn:hover { background: rgba(255, 255, 255, .24); transform: translateY(-1px); }
+.call-btn--lg { width: 72px; height: 72px; }
+html body .call-layer .call-btn--end { background: linear-gradient(160deg, #ff5d62, #e5484d); border-color: rgba(255, 255, 255, .18); box-shadow: 0 10px 28px rgba(229, 72, 77, .5); }
+html body .call-layer .call-btn--end:hover { background: linear-gradient(160deg, #ff7176, #ef565b); }
+html body .call-layer .call-btn--accept { background: linear-gradient(160deg, #2fd39c, #12a277); border-color: rgba(255, 255, 255, .18); box-shadow: 0 10px 28px rgba(18, 162, 119, .55); animation: call-accept-glow 1.8s ease-in-out infinite; }
+html body .call-layer .call-btn--accept:hover { background: linear-gradient(160deg, #46e0ad, #17b786); }
+html body .call-layer .call-btn--accept.call-btn--alt, html body .call-layer .call-btn--alt { background: rgba(255, 255, 255, .15); box-shadow: 0 6px 18px rgba(0, 0, 0, .22); animation: none; }
+html body .call-layer .call-btn--mute.is-on { background: #fff; color: #171E2E; }
+@keyframes call-accept-glow { 0%, 100% { box-shadow: 0 10px 28px rgba(18, 162, 119, .45), 0 0 0 0 rgba(47, 211, 156, .5); } 50% { box-shadow: 0 10px 28px rgba(18, 162, 119, .45), 0 0 0 14px rgba(47, 211, 156, 0); } }
+
+/* ---------- incoming call screen ---------- */
+.call-ring { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; animation: call-fade .22s ease; background: #0b1020; }
+.call-ring__card {
+  position: relative; width: 100%; height: 100%; box-sizing: border-box; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center;
+  padding: max(36px, env(safe-area-inset-top, 0px)) 24px max(40px, env(safe-area-inset-bottom, 0px));
+}
+.call-ring__name { font-size: clamp(1.6rem, 1.2rem + 1.6vw, 2.2rem); font-weight: 800; letter-spacing: -.01em; max-width: 92%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 14px; }
+.call-ring__sub { font-size: 15px; color: rgba(255, 255, 255, .72); min-height: 22px; }
+.call-ring__btns { display: flex; align-items: flex-start; justify-content: center; gap: 44px; margin-top: 38px; }
+.call-ring .call-ctl, .call-screen .call-ctl { color: rgba(255, 255, 255, .85); font-weight: 600; }
+@media (min-width: 720px) {
+  /* desktop: a floating card over a dimmed page instead of taking the whole screen */
+  .call-ring { background: rgba(5, 8, 18, .55); backdrop-filter: blur(6px); }
+  .call-ring__card { width: 380px; height: auto; padding: 34px 28px 32px; border-radius: 30px; border: 1px solid rgba(255, 255, 255, .14); box-shadow: 0 40px 100px rgba(0, 0, 0, .6); animation: call-pop .3s cubic-bezier(.2, .9, .3, 1.15); }
+}
+
+/* ---------- active voice call ---------- */
+.call-screen { background: #0b1020; }
+.call-screen__center h2 { font-family: inherit; font-weight: 800; letter-spacing: -.01em; margin-top: 10px; }
+.call-screen__status { padding: 5px 14px; border-radius: 999px; background: rgba(255, 255, 255, .08); font-size: 14px; color: rgba(255, 255, 255, .85); }
+.call-screen__status .is-timer { font-family: inherit; font-weight: 700; letter-spacing: .06em; }
+.call-screen__controls {
+  gap: 26px; padding: 16px 28px 14px; border-radius: 30px; margin-bottom: 4px;
+  background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .12); backdrop-filter: blur(16px); box-shadow: 0 20px 50px rgba(0, 0, 0, .35);
+}
+.call-screen__controls .call-btn { width: 58px; height: 58px; }
+.call-screen__controls .call-btn--lg { width: 72px; height: 72px; }
+.call-screen__min { background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .12); backdrop-filter: blur(10px); z-index: 2; }
+
+/* video calls: same glass language */
+.call-vbar .call-btn { width: 54px; height: 54px; }
+.call-vbar .call-btn--end { width: 64px; height: 64px; }
+.call-vtop__info > strong { font-weight: 800; }
+.call-vplaceholder .call-rings { margin: 0; }
+
+/* ---------- minimised pill ---------- */
+.call-pill { background: rgba(18, 24, 44, .92); backdrop-filter: blur(16px); border-color: rgba(255, 255, 255, .16); box-shadow: 0 16px 40px rgba(0, 0, 0, .5); }
+.call-pill__txt span { color: rgba(255, 255, 255, .75); }
+
+@media (max-width: 420px) {
+  .call-ring__btns { gap: 28px; }
+  .call-screen__controls { gap: 18px; padding: 14px 18px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .call-rings > i, html body .call-layer .call-btn--accept { animation: none !important; }
+  .call-rings.is-ringing > i:nth-child(1) { opacity: .3; transform: scale(1.25); }
+}

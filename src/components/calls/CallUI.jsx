@@ -26,6 +26,27 @@ function CallAvatar({ peer, size }) {
   );
 }
 
+/** Blurred, darkened copy of the peer's photo behind the whole call screen (falls back to the brand gradient when there is no photo). */
+function CallBackdrop({ peer }) {
+  const url = avatarUrl(peer && peer.avatar);
+  return (
+    <div className="call-backdrop" aria-hidden="true">
+      {url && <span className="call-backdrop__img" style={{ backgroundImage: `url("${url}")` }} />}
+      <span className="call-backdrop__glow" />
+    </div>
+  );
+}
+
+/** Avatar with soft expanding rings (calling / ringing) or a calm live halo (connected). */
+function CallRings({ peer, size, ringing, live }) {
+  return (
+    <div className={`call-rings${ringing ? ' is-ringing' : ''}${live ? ' is-live' : ''}`}>
+      <i /><i /><i />
+      <CallAvatar peer={peer} size={size || 'xl'} />
+    </div>
+  );
+}
+
 function useElapsed(startedAt) {
   const [, tick] = useState(0);
   useEffect(() => {
@@ -233,28 +254,42 @@ export default function CallUI() {
   let body = null;
 
   if (c.phase === 'incoming') {
+    const kindLabel = isVideo ? t('Incoming video call', 'مكالمة فيديو واردة') : t('Incoming voice call', 'مكالمة صوتية واردة');
+    const acceptLabel = isVideo ? t('Answer with video', 'الرد بالفيديو') : t('Accept', 'رد');
     body = (
-      <div className="call-incoming" role="alertdialog" aria-label={t('Incoming call', 'مكالمة واردة')}>
-        <CallAvatar peer={c.peer} size="md" />
-        <div className="call-incoming__txt">
-          <strong dir="auto">{name}</strong>
-          <span>{c.accepting ? t('Connecting…', 'جارٍ الاتصال…') : (isVideo ? t('Incoming video call…', 'مكالمة فيديو واردة…') : t('Incoming voice call…', 'مكالمة صوتية واردة…'))}</span>
-        </div>
-        <div className="call-incoming__btns">
-          <button type="button" className="call-btn call-btn--end" onClick={c.decline} disabled={c.accepting} aria-label={t('Decline', 'رفض')} title={t('Decline', 'رفض')}>
-            <Icon name="phone" size={22} />
-          </button>
-          {isVideo && (
-            <button type="button" className="call-btn call-btn--accept call-btn--alt" onClick={() => c.accept({ video: false })} disabled={c.accepting} aria-label={t('Answer with audio only', 'الرد بالصوت فقط')} title={t('Answer with audio only', 'الرد بالصوت فقط')}>
-              <Icon name="phone" size={22} />
-            </button>
-          )}
-          <button type="button" className="call-btn call-btn--accept" onClick={() => c.accept()} disabled={c.accepting} aria-label={isVideo ? t('Answer with video', 'الرد بالفيديو') : t('Accept', 'رد')} title={isVideo ? t('Answer with video', 'الرد بالفيديو') : t('Accept', 'رد')}>
-            <Icon name={isVideo ? 'video' : 'phone'} size={22} />
-          </button>
+      <div className="call-ring" role="alertdialog" aria-label={t('Incoming call', 'مكالمة واردة')}>
+        <div className="call-ring__card">
+          <CallBackdrop peer={c.peer} />
+          <span className="call-ring__kind"><Icon name={isVideo ? 'video' : 'phone'} size={14} /> {kindLabel}</span>
+          <CallRings peer={c.peer} size="xl" ringing={!c.accepting} />
+          <strong className="call-ring__name" dir="auto">{name}</strong>
+          <span className="call-ring__sub" aria-live="polite">{c.accepting ? t('Connecting…', 'جارٍ الاتصال…') : t('is calling you…', 'يتصل بك…')}</span>
+          <div className="call-ring__btns">
+            <div className="call-ctl">
+              <button type="button" className="call-btn call-btn--end call-btn--lg" onClick={c.decline} disabled={c.accepting} aria-label={t('Decline', 'رفض')} title={t('Decline', 'رفض')}>
+                <Icon name="phone" size={26} />
+              </button>
+              <span>{t('Decline', 'رفض')}</span>
+            </div>
+            {isVideo && (
+              <div className="call-ctl">
+                <button type="button" className="call-btn call-btn--lg call-btn--alt" onClick={() => c.accept({ video: false })} disabled={c.accepting} aria-label={t('Answer with audio only', 'الرد بالصوت فقط')} title={t('Answer with audio only', 'الرد بالصوت فقط')}>
+                  <Icon name="phone" size={24} />
+                </button>
+                <span>{t('Audio only', 'صوت فقط')}</span>
+              </div>
+            )}
+            <div className="call-ctl">
+              <button type="button" className="call-btn call-btn--accept call-btn--lg" onClick={() => c.accept()} disabled={c.accepting} aria-label={acceptLabel} title={acceptLabel}>
+                <Icon name={isVideo ? 'video' : 'phone'} size={26} />
+              </button>
+              <span>{acceptLabel}</span>
+            </div>
+          </div>
         </div>
       </div>
     );
+
   } else if (inCall && c.minimized) {
     body = (
       <div className="call-pill" role="group" aria-label={t('Call in progress', 'مكالمة جارية')}>
@@ -282,7 +317,7 @@ export default function CallUI() {
           {showSelfBig && <StreamVideo className={`call-vremote call-vremote--self${mirrorSelf ? ' is-mirror' : ''}`} stream={c.localVideo} />}
           {!showRemote && (
             <div className={`call-vplaceholder${showSelfBig ? ' is-over' : ''}`}>
-              <div className={`call-screen__avatar${c.phase === 'outgoing' || c.phase === 'connecting' ? ' is-ringing' : ''}`}><CallAvatar peer={c.peer} size="xl" /></div>
+              <CallRings peer={c.peer} size="xl" ringing={c.phase === 'outgoing' || c.phase === 'connecting'} />
               {c.phase === 'active' && !c.peerCam && <p className="call-screen__peermuted"><Icon name="video-off" size={14} /> {t(`${name || 'They'} turned their camera off`, `${name || 'الطرف الآخر'} أوقف الكاميرا`)}</p>}
             </div>
           )}
@@ -341,13 +376,13 @@ export default function CallUI() {
   } else if (inCall) {
     body = (
       <div className="call-screen" role="dialog" aria-modal="false" aria-label={t('Voice call', 'مكالمة صوتية')}>
+        <CallBackdrop peer={c.peer} />
+        <span className="call-screen__kind"><Icon name="phone" size={13} /> {t('Voice call', 'مكالمة صوتية')}</span>
         <button type="button" className="call-screen__min" onClick={() => c.setMinimized(true)} aria-label={t('Minimise', 'تصغير')} title={t('Minimise', 'تصغير')}>
           <Icon name="chevron-down" size={22} />
         </button>
         <div className="call-screen__center">
-          <div className={`call-screen__avatar${c.phase === 'outgoing' || c.phase === 'connecting' ? ' is-ringing' : ''}${c.phase === 'active' && !c.reconnecting ? ' is-live' : ''}`}>
-            <CallAvatar peer={c.peer} size="xl" />
-          </div>
+          <CallRings peer={c.peer} size="xl" ringing={c.phase === 'outgoing' || c.phase === 'connecting'} live={c.phase === 'active' && !c.reconnecting} />
           <h2 dir="auto">{name}</h2>
           <p className="call-screen__status" aria-live="polite">
             {c.phase === 'active' && <QualityBars quality={c.reconnecting ? 'poor' : c.quality} ar={ar} />}
