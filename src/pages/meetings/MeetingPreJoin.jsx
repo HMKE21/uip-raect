@@ -107,7 +107,7 @@ export default function MeetingPreJoin() {
       return undefined;
     }
 
-    navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+    navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }, audio: true })
       .then((stream) => {
         if (cancelled) { stream.getTracks().forEach((tr) => tr.stop()); return; }
         streamRef.current = stream;

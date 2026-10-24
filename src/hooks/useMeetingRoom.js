@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { attachNoiseSuppressor, noiseSuppressSupported } from '../lib/calls/noiseSuppress';
+import { createCameraFx, cameraFxSupported } from '../lib/cameraFx';
 import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, filesApi, notesApi, pollsApi, recordingsApi } from '../lib/meetingSignaling';
 
 /**
@@ -166,7 +167,7 @@ function tuneAudioSdp(sdp) {
  * small fixed budget and top priority; video is capped and shrinks as the room grows. Must run after the local description is set.
  */
 async function tuneSenders(pc, peerCount) {
-  const videoCap = Math.max(450000, Math.min(2200000, Math.floor(3200000 / Math.max(1, peerCount))));
+  const videoCap = Math.max(600000, Math.min(2800000, Math.floor(3800000 / Math.max(1, peerCount))));
   for (const sender of pc.getSenders()) {
     try {
       if (!sender.track) continue;
@@ -180,6 +181,9 @@ async function tuneSenders(pc, peerCount) {
       } else {
         enc.maxBitrate = videoCap;
         enc.networkPriority = 'low';
+        enc.scaleResolutionDownBy = 1;          // never shrink the picture on purpose
+        enc.maxFramerate = 30;
+        if (sender.track.contentHint !== 'detail') params.degradationPreference = 'maintain-resolution'; // camera: keep it sharp, drop fps first if the link is tight
       }
       await sender.setParameters(params);
     } catch (e) { dbg('sender tuning skipped', e?.message); }
@@ -243,6 +247,8 @@ export function useMeetingRoom({
   const [localStream, setLocalStream] = useState(null);
   const [micEnabled, setMicEnabled] = useState(!(deviceDefaults?.mute_on_entry ?? false));
   const [cameraEnabled, setCameraEnabled] = useState(deviceDefaults?.camera_on_entry ?? true);
+  const cameraEnabledRef = useRef(cameraEnabled);
+  cameraEnabledRef.current = cameraEnabled;
   const [screenSharing, setScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState(null); // local preview of what we are presenting (the camera stream is untouched)
   const [hasCamera, setHasCamera] = useState(true); // false when no real camera track exists (only the black placeholder)
@@ -264,6 +270,7 @@ export function useMeetingRoom({
   // Round 5 — بند 11 (Raise Hand + Reactions).
   const [handRaised, setHandRaised] = useState(false);
   const [reactions, setReactions] = useState([]); // ephemeral: [{id, key, displayName, type, emoji}], auto-pruned
+  const [cameraEffect, setCameraEffectState] = useState('none');
   const [reactionLog, setReactionLog] = useState([]); // same events, kept (capped) so the chat panel can list "X reacted 👍" like Zoom
   // Noise isolation (RNNoise) — `noiseOn` is the switch, `noiseAvailable` is whether the neural graph could be built here.
   const [noiseOn, setNoiseOn] = useState(readNoisePref);
@@ -323,6 +330,8 @@ export function useMeetingRoom({
   const onFeedbackRef = useRef(null);
   const pushReactionRef = useRef(null);
   const noiseRef = useRef(null); // { stream, setEnabled } from attachNoiseSuppressor()
+  const rawCameraTrackRef = useRef(null); // the real camera track, kept alive while an effect track is being sent
+  const cameraFxRef = useRef(null); // createCameraFx() instance (lazy: only built the first time an effect is chosen)
 
   const patchParticipant = useCallback((key, patch) => {
     setParticipants((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], ...patch } } : prev));
@@ -692,7 +701,7 @@ export function useMeetingRoom({
         const audioC = buildAudioConstraints(noisePref);
         let stream;
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: audioC });
+          stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }, audio: audioC });
         } catch (firstErr) {
           // no camera (or it is busy)? still join with the mic — and vice versa — instead of joining with nothing
           try { stream = await navigator.mediaDevices.getUserMedia({ audio: audioC }); }
@@ -718,6 +727,7 @@ export function useMeetingRoom({
         stream.getAudioTracks().forEach((t) => { t.enabled = micEnabled; });
         dbg('local media', stream.getTracks().map((t) => t.kind).join('+') || 'none');
         localStreamRef.current = stream;
+        if (hasCameraRef.current) rawCameraTrackRef.current = stream.getVideoTracks()[0] || null;
         setLocalStream(stream);
       } catch (gumErr) {
         dbg('getUserMedia failed', gumErr?.name, gumErr?.message);
@@ -1052,6 +1062,10 @@ export function useMeetingRoom({
         echoRef.current.disconnect();
       }
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
+      try { cameraFxRef.current?.stop(); } catch { /* ignore */ }
+      cameraFxRef.current = null;
+      try { rawCameraTrackRef.current?.stop(); } catch { /* ignore */ }
+      rawCameraTrackRef.current = null;
       localStreamRef.current = null;
       noiseRef.current = null;
       if (screenTrackRef.current) { screenTrackRef.current.onended = null; screenTrackRef.current.stop(); screenTrackRef.current = null; }
@@ -1075,6 +1089,10 @@ export function useMeetingRoom({
     echoRef.current?.leave(personalChannelName(meetingUuid, myKey));
     echoRef.current?.disconnect();
     localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    try { cameraFxRef.current?.stop(); } catch { /* ignore */ }
+    cameraFxRef.current = null;
+    try { rawCameraTrackRef.current?.stop(); } catch { /* ignore */ }
+    rawCameraTrackRef.current = null;
     localStreamRef.current = null;
     setLocalStream(null);
     teardownLocalRecorder();
@@ -1142,10 +1160,10 @@ export function useMeetingRoom({
   }, [meetingUuid, guestToken]);
 
   /** Swap the video track we send on every peer connection (and in our local stream) without renegotiating. */
-  const swapCameraTrack = useCallback((newTrack) => {
+  const swapCameraTrack = useCallback((newTrack, keepOld = false) => {
     const local = localStreamRef.current;
     if (!local) return;
-    local.getVideoTracks().forEach((old) => { local.removeTrack(old); if (old !== newTrack) old.stop(); });
+    local.getVideoTracks().forEach((old) => { local.removeTrack(old); if (old !== newTrack && !keepOld) old.stop(); });
     local.addTrack(newTrack);
     // while presenting, peers keep receiving the screen; the camera comes back when the presentation stops
     if (!screenTrackRef.current) {
@@ -1155,13 +1173,40 @@ export function useMeetingRoom({
     localStreamRef.current = local;
   }, []);
 
+  /** Camera effects: send a processed track (filter / blur) instead of the raw camera, or switch back to the raw one. */
+  const setCameraEffect = useCallback(async (id) => {
+    const raw = rawCameraTrackRef.current;
+    if (!raw || raw.readyState === 'ended') { setNotice({ type: 'camera_unavailable' }); return false; }
+    if (id === 'none') {
+      swapCameraTrack(raw, true);
+      raw.enabled = cameraEnabledRef.current;
+      setCameraEffectState('none');
+      return true;
+    }
+    if (!cameraFxSupported()) return false;
+    try {
+      if (!cameraFxRef.current) cameraFxRef.current = createCameraFx(raw);
+      await cameraFxRef.current.setEffect(id);
+    } catch (err) {
+      dbg('camera effect failed', err?.message);
+      if (id === 'blur') setNotice({ type: 'effect_unavailable' });
+      return false;
+    }
+    const fxTrack = cameraFxRef.current.track;
+    fxTrack.enabled = cameraEnabledRef.current;
+    swapCameraTrack(fxTrack, true);
+    setCameraEffectState(id);
+    return true;
+  }, [swapCameraTrack]);
+
   const toggleCamera = useCallback(async () => {
     // No real camera yet (denied / none / joined without one): try to open one now instead of toggling a black placeholder.
     if (!hasCameraRef.current) {
       try {
-        const cam = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
+        const cam = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } });
         const track = cam.getVideoTracks()[0];
         hasCameraRef.current = true;
+        rawCameraTrackRef.current = track;
         setHasCamera(true);
         swapCameraTrack(track);
         setCameraEnabled(true);
@@ -1174,6 +1219,7 @@ export function useMeetingRoom({
     setCameraEnabled((prev) => {
       const next = !prev;
       localStreamRef.current?.getVideoTracks().forEach((t) => { t.enabled = next; });
+      if (rawCameraTrackRef.current) rawCameraTrackRef.current.enabled = next;
       signalingApi.mediaState(meetingUuid, guestToken, { camera_enabled: next }).catch(() => {});
       return next;
     });
@@ -1440,6 +1486,7 @@ export function useMeetingRoom({
 
     // بند 11 — Raise Hand + Reactions.
     handRaised, toggleHand, reactions, reactionLog, sendReaction,
+    cameraEffect, setCameraEffect,
 
     // Audio — noise isolation switch.
     noiseOn, noiseAvailable, toggleNoise, speakersMuted, toggleSpeakers,

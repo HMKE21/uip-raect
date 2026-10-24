@@ -96,3 +96,12 @@
 /* ---------- host menu on a tile (rendered in a portal so the tile can't clip it) ---------- */
 .meeting-tile__host-menu.is-floating { position: fixed; top: auto; inset-inline-end: auto; z-index: 960; max-height: min(70vh, 420px); overflow-y: auto; min-width: 220px; max-width: min(300px, 92vw); }
 .meeting-tile__host-menu.is-floating button { white-space: normal; }
+
+/* ---------- camera effects popover ---------- */
+.meeting-room__fx { min-width: 260px; padding: 10px; }
+.meeting-room__fx-title { font-size: 12px; font-weight: 700; color: var(--mr-muted); padding: 2px 4px 8px; }
+.meeting-room__fx-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.meeting-room__fx-chip { border: 1px solid var(--mr-line-strong); background: var(--mr-fill-1); color: var(--mr-text); border-radius: 10px; padding: 9px 8px; font-size: 12.5px; font-weight: 600; cursor: var(--cur-pointer, pointer); font-family: inherit; }
+.meeting-room__fx-chip:hover:not(:disabled) { background: var(--mr-fill-2); }
+.meeting-room__fx-chip.is-on { background: var(--mr-primary); border-color: var(--mr-primary); color: #fff; }
+.meeting-room__fx-chip:disabled { opacity: 0.6; cursor: wait; }

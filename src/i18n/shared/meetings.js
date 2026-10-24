@@ -8,6 +8,17 @@
 // prefix" convention as Messages/Notifications) plus the dashboard widget,
 // so keys stay generic rather than duplicated per page.
 export default {
+  'Effects': 'الفلاتر',
+  'Camera effects': 'فلاتر الكاميرا',
+  'No effect': 'بدون فلتر',
+  'Enhance': 'تحسين الصورة',
+  'Low light': 'إضاءة ضعيفة',
+  'Soft skin': 'نعومة البشرة',
+  'Warm': 'دافئ',
+  'Cool': 'بارد',
+  'Black & white': 'أبيض وأسود',
+  'Blur background': 'تمويه الخلفية',
+  "Background blur couldn't load (it needs an internet connection to its model). A colour effect still works.": 'تمويه الخلفية ماتحمّلش (محتاج اتصال إنترنت لتحميل النموذج). الفلاتر اللونية لسه شغالة.',
   'Open-ended': 'بدون نهاية',
   'Custom': 'مخصص',
   'No end time — the meeting stays open until the host ends it.': 'من غير وقت انتهاء — الاجتماع يفضل مفتوح لحد ما الهوست يقفله.',

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBackLayer } from '../../../lib/backStack';
 import { useMeetingRoom, meetingLog } from '../../../hooks/useMeetingRoom';
 import ParticipantTile from './ParticipantTile';
+import { CAMERA_EFFECTS } from '../../../lib/cameraFx';
 import ChatPanel from './ChatPanel';
 import ParticipantsPanel from './ParticipantsPanel';
 import FilesPanel from './FilesPanel';
@@ -105,6 +106,8 @@ export default function MeetingRoomShell({
   const [roomTheme, toggleRoomTheme] = useRoomTheme();
   const [reactionsOpen, setReactionsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [fxOpen, setFxOpen] = useState(false);
+  const [fxBusy, setFxBusy] = useState(null);
   const dockRef = useRef(null);
   const [elapsed, setElapsed] = useState('00:00');
   useEffect(() => {
@@ -121,13 +124,13 @@ export default function MeetingRoomShell({
   }, []);
   // close the reactions / "more" popovers when clicking anywhere outside the dock
   useEffect(() => {
-    if (!reactionsOpen && !moreOpen) return undefined;
+    if (!reactionsOpen && !moreOpen && !fxOpen) return undefined;
     const onDown = (e) => {
-      if (dockRef.current && !dockRef.current.contains(e.target)) { setReactionsOpen(false); setMoreOpen(false); }
+      if (dockRef.current && !dockRef.current.contains(e.target)) { setReactionsOpen(false); setMoreOpen(false); setFxOpen(false); }
     };
     document.addEventListener('pointerdown', onDown);
     return () => document.removeEventListener('pointerdown', onDown);
-  }, [reactionsOpen, moreOpen]);
+  }, [reactionsOpen, moreOpen, fxOpen]);
   const [diagOpen, setDiagOpen] = useState(false);
   const [diagLines, setDiagLines] = useState([]);
   useEffect(() => {
@@ -266,6 +269,7 @@ export default function MeetingRoomShell({
       return `${t('You were muted by the host.')}${notice.by ? ` (${notice.by})` : ''}`;
     }
     if (notice.type === 'echo_detected') return t('Audio feedback detected — another device nearby is looping your voice, so your mic was muted. Use headphones, or turn Speakers off in More if you are in the same room as them.');
+    if (notice.type === 'effect_unavailable') return t("Background blur couldn't load (it needs an internet connection to its model). A colour effect still works.");
     if (notice.type === 'camera_unavailable') return t("Couldn't open a camera. Check the browser's camera permission and that no other app is using it.");
     if (notice.type === 'screen_share_unsupported') return t("This browser can't share your screen.");
     if (notice.type === 'screen_share_failed') return t('Screen sharing could not start. Please try again.');
@@ -524,6 +528,34 @@ export default function MeetingRoomShell({
               state={room.cameraEnabled ? '' : 'is-off'}
               onClick={room.toggleCamera}
             />
+            <div className="meeting-room__pop-anchor">
+              <DockButton
+                icon="ai-spark"
+                label={t('Effects')}
+                title={t('Camera effects')}
+                state={fxOpen || room.cameraEffect !== 'none' ? 'is-active' : ''}
+                disabled={!room.hasCamera}
+                onClick={() => { setFxOpen((v) => !v); setMoreOpen(false); setReactionsOpen(false); }}
+              />
+              {fxOpen && (
+                <div className="meeting-room__menu meeting-room__fx" role="menu">
+                  <div className="meeting-room__fx-title">{t('Camera effects')}</div>
+                  <div className="meeting-room__fx-grid">
+                    {CAMERA_EFFECTS.map((fx) => (
+                      <button
+                        key={fx.id}
+                        type="button"
+                        className={`meeting-room__fx-chip ${room.cameraEffect === fx.id ? 'is-on' : ''}`}
+                        disabled={fxBusy !== null}
+                        onClick={async () => { setFxBusy(fx.id); await room.setCameraEffect(fx.id); setFxBusy(null); }}
+                      >
+                        {fxBusy === fx.id ? '…' : t(fx.label)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             <DockButton
               icon="screen-share"
               label={room.screenSharing ? t('Stop Sharing') : t('Share Screen')}
