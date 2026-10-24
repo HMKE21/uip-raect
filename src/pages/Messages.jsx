@@ -7,6 +7,7 @@ import ConversationRail from '../components/messaging/ConversationRail';
 import ConfirmDialog from '../components/messaging/ConfirmDialog';
 import ThreadPanel from '../components/messaging/ThreadPanel';
 import InfoPanel from '../components/messaging/InfoPanel';
+import { useCustomWallpapers, isCustomWall, customWallId } from '../lib/customWallpapers';
 import GroupSettingsModal from '../components/messaging/GroupSettingsModal';
 import { localizeError } from '../components/messaging/groupText';
 import {
@@ -120,6 +121,7 @@ const readWall = () => {
   try {
     const raw = localStorage.getItem(WALL_KEY);
     const v = WALL_LEGACY[raw] || raw;
+    if (isCustomWall(v)) return v; // the person's own photo (kept in this browser's library)
     return WALLPAPERS.includes(v) ? v : 'dots';
   } catch { return 'dots'; }
 };
@@ -191,6 +193,15 @@ export default function Messages() {
     setWall(id);
     try { localStorage.setItem(WALL_KEY, id); } catch { /* not remembered */ }
   }, []);
+  // The person's own photos: stay in the library until deleted, whichever theme is selected.
+  const wallpapers = useCustomWallpapers();
+  const customWallUrl = wallpapers.urlFor(wall);
+  const shownWall = isCustomWall(wall) ? (customWallUrl ? 'custom' : 'dots') : wall; // photo missing on this device -> default look (the saved choice is kept)
+  const addCustomWall = useCallback(async (file) => { const id = await wallpapers.add(file); onWall(`img:${id}`); }, [wallpapers, onWall]);
+  const removeCustomWall = useCallback(async (id) => {
+    await wallpapers.remove(id);
+    if (customWallId(wall) === id) onWall('dots'); // deleting the photo in use falls back to the classic background
+  }, [wallpapers, wall, onWall]);
   // Android app only: save media/files other people send to the phone (Pictures/Movies/Documents > UIP).
   const [autoSave, setAutoSave] = useState(isAutoSaveOn);
   const onAutoSave = useCallback((on) => { setAutoSaveOn(on); setAutoSave(on); }, []);
@@ -1306,7 +1317,7 @@ export default function Messages() {
 
   return (
     <>
-    <div className={`msg-app${infoOpen && activeConversation ? ' has-info' : ''}${activeId ? ' thread-open' : ''}${railCollapsed && activeId ? ' rail-collapsed' : ''}${fullView ? ' is-full' : ''}`} data-msg-app data-wall={wall} data-wall-anim={wallAnim ? 'on' : 'off'}>
+    <div className={`msg-app${infoOpen && activeConversation ? ' has-info' : ''}${activeId ? ' thread-open' : ''}${railCollapsed && activeId ? ' rail-collapsed' : ''}${fullView ? ' is-full' : ''}`} data-msg-app data-wall={shownWall} data-wall-anim={wallAnim ? 'on' : 'off'} style={customWallUrl && shownWall === 'custom' ? { '--msg-wall-img': `url("${customWallUrl}")` } : undefined}>
       <ConversationRail
         onDeleteConversations={requestDelete}
         onOpenTrash={() => navigate(centerBase + '/trash')}
@@ -1406,6 +1417,9 @@ export default function Messages() {
           onClose={() => rememberInfo(false)}
           wall={wall}
           onWall={onWall}
+          customWalls={wallpapers.items}
+          onAddCustomWall={addCustomWall}
+          onRemoveCustomWall={removeCustomWall}
           wallAnim={wallAnim}
           onWallAnim={onWallAnim}
           autoSave={autoSave}

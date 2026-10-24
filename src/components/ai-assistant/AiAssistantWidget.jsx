@@ -6,6 +6,7 @@ import Icon from '../Icon';
 import { saveBlob, exportTable } from '../../lib/exporter';
 import ExportMenu from '../ExportMenu';
 import { RecorderBar, useVoiceRecorder } from './aiRecorder';
+import { useCustomWallpapers, isCustomWall, customWallId } from '../../lib/customWallpapers';
 import { AiAttachment, NoiseError, PendingFileChip, PendingMediaCard, TranscriptCard, denoiseAudioFile, hasSpeech, mediaKindOf, isTranscribable, splitTranscripts, transcribeFile, transcriptBlock, useAbortRegistry } from './aiMedia';
 
 // the same editor the people-to-people chat uses (trim, subtitles, noise removal, mute…) — loaded only when someone opens it
@@ -70,10 +71,34 @@ export default function AiAssistantWidget({ role, user }) {
   const isNarrow = () => typeof window !== 'undefined' && window.innerWidth <= 860;
   const toggleHistory = () => setHistoryHidden((h) => { writePref('uip_ai_history_hidden', h ? '0' : '1'); return !h; });
   // Chat background theme (same idea as the people-to-people messenger).
-  const [wall, setWall] = useState(() => { const raw = readPref('uip_ai_wallpaper'); const v = AI_WALL_LEGACY[raw] || raw; return AI_WALLS.includes(v) ? v : 'none'; });
+  const [wall, setWall] = useState(() => { const raw = readPref('uip_ai_wallpaper'); const v = AI_WALL_LEGACY[raw] || raw; if (isCustomWall(v)) return v; return AI_WALLS.includes(v) ? v : 'none'; });
   const [wallOpen, setWallOpen] = useState(false);
   const wallWrapRef = useRef(null);
   const pickWall = (id) => { setWall(id); writePref('uip_ai_wallpaper', id); setWallOpen(false); };
+  // The person's own photos: stay in the library until deleted, whichever theme is selected.
+  const wallpapers = useCustomWallpapers();
+  const customWallUrl = wallpapers.urlFor(wall);
+  const shownWall = isCustomWall(wall) ? (customWallUrl ? 'custom' : 'none') : wall; // photo missing on this device -> clean look (saved choice is kept)
+  const wallFileRef = useRef(null);
+  const [wallBusy, setWallBusy] = useState(false);
+  const [wallError, setWallError] = useState(null);
+  const uploadWall = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setWallBusy(true); setWallError(null);
+    try {
+      const id = await wallpapers.add(file);
+      pickWall(`img:${id}`);
+    } catch (err) {
+      const code = err && err.message;
+      setWallError(t(code === 'not_image' ? 'bgNotImage' : code === 'too_big' ? 'bgTooBig' : code === 'limit' ? 'bgLimit' : 'bgStorage'));
+    } finally { setWallBusy(false); }
+  };
+  const deleteWall = async (id) => {
+    await wallpapers.remove(id);
+    if (customWallId(wall) === id) { setWall('none'); writePref('uip_ai_wallpaper', 'none'); } // deleting the photo in use -> clean background
+  };
   // Multi-select + bulk delete of conversations.
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
@@ -828,7 +853,8 @@ export default function AiAssistantWidget({ role, user }) {
         className={`ai-panel${isOpen ? ' is-open' : ''}${isExpanded ? ' is-fullscreen' : ''}${isMaximized ? ' is-maximized' : ''}`}
         role="dialog"
         aria-label={t('title')}
-        data-wall={wall}
+        data-wall={shownWall}
+        style={customWallUrl && shownWall === 'custom' ? { '--ai-wall-img': `url("${customWallUrl}")` } : undefined}
       >
         <div className="ai-panel__header">
           {!isExpanded && (
@@ -861,6 +887,22 @@ export default function AiAssistantWidget({ role, user }) {
                     {AI_WALLS.map((id) => (
                       <button key={id} type="button" className={`ai-wall-swatch ai-wall-swatch--${id}`} aria-pressed={wall === id} aria-label={t(`wall_${id}`)} title={t(`wall_${id}`)} onClick={() => pickWall(id)} />
                     ))}
+                  </div>
+                  <div className="ai-wall-mine">
+                    <span className="ai-wall-mine__title">{t('myPhotos')}</span>
+                    <div className="ai-wall-mine__grid">
+                      <input ref={wallFileRef} type="file" accept="image/*" hidden onChange={uploadWall} />
+                      <button type="button" className="ai-wall-add" onClick={() => wallFileRef.current?.click()} disabled={wallBusy} aria-label={t('uploadBg')} title={t('uploadBg')}>
+                        <Icon name="plus" size={17} />
+                      </button>
+                      {wallpapers.items.map((w) => (
+                        <div key={w.id} className="ai-wall-mine__item">
+                          <button type="button" className="ai-wall-mine__pick" aria-pressed={wall === `img:${w.id}`} aria-label={t('useBg')} onClick={() => pickWall(`img:${w.id}`)} style={{ backgroundImage: `url("${w.url}")` }} />
+                          <button type="button" className="ai-wall-mine__del" aria-label={t('deleteBg')} title={t('deleteBg')} onClick={() => deleteWall(w.id)}><Icon name="x" size={10} /></button>
+                        </div>
+                      ))}
+                    </div>
+                    {wallError && <p className="ai-wall-mine__err">{wallError}</p>}
                   </div>
                 </div>
               )}

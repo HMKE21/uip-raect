@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
 import { Avatar } from './ConversationRail';
 import { GroupTop, GroupMembers, GroupDanger } from './GroupPanel';
@@ -35,6 +35,9 @@ export default function InfoPanel({
   onClose,
   wall = 'dots',
   onWall,
+  customWalls = [],
+  onAddCustomWall,
+  onRemoveCustomWall,
   wallAnim = false,
   onWallAnim,
   autoSave = true,
@@ -43,6 +46,28 @@ export default function InfoPanel({
   const { locale } = useLanguage();
   const t = (en, ar) => (locale === 'ar' ? ar : en);
   const [category, setCategory] = useState(convMeta?.category || '');
+  const wallFileRef = useRef(null);
+  const [wallBusy, setWallBusy] = useState(false);
+  const [wallError, setWallError] = useState(null);
+
+  async function pickWallFile(e) {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file || !onAddCustomWall) return;
+    setWallBusy(true);
+    setWallError(null);
+    try {
+      await onAddCustomWall(file);
+    } catch (err) {
+      const code = err && err.message;
+      setWallError(
+        code === 'not_image' ? t('Choose an image file.', 'اختار ملف صورة.')
+          : code === 'too_big' ? t('This image is larger than 15 MB.', 'الصورة أكبر من 15 ميجا.')
+            : code === 'limit' ? t('You reached the limit of 12 saved backgrounds — delete one first.', 'وصلت للحد الأقصى (12 خلفية محفوظة) — امسح واحدة الأول.')
+              : t('Could not save this image on this device.', 'مقدرتش أحفظ الصورة على الجهاز ده.'),
+      );
+    } finally { setWallBusy(false); }
+  }
 
   useEffect(() => {
     setCategory(convMeta?.category || '');
@@ -110,6 +135,28 @@ export default function InfoPanel({
                 </button>
               ))}
             </div>
+            {onAddCustomWall && (
+              <div className="msg-wall-mine">
+                <div className="msg-wall-mine__title">{t('My photos', 'صوري')}</div>
+                <div className="msg-wall-mine__grid">
+                  <input ref={wallFileRef} type="file" accept="image/*" hidden onChange={pickWallFile} />
+                  <button type="button" className="msg-wall-add" onClick={() => wallFileRef.current?.click()} disabled={wallBusy} aria-label={t('Upload a photo as background', 'ارفع صورة كخلفية')} title={t('Upload a photo as background', 'ارفع صورة كخلفية')}>
+                    <Icon name={'plus'} size={18} />
+                  </button>
+                  {customWalls.map((w) => (
+                    <div key={w.id} className="msg-wall-mine__item">
+                      <button type="button" className="msg-wall-mine__pick" aria-pressed={wall === `img:${w.id}`} aria-label={t('Use this photo', 'استخدم الصورة دي')} onClick={() => onWall(`img:${w.id}`)} style={{ backgroundImage: `url("${w.url}")` }} />
+                      {onRemoveCustomWall && (
+                        <button type="button" className="msg-wall-mine__del" aria-label={t('Delete this photo', 'امسح الصورة دي')} title={t('Delete this photo', 'امسح الصورة دي')} onClick={() => onRemoveCustomWall(w.id)}>
+                          <Icon name="x" size={11} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {wallError && <p className="msg-wall-mine__err">{wallError}</p>}
+              </div>
+            )}
             {onWallAnim && (
               <div className="msg-info__toggle-row msg-wall-anim">
                 <span>{t('Animated background', 'خلفية متحركة')}</span>

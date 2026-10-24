@@ -470,3 +470,41 @@ html body .msg-app .loc-card .loc-card__open svg { flex: none; }
    (the phone rule `.msg-bubble { padding: 10px 13px }` came later in the file and beat `.msg-bubble--media { padding: 0 }`) */
 html body .msg-app .msg-row .msg-bubble.msg-bubble--media { padding: 0 !important; background: transparent; border: 0; box-shadow: none; }
 html body .msg-app .msg-row .msg-bubble.msg-bubble--media .loc-card { margin: 0; }
+
+/* ---------------------------------------------------------------- the person's own photo as chat background */
+html body .msg-app[data-msg-app][data-wall="custom"] .msg-thread {
+  background:
+    linear-gradient(var(--wall-veil), var(--wall-veil)),
+    var(--msg-wall-img) center / cover no-repeat,
+    var(--bg-canvas);
+}
+/* the little date chips sit directly on the photo: give them their own backing so they stay readable on any picture */
+html body .msg-app[data-msg-app][data-wall="custom"] .msg-day-sep span {
+  background: color-mix(in srgb, var(--bg-surface) 82%, transparent); color: var(--text-secondary);
+  padding: 3px 10px; border-radius: 999px; backdrop-filter: blur(6px);
+}
+
+/* "My photos" row in the details panel */
+.msg-wall-mine { margin-top: 14px; }
+.msg-wall-mine__title { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
+.msg-wall-mine__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.msg-wall-add {
+  all: unset; box-sizing: border-box; height: 62px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+  border: 1.5px dashed color-mix(in srgb, var(--color-primary) 55%, transparent); color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent); cursor: var(--cur-pointer, pointer);
+}
+.msg-wall-add:hover:not(:disabled) { background: color-mix(in srgb, var(--color-primary) 14%, transparent); }
+.msg-wall-add:disabled { opacity: .55; cursor: progress; }
+.msg-wall-add:focus-visible, .msg-wall-mine__pick:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+.msg-wall-mine__item { position: relative; }
+.msg-wall-mine__pick {
+  all: unset; box-sizing: border-box; display: block; width: 100%; height: 62px; border-radius: 16px; cursor: var(--cur-pointer, pointer);
+  background-size: cover; background-position: center; border: 1px solid rgba(127, 127, 150, .25);
+}
+.msg-wall-mine__pick[aria-pressed="true"] { outline: 2.5px solid var(--color-primary); outline-offset: 2px; }
+.msg-wall-mine__del {
+  all: unset; box-sizing: border-box; position: absolute; top: -6px; inset-inline-end: -6px; width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: #e5484d; color: #fff; cursor: var(--cur-pointer, pointer);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+}
+.msg-wall-mine__err { margin: 8px 0 0; font-size: 12px; color: #e5484d; }

@@ -217,3 +217,32 @@ html body .ai-panel .ai-wall-pop {
   width: 252px; max-width: calc(100% - 20px); box-sizing: border-box;
   max-height: calc(100dvh - 110px); overflow-y: auto;
 }
+
+/* ---------------- the person's own photo as background ---------------- */
+html body .ai-panel[data-wall="custom"] {
+  --ai-wall: linear-gradient(rgba(255, 255, 255, .06), rgba(255, 255, 255, .06)), var(--ai-wall-img) center / cover no-repeat, var(--bg-canvas);
+}
+[data-theme="dark"] .ai-panel[data-wall="custom"] {
+  --ai-wall: linear-gradient(rgba(8, 10, 24, .42), rgba(8, 10, 24, .42)), var(--ai-wall-img) center / cover no-repeat, var(--bg-canvas);
+}
+html body .ai-panel .ai-wall-mine { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
+html body .ai-panel .ai-wall-mine__title { display: block; font-size: 11.5px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
+html body .ai-panel .ai-wall-mine__grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+html body .ai-panel .ai-wall-add {
+  height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center; cursor: var(--cur-pointer, pointer);
+  border: 1.5px dashed color-mix(in srgb, var(--color-primary) 55%, transparent); color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent); padding: 0;
+}
+html body .ai-panel .ai-wall-add:disabled { opacity: .55; cursor: progress; }
+html body .ai-panel .ai-wall-mine__item { position: relative; }
+html body .ai-panel .ai-wall-mine__pick {
+  display: block; width: 100%; height: 50px; border-radius: 14px; padding: 0; cursor: var(--cur-pointer, pointer);
+  background-size: cover; background-position: center; border: 1px solid rgba(127, 127, 150, .25);
+}
+html body .ai-panel .ai-wall-mine__pick[aria-pressed="true"] { outline: 2.5px solid var(--color-primary); outline-offset: 2px; }
+html body .ai-panel .ai-wall-mine__del {
+  position: absolute; top: -6px; inset-inline-end: -6px; width: 19px; height: 19px; padding: 0; border: 0; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; background: #e5484d; color: #fff; cursor: var(--cur-pointer, pointer);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+}
+html body .ai-panel .ai-wall-mine__err { margin: 8px 0 0; font-size: 12px; color: #e5484d; }
