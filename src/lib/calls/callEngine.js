@@ -21,11 +21,66 @@ const IDLE_STATE = {
   phase: 'idle', call: null, peer: null, muted: false, peerMuted: false, quality: 'good',
   reconnecting: false, accepting: false, startedAt: 0, notice: null, minimized: false, available: false, videoEnabled: false, noAccess: false,
   // video: callType is fixed at start; camOn/sharing = what I send, peerCam/peerSharing = what the other side says it sends
-  callType: 'audio', camOn: false, peerCam: false, sharing: false, peerSharing: false, facing: 'user', canSwitchCam: false, filter: 'none',
+  callType: 'audio', camOn: false, peerCam: false, sharing: false, peerSharing: false, facing: 'user', canSwitchCam: false, filter: 'none', filterAmount: 100,
   noiseOn: true,
 };
 
-export const VIDEO_FILTERS = ['none', 'bright', 'vivid', 'warm', 'cool', 'soft', 'bw', 'vintage', 'portrait'];
+export const VIDEO_FILTERS = ['none', 'enhance', 'soft', 'studio', 'warm', 'cool', 'cinema', 'mono', 'blur'];
+
+/**
+ * Local SDP tuning, applied to MY description before it is sent (the other side's encoder reads it):
+ *  - Opus: in-band FEC (a lost packet is rebuilt instead of leaving a gap), mono, ~40 kbps - plenty for speech, no DTX (DTX makes
+ *    the voice "pump" when it is combined with noise isolation).
+ *  - Video: start/min/max bitrate hints so the picture starts sharp instead of ramping up from a blurry 300 kbps.
+ * Anything unexpected returns the SDP untouched.
+ */
+export function tuneSdp(sdp, maxVideoBps = 3500000) {
+  if (typeof sdp !== 'string' || sdp.indexOf('m=') === -1) return sdp;
+  try {
+    const maxK = Math.round(maxVideoBps / 1000);
+    const startK = Math.min(maxK, 1800);
+    const eol = sdp.includes('\r\n') ? '\r\n' : '\n';
+    const lines = sdp.split(/\r?\n/);
+    const res = [];
+    let kind = '';
+    // payload types of real codecs per m-section, to know where a missing a=fmtp must be added
+    const sectionCodecs = {};
+    let cur = -1;
+    lines.forEach((ln) => {
+      if (ln.startsWith('m=')) { cur += 1; sectionCodecs[cur] = {}; }
+      const m = /^a=rtpmap:(\d+) ([A-Za-z0-9-]+)\//.exec(ln);
+      if (m && cur >= 0) sectionCodecs[cur][m[1]] = m[2].toUpperCase();
+    });
+    const wantAudio = (pt, codec) => codec === 'OPUS';
+    const wantVideo = (pt, codec) => ['VP8', 'VP9', 'H264', 'AV1', 'H265'].includes(codec);
+    const audioParams = 'useinbandfec=1;stereo=0;sprop-stereo=0;usedtx=0;maxaveragebitrate=40000;maxplaybackrate=48000';
+    const videoParams = `x-google-min-bitrate=600;x-google-start-bitrate=${startK};x-google-max-bitrate=${maxK}`;
+    const merge = (existing, extra) => {
+      const have = new Set(existing.split(';').map((x) => x.split('=')[0].trim()));
+      const add = extra.split(';').filter((x) => !have.has(x.split('=')[0]));
+      return add.length ? `${existing};${add.join(';')}` : existing;
+    };
+    cur = -1;
+    const fmtpSeen = new Set();
+    lines.forEach((ln) => {
+      if (ln.startsWith('m=')) { cur += 1; kind = ln.slice(2, ln.indexOf(' ')); }
+      const f = /^a=fmtp:(\d+) (.*)$/.exec(ln);
+      if (f && cur >= 0) {
+        const codec = sectionCodecs[cur][f[1]];
+        if (kind === 'audio' && wantAudio(f[1], codec)) { fmtpSeen.add(`${cur}:${f[1]}`); res.push(`a=fmtp:${f[1]} ${merge(f[2], audioParams)}`); return; }
+        if (kind === 'video' && wantVideo(f[1], codec)) { fmtpSeen.add(`${cur}:${f[1]}`); res.push(`a=fmtp:${f[1]} ${merge(f[2], videoParams)}`); return; }
+      }
+      res.push(ln);
+      const r = /^a=rtpmap:(\d+) /.exec(ln);
+      if (r && cur >= 0) {
+        const codec = sectionCodecs[cur][r[1]];
+        const needs = (kind === 'video' && wantVideo(r[1], codec)) ? videoParams : (kind === 'audio' && wantAudio(r[1], codec)) ? audioParams : '';
+        if (needs && !lines.some((x) => x.startsWith(`a=fmtp:${r[1]} `))) res.push(`a=fmtp:${r[1]} ${needs}`);
+      }
+    });
+    return res.join(eol);
+  } catch { return sdp; }
+}
 
 export function createCallEngine(deps) {
   const {
@@ -150,13 +205,14 @@ export function createCallEngine(deps) {
     if (src && !screenTrack && st.filter !== 'none' && createFx) {
       try {
         if (!fx) fx = createFx();
-        out = fx.attach(src, st.filter) || src;
+        out = fx.attach(src, st.filter, (st.filterAmount == null ? 100 : st.filterAmount) / 100) || src;
         if (out === src && st.filter !== 'none') st.filter = 'none'; // canvas filters unsupported here
       } catch { out = src; st.filter = 'none'; }
     } else if (fx) {
       try { fx.stop(); } catch { /* ignore */ }
       fx = null;
     }
+    try { if (out) out.contentHint = screenTrack ? 'detail' : 'motion'; } catch { /* optional hint for the encoder */ }
     const vt = videoTransceiver();
     if (vt && vt.sender) {
       try { await vt.sender.replaceTrack(out || null); } catch { /* the peer just keeps the last frame; the next change retries */ }
@@ -435,7 +491,8 @@ export function createCallEngine(deps) {
         try { console.warn('[call] no media on the direct path - restarting ICE through TURN relay'); } catch { /* diagnostics only */ }
       }
       if (conn.restartIce) conn.restartIce();
-      const offer = await conn.createOffer({ iceRestart: true });
+      let offer = await conn.createOffer({ iceRestart: true });
+      if (offer && offer.sdp) offer = { type: offer.type, sdp: tuneSdp(offer.sdp, videoMaxBitrate) };
       if (pc !== conn) return;
       await conn.setLocalDescription(offer);
       await sendSignal('offer', { type: offer.type, sdp: offer.sdp });
@@ -468,12 +525,26 @@ export function createCallEngine(deps) {
   async function tuneVideoSender(conn) {
     try {
       const vt = conn.getTransceivers ? conn.getTransceivers().find((t) => t.receiver && t.receiver.track && t.receiver.track.kind === 'video') : null;
-      if (!vt || !vt.sender || !vt.sender.getParameters || !vt.sender.setParameters) return;
+      if (!vt || !vt.sender || !vt.sender.getParameters || !vt.sender.setParameters) throw new Error('no video sender');
       const params = vt.sender.getParameters();
       if (!params.encodings || !params.encodings.length) params.encodings = [{}];
       params.encodings[0].maxBitrate = videoMaxBitrate;
-      params.degradationPreference = 'balanced';
+      params.encodings[0].maxFramerate = 30;
+      params.encodings[0].scaleResolutionDownBy = 1;     // never send a downscaled picture unless the browser has to
+      params.encodings[0].networkPriority = 'high';
+      params.degradationPreference = 'maintain-resolution'; // on a weak link drop frames, keep the picture sharp
       await vt.sender.setParameters(params);
+    } catch { /* optional tuning */ }
+    try { // voice: small constant bitrate budget, top priority on the wire
+      const at = conn.getTransceivers ? conn.getTransceivers().find((t) => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio') : null;
+      if (at && at.sender && at.sender.getParameters && at.sender.setParameters) {
+        const ap = at.sender.getParameters();
+        if (!ap.encodings || !ap.encodings.length) ap.encodings = [{}];
+        ap.encodings[0].maxBitrate = 48000;
+        ap.encodings[0].priority = 'high';
+        ap.encodings[0].networkPriority = 'high';
+        await at.sender.setParameters(ap);
+      }
     } catch { /* optional tuning */ }
   }
 
@@ -570,7 +641,8 @@ export function createCallEngine(deps) {
       const vt = videoTransceiver();
       if (vt && vt.direction !== 'sendrecv') { try { vt.direction = 'sendrecv'; } catch { /* ignore */ } }
       await flushIce(conn);
-      const answer = await conn.createAnswer();
+      let answer = await conn.createAnswer();
+      if (answer && answer.sdp) answer = { type: answer.type, sdp: tuneSdp(answer.sdp, videoMaxBitrate) };
       await conn.setLocalDescription(answer);
       await sendSignal('answer', { type: answer.type, sdp: answer.sdp });
     } else if (s.kind === 'answer') {
@@ -753,7 +825,8 @@ export function createCallEngine(deps) {
       await buildPc();
       const conn = pc;
       makingOffer = true;
-      const offer = await conn.createOffer();
+      let offer = await conn.createOffer();
+      if (offer && offer.sdp) offer = { type: offer.type, sdp: tuneSdp(offer.sdp, videoMaxBitrate) };
       await conn.setLocalDescription(offer);
       makingOffer = false;
       if (st.call && st.call.id === call.id) await sendSignal('offer', { type: offer.type, sdp: offer.sdp });
@@ -949,6 +1022,12 @@ export function createCallEngine(deps) {
     if (inLiveCall() && camTrack && !screenTrack) await applyOutgoingVideo();
   }
 
+  function setFilterAmount(v) {
+    const a = Math.max(0, Math.min(100, Math.round(Number(v)) || 0));
+    set({ filterAmount: a });
+    try { fx && fx.setAmount && fx.setAmount(a / 100); } catch { /* ignore */ }
+  }
+
   function setNoise(on) {
     const v = !!on;
     set({ noiseOn: v });
@@ -987,7 +1066,7 @@ export function createCallEngine(deps) {
 
   return {
     start, stop, startCall, accept, decline, hangup, toggleMute, setMinimized, dismissNotice,
-    toggleCamera, switchCamera, toggleScreenShare, setFilter, setNoise,
+    toggleCamera, switchCamera, toggleScreenShare, setFilter, setFilterAmount, setNoise,
     pollNow, kick: () => schedule(0), getState: () => ({ ...st }), diagnostics,
   };
 }

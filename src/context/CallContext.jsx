@@ -58,11 +58,15 @@ function getUserMedia(opts = {}) {
     autoGainControl: noise && !noiseSuppressSupported(),
     voiceIsolation: { ideal: noise },
     channelCount: { ideal: 1 },
+    sampleRate: { ideal: 48000 },
+    latency: { ideal: 0.01 },
+    // older Chromium / WebView builds still read the legacy switches: keep the high-pass + second-generation AGC/NS on
+    advanced: [{ googEchoCancellation: true, googHighpassFilter: true, googNoiseSuppression: noise, googNoiseSuppression2: noise, googTypingNoiseDetection: true }],
   };
-  // phones/tablets: 960x540 @ ≤20 fps keeps encoding affordable; desktops get 720p
-  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test((typeof navigator !== 'undefined' && navigator.userAgent) || '');
+  // 720p @ 30 fps everywhere (what Meet / Zoom use). Phones used to capture 960x540 @ 20 fps, which then gets stretched over the whole
+  // screen of the other device and looks soft; the sender still adapts down by itself when the link is weak.
   const video = opts.video ? {
-    width: { ideal: mobile ? 960 : 1280 }, height: { ideal: mobile ? 540 : 720 }, frameRate: mobile ? { ideal: 20, max: 24 } : { ideal: 24, max: 30 },
+    width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 },
     facingMode: { ideal: opts.facing === 'environment' ? 'environment' : 'user' },
   } : false;
   return navigator.mediaDevices.getUserMedia({ audio, video }).then(async (stream) => {
@@ -224,7 +228,7 @@ export function CallProvider({ children }) {
       countCameras,
       createFx: createVideoFx,
       makeStream: (tracks) => new MediaStream(tracks),
-      videoMaxBitrate: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ? 1500000 : 2500000,
+      videoMaxBitrate: /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ? 2500000 : 3500000,
       setLocalVideo: (stream) => setMedia((m) => (m.local === stream ? m : { ...m, local: stream })),
       setRemoteVideo: (stream) => setMedia((m) => (m.remote === stream ? m : { ...m, remote: stream })),
       initialNoise: readNoisePref(),
@@ -307,6 +311,7 @@ export function CallProvider({ children }) {
     switchCamera: () => engineRef.current && engineRef.current.switchCamera(),
     toggleScreenShare: () => engineRef.current && engineRef.current.toggleScreenShare(),
     setFilter: (name) => engineRef.current && engineRef.current.setFilter(name),
+    setFilterAmount: (v) => engineRef.current && engineRef.current.setFilterAmount(v),
     setNoise: (on) => engineRef.current && engineRef.current.setNoise(on),
     decline: () => engineRef.current && engineRef.current.decline(),
     hangup: () => engineRef.current && engineRef.current.hangup(),

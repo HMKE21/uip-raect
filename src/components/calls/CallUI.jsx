@@ -135,14 +135,23 @@ function EffectsPanel({ c, ar, t, onClose }) {
       {fxOk && (
         <>
           <p className="call-fx__label">{t('Video filters', 'فلاتر الفيديو')}</p>
-          <div className="call-fx__chips" role="radiogroup" aria-label={t('Video filters', 'فلاتر الفيديو')}>
+          <div className="call-fx__grid" role="radiogroup" aria-label={t('Video filters', 'فلاتر الفيديو')}>
             {FILTER_LIST.map((f) => (
-              <button key={f.id} type="button" role="radio" aria-checked={c.filter === f.id} className={`call-chip${c.filter === f.id ? ' is-on' : ''}`}
+              <button key={f.id} type="button" role="radio" aria-checked={c.filter === f.id} className={`call-flt${c.filter === f.id ? ' is-on' : ''}`}
                 onClick={() => c.setFilter(f.id)} disabled={!c.camOn || c.sharing}>
-                {ar ? f.ar : f.en}
+                <span className="call-flt__sw" style={{ background: f.sw }} aria-hidden="true" />
+                <span className="call-flt__name">{ar ? f.ar : f.en}</span>
               </button>
             ))}
           </div>
+          {c.filter !== 'none' && c.camOn && !c.sharing && (
+            <label className="call-fx__range">
+              <span>{t('Intensity', 'الشدة')}</span>
+              <input type="range" min="0" max="100" step="1" value={c.filterAmount == null ? 100 : c.filterAmount}
+                onChange={(e) => c.setFilterAmount(Number(e.target.value))} aria-label={t('Filter intensity', 'شدة الفلتر')} />
+              <output>{c.filterAmount == null ? 100 : c.filterAmount}%</output>
+            </label>
+          )}
           {(!c.camOn || c.sharing) && <p className="call-fx__hint">{c.sharing ? t('Filters apply to the camera, not a shared screen.', 'الفلاتر تعمل على الكاميرا فقط وليس على مشاركة الشاشة.') : t('Turn the camera on to use filters.', 'شغّل الكاميرا لاستخدام الفلاتر.')}</p>}
         </>
       )}

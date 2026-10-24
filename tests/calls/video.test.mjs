@@ -200,3 +200,34 @@ test('hangup releases camera + screen and clears previews', async () => {
   assert.equal(t.log.remote[t.log.remote.length - 1], null);
   assert.equal(t.eng.getState().callType, 'audio');
 });
+
+test('filterAmount is clamped, kept in state and pushed to the live fx', async () => {
+  const t = setup();
+  await calleeConnected(t, { video: true });
+  await t.eng.setFilter('soft');
+  t.log.fxObj.amounts = [];
+  t.log.fxObj.setAmount = (a) => t.log.fxObj.amounts.push(a);
+  t.eng.setFilterAmount(40);
+  t.eng.setFilterAmount(999);
+  t.eng.setFilterAmount(-5);
+  assert.deepEqual(t.log.fxObj.amounts, [0.4, 1, 0]);
+  assert.equal(t.eng.getState().filterAmount, 0);
+});
+
+test('tuneSdp: opus FEC/mono + video bitrate hints, tolerant of junk', async () => {
+  const { tuneSdp } = await import('../../src/lib/calls/callEngine.js');
+  const sdp = [
+    'v=0', 'm=audio 9 UDP/TLS/RTP/SAVPF 111', 'a=rtpmap:111 opus/48000/2', 'a=fmtp:111 minptime=10;useinbandfec=0',
+    'm=video 9 UDP/TLS/RTP/SAVPF 96 97 98', 'a=rtpmap:96 VP8/90000', 'a=rtpmap:97 rtx/90000', 'a=fmtp:97 apt=96',
+    'a=rtpmap:98 H264/90000', 'a=fmtp:98 level-asymmetry-allowed=1;profile-level-id=42e01f', '',
+  ].join('\r\n');
+  const out = tuneSdp(sdp, 3500000);
+  assert.match(out, /a=fmtp:111 minptime=10;useinbandfec=0;stereo=0;/); // existing keys are kept, not duplicated
+  assert.doesNotMatch(out, /useinbandfec=1/);
+  assert.match(out, /a=fmtp:96 x-google-min-bitrate=600;x-google-start-bitrate=1800;x-google-max-bitrate=3500/);
+  assert.match(out, /a=fmtp:98 level-asymmetry-allowed=1;profile-level-id=42e01f;x-google-min-bitrate=600/);
+  assert.equal(out.match(/a=fmtp:97 apt=96/g).length, 1); // rtx line untouched
+  assert.ok(out.includes('\r\n'));
+  assert.equal(tuneSdp('OFFER'), 'OFFER');
+  assert.equal(tuneSdp(undefined), undefined);
+});
