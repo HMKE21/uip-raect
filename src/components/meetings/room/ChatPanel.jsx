@@ -303,17 +303,7 @@ export default function ChatPanel({
           {sendError && <p className="form-error meeting-chat-panel__error">{sendError}</p>}
 
           {recipientOptions.length > 0 && (
-            <div className={`meeting-chat-panel__to ${recipientKey ? 'is-private' : ''}`}>
-              <Icon name={recipientKey ? 'lock' : 'users'} size={13} />
-              <span>{t('To')}</span>
-              <select value={recipientKey} onChange={(e) => setRecipientKey(e.target.value)} aria-label={t('To')}>
-                <option value="">{t('Everyone')}</option>
-                {recipientOptions.map((p) => (
-                  <option key={p.key} value={p.key}>{p.displayName}</option>
-                ))}
-              </select>
-              {recipientKey && <em>{t('Only they will see this')}</em>}
-            </div>
+            <RecipientPicker t={t} value={recipientKey} onChange={setRecipientKey} options={recipientOptions} />
           )}
 
           {picked && (
@@ -385,6 +375,64 @@ export default function ChatPanel({
       )}
 
       {previewFile && <MeetingFilePreview file={previewFile} files={sharedFiles} onClose={() => setPreviewFile(null)} />}
+    </div>
+  );
+}
+
+/** "To: Everyone ⌄" — a dark popover (the browser's own <select> list opened as a white box over the dark room). */
+function RecipientPicker({ t, value, onChange, options }) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const away = (e) => { if (!wrap.current?.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', away);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('pointerdown', away); document.removeEventListener('keydown', esc); };
+  }, [open]);
+
+  // two people with the same display name get a "(2)" so they can be told apart
+  const seen = {};
+  const list = options.map((p) => {
+    const n = (seen[p.displayName] = (seen[p.displayName] || 0) + 1);
+    return { ...p, label: p.displayName, n };
+  });
+  const dupes = list.filter((p) => list.filter((q) => q.label === p.label).length > 1);
+  const labelOf = (p) => (dupes.includes(p) ? `${p.label} (${p.n})` : p.label);
+  const current = list.find((p) => p.key === value);
+  const pick = (k) => { onChange(k); setOpen(false); };
+
+  return (
+    <div className={`mc-to ${value ? 'is-private' : ''}`} ref={wrap}>
+      <button type="button" className="mc-to__btn" aria-haspopup="listbox" aria-expanded={open} aria-label={t('To')} onClick={() => setOpen((o) => !o)}>
+        <Icon name={value ? 'lock' : 'users'} size={14} />
+        <span className="mc-to__lbl">{t('To')}</span>
+        <strong dir="auto">{current ? labelOf(current) : t('Everyone')}</strong>
+        <Icon name="chevron-up" size={14} />
+      </button>
+      {value && <em>{t('Only they will see this')}</em>}
+      {open && (
+        <ul className="mc-to__menu" role="listbox">
+          <li>
+            <button type="button" role="option" aria-selected={!value} className={!value ? 'is-on' : ''} onClick={() => pick('')}>
+              <span className="mc-to__av mc-to__av--all"><Icon name="users" size={14} /></span>
+              <span className="mc-to__name">{t('Everyone')}</span>
+              {!value && <Icon name="check" size={16} />}
+            </button>
+          </li>
+          {list.map((p) => (
+            <li key={p.key}>
+              <button type="button" role="option" aria-selected={value === p.key} className={value === p.key ? 'is-on' : ''} onClick={() => pick(p.key)}>
+                <span className="mc-to__av" style={{ background: avatarColor(p.displayName) }}>{(p.displayName || '?').trim().charAt(0).toUpperCase() || '?'}</span>
+                <span className="mc-to__name" dir="auto">{labelOf(p)}</span>
+                <small><Icon name="lock" size={11} /> {t('Private')}</small>
+                {value === p.key && <Icon name="check" size={16} />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
