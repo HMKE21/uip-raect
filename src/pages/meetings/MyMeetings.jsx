@@ -40,21 +40,52 @@ const translations = { ...i18nCommon, ...i18nMeetings };
  * re-run after a response for that reason.
  */
 
-const CARD = { display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' };
+const STATUS_KEY = { scheduled: 'Scheduled', lobby: 'In Lobby', live: 'Live', ended: 'Ended', cancelled: 'Cancelled' };
+const isLive = (m) => m.status === 'live' || m.status === 'lobby';
+const isPast = (m) => m.status === 'ended' || m.status === 'cancelled';
+const startOf = (m) => new Date(m.scheduled_start_at || m.created_at || 0);
 
-const STATUS_META = {
-  scheduled: { cls: 'badge-primary', key: 'Scheduled' },
-  lobby: { cls: 'badge-warning', key: 'In Lobby' },
-  live: { cls: 'badge-success', key: 'Live' },
-  ended: { cls: 'badge-neutral', key: 'Ended' },
-  cancelled: { cls: 'badge-neutral', key: 'Cancelled' },
-};
+/** One meeting: date tile · title + meta · actions. Live ones glow and get a "Join now" button. */
+function MeetingCard({ m, isHost, prefix, t, onDelete }) {
+  const loc = t.locale === 'ar' ? 'ar-EG' : undefined;
+  const live = isLive(m);
+  const past = isPast(m);
+  const when = m.scheduled_start_at ? new Date(m.scheduled_start_at) : null;
+  const href = `/${prefix}/meetings/${m.uuid}`;
+  return (
+    <article className={`mm-card${live ? ' is-live' : ''}${past ? ' is-past' : ''}`}>
+      <Link to={href} className="mm-date" aria-hidden="true" tabIndex={-1}>
+        {live ? <span className="mm-date__live"><i /><Icon name="video" size={20} /></span>
+          : when ? <><b>{when.toLocaleDateString(loc, { day: 'numeric' })}</b><small>{when.toLocaleDateString(loc, { month: 'short' })}</small></>
+          : <Icon name={m.type === 'scheduled' ? 'calendar' : 'video'} size={22} />}
+      </Link>
+      <div className="mm-card__main">
+        <div className="mm-card__top">
+          <Link to={href} className="mm-card__title">{m.title}</Link>
+          <span className={`mm-pill mm-pill--${m.status}`}>{live && <i />}{t(STATUS_KEY[m.status] || 'Scheduled')}</span>
+        </div>
+        <div className="mm-card__meta">
+          <span><Icon name="clock" size={14} />{when ? when.toLocaleString(loc, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : t('No date')} · {m.duration_minutes ? `${m.duration_minutes} ${t('min')}` : t('Open-ended')}</span>
+          {isHost && <span className="mm-host"><Icon name="crown" size={14} />{t('You host this')}</span>}
+        </div>
+      </div>
+      <div className="mm-card__actions">
+        <Link to={href} className={`mm-btn ${live ? 'mm-btn--go' : 'mm-btn--ghost'}`}>
+          {live ? <><Icon name="video" size={15} />{t('Join now')}</> : <>{t('Open meeting')}<Icon name="arrow-right" size={15} className="mm-flip" /></>}
+        </Link>
+        {isHost && (
+          <button type="button" className="mm-icon-btn" onClick={() => onDelete(m)} title={t('Delete')} aria-label={t('Delete')}><Icon name="trash" size={15} /></button>
+        )}
+      </div>
+    </article>
+  );
+}
 
-function CreateMeetingModal({ onClose, onCreated }) {
+function CreateMeetingModal({ onClose, onCreated, initialType = 'instant' }) {
   const t = useTranslations(translations);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [type, setType] = useState('instant');
+  const [type, setType] = useState(initialType);
   const [scheduledStartAt, setScheduledStartAt] = useState('');
   const [durationMinutes, setDurationMinutes] = useState(null); // null = open-ended (no end time)
   const [maxParticipants, setMaxParticipants] = useState('');
@@ -172,7 +203,10 @@ export default function MyMeetings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [actionError, setActionError] = useState(null);
-  const [creating, setCreating] = useState(false);
+  const [creating, setCreating] = useState(null); // null | 'instant' | 'scheduled'
+  const [filter, setFilter] = useState('all');
+  const [joinLink, setJoinLink] = useState('');
+  const [joinError, setJoinError] = useState(null);
 
   // Round 8 — بند 13 (My Invitations).
   const [invitations, setInvitations] = useState([]);
@@ -213,7 +247,7 @@ export default function MyMeetings() {
   }
 
   function handleCreated(uuid) {
-    setCreating(false);
+    setCreating(null);
     navigate(`/${prefix}/meetings/${uuid}`);
   }
 
@@ -228,113 +262,131 @@ export default function MyMeetings() {
     }
   }
 
-  if (loading) return <p className="text-small" style={{ padding: 'var(--space-5)' }}>{t('Loading…')}</p>;
+  // "Join with a link": accepts the whole link or just the code at the end of it.
+  function handleJoin(e) {
+    e.preventDefault();
+    const raw = joinLink.trim();
+    const m = /\/join\/([A-Za-z0-9_-]+)/.exec(raw) || /^([A-Za-z0-9_-]{8,})$/.exec(raw);
+    if (!m) { setJoinError(t('Paste a valid meeting link or code.')); return; }
+    setJoinError(null);
+    navigate(`/join/${m[1]}`);
+  }
+
+  const live = meetings.filter(isLive);
+  const upcoming = meetings.filter((m) => !isLive(m) && !isPast(m)).sort((a, b) => startOf(a) - startOf(b));
+  const past = meetings.filter(isPast).sort((a, b) => startOf(b) - startOf(a));
+  const counts = { all: meetings.length, live: live.length, upcoming: upcoming.length, past: past.length };
+  const sections = [
+    { id: 'live', title: t('Live now'), items: live },
+    { id: 'upcoming', title: t('Upcoming'), items: upcoming },
+    { id: 'past', title: t('Past'), items: past },
+  ].filter((sec) => sec.items.length > 0 && (filter === 'all' || filter === sec.id));
+  const tabs = [['all', t('All')], ['live', t('Live now')], ['upcoming', t('Upcoming')], ['past', t('Past')]];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
-        <div>
-          <h1 className="text-h2" style={{ margin: 0 }}>{t('My Meetings')}</h1>
-          <p className="text-small" style={{ margin: 'var(--space-1) 0 0', color: 'var(--text-secondary)' }}>
-            {t('Host a meeting, or wait to be invited to one — every result below is a meeting you host or are part of.')}
-          </p>
+    <div className="mm-page">
+      <header className="mm-hero">
+        <span className="mm-hero__blob mm-hero__blob--a" aria-hidden="true" />
+        <span className="mm-hero__blob mm-hero__blob--b" aria-hidden="true" />
+        <div className="mm-hero__text">
+          <span className="mm-eyebrow"><Icon name="video" size={14} />{t('Meetings')}</span>
+          <h1>{t('My Meetings')}</h1>
+          <p>{t('Host, join and follow every meeting from one place.')}</p>
+          <div className="mm-hero__cta">
+            <button type="button" className="mm-btn mm-btn--light" onClick={() => setCreating('instant')}>
+              <Icon name="video" size={16} />{t('Instant meeting')}
+            </button>
+            <button type="button" className="mm-btn mm-btn--glass" onClick={() => setCreating('scheduled')}>
+              <Icon name="calendar" size={16} />{t('Schedule a meeting')}
+            </button>
+            <Link to={`/${prefix}/meetings/calendar`} className="mm-btn mm-btn--glass">
+              <Icon name="calendar" size={16} />{t('Calendar')}
+            </Link>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-          <Link to={`/${prefix}/meetings/calendar`} className="btn btn-outline">
-            <Icon name="calendar" size={16} /> {t('Calendar')}
-          </Link>
-          <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-            <Icon name="plus" size={16} /> {t('New Meeting')}
-          </button>
-        </div>
-      </div>
+        <form className="mm-join" onSubmit={handleJoin}>
+          <label htmlFor="mm-join-input"><Icon name="link" size={15} />{t('Join with a link')}</label>
+          <div className={`mm-join__box${joinError ? ' has-error' : ''}`}>
+            <input id="mm-join-input" value={joinLink} onChange={(e) => { setJoinLink(e.target.value); setJoinError(null); }} placeholder={t('Paste a meeting link or code')} autoComplete="off" dir="ltr" />
+            <button type="submit" disabled={!joinLink.trim()}>{t('Join')}</button>
+          </div>
+          {joinError && <small className="mm-join__err">{joinError}</small>}
+        </form>
+      </header>
 
       {error && <p className="form-error">{error}</p>}
       {actionError && <p className="form-error">{actionError}</p>}
       {invitationsError && <p className="form-error">{invitationsError}</p>}
 
       {!invitationsLoading && invitations.length > 0 && (
-        <div className="card glass-panel" style={CARD}>
-          <h2 className="text-h3" style={{ margin: 0 }}>{t('My Invitations')}</h2>
-          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+        <section className="mm-invites" aria-label={t('My Invitations')}>
+          <h2><Icon name="mail" size={16} />{t('Invitations waiting for you')}<b>{invitations.length}</b></h2>
+          <div className="mm-invites__row">
             {invitations.map((inv) => (
-              <li key={inv.id} className="text-small" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{inv.meeting?.title}</div>
-                  <div className="text-caption">{t('Invited by')}: {inv.invited_by?.full_name || `#${inv.invited_by_user_id}`}</div>
+              <div className="mm-invite" key={inv.id}>
+                <div className="mm-invite__txt">
+                  <strong>{inv.meeting?.title}</strong>
+                  <small>{t('Invited by')}: {inv.invited_by?.full_name || `#${inv.invited_by_user_id}`}</small>
                 </div>
-                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-                  <button type="button" className="btn btn-outline btn-sm" disabled={respondingId === inv.id} onClick={() => handleRespond(inv, false)}>
-                    {t('Decline')}
-                  </button>
-                  <button type="button" className="btn btn-primary btn-sm" disabled={respondingId === inv.id} onClick={() => handleRespond(inv, true)}>
-                    {respondingId === inv.id ? '…' : t('Accept')}
-                  </button>
+                <div className="mm-invite__btns">
+                  <button type="button" className="mm-btn mm-btn--ghost mm-btn--sm" disabled={respondingId === inv.id} onClick={() => handleRespond(inv, false)}>{t('Decline')}</button>
+                  <button type="button" className="mm-btn mm-btn--solid mm-btn--sm" disabled={respondingId === inv.id} onClick={() => handleRespond(inv, true)}>{respondingId === inv.id ? '…' : t('Accept')}</button>
                 </div>
-              </li>
+              </div>
             ))}
-          </ul>
-        </div>
-      )}
-
-      {meetings.length === 0 ? (
-        <div className="card glass-panel empty-state">
-          <Icon name="monitor" size={32} className="empty-state__icon" />
-          <p className="text-small">{t('Host your first meeting to get started.')}</p>
-          <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-            <Icon name="plus" size={16} /> {t('New Meeting')}
-          </button>
-        </div>
-      ) : (
-        <div className="card glass-panel" style={CARD}>
-          <div className="table-responsive">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>{t('Title')}</th>
-                  <th>{t('Type')}</th>
-                  <th>{t('Scheduled Start')}</th>
-                  <th>{t('Status')}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {meetings.map((m) => {
-                  const meta = STATUS_META[m.status] || STATUS_META.scheduled;
-                  const isHost = String(m.host_user_id) === String(user?.id);
-                  return (
-                    <tr key={m.uuid}>
-                      <td>
-                        <Link to={`/${prefix}/meetings/${m.uuid}`} className="text-small" style={{ fontWeight: 600 }}>
-                          {m.title}
-                        </Link>
-                        {isHost && <div className="text-caption">{t('Host')}: {t('You')}</div>}
-                      </td>
-                      <td>{t(m.type === 'scheduled' ? 'Scheduled' : 'Instant')}</td>
-                      <td>{m.scheduled_start_at ? new Date(m.scheduled_start_at).toLocaleString() : '—'}</td>
-                      <td><span className={`badge ${meta.cls}`}>{t(meta.key)}</span></td>
-                      <td>
-                        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                          <Link to={`/${prefix}/meetings/${m.uuid}`} className="btn btn-outline btn-sm">
-                            {t('Meeting Details')}
-                          </Link>
-                          {isHost && (
-                            <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(m)} title={t('Delete')}>
-                              <Icon name="trash" size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
           </div>
-        </div>
+        </section>
       )}
 
-      {creating && <CreateMeetingModal onClose={() => setCreating(false)} onCreated={handleCreated} />}
+      {loading ? (
+        <div className="mm-list" aria-busy="true">
+          {[0, 1, 2].map((i) => <div key={i} className="mm-card mm-skel"><span className="mm-date" /><div className="mm-card__main"><i /><i /></div></div>)}
+        </div>
+      ) : meetings.length === 0 ? (
+        <section className="mm-empty">
+          <div className="mm-empty__art" aria-hidden="true">
+            <span className="mm-empty__orb"><Icon name="video" size={38} /></span>
+            <span className="mm-empty__chip mm-empty__chip--1"><Icon name="calendar" size={16} /></span>
+            <span className="mm-empty__chip mm-empty__chip--2"><Icon name="users" size={16} /></span>
+            <span className="mm-empty__chip mm-empty__chip--3"><Icon name="link" size={16} /></span>
+          </div>
+          <h2>{t('Your meeting room is empty')}</h2>
+          <p>{t('Start one in a click, schedule it for later, or join with a link. Everything you host or get invited to lands here.')}</p>
+          <div className="mm-empty__cta">
+            <button type="button" className="mm-btn mm-btn--solid" onClick={() => setCreating('instant')}><Icon name="video" size={16} />{t('Instant meeting')}</button>
+            <button type="button" className="mm-btn mm-btn--ghost" onClick={() => setCreating('scheduled')}><Icon name="calendar" size={16} />{t('Schedule a meeting')}</button>
+          </div>
+          <ul className="mm-empty__perks">
+            <li><Icon name="screen-share" size={16} />{t('Video, audio and screen sharing')}</li>
+            <li><Icon name="shield" size={16} />{t('Waiting room and password')}</li>
+            <li><Icon name="mail" size={16} />{t('Invite by link or email')}</li>
+          </ul>
+        </section>
+      ) : (
+        <>
+          <nav className="mm-tabs" role="tablist" aria-label={t('My Meetings')}>
+            {tabs.map(([id, label]) => (
+              <button key={id} type="button" role="tab" aria-selected={filter === id} className={`mm-tab${filter === id ? ' is-on' : ''}${id === 'live' && counts.live ? ' is-hot' : ''}`} onClick={() => setFilter(id)}>
+                {id === 'live' && counts.live > 0 && <i />}{label}<b>{counts[id]}</b>
+              </button>
+            ))}
+          </nav>
+          {sections.length === 0 ? (
+            <p className="mm-none">{t('No meetings in this view.')}</p>
+          ) : sections.map((sec) => (
+            <section key={sec.id} className="mm-section">
+              <h2 className="mm-section__title">{sec.title}<span>{sec.items.length}</span></h2>
+              <div className="mm-list">
+                {sec.items.map((m) => (
+                  <MeetingCard key={m.uuid} m={m} t={t} prefix={prefix} isHost={String(m.host_user_id) === String(user?.id)} onDelete={handleDelete} />
+                ))}
+              </div>
+            </section>
+          ))}
+        </>
+      )}
+
+      {creating && <CreateMeetingModal initialType={creating} onClose={() => setCreating(null)} onCreated={handleCreated} />}
     </div>
   );
 }
