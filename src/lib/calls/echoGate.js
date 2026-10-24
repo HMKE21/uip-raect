@@ -19,19 +19,19 @@
  *  - switch it off for yourself with localStorage `uip.call.halfduplex` = '0'.
  */
 
-const KEY = 'uip.call.halfduplex';
-// ON by default again (the stats of a real call showed a clean network: the whistle is the speaker->mic loop between two devices in
-// the same room, which no browser echo canceller can remove). Switch with the URL, remembered afterwards:
-//   ?halfduplex=strict -> maximum protection: the mic is closed whenever the other side is audible, no barge-in at all
-//   ?halfduplex=1      -> normal gate (you can talk over the other side only by speaking much louder)
-//   ?halfduplex=0      -> off
+const KEY = 'uip.call.halfduplex.v2'; // new key: a value saved by the earlier always-on build must not keep the gate on
+// OFF by default. Routing the microphone through a WebAudio graph can leave the mic silent on phones (a suspended / interrupted
+// AudioContext outputs silence) - nobody hears anybody. Opt in only when two devices sit in the SAME room (speaker -> other mic whistle):
+//   ?halfduplex=1      -> gate on
+//   ?halfduplex=strict -> gate on, no barge-in
+//   ?halfduplex=0      -> off (default)
 const fromUrl = () => {
   try {
     const v = new URLSearchParams(window.location.search).get('halfduplex');
     if (v === '1' || v === '0' || v === 'strict') localStorage.setItem(KEY, v);
   } catch { /* private mode / no window */ }
 };
-const mode = () => { fromUrl(); try { return localStorage.getItem(KEY) || '1'; } catch { return '1'; } };
+const mode = () => { fromUrl(); try { return localStorage.getItem(KEY) || '0'; } catch { return '0'; } };
 export const echoGateEnabled = () => mode() !== '0';
 const strictMode = () => mode() === 'strict';
 export const setEchoGateEnabled = (on) => { try { localStorage.setItem(KEY, on ? '1' : '0'); } catch { /* private mode */ } };
