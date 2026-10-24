@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { attachNoiseSuppressor } from '../lib/calls/noiseSuppress';
 import { attachEchoGate, echoGateEnabled, setRemoteAudio, clearRemoteAudio, tightenEchoGate } from '../lib/calls/echoGate';
 import { createCameraFx, cameraFxSupported } from '../lib/cameraFx';
+import { watchScreenCapture } from '../lib/captureGuard';
 import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, meetingLifecycleApi, filesApi, notesApi, pollsApi, recordingsApi } from '../lib/meetingSignaling';
 
 /**
@@ -896,6 +897,11 @@ export function useMeetingRoom({
           });
         })
         .listenForWhisper('signal', handleSignal)
+        .listenForWhisper('capture', (e) => {
+          // someone else's screenshot / recording warning (client event: it never goes through Laravel)
+          if (!e || e.key === myKey) return;
+          setNotice({ type: e.kind === 'recording' ? 'capture_other_recording' : 'capture_other_screenshot', by: String(e.name || '').slice(0, 80) });
+        })
         .listen('.media.state.changed', (e) => {
           patchParticipant(e.participant_key, { micEnabled: e.mic_enabled, cameraEnabled: e.camera_enabled, screenSharing: e.screen_sharing });
         })
@@ -1353,6 +1359,12 @@ export function useMeetingRoom({
   }, [meetingUuid, guestToken]);
 
   const clearNotice = useCallback(() => setNotice(null), []);
+
+  // Screenshot / screen-recording warning: tell everyone in the room (and show the person that it was reported).
+  useEffect(() => watchScreenCapture((kind) => {
+    try { channelRef.current?.whisper('capture', { key: myKey, name: myDisplayName, kind }); } catch { /* ignore */ }
+    setNotice({ type: kind === 'recording' ? 'capture_self_recording' : 'capture_self_screenshot' });
+  }), [meetingUuid, myKey, myDisplayName]);
 
   // ---- بند 7/8 (Chat) ----------------------------------------------------
   // recipientKey=null → رسالة عامة. الرد المباشر من REST بيتضاف فورًا

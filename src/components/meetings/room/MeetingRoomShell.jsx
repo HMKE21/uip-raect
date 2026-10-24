@@ -330,6 +330,10 @@ export default function MeetingRoomShell({
     if (notice.type === 'muted_by_host') {
       return `${t('You were muted by the host.')}${notice.by ? ` (${notice.by})` : ''}`;
     }
+    if (notice.type === 'capture_other_screenshot') return `${t('Screenshot warning')}: ${notice.by || t('A participant')} ${t('may have taken a screenshot of this meeting.')}`;
+    if (notice.type === 'capture_other_recording') return `${t('Recording warning')}: ${notice.by || t('A participant')} ${t('may be recording their screen.')}`;
+    if (notice.type === 'capture_self_screenshot') return t('A screenshot was detected. The other participants were notified.');
+    if (notice.type === 'capture_self_recording') return t('Screen recording was detected. The other participants were notified.');
     if (notice.type === 'echo_detected') return t('Audio feedback detected — another device nearby is looping your voice, so your mic was muted. Use headphones, or turn Speakers off in More if you are in the same room as them.');
     if (notice.type === 'effect_unavailable') return t("Backgrounds and blur couldn't load. Colour filters still work.");
     if (notice.type === 'camera_unavailable') return t("Couldn't open a camera. Check the browser's camera permission and that no other app is using it.");
@@ -467,7 +471,7 @@ export default function MeetingRoomShell({
           </p>
         )}
         {noticeText(room.notice) && (
-          <p className="meeting-room__alert is-info">
+          <p className={`meeting-room__alert ${String(room.notice?.type || '').startsWith('capture_') ? 'is-warn' : 'is-info'}`}>
             <Icon name="info" size={15} />
             <span>{noticeText(room.notice)}</span>
             <button type="button" onClick={room.clearNotice} aria-label={t('Close')}><Icon name="x" size={14} /></button>

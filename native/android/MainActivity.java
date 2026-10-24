@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(ExamLockPlugin.class); // must be before super.onCreate
+        registerPlugin(ScreenCapturePlugin.class);
         registerPlugin(NativePrintPlugin.class);
         registerPlugin(NativeLinksPlugin.class);
         registerPlugin(NativeFilesPlugin.class);

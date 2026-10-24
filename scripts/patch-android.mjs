@@ -28,7 +28,7 @@ if (!existsSync(androidDir)) {
 const javaDir = join(androidDir, 'app', 'src', 'main', 'java', ...pkg.split('.'));
 mkdirSync(javaDir, { recursive: true });
 
-for (const file of ['ExamLockPlugin.java', 'NativePrintPlugin.java', 'NativeLinksPlugin.java', 'NativeFilesPlugin.java', 'MainActivity.java']) {
+for (const file of ['ExamLockPlugin.java', 'ScreenCapturePlugin.java', 'NativePrintPlugin.java', 'NativeLinksPlugin.java', 'NativeFilesPlugin.java', 'MainActivity.java']) {
   const src = readFileSync(join(root, 'native', 'android', file), 'utf8').replaceAll('__PACKAGE__', pkg);
   writeFileSync(join(javaDir, file), src);
   console.log(`[patch-android] wrote ${pkg}.${file.replace('.java', '')}`);
@@ -55,6 +55,8 @@ if (existsSync(manifestPath)) {
     'android.permission.WAKE_LOCK',
     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', // keep pushes arriving with the app closed (like WhatsApp)
     'android.permission.RECEIVE_BOOT_COMPLETED',
+    'android.permission.DETECT_SCREEN_CAPTURE',   // Android 14+: warn the other people in a meeting when someone takes a screenshot
+    'android.permission.DETECT_SCREEN_RECORDING', // Android 15+: same for a screen recording
   ];
   const add = perms.filter((p) => !xml.includes(`"${p}"`)).map((p) => `    <uses-permission android:name="${p}" />`);
   for (const f of ['android.hardware.camera', 'android.hardware.microphone', 'android.hardware.location.gps']) {

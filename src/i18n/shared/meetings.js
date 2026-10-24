@@ -187,6 +187,13 @@ export default {
   // Reactions)، بند 9 (Screen Sharing host policies).
   'Chat': 'الشات',
   'Close': 'إغلاق',
+  'Screenshot warning': 'تحذير لقطة شاشة',
+  'Recording warning': 'تحذير تسجيل شاشة',
+  'A participant': 'أحد المشاركين',
+  'may have taken a screenshot of this meeting.': 'ربما أخذ لقطة شاشة لهذا الاجتماع.',
+  'may be recording their screen.': 'ربما يسجّل شاشته.',
+  'A screenshot was detected. The other participants were notified.': 'تم اكتشاف لقطة شاشة، وتم إبلاغ باقي المشاركين.',
+  'Screen recording was detected. The other participants were notified.': 'تم اكتشاف تسجيل للشاشة، وتم إبلاغ باقي المشاركين.',
   'No messages yet — say hello.': 'لسه مفيش رسايل — ابدأ السلام.',
   'Type a message…': 'اكتب رسالة…',
   'Everyone': 'الكل',
