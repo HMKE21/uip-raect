@@ -5,6 +5,7 @@ import { getNavConfig, portalPrefix, SECTION_TITLES } from '../config/navConfig'
 import { getPortalBrand, pick } from '../config/portalBrand';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
+import { useMyPcAccess } from '../hooks/useMyPcAccess';
 import { useTheme } from '../context/ThemeContext';
 import { api } from '../api/client';
 import { AVATAR_EVENT, avatarSrc } from './insight/AvatarUploader';
@@ -99,7 +100,12 @@ export default function Sidebar({ role, user, isOpen, collapsed = false, unread 
   const { locale } = useLanguage();
   const { mode, setMode } = useTheme();
   const { can } = useAuth();
-  const sections = getNavConfig(role, can);
+  const pcAccess = useMyPcAccess(user?.id);
+  const navAll = getNavConfig(role, can);
+  // My PC closed for this portal / account (Admin → My PC Control): do not offer it in the menu
+  const sections = pcAccess.allowed === false
+    ? Object.fromEntries(Object.entries(navAll).map(([k, v]) => [k, v.filter((i) => i.key !== 'my-pc')]))
+    : navAll;
   const brand = getPortalBrand(role);
   const promo = brand.promo;
   const profileTo = PROFILE_ROUTE[role] || `/${portalPrefix(role)}/settings`;

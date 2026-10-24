@@ -9,6 +9,7 @@ const B = '/api/v1/desktop';
 const unwrap = (r) => (r && r.data !== undefined ? r.data : r);
 
 export const desktopApi = {
+  access: async () => unwrap(await api.get(`${B}/access`)), // is My PC open for this account? { allowed, code, message, readonly }
   settings: async () => unwrap(await api.get(`${B}/settings`)),
   saveSettings: async (body) => unwrap(await api.put(`${B}/settings`, body)),
   wallpaper: async () => unwrap(await api.get(`${B}/wallpaper`)),

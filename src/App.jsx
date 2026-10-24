@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PageLoading from './components/PageLoading';
+import MyPcAccessGate from './components/MyPcAccessGate';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { readHeldFlag, readLockCache, readUnlockedFlag } from './desktop/desktopApi';
 import { STAFF_LOGIN_PATH } from './config/staffPortal';
@@ -411,8 +412,8 @@ export default function App() {
                 {/* My PC lives in every portal: /student/my-pc, /admin/my-pc, /faculty/my-pc, … (the API decides who may use it). */}
                 <Route path="/my-pc" element={<MyPcRedirect />} />
                 {MY_PC_PREFIXES.map((px) => [
-                  <Route key={`${px}-pc`} path={`/${px}/my-pc`} element={<DesktopOS />} />,
-                  <Route key={`${px}-pc-classic`} path={`/${px}/my-pc/classic`} element={<ClassicLockGuard><StudentMyPC /></ClassicLockGuard>} />,
+                  <Route key={`${px}-pc`} path={`/${px}/my-pc`} element={<MyPcAccessGate><DesktopOS /></MyPcAccessGate>} />,
+                  <Route key={`${px}-pc-classic`} path={`/${px}/my-pc/classic`} element={<MyPcAccessGate><ClassicLockGuard><StudentMyPC /></ClassicLockGuard></MyPcAccessGate>} />,
                 ])}
                 <Route path="/student/graduation" element={<StudentGraduation />} />
                 <Route path="/student/group-chat" element={<StudentGroupChat />} />
