@@ -30,6 +30,7 @@ const translations = { ...i18nCommon, ...i18nMeetings };
  */
 export default function ParticipantsPanel({
   people, myRole, meetingLocked, isOpen, onClose,
+  waiting = null, onInvite = null,
   onLockMeeting, onMute, onDisableCamera, onRemove, onPromote, onDemote, onMakeHost,
 }) {
   const t = useTranslations(translations);
@@ -70,6 +71,37 @@ export default function ParticipantsPanel({
           <Icon name="x" size={16} />
         </button>
       </div>
+
+      {isManager && onInvite && (
+        <button type="button" className="meeting-participants-panel__invite" onClick={onInvite}>
+          <Icon name="link" size={15} /> {t('Invite people')}
+        </button>
+      )}
+
+      {isManager && waiting && waiting.requests.length > 0 && (
+        <div className="meeting-participants-panel__waiting">
+          <div className="meeting-participants-panel__waiting-head">
+            <strong>{t('Waiting to join')} <span className="badge badge-warning">{waiting.requests.length}</span></strong>
+            <span>
+              <button type="button" disabled={waiting.busyAll} onClick={waiting.rejectAll}>{t('Deny All')}</button>
+              <button type="button" className="is-primary" disabled={waiting.busyAll} onClick={waiting.admitAll}>{t('Admit All')}</button>
+            </span>
+          </div>
+          {waiting.requests.map((r) => (
+            <div key={r.id} className="meeting-participants-panel__wait-row">
+              <span className="meeting-participants-panel__wait-name">
+                {r.display_label}
+                {r.is_guest && <span className="badge badge-neutral" style={{ marginInlineStart: 6 }}>{t('Guest')}</span>}
+              </span>
+              <span>
+                <button type="button" disabled={waiting.busyId === r.id} onClick={() => waiting.reject(r.id)}>{t('Reject')}</button>
+                <button type="button" className="is-primary" disabled={waiting.busyId === r.id} onClick={() => waiting.admit(r.id)}>{t('Admit')}</button>
+              </span>
+            </div>
+          ))}
+          {waiting.error && <p className="form-error" style={{ margin: '4px 0 0' }}>{waiting.error}</p>}
+        </div>
+      )}
 
       {isManager && (
         <label className="meeting-participants-panel__lock-row">

@@ -10,6 +10,10 @@ import FilesPanel from './FilesPanel';
 import NotesPanel from './NotesPanel';
 import PollsPanel from './PollsPanel';
 import RecordingsPanel from './RecordingsPanel';
+import InvitePanel from './InvitePanel';
+import { useRoomWaiting } from './useRoomWaiting';
+import { api } from '../../../api/client';
+import { publicOrigin } from '../../../config/siteUrl';
 import Icon from '../../Icon';
 import { useTranslations, useLanguage } from '../../../context/LanguageContext';
 import { useTheme } from '../../../context/ThemeContext';
@@ -189,6 +193,20 @@ export default function MeetingRoomShell({
     meetingUuid, guestToken, myKey, myDisplayName, deviceDefaults,
     isHost, screenSharingLockedInitial, chatEnabledInitial, meetingLockedInitial,
   });
+
+  // Host / moderator tools inside the room: the join link + who is waiting at the door. (A guest has no meeting record to read.)
+  const canHost = !guestToken && room.isManager;
+  const [hostInfo, setHostInfo] = useState(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  useEffect(() => {
+    if (!canHost) return undefined;
+    let off = false;
+    api.get(`/api/v1/meetings/${meetingUuid}`).then((json) => { if (!off) setHostInfo(json.data || null); }).catch(() => {});
+    return () => { off = true; };
+  }, [canHost, meetingUuid]);
+  const joinToken = hostInfo && hostInfo.join_url ? String(hostInfo.join_url).split('/').filter(Boolean).pop() : null;
+  const joinAppUrl = joinToken ? `${publicOrigin()}/join/${joinToken}` : null;
+  const waiting = useRoomWaiting(meetingUuid, canHost && !(hostInfo && hostInfo.waiting_room_enabled === false));
 
   const tiles = useMemo(() => {
     const remote = Object.entries(room.participants).map(([key, p]) => ({ key, ...p }));
@@ -386,7 +404,14 @@ export default function MeetingRoomShell({
           >
             <Icon name="users" size={15} />
             <span>{tiles.all.length}</span>
+            {canHost && waiting.requests.length > 0 && <span className="meeting-room__pill-badge" aria-label={t('Waiting to join')}>{waiting.requests.length}</span>}
           </button>
+          {canHost && (
+            <button type="button" className="meeting-room__pill" onClick={() => setInviteOpen(true)} title={t('Invite people')} aria-label={t('Invite people')}>
+              <Icon name="link" size={15} />
+              <span className="meeting-room__pill-text">{t('Invite')}</span>
+            </button>
+          )}
           {room.isHost && (
             <button
               type="button"
@@ -431,6 +456,16 @@ export default function MeetingRoomShell({
       )}
 
       <div className="meeting-room__alerts">
+        {canHost && waiting.requests.length > 0 && !participantsOpen && (
+          <p className="meeting-room__alert is-info meeting-room__alert--wait" role="status">
+            <Icon name="users" size={15} />
+            <span>
+              <strong>{waiting.requests.length === 1 ? waiting.requests[0].display_label : waiting.requests.length}</strong> {t('waiting to join')}
+            </span>
+            <button type="button" className="meeting-room__alert-act" onClick={() => setOpenPanel('participants')}>{t('View')}</button>
+            <button type="button" className="meeting-room__alert-act is-primary" disabled={waiting.busyAll} onClick={waiting.admitAll}>{t('Admit All')}</button>
+          </p>
+        )}
         {noticeText(room.notice) && (
           <p className="meeting-room__alert is-info">
             <Icon name="info" size={15} />
@@ -485,6 +520,8 @@ export default function MeetingRoomShell({
           people={tiles.all}
           myRole={room.myRole}
           meetingLocked={room.meetingLocked}
+          waiting={canHost ? waiting : null}
+          onInvite={canHost ? () => setInviteOpen(true) : null}
           isOpen={participantsOpen}
           onClose={() => setOpenPanel(null)}
           onLockMeeting={(locked) => room.lockMeeting(locked)}
@@ -710,6 +747,10 @@ export default function MeetingRoomShell({
           </button>
         </div>
       </footer>
+
+      {inviteOpen && canHost && (
+        <InvitePanel title={meetingTitle} joinUrl={joinAppUrl} code={hostInfo && hostInfo.meeting_code} hasPassword={!!(hostInfo && hostInfo.has_password)} onClose={() => setInviteOpen(false)} />
+      )}
 
       {leaveOpen && (
         <div className="meeting-leave" role="dialog" aria-modal="true" aria-label={t('Leave Meeting')} onClick={() => !ending && setLeaveOpen(false)}>

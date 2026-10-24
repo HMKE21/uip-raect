@@ -436,4 +436,13 @@ export default {
   'Video, audio and screen sharing': 'فيديو وصوت ومشاركة شاشة',
   'Waiting room and password': 'غرفة انتظار وكلمة سر',
   'Invite by link or email': 'ادعُ بالرابط أو الإيميل',
+  'Invite people': 'دعوة أشخاص',
+  'Share this link to invite people': 'شارك الرابط ده عشان تدعو ناس للاجتماع',
+  'Copy link': 'نسخ الرابط',
+  'Share': 'مشاركة',
+  'Waiting to join': 'مستنيين الدخول',
+  'waiting to join': 'مستني الدخول',
+  'View': 'عرض',
+  'The link is not available yet.': 'الرابط مش متاح دلوقتي.',
+  'This meeting has a password — send it to them separately.': 'الاجتماع ليه كلمة سر — ابعتها لهم لوحدها.',
 };
