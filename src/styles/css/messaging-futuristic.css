@@ -242,6 +242,17 @@ html body .msg-app[data-wall="midnight"] {
   --glass-bg: rgba(160, 175, 255, .10); --msg-bubble-theirs: #1b2147; color-scheme: dark;
 }
 
+/* FIX (dark/light wallpaper text): the wallpaper redefines --text-primary / --bg-* on .msg-app,
+   but any text with no colour of its own (names, toggle labels, member rows...) inherits from <body>,
+   i.e. from the SITE theme -> dark text on graphite/midnight (and light text on light walls in dark mode).
+   Giving the app root its own colour makes every inheriting element follow the wallpaper's tokens. */
+html body .msg-app[data-wall] { color: var(--text-primary); }
+/* form controls don't inherit colour by default; zero-specificity so any component rule still wins */
+:where(.msg-app[data-wall]) :where(button, input, textarea, select) { color: inherit; }
+:where(.msg-app[data-wall]) :where(input, textarea)::placeholder { color: var(--text-secondary); opacity: .85; }
+/* secondary text on the two dark walls: keep it readable on the glass surfaces */
+html body .msg-app[data-wall="graphite"], html body .msg-app[data-wall="midnight"] { --text-secondary: color-mix(in srgb, var(--text-primary) 68%, transparent); }
+
 /* animated-background colours follow the theme */
 html body .msg-app[data-wall]:not([data-wall="dots"]) { --wall-a: rgba(var(--t1), .30); --wall-b: rgba(var(--t2), .24); --wall-d: rgba(var(--color-primary-rgb), .20); }
 
