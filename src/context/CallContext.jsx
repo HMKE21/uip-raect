@@ -62,6 +62,7 @@ function getUserMedia(opts = {}) {
     echoCancellation: true,
     noiseSuppression: noise,
     autoGainControl: true,
+    voiceIsolation: { ideal: noise }, // same constraint set the meeting room asks for
     channelCount: { ideal: 1 },
   };
   // 720p everywhere; the sender adapts down by itself when the link is weak.
@@ -267,7 +268,8 @@ export function CallProvider({ children }) {
         const el = audioRef.current;
         if (!el) return;
         // the echo gate listens to the remote voice (analysis only) to know when to close the mic
-        try { setRemoteAudio('call', track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null), receiver || null); } catch { /* optional */ }
+        // 1:1 calls never use the gate, so don't spin up an extra AudioContext + 60 ms getStats polling on the voice for nothing.
+        if (echoGateEnabled()) { try { setRemoteAudio('call', track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null), receiver || null); } catch { /* optional */ } }
         // Voice only: hand the <audio> a stream with just the audio track, so the video track riding in the same remote stream can never interfere.
         const src = track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null);
         const cur = el.srcObject;
