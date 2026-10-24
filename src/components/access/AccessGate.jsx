@@ -17,7 +17,9 @@ import './AccessGate.css';
  *  - the status is re-checked every 45 s while restricted, so an approval opens the app without a manual reload.
  * Every other role is untouched.
  */
-const OPEN_PATHS = /^\/(student\/(profile|notifications|settings)|auth\/)/;
+const OPEN_PATHS = /^\/(student\/(profile|notifications|settings)|auth\/|notifications|settings|[a-z_-]+\/(notifications|settings))/;
+// Security and data-analyst accounts are exempt unless an admin cancelled the exemption for that account (server decides).
+const GATED_ROLES = ['student', 'security_admin', 'security_officer', 'data_analyst'];
 
 export default function AccessGate({ children }) {
   const { status, user, logout } = useAuth();
@@ -29,7 +31,8 @@ export default function AccessGate({ children }) {
 
   const [st, setSt] = useState(null);
   const [notice, setNotice] = useState(null); // feature key that was refused
-  const isStudent = status === 'authenticated' && user?.role === 'student';
+  const isStudent = status === 'authenticated' && GATED_ROLES.includes(user?.role);
+  const isLearner = user?.role === 'student'; // only students can join a university
   const navAt = useRef(0); // when the person last navigated: only a refusal right after that is about what they opened
   useEffect(() => { navAt.current = Date.now(); }, [pathname]);
 
@@ -61,7 +64,7 @@ export default function AccessGate({ children }) {
   const nothing = restricted && !(st.allowed_features || []).length;
 
   if (nothing && !OPEN_PATHS.test(pathname)) {
-    return <LockedScreen st={st} ar={ar} t={t} onProfile={() => navigate('/student/profile')} onRefresh={load} onLogout={logout} onLocale={toggleLocale} />;
+    return <LockedScreen st={st} ar={ar} t={t} learner={isLearner} onProfile={() => navigate('/student/profile')} onRefresh={load} onLogout={logout} onLocale={toggleLocale} />;
   }
 
   return (
@@ -70,10 +73,12 @@ export default function AccessGate({ children }) {
       {restricted && (
         <div className="accgate__banner" role="status">
           <Icon name="lock" size={15} />
-          <span>{nothing
-            ? t('Your account is not linked to a university yet.', 'حسابك لسه مش مرتبط بجامعة.')
-            : t('Some features are locked until a university approves your account.', 'في مميزات مقفولة لحد ما جامعة توافق على حسابك.')}</span>
-          <Link to="/student/profile">{t('Join a university', 'انضم لجامعة')}</Link>
+          <span>{!isLearner
+            ? t('Your account access was restricted by an administrator.', 'الإدارة قيّدت صلاحية حسابك.')
+            : nothing
+              ? t('Your account is not linked to a university yet.', 'حسابك لسه مش مرتبط بجامعة.')
+              : t('Some features are locked until a university approves your account.', 'في مميزات مقفولة لحد ما جامعة توافق على حسابك.')}</span>
+          {isLearner && <Link to="/student/profile">{t('Join a university', 'انضم لجامعة')}</Link>}
         </div>
       )}
       {notice && (
@@ -96,7 +101,7 @@ export default function AccessGate({ children }) {
   );
 }
 
-function LockedScreen({ st, ar, t, onProfile, onRefresh, onLogout, onLocale }) {
+function LockedScreen({ st, ar, t, learner, onProfile, onRefresh, onLogout, onLocale }) {
   const req = st.request;
   const expired = (st.history || []).some((g) => g.state === 'expired');
   const pendingPay = (st.history || []).find((g) => g.state === 'pending');
@@ -104,20 +109,21 @@ function LockedScreen({ st, ar, t, onProfile, onRefresh, onLogout, onLocale }) {
     <main className="accgate">
       <div className="accgate__card">
         <div className="accgate__icon" aria-hidden="true"><Icon name="lock" size={34} /></div>
-        <h1 className="accgate__title">{t('Your account is waiting for approval', 'حسابك مستني الموافقة')}</h1>
-        <p className="accgate__desc">
+        <h1 className="accgate__title">{learner ? t('Your account is waiting for approval', 'حسابك مستني الموافقة') : t('Your account access was restricted', 'صلاحية حسابك اتقيّدت')}</h1>
+        {!learner && <p className="accgate__desc">{t('An administrator cancelled the exemption for this account, so it can no longer use the platform. Contact the admin to get access back.', 'الإدارة لغت الاستثناء عن الحساب ده، فمبقاش ينفع يستخدم المنصة. كلّم الإدارة عشان ترجّع الصلاحية.')}</p>}
+        {learner && <p className="accgate__desc">
           {t(
             'Your account is not linked to a university, so meetings, messages, projects and My PC are locked. A university or faculty has to approve you, or the admin can grant you access.',
             'حسابك مش مرتبط بجامعة، فالاجتماعات والرسائل والمشاريع وجهازي مقفولة. لازم جامعة أو كلية توافق عليك، أو الإدارة تديك صلاحية.'
           )}
-        </p>
-        {req?.status === 'pending' && <span className="accgate__state"><Icon name="clock" size={14} /> {t('Your join request is under review', 'طلب الانضمام بتاعك قيد المراجعة')}</span>}
-        {req?.status === 'rejected' && <span className="accgate__state accgate__state--rejected"><Icon name="x-circle" size={14} /> {t('Your last join request was declined — you can try another university', 'آخر طلب انضمام اترفض — تقدر تجرّب جامعة تانية')}</span>}
-        {!req && <span className="accgate__state"><Icon name="building" size={14} /> {t('You have not requested a university yet', 'لسه ماقدمتش على جامعة')}</span>}
+        </p>}
+        {learner && req?.status === 'pending' && <span className="accgate__state"><Icon name="clock" size={14} /> {t('Your join request is under review', 'طلب الانضمام بتاعك قيد المراجعة')}</span>}
+        {learner && req?.status === 'rejected' && <span className="accgate__state accgate__state--rejected"><Icon name="x-circle" size={14} /> {t('Your last join request was declined — you can try another university', 'آخر طلب انضمام اترفض — تقدر تجرّب جامعة تانية')}</span>}
+        {learner && !req && <span className="accgate__state"><Icon name="building" size={14} /> {t('You have not requested a university yet', 'لسه ماقدمتش على جامعة')}</span>}
         {expired && <p className="accgate__desc">{t('Your previous access has expired.', 'الصلاحية اللي كانت معاك خلصت.')}</p>}
         {pendingPay && <p className="accgate__desc">{t(`An access of ${pendingPay.price} ${pendingPay.currency} was approved for you and starts once the payment is confirmed.`, `اتوافق لك على صلاحية بمبلغ ${pendingPay.price} ${pendingPay.currency} وهتبدأ أول ما الدفع يتأكد.`)}</p>}
         <div className="accgate__actions">
-          <button type="button" className="btn btn-primary" onClick={onProfile}><Icon name="building" size={16} /> {req?.status === 'pending' ? t('View my request', 'شوف طلبي') : t('Choose a university', 'اختار جامعة')}</button>
+          {learner && <button type="button" className="btn btn-primary" onClick={onProfile}><Icon name="building" size={16} /> {req?.status === 'pending' ? t('View my request', 'شوف طلبي') : t('Choose a university', 'اختار جامعة')}</button>}
           <button type="button" className="btn btn-outline" onClick={onRefresh}><Icon name="refresh" size={16} /> {t('Check again', 'اتأكد تاني')}</button>
         </div>
         <div className="accgate__foot">
