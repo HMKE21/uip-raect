@@ -5,7 +5,7 @@ import SearchPanel from './SearchPanel';
 import Menu from './Menus';
 import RunPanel from './RunPanel';
 import SandboxPanel from './SandboxPanel';
-import { detectApps, defaultApp } from './runner/detectApps';
+import { detectApps, defaultApp, LANGS } from './runner/detectApps';
 import { useRunner } from './runner/useRunner';
 import { useSandbox } from './runner/useSandbox';
 import { useAiFix } from './ai/useAiFix';
@@ -840,6 +840,15 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     { label: tt('Upload folder…', 'رفع مجلد…'), icon: 'folder-up', onClick: () => pickUpload('dir', base) },
   ];
 
+  // "Run this file": open it, drop any earlier dropdown pick (which would override the file being looked at) and start it
+  const runnableFile = (path) => !!LANGS[extOf(path)] || /\.html?$/i.test(path);
+  const [pendingRun, setPendingRun] = useState(null);
+  const runThisFile = (path) => {
+    setPendingRun(path);
+    setRunChoice(null); runner.stop(); sandbox.reset();
+    openFile(path);
+  };
+
   const menuFor = (path) => {
     const base = dirOf(path);
     if (!path) return addItems('');
@@ -848,6 +857,7 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
       { label: tt('Open', 'فتح'), icon: 'file', onClick: () => openFile(path) },
       { label: tt('Download', 'تنزيل'), icon: 'download', onClick: () => downloadFile(path) },
       { label: tt('Duplicate', 'تكرار'), icon: 'copy', onClick: () => duplicateFile(path) },
+      ...(runnableFile(path) ? [{ label: tt('Run this file', 'تشغيل هذا الملف'), icon: 'play', onClick: () => runThisFile(path) }] : []),
     ];
     items.push({ sep: true });
     items.push({ label: tt('Rename', 'إعادة تسمية'), icon: 'edit', hint: 'F2', onClick: () => setDlg({ type: 'rename', path, value: baseName(path) }) });
@@ -944,6 +954,13 @@ export default function ZipWorkbench({ blob, fileName, tt, guardRef, onSave, pro
     if (skipped) flash(tt(`${skipped} large file(s) were left out of the run.`, `${skipped} ملف كبير اتستبعد من التشغيل.`));
     runner.run({ kind: runApp.kind, files, root: runApp.root, entry: runApp.entry, stdin: opts.stdin || '' });
   };
+  // run the file chosen with "Run this file" as soon as it leads the run list
+  useEffect(() => {
+    if (!pendingRun || active !== pendingRun || !runApp || !runApp.current) return;
+    setPendingRun(null);
+    startRun();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingRun, active, runApp]);
   // a refresh while a server was running: re-attach to it instead of uploading + installing everything again
   const resumedOnce = useRef(false);
   useEffect(() => {

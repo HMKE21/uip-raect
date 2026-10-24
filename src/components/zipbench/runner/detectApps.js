@@ -212,7 +212,9 @@ export function detectApps(allPaths, { activePath = null, readText = () => null,
     }
   }
   // ---- single files in any other language (the file you are looking at first, then the usual entry files) ----------
-  const hasHtmlNext = (p) => paths.some((q) => isHtml(q) && dirOf(q) === dirOf(p)); // a script next to an .html page belongs to that page
+  // a JavaScript/TypeScript file next to an .html page belongs to that page. Any other language (C#, Java, C++, Go …) is its own program:
+  // an .html report that merely sits in the same folder must not hide it (it used to, so a main.cs could never be picked)
+  const hasHtmlNext = (p) => JS_EXTS.includes(extOf(p)) && paths.some((q) => isHtml(q) && dirOf(q) === dirOf(p));
   const langApp = (p, current) => {
     const ext = extOf(p); const name = LANGS[ext];
     const { root, entry } = runRoot(p, readText);

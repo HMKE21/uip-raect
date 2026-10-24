@@ -175,3 +175,14 @@ test('single files: the extra languages (Zig, Nim, D, Ada, COBOL, Assembly, F#, 
     assert.equal(detectApps([f], { activePath: f, readText: read({}) })[0].kind, 'unsupported', `${f} without the sandbox`);
   }
 });
+
+test('a C# file next to an .html report is still runnable, and leads when it is the open file', () => {
+  const paths = ['report.html', 'main.cs'];
+  const idle = detectApps(paths, { sandbox: true });
+  assert.ok(idle.some((a) => a.id === 'lang:main.cs'), 'main.cs is offered');
+  const open = detectApps(paths, { sandbox: true, activePath: 'main.cs' });
+  assert.equal(open[0].id, 'lang:main.cs');
+  assert.equal(defaultApp(open).id, 'lang:main.cs');
+  // JS next to an .html page still belongs to that page
+  assert.deepEqual(detectApps(['a.html', 'app.js'], { sandbox: true }).map((a) => a.id), ['html:a.html']);
+});
