@@ -3,7 +3,8 @@ import { useBackLayer } from '../../lib/backStack';
 import { api, getTokens, errorMessage } from '../../api/client';
 import { attachmentUrl } from '../messaging/format';
 import Icon from '../Icon';
-import { saveBlob } from '../../lib/exporter';
+import { saveBlob, exportTable } from '../../lib/exporter';
+import ExportMenu from '../ExportMenu';
 import { RecorderBar, useVoiceRecorder } from './aiRecorder';
 import { AiAttachment, NoiseError, PendingFileChip, PendingMediaCard, TranscriptCard, denoiseAudioFile, hasSpeech, mediaKindOf, isTranscribable, splitTranscripts, transcribeFile, transcriptBlock, useAbortRegistry } from './aiMedia';
 
@@ -284,7 +285,7 @@ export default function AiAssistantWidget({ role, user }) {
     } else if (action === 'archive') {
       api.patch(`${API}/conversations/${c.id}`, { is_archived: !c.is_archived }).then(() => loadConversations(search));
     } else if (action === 'export') {
-      exportConversation(c.id);
+      // handled by the <ExportMenu> inside the menu
     } else if (action === 'delete') {
       // eslint-disable-next-line no-alert
       if (!confirm(t('confirmDelete'))) return;
@@ -295,16 +296,53 @@ export default function AiAssistantWidget({ role, user }) {
     }
   }
 
-  // Bearer-auth download — window.open() can't carry an Authorization
-  // header, so this follows the same fetch+blob pattern already used by
-  // AdminSecurityLogs.jsx's CSV export.
-  async function exportConversation(id) {
+  // Export one conversation in any format the platform supports (PDF / Excel / CSV / JSON / Markdown / text), each with a
+  // preview — ExportMenu runs this same routine for "preview" and intercepts the final save.
+  async function exportConversation(c, format, fileLang) {
+    const id = c.id;
+    const ar = (fileLang || locale) === 'ar';
     try {
-      const { accessToken } = getTokens();
-      const res = await fetch(`${API}/conversations/${id}/export`, {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      if (format === 'md' || format === 'txt') {
+        // the server already renders the conversation as Markdown
+        const { accessToken } = getTokens();
+        const res = await fetch(`${API}/conversations/${id}/export`, { headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {} });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        saveBlob(await res.blob(), `conversation-${id}.${format}`);
+        return;
+      }
+      const res = await api.get(`${API}/conversations/${id}`);
+      const msgs = ((res.data && res.data.messages) || []).filter((m) => (m.role === 'user' || m.role === 'assistant') && (m.content || '').trim());
+      if (!msgs.length) throw new Error('empty');
+      const who = (m) => (m.role === 'user' ? (ar ? 'أنت' : 'You') : 'UIP AI');
+      // very long answers are split over several rows so no PDF row is taller than a page
+      const CHUNK = 1100;
+      const plain = (txt) => String(txt).replace(/```[a-z0-9]*\n?/gi, '').replace(/[*_`#>]+/g, '').replace(/\n{3,}/g, '\n\n').trim();
+      const rows = [];
+      msgs.forEach((m) => {
+        const body = format === 'pdf' || format === 'csv' || format === 'xlsx' ? plain(m.content) : m.content;
+        if (format !== 'pdf' || body.length <= CHUNK) { rows.push([who(m), body, m.created_at || '']); return; }
+        const parts = [];
+        let rest = body;
+        while (rest.length > CHUNK) {
+          let cut = rest.lastIndexOf('\n', CHUNK);
+          if (cut < CHUNK * 0.5) cut = rest.lastIndexOf(' ', CHUNK);
+          if (cut < CHUNK * 0.5) cut = CHUNK;
+          parts.push(rest.slice(0, cut).trim());
+          rest = rest.slice(cut).trim();
+        }
+        if (rest) parts.push(rest);
+        parts.forEach((part, i) => rows.push([i === 0 ? who(m) : '', part, i === 0 ? (m.created_at || '') : '']));
       });
-      saveBlob(await res.blob(), `conversation-${id}.txt`);
+      await exportTable({
+        headers: ar ? ['المرسل', 'الرسالة', 'الوقت'] : ['From', 'Message', 'Time'],
+        rows,
+        format,
+        filename: `conversation-${id}`,
+        title: c.title || (ar ? 'محادثة' : 'Conversation'),
+        rtl: ar,
+        maxCell: 100000,
+        meta: [{ label: ar ? 'عدد الرسائل' : 'Messages', value: String(msgs.length) }],
+      });
     } catch {
       setBanner({ text: t('errorGeneric'), kind: 'error' });
     }
@@ -760,7 +798,7 @@ export default function AiAssistantWidget({ role, user }) {
               time={relTime(c, t, locale)}
               onOpenMenu={() => setOpenMenuId((id) => (id === c.id ? null : c.id))}
               selectMode={selectMode} selected={selected.has(c.id)}
-              onSelect={() => (selectMode ? toggleSelected(c.id) : openConversation(c.id))} onAction={(act) => convAction(c, act)} t={t} />
+              onSelect={() => (selectMode ? toggleSelected(c.id) : openConversation(c.id))} onAction={(act) => convAction(c, act)} onExport={exportConversation} t={t} />
           ))}
         </div>
       ))}
@@ -1023,7 +1061,7 @@ function AiBanner({ banner, t, onRetry }) {
   );
 }
 
-function ConvItem({ c, active, open, time, selectMode, selected, onOpenMenu, onSelect, onAction, t }) {
+function ConvItem({ c, active, open, time, selectMode, selected, onOpenMenu, onSelect, onAction, onExport, t }) {
   return (
     <div className={`ai-conv-item${active && !selectMode ? ' is-active' : ''}${selected ? ' is-selected' : ''}`} onClick={onSelect}>
       {selectMode
@@ -1045,7 +1083,7 @@ function ConvItem({ c, active, open, time, selectMode, selected, onOpenMenu, onS
         <button type="button" onClick={() => onAction('rename')}><Icon name="edit" size={14} />{t('rename')}</button>
         <button type="button" onClick={() => onAction('pin')}><Icon name="star" size={14} />{c.is_pinned ? t('unpin') : t('pin')}</button>
         <button type="button" onClick={() => onAction('archive')}><Icon name="archive" size={14} />{c.is_archived ? t('unarchive') : t('archive')}</button>
-        <button type="button" onClick={() => onAction('export')}><Icon name="download" size={14} />{t('exportChat')}</button>
+        <ExportMenu className="ai-conv-menu__export" iconSize={14} label={t('exportChat')} formats={['pdf', 'xlsx', 'csv', 'json', 'md', 'txt']} onExport={(format, lang) => onExport(c, format, lang)} />
         <button type="button" className="is-danger" onClick={() => onAction('delete')}><Icon name="trash" size={14} />{t('del')}</button>
       </div>
     </div>

@@ -154,7 +154,7 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
  * jsPDF's built-in fonts, so Arabic shaping and right-to-left tables come out
  * correctly. Rows are paginated by measured height, so no row is ever cut.
  */
-async function buildPdf(headers, rows, { title, rtl, meta = [] }) {
+async function buildPdf(headers, rows, { title, rtl, meta = [], maxCell = 220 }) {
   const [{ default: html2canvas }, { jsPDF }] = await Promise.all([import('html2canvas'), import('jspdf')]);
 
   const landscape = headers.length > 5;
@@ -201,14 +201,14 @@ async function buildPdf(headers, rows, { title, rtl, meta = [] }) {
   const font = getComputedStyle(document.body).fontFamily || 'sans-serif';
   const dir = rtl ? 'rtl' : 'ltr';
   const stamp = new Date().toLocaleString(loc, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const MAX_CELL = 220;
+  const MAX_CELL = maxCell;
   const cellStyle = (i, extra = '') => `${kinds[i] === 'text' ? 'text-align:start;unicode-bidi:plaintext;' : 'text-align:center;direction:ltr;font-variant-numeric:tabular-nums;'}${extra}`;
 
   const tableHtml = (list, withHead = true) => `
     <table style="width:100%;border-collapse:separate;border-spacing:0;table-layout:fixed;font-size:${FS}px;line-height:1.5;border:1px solid #D5DAF3;border-radius:10px;overflow:hidden">
       <colgroup>${weights.map((w) => `<col style="width:${((w / totalW) * 100).toFixed(2)}%">`).join('')}</colgroup>
       ${withHead ? `<thead><tr>${headers.map((h, i) => `<th style="background:#3B47D6;color:#fff;font-weight:700;padding:11px 10px;word-break:break-word;${cellStyle(i === -1 ? 0 : i).replace('direction:ltr;', '')}">${esc(h)}</th>`).join('')}</tr></thead>` : ''}
-      <tbody>${list.map((r, ri) => `<tr style="background:${ri % 2 ? '#F5F6FD' : '#fff'}">${r.map((v, i) => `<td style="padding:10px;border-top:1px solid #E6E9F7;vertical-align:middle;word-break:break-word;overflow-wrap:anywhere;color:#1F2433;${cellStyle(i)}">${esc(v.length > MAX_CELL ? `${v.slice(0, MAX_CELL)}…` : v)}</td>`).join('')}</tr>`).join('')}</tbody>
+      <tbody>${list.map((r, ri) => `<tr style="background:${ri % 2 ? '#F5F6FD' : '#fff'}">${r.map((v, i) => `<td style="padding:10px;border-top:1px solid #E6E9F7;vertical-align:middle;word-break:break-word;overflow-wrap:anywhere;white-space:pre-wrap;color:#1F2433;${cellStyle(i)}">${esc(v.length > MAX_CELL ? `${v.slice(0, MAX_CELL)}…` : v)}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>`;
 
   const chips = meta.filter((m) => m && m.value !== undefined && m.value !== '')
@@ -275,7 +275,7 @@ async function buildPdf(headers, rows, { title, rtl, meta = [] }) {
  * @param {boolean} [o.rtl]       defaults to the page direction
  * @param {{label:string,value:string}[]} [o.meta]  summary chips shown under the PDF title
  */
-export async function exportTable({ headers, rows, format = 'csv', filename = 'export', title, rtl = isRtl(), meta }) {
+export async function exportTable({ headers, rows, format = 'csv', filename = 'export', title, rtl = isRtl(), meta, maxCell }) {
   if (!FORMAT_META[format]) throw new Error(`Unsupported export format: ${format}`);
   const safeHeaders = (headers || []).map(cellText);
   const safeRows = rows || [];
@@ -283,7 +283,7 @@ export async function exportTable({ headers, rows, format = 'csv', filename = 'e
   if (format === 'csv') blob = new Blob([toCsv(safeHeaders, safeRows)], { type: FORMAT_META.csv.mime });
   else if (format === 'json') blob = buildJson(safeHeaders, safeRows);
   else if (format === 'xlsx') blob = await buildXlsx(safeHeaders, safeRows, { title: title || filename, rtl });
-  else blob = await buildPdf(safeHeaders, safeRows, { title: title || filename, rtl, meta });
+  else blob = await buildPdf(safeHeaders, safeRows, { title: title || filename, rtl, meta, maxCell });
   saveBlob(blob, withExtension(filename, format));
 }
 

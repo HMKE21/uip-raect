@@ -189,3 +189,9 @@ html body .ai-fab { background: var(--ai-grad, linear-gradient(135deg, #5b6cff, 
   html body .ai-panel__title-text small { display: none; }
   html body .ai-panel .ai-avatar { width: 30px; height: 30px; }
 }
+
+/* ---- Export from the chat list: the format picker and the preview must sit above the assistant panel (z-index 650) ---- */
+body:has(.ai-panel.is-open) .export-menu { z-index: 720; }
+body:has(.ai-panel.is-open) .modal-overlay { z-index: 730 !important; }
+.ai-conv-menu__export { justify-content: flex-start; }
+.ai-conv-menu__export > svg:last-child { margin-inline-start: auto; opacity: .6; }
