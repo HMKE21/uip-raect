@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBackLayer } from '../../../lib/backStack';
 import { useMeetingRoom, meetingLog } from '../../../hooks/useMeetingRoom';
 import ParticipantTile from './ParticipantTile';
+import { ReactionLayer } from './ReactionFx';
 import { CAMERA_FILTERS, CAMERA_BACKGROUNDS, scenePreview } from '../../../lib/cameraFx';
 import ChatPanel from './ChatPanel';
 import ParticipantsPanel from './ParticipantsPanel';
@@ -129,6 +130,9 @@ export default function MeetingRoomShell({
       await room.setCameraLook({ ...room.cameraLook, background: 'custom', image: fxImageRef.current });
     } catch { /* unreadable image: keep the current look */ } finally { setFxBusy(null); }
   }
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [endError, setEndError] = useState(null);
   const dockRef = useRef(null);
   const [elapsed, setElapsed] = useState('00:00');
   useEffect(() => {
@@ -217,9 +221,28 @@ export default function MeetingRoomShell({
   );
 
   function handleLeave() {
-    if (!window.confirm(t('Are you sure you want to leave the meeting?'))) return;
+    setMoreOpen(false); setReactionsOpen(false); setFxOpen(false);
+    setLeaveOpen(true);
+  }
+  /** Leave only (everyone else stays in the call). */
+  function confirmLeave() {
+    setLeaveOpen(false);
     room.leave();
     onLeave?.();
+  }
+  /** Host / co-host: close the meeting for every participant, then leave. */
+  async function confirmEndForAll() {
+    setEnding(true);
+    setEndError(null);
+    try {
+      await room.endMeetingForAll();
+      setLeaveOpen(false);
+      onLeave?.();
+    } catch (err) {
+      setEndError(err?.message || t('Could not end the meeting. Please try again.'));
+    } finally {
+      setEnding(false);
+    }
   }
 
   if (room.status === 'error') {
@@ -290,7 +313,7 @@ export default function MeetingRoomShell({
       return `${t('You were muted by the host.')}${notice.by ? ` (${notice.by})` : ''}`;
     }
     if (notice.type === 'echo_detected') return t('Audio feedback detected — another device nearby is looping your voice, so your mic was muted. Use headphones, or turn Speakers off in More if you are in the same room as them.');
-    if (notice.type === 'effect_unavailable') return t("Backgrounds and blur couldn't load (they need an internet connection to download their model). Colour filters still work.");
+    if (notice.type === 'effect_unavailable') return t("Backgrounds and blur couldn't load. Colour filters still work.");
     if (notice.type === 'camera_unavailable') return t("Couldn't open a camera. Check the browser's camera permission and that no other app is using it.");
     if (notice.type === 'screen_share_unsupported') return t("This browser can't share your screen.");
     if (notice.type === 'screen_share_failed') return t('Screen sharing could not start. Please try again.');
@@ -298,6 +321,19 @@ export default function MeetingRoomShell({
       return `${t('Your camera was turned off by the host.')}${notice.by ? ` (${notice.by})` : ''}`;
     }
     return null;
+  }
+
+  if (room.meetingStatus === 'ended') {
+    return (
+      <div className="meeting-room" data-room-theme={roomTheme} style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 'var(--space-6)' }}>
+        <Icon name="check-circle" size={32} />
+        <p className="text-h3" style={{ margin: 'var(--space-3) 0 var(--space-2)' }}>{t('This meeting has ended.')}</p>
+        <p className="text-small" style={{ color: 'var(--mr-muted)' }}>{t('The host ended the meeting for everyone.')}</p>
+        <button type="button" className="btn btn-outline" style={{ marginTop: 'var(--space-3)' }} onClick={() => onLeave?.()}>
+          {t('Back to My Meetings')}
+        </button>
+      </div>
+    );
   }
 
   if (room.kicked) {
@@ -442,16 +478,7 @@ export default function MeetingRoomShell({
             </>
           ) : tiles.all.map(renderTile)}
 
-          {room.reactions.length > 0 && (
-            <div className="meeting-room__reactions-overlay">
-              {room.reactions.map((r) => (
-                <span key={r.id} className="meeting-room__floating-reaction">
-                  <span className="meeting-room__floating-emoji">{r.emoji || '👍'}</span>
-                  <span className="meeting-room__floating-name">{r.key === myKey ? t('You') : r.displayName}</span>
-                </span>
-              ))}
-            </div>
-          )}
+          <ReactionLayer reactions={room.reactions} myKey={myKey} youLabel={t('You')} />
         </div>
 
         <ParticipantsPanel
@@ -645,29 +672,30 @@ export default function MeetingRoomShell({
                 onClick={() => { setMoreOpen((v) => !v); setReactionsOpen(false); }}
               />
               {moreOpen && (
-                <div className="meeting-room__menu" role="menu">
+                <div className="meeting-room__menu meeting-room__more" role="menu">
                   <button type="button" role="menuitem" className="meeting-room__menu-item show-sm" onClick={() => { togglePanel('participants'); setMoreOpen(false); }}>
-                    <Icon name="users" size={16} /> {t('Participants')}
+                    <Icon name="users" size={16} /><span className="meeting-room__menu-text">{t('Participants')}</span>
                   </button>
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={() => { togglePanel('files'); setMoreOpen(false); }}>
-                    <Icon name="file" size={16} /> {t('Files')}
+                    <Icon name="file" size={16} /><span className="meeting-room__menu-text">{t('Files')}</span>
                   </button>
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={() => { togglePanel('notes'); setMoreOpen(false); }}>
-                    <Icon name="note" size={16} /> {t('Notes & Action Items')}
+                    <Icon name="note" size={16} /><span className="meeting-room__menu-text">{t('Notes & Action Items')}</span>
                   </button>
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={() => { togglePanel('polls'); setMoreOpen(false); }}>
-                    <Icon name="bar-chart" size={16} /> {t('Polls')}
-                  </button>
-                  <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={room.toggleNoise} aria-pressed={room.noiseOn}>
-                    <Icon name="mic" size={16} /> {t('Noise isolation')}
-                    <span className="badge badge-neutral" style={{ marginInlineStart: 'auto' }}>{room.noiseOn ? t('On') : t('Off')}</span>
-                  </button>
-                  <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={room.toggleSpeakers} aria-pressed={room.speakersMuted} title={t('Turn off if another participant is sitting next to you')}>
-                    <Icon name="volume" size={16} /> {t('Speakers off (same room)')}
-                    <span className="badge badge-neutral" style={{ marginInlineStart: 'auto' }}>{room.speakersMuted ? t('On') : t('Off')}</span>
+                    <Icon name="bar-chart" size={16} /><span className="meeting-room__menu-text">{t('Polls')}</span>
                   </button>
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={() => { togglePanel('recordings'); setMoreOpen(false); }}>
-                    <Icon name="record-dot" size={16} style={room.activeRecording ? { color: '#ef4444' } : undefined} /> {t('Recordings')}
+                    <Icon name="record-dot" size={16} style={room.activeRecording ? { color: '#ef4444' } : undefined} /><span className="meeting-room__menu-text">{t('Recordings')}</span>
+                  </button>
+                  <div className="meeting-room__menu-sep" role="separator" />
+                  <button type="button" role="menuitemcheckbox" aria-checked={!!room.noiseOn} className="meeting-room__menu-item" onClick={room.toggleNoise}>
+                    <Icon name="mic" size={16} /><span className="meeting-room__menu-text">{t('Noise isolation')}</span>
+                    <span className={`meeting-room__switch ${room.noiseOn ? 'is-on' : ''}`} aria-hidden="true"><i /></span>
+                  </button>
+                  <button type="button" role="menuitemcheckbox" aria-checked={!!room.speakersMuted} className="meeting-room__menu-item" onClick={room.toggleSpeakers} title={t('Turn off if another participant is sitting next to you')}>
+                    <Icon name="volume" size={16} /><span className="meeting-room__menu-text">{t('Speakers off (same room)')}</span>
+                    <span className={`meeting-room__switch ${room.speakersMuted ? 'is-on' : ''}`} aria-hidden="true"><i /></span>
                   </button>
                 </div>
               )}
@@ -682,6 +710,27 @@ export default function MeetingRoomShell({
           </button>
         </div>
       </footer>
+
+      {leaveOpen && (
+        <div className="meeting-leave" role="dialog" aria-modal="true" aria-label={t('Leave Meeting')} onClick={() => !ending && setLeaveOpen(false)}>
+          <div className="meeting-leave__box" onClick={(e) => e.stopPropagation()}>
+            <h3>{t('Leave Meeting')}</h3>
+            <p>{room.isManager ? t('You can leave and let the others carry on, or end the meeting for everyone.') : t('Are you sure you want to leave the meeting?')}</p>
+            {endError && <p className="form-error">{endError}</p>}
+            <div className="meeting-leave__actions">
+              {room.isManager && (
+                <button type="button" className="meeting-leave__btn is-danger" disabled={ending} onClick={confirmEndForAll}>
+                  <Icon name="x-circle" size={16} /> {ending ? t('Ending…') : t('End meeting for everyone')}
+                </button>
+              )}
+              <button type="button" className={`meeting-leave__btn ${room.isManager ? '' : 'is-danger'}`} disabled={ending} onClick={confirmLeave}>
+                <Icon name="logout" size={16} /> {room.isManager ? t('Leave, keep meeting open') : t('Leave')}
+              </button>
+              <button type="button" className="meeting-leave__btn is-ghost" disabled={ending} onClick={() => setLeaveOpen(false)}>{t('Cancel')}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -39,7 +39,7 @@ const dict = {
 export const MAX_ROWS = 200;
 const MAX_PDF_PAGES = 60;
 const MAX_TEXT = 200000;
-const TEXT_EXT = ['json', 'xml', 'txt', 'md', 'log', 'html', 'htm', 'yml', 'yaml', 'sql', 'swift', 'm', 'mm', 'vb', 'scala', 'ex', 'exs', 'erl', 'fs', 'fsx', 'ml', 'clj', 'lisp', 'lsp', 'cob', 'cbl', 'asm', 'nasm', 'dpr', 'bas', 'cls', 'frm', 'ps1', 'sol', 'abap', 'sas', 'plsql', 'pls', 'tsql', 'pro', 'adb', 'ads', 'v', 'zig', 'groovy', 'gvy', 'kts', 'scm', 'rkt'];
+export const TEXT_EXT = ['json', 'xml', 'txt', 'md', 'log', 'html', 'htm', 'yml', 'yaml', 'sql', 'swift', 'm', 'mm', 'vb', 'scala', 'ex', 'exs', 'erl', 'fs', 'fsx', 'ml', 'clj', 'lisp', 'lsp', 'cob', 'cbl', 'asm', 'nasm', 'dpr', 'bas', 'cls', 'frm', 'ps1', 'sol', 'abap', 'sas', 'plsql', 'pls', 'tsql', 'pro', 'adb', 'ads', 'v', 'zig', 'groovy', 'gvy', 'kts', 'scm', 'rkt'];
 const IMG_EXT = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'];
 
 export const extOf = (name) => (/\.([a-z0-9]+)(?:[?#].*)?$/i.exec(String(name || '')) || [])[1]?.toLowerCase() || '';

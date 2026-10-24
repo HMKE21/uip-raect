@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Icon from '../../Icon';
-import { BlobPreviewModal, extOf } from '../../FilePreviewButton';
+import { BlobPreviewModal, extOf, TEXT_EXT } from '../../FilePreviewButton';
 import { useTranslations } from '../../../context/LanguageContext';
 import i18nCommon from '../../../i18n/common';
 import i18nMeetings from '../../../i18n/shared/meetings';
@@ -11,6 +11,8 @@ const translations = { ...i18nCommon, ...i18nMeetings };
 const IMG = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'ico'];
 const VID = ['mp4', 'webm', 'mov', 'm4v', 'ogv'];
 const AUD = ['mp3', 'wav', 'ogg', 'm4a', 'aac', 'oga', 'opus', 'weba'];
+
+const INSPECTABLE = ['pdf', 'csv', 'xlsx', 'docx', ...TEXT_EXT];
 
 /** image | video | audio | file — by extension first, then by mime type. */
 export function fileKind(file) {
@@ -58,19 +60,22 @@ export default function MeetingFilePreview({ file, onClose }) {
   const url = sameOriginUrl(file.download_url);
   const name = file.original_name || file.name || 'file';
   const kind = fileKind(file);
+  const ext = (file?.extension || extOf(name) || '').toLowerCase();
+  // only download the bytes for types the previewer can actually render (a 200 MB zip is not fetched just to say "no preview")
+  const inspectable = kind === 'file' && INSPECTABLE.includes(ext);
   const [blob, setBlob] = useState(null);
   const [err, setErr] = useState(null);
 
   // documents / sheets / text / PDF go through the platform's own previewer (pdf.js canvas, mammoth, table view…) which needs the bytes
   useEffect(() => {
-    if (kind !== 'file') return undefined;
+    if (!inspectable) return undefined;
     let cancelled = false;
     fetch(url, { credentials: 'omit' })
       .then((res) => { if (!res.ok) throw new Error(`Request failed (${res.status})`); return res.blob(); })
       .then((b) => { if (!cancelled) setBlob(b); })
       .catch((e) => { if (!cancelled) setErr(e?.message || 'Could not load this file.'); });
     return () => { cancelled = true; };
-  }, [kind, url]);
+  }, [inspectable, url]);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -78,7 +83,7 @@ export default function MeetingFilePreview({ file, onClose }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  if (kind === 'file' && blob) {
+  if (inspectable && blob) {
     return <BlobPreviewModal blob={blob} filename={name} title={name} onClose={onClose} />;
   }
 
@@ -95,9 +100,14 @@ export default function MeetingFilePreview({ file, onClose }) {
           {kind === 'image' && <img src={url} alt={name} />}
           {kind === 'video' && <video src={url} controls autoPlay playsInline />}
           {kind === 'audio' && <audio src={url} controls autoPlay />}
-          {kind === 'file' && !err && <p className="meeting-preview__msg">{t('Loading…')}</p>}
-          {kind === 'file' && err && (
-            <p className="meeting-preview__msg">{err}</p>
+          {inspectable && !err && <p className="meeting-preview__msg">{t('Loading…')}</p>}
+          {inspectable && err && <p className="meeting-preview__msg">{err}</p>}
+          {kind === 'file' && !inspectable && (
+            <div className="meeting-preview__msg">
+              <Icon name="file" size={36} />
+              <p>{t('Preview is not available for this file type in the browser. Download it to open it.')}</p>
+              <a className="btn btn-primary" href={url} download={name}><Icon name="download" size={16} /> {t('Download')}</a>
+            </div>
           )}
         </div>
       </div>

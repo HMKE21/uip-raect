@@ -1082,8 +1082,9 @@ export function useMeetingRoom({
   // ---- بند 5 — once we're removed, tear down media/peers/sockets right
   // away instead of waiting for MeetingRoomShell to unmount us (it keeps
   // rendering the hook's owner while it shows the "removed" screen).
+  const meetingEnded = meetingStatus === 'ended';
   useEffect(() => {
-    if (!kicked) return;
+    if (!kicked && !meetingEnded) return;
     Object.keys(peersRef.current).forEach(closePeer);
     echoRef.current?.leave(presenceChannelName(meetingUuid));
     echoRef.current?.leave(personalChannelName(meetingUuid, myKey));
@@ -1096,7 +1097,7 @@ export function useMeetingRoom({
     localStreamRef.current = null;
     setLocalStream(null);
     teardownLocalRecorder();
-  }, [kicked, meetingUuid, myKey, closePeer, teardownLocalRecorder]);
+  }, [kicked, meetingEnded, meetingUuid, myKey, closePeer, teardownLocalRecorder]);
 
   // ---- heartbeat --------------------------------------------------------
   useEffect(() => {

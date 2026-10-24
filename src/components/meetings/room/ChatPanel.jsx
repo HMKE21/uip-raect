@@ -3,6 +3,7 @@ import Icon from '../../Icon';
 import { useTranslations } from '../../../context/LanguageContext';
 import i18nCommon from '../../../i18n/common';
 import i18nMeetings from '../../../i18n/shared/meetings';
+import MeetingFilePreview, { fileKind, fileIcon, formatSize, sameOriginUrl } from './MeetingFilePreview';
 
 const translations = { ...i18nCommon, ...i18nMeetings };
 
@@ -44,6 +45,11 @@ export default function ChatPanel({
   const [sendError, setSendError] = useState(null);
   const [sending, setSending] = useState(false);
   const [showJump, setShowJump] = useState(false);
+  const [picked, setPicked] = useState(null); // file waiting to be sent with the next message
+  const [previewFile, setPreviewFile] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [pickedUrl, setPickedUrl] = useState(null);
+  const fileInputRef = useRef(null);
   const listRef = useRef(null);
   const inputRef = useRef(null);
   const stickRef = useRef(true); // true while the reader is at (or near) the bottom — only then do new messages auto-scroll
@@ -81,6 +87,14 @@ export default function ChatPanel({
     el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [body, isOpen]);
 
+  // thumbnail of the picked image
+  useEffect(() => {
+    if (!picked || !picked.type?.startsWith('image/')) { setPickedUrl(null); return undefined; }
+    const url = URL.createObjectURL(picked);
+    setPickedUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [picked]);
+
   if (!isOpen) return null;
 
   const nameFor = (key) => recipientOptions.find((p) => p.key === key)?.displayName || key;
@@ -99,13 +113,32 @@ export default function ChatPanel({
     if (atBottom) setShowJump(false);
   }
 
+  function pickFile(file) {
+    if (!file) return;
+    setSendError(null);
+    setPicked(file);
+    inputRef.current?.focus();
+  }
+
+  function handlePaste(e) {
+    const f = Array.from(e.clipboardData?.files || [])[0];
+    if (f) { e.preventDefault(); pickFile(f); }
+  }
+
+  function handleDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    pickFile(Array.from(e.dataTransfer?.files || [])[0]);
+  }
+
   async function submit() {
-    if (!body.trim() || sending) return;
+    if ((!body.trim() && !picked) || sending) return;
     setSending(true);
     setSendError(null);
     try {
-      await onSend(body, { recipientKey: recipientKey || null });
+      await onSend(body, { recipientKey: recipientKey || null, file: picked || null });
       setBody('');
+      setPicked(null);
       stickRef.current = true;
     } catch (err) {
       setSendError(err?.message || t('Could not send this message.'));
@@ -143,7 +176,13 @@ export default function ChatPanel({
   });
 
   return (
-    <div className="meeting-chat-panel">
+    <div
+      className={`meeting-chat-panel ${dragOver ? 'is-dragover' : ''}`}
+      onDragOver={(e) => { if (enabled && Array.from(e.dataTransfer?.types || []).includes('Files')) { e.preventDefault(); setDragOver(true); } }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false); }}
+      onDrop={enabled ? handleDrop : undefined}
+    >
+      {dragOver && <div className="meeting-chat-panel__drop"><Icon name="upload" size={22} /> {t('Drop a file to share it')}</div>}
       <div className="meeting-chat-panel__header">
         <span className="meeting-chat-panel__header-ico" aria-hidden="true"><Icon name="message-square" size={16} /></span>
         <strong>{t('Chat')}</strong>
@@ -197,7 +236,8 @@ export default function ChatPanel({
                 )}
 
                 <div className="meeting-chat-msg__bubble-wrap">
-                  <div className="meeting-chat-msg__body" dir="auto">{m.body}</div>
+                  {(m.body || !m.attachment) && <div className="meeting-chat-msg__body" dir="auto">{m.body}</div>}
+                  {m.attachment && <ChatAttachment file={m.attachment} onOpen={() => setPreviewFile(m.attachment)} t={t} />}
                   <div className="meeting-chat-msg__quick-react" role="group" aria-label={t('React')}>
                     {QUICK_REACTIONS.map((emoji) => (
                       <button key={emoji} type="button" onClick={() => onReact(m.id, emoji)} title={t('React')}>{emoji}</button>
@@ -251,7 +291,19 @@ export default function ChatPanel({
             </div>
           )}
 
+          {picked && (
+            <div className="meeting-chat-panel__picked">
+              {pickedUrl ? <img src={pickedUrl} alt="" /> : <span className="meeting-chat-panel__picked-ico"><Icon name={fileIcon({ name: picked.name, mime_type: picked.type })} size={18} /></span>}
+              <span className="meeting-chat-panel__picked-name" dir="auto" title={picked.name}>{picked.name}<em>{formatSize(picked.size)}</em></span>
+              <button type="button" onClick={() => setPicked(null)} title={t('Remove')} aria-label={t('Remove')}><Icon name="x" size={14} /></button>
+            </div>
+          )}
+
           <div className="meeting-chat-panel__field">
+            <input ref={fileInputRef} type="file" hidden onChange={(e) => { pickFile(e.target.files && e.target.files[0]); e.target.value = ''; }} />
+            <button type="button" className="meeting-chat-panel__attach" onClick={() => fileInputRef.current?.click()} disabled={sending} title={t('Attach a file')} aria-label={t('Attach a file')}>
+              <Icon name="paperclip" size={17} />
+            </button>
             <textarea
               ref={inputRef}
               rows={1}
@@ -260,9 +312,10 @@ export default function ChatPanel({
               value={body}
               onChange={(e) => setBody(e.target.value)}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               maxLength={4000}
             />
-            <button type="submit" className="meeting-chat-panel__send" disabled={sending || !body.trim()} title={t('Send')} aria-label={t('Send')}>
+            <button type="submit" className="meeting-chat-panel__send" disabled={sending || (!body.trim() && !picked)} title={t('Send')} aria-label={t('Send')}>
               <Icon name="send" size={16} />
             </button>
           </div>
@@ -272,6 +325,39 @@ export default function ChatPanel({
           <Icon name="lock" size={13} /> {t('Chat is disabled for this meeting.')}
         </p>
       )}
+
+      {previewFile && <MeetingFilePreview file={previewFile} onClose={() => setPreviewFile(null)} />}
+    </div>
+  );
+}
+
+/** A file shared in the chat: images / video / audio show inline, everything else is a file card. Click opens the full preview. */
+function ChatAttachment({ file, onOpen, t }) {
+  const kind = fileKind(file);
+  const url = sameOriginUrl(file.download_url);
+  const name = file.original_name || 'file';
+  if (kind === 'image') {
+    return (
+      <button type="button" className="meeting-chat-att is-image" onClick={onOpen} title={name}>
+        <img src={url} alt={name} loading="lazy" />
+      </button>
+    );
+  }
+  if (kind === 'video') {
+    return (
+      <button type="button" className="meeting-chat-att is-image is-video" onClick={onOpen} title={name}>
+        <video src={url} preload="metadata" muted playsInline />
+        <span className="meeting-chat-att__play"><Icon name="play" size={28} /></span>
+      </button>
+    );
+  }
+  return (
+    <div className="meeting-chat-att is-file">
+      <button type="button" className="meeting-chat-att__main" onClick={onOpen} title={t('Preview')}>
+        <span className="meeting-chat-att__ico"><Icon name={fileIcon(file)} size={20} /></span>
+        <span className="meeting-chat-att__name" dir="auto">{name}<em>{formatSize(file.size_bytes)}</em></span>
+      </button>
+      <a className="meeting-chat-att__dl" href={url} download={name} title={t('Download')} aria-label={t('Download')}><Icon name="download" size={16} /></a>
     </div>
   );
 }

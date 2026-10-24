@@ -172,7 +172,7 @@ const PATHS = {
   'file-up': '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5Z"/><path d="M14 3v5h5"/><path d="M12 18v-6M9 14.5l3-3 3 3"/>',
   'folder-up': '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M12 17v-6M9 13.5l3-3 3 3"/>',
   'collapse-all': '<path d="m7 4 5 5 5-5"/><path d="m7 20 5-5 5 5"/>',
-  'message-square': '<path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5A8.5 8.5 0 1 1 21 11.5Z"/>',
+  'message-square': '<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z"/><path d="M8.5 11h7M8.5 14h4"/>',
   'ed-triangle': '<path d="M12 4 21 20H3z"/>',
   'ed-diamond': '<path d="M12 3 21 12 12 21 3 12z"/>',
   'ed-star': '<path d="m12 3 2.7 5.8 6.3.8-4.6 4.4 1.2 6.3L12 17.2 6.4 20.3l1.2-6.3L3 9.6l6.3-.8z"/>',

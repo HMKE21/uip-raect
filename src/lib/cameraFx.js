@@ -283,7 +283,7 @@ export function createCameraFx(rawTrack) {
     } catch { /* keep the last value */ }
   }
 
-  function drawFiltered(c) {
+  function drawFiltered(c, extraCss = '') {
     frameNo += 1;
     let css = filter.css || '';
     if (filter.auto) {
@@ -291,10 +291,11 @@ export function createCameraFx(rawTrack) {
       const gain = 1 + (autoGain - 1) * filter.auto;
       css = `${css} brightness(${gain.toFixed(3)})`.trim();
     }
+    css = `${css} ${extraCss}`.trim();
     c.filter = css || 'none';
     c.drawImage(video, 0, 0, W, H);
     c.filter = 'none';
-    if (filter.soften) {
+    if (filter.soften && !extraCss) {
       c.globalAlpha = 0.45;
       c.filter = 'blur(2.5px) brightness(1.04)';
       c.drawImage(video, 0, 0, W, H);
@@ -318,7 +319,8 @@ export function createCameraFx(rawTrack) {
 
     if (wantsBg && segmenter && haveMask) {
       // 1) the new background
-      if (bg.blur) { ctx.filter = `blur(${bg.blur}px)`; ctx.drawImage(video, 0, 0, W, H); ctx.filter = 'none'; }
+      // (blurred backdrop gets the colour filter too, otherwise a B&W / warm look would only apply to the person)
+      if (bg.blur) drawFiltered(ctx, `blur(${bg.blur}px)`);
       else ctx.drawImage(bgCanvas, 0, 0, W, H);
       // 2) the person (filtered camera frame cut out with the soft mask)
       pctx.globalCompositeOperation = 'source-over';

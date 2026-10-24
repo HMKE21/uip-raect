@@ -35,6 +35,20 @@ const STATUS_POLL_MS = 3000;
  * screen instead, holding onto the guest_token this call issued (Round 3's
  * signaling group needs it) in sessionStorage keyed by the join token.
  */
+/**
+ * The actor key the server uses for a guest is `guest:<join_request_id>` (MeetingSignalingService::resolveActor), and that id is
+ * inside the guest token (a JWT). The old code used `guest:<whole token>`, so presence / WebRTC signalling / "is this message mine"
+ * never matched the server's key for guests.
+ */
+function guestKeyFromToken(token) {
+  try {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = JSON.parse(decodeURIComponent(escape(atob(payload.padEnd(Math.ceil(payload.length / 4) * 4, '=')))));
+    if (json && json.join_request_id) return `guest:${json.join_request_id}`;
+  } catch { /* fall through */ }
+  return `guest:${token}`;
+}
+
 export default function MeetingPreJoin() {
   const { joinToken } = useParams();
   const t = useTranslations(translations);
@@ -267,7 +281,12 @@ export default function MeetingPreJoin() {
       navigate(`/${portalPrefix(user.role)}/meetings/${info.meeting.uuid}`, { replace: true });
       return;
     }
-    if (token) sessionStorage.setItem(`uip_meeting_guest_token_${joinToken}`, token);
+    if (token) {
+      sessionStorage.setItem(`uip_meeting_guest_token_${joinToken}`, token);
+      // a guest who was let straight in (no waiting room) never went through setGuestToken — without it the room opened with
+      // no identity and showed "You haven't joined this meeting yet".
+      setGuestToken(token);
+    }
     setPhase('admitted');
   }
 
@@ -468,7 +487,7 @@ export default function MeetingPreJoin() {
           meetingUuid={info.meeting.uuid}
           meetingTitle={info.meeting.title}
           guestToken={guestToken}
-          myKey={guestToken ? `guest:${guestToken}` : `user:${user?.id}`}
+          myKey={guestToken ? guestKeyFromToken(guestToken) : `user:${user?.id}`}
           myDisplayName={displayName || user?.full_name || user?.email || t('Guest')}
           deviceDefaults={info.device_defaults}
           // Round 5 — a not-yet-admitted guest's own preJoinInfo() doesn't

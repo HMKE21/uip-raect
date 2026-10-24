@@ -707,3 +707,75 @@ a.meeting-files-panel__name:hover { text-decoration: underline; }
 .meeting-preview__body img, .meeting-preview__body video { max-width: 100%; max-height: 74vh; border-radius: 8px; }
 .meeting-preview__body audio { width: min(480px, 100%); }
 .meeting-preview__msg { margin: 24px; opacity: 0.8; }
+
+/* ---- "More" menu: one clean list — icon, label that wraps nicely, and a real on/off switch instead of a text badge ---- */
+.meeting-room__more { min-width: 260px; max-width: min(320px, calc(100vw - 24px)); }
+.meeting-room__menu-text { flex: 1; min-width: 0; line-height: 1.35; overflow-wrap: anywhere; }
+.meeting-room__more .meeting-room__menu-item { padding: 10px 12px; }
+.meeting-room__more .meeting-room__menu-item svg { flex-shrink: 0; }
+.meeting-room__menu-sep { height: 1px; margin: 6px 8px; background: var(--mr-line); flex-shrink: 0; }
+.meeting-room__switch {
+  position: relative; flex-shrink: 0; width: 36px; height: 20px; border-radius: 999px; background: var(--mr-fill-3);
+  transition: background 140ms ease;
+}
+.meeting-room__switch i {
+  position: absolute; top: 2px; inset-inline-start: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35); transition: inset-inline-start 140ms ease;
+}
+.meeting-room__switch.is-on { background: var(--mr-primary); }
+.meeting-room__switch.is-on i { inset-inline-start: 18px; }
+
+/* ---- leave dialog (leave only / end for everyone) ---- */
+.meeting-leave { position: fixed; inset: 0; z-index: 650; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.55); }
+.meeting-leave__box {
+  width: min(420px, 100%); padding: 22px; border-radius: 18px; background: var(--mr-surface-2); color: var(--mr-text);
+  border: 1px solid var(--mr-line-strong); box-shadow: 0 24px 64px var(--mr-shadow); display: flex; flex-direction: column; gap: 10px;
+}
+.meeting-leave__box h3 { margin: 0; font-size: 18px; }
+.meeting-leave__box p { margin: 0; font-size: 13.5px; line-height: 1.6; color: var(--mr-muted); }
+.meeting-leave__actions { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.meeting-leave__btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 12px;
+  border: 1px solid var(--mr-line-strong); background: var(--mr-fill-2); color: var(--mr-text); font: inherit; font-weight: 700; font-size: 14px;
+  cursor: var(--cur-pointer, pointer); transition: background 120ms ease, transform 120ms ease;
+}
+.meeting-leave__btn:hover:not(:disabled) { background: var(--mr-fill-3); }
+.meeting-leave__btn:active:not(:disabled) { transform: scale(0.98); }
+.meeting-leave__btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.meeting-leave__btn.is-danger { background: var(--mr-danger); border-color: transparent; color: #fff; }
+.meeting-leave__btn.is-danger:hover:not(:disabled) { background: #dc2626; }
+.meeting-leave__btn.is-ghost { background: transparent; border-color: transparent; color: var(--mr-muted); }
+
+/* ---- chat: attachments ---- */
+.meeting-chat-panel.is-dragover { outline: 2px dashed var(--mr-primary); outline-offset: -6px; }
+.meeting-chat-panel__drop {
+  position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center; gap: 10px; pointer-events: none;
+  background: color-mix(in srgb, var(--mr-surface-2) 88%, transparent); color: var(--mr-accent-text); font-weight: 700; font-size: 14px;
+}
+.meeting-chat-panel__attach {
+  width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; border: none; display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--mr-muted); cursor: var(--cur-pointer, pointer); margin-inline-start: -8px;
+}
+.meeting-chat-panel__attach:hover:not(:disabled) { background: var(--mr-fill-2); color: var(--mr-text); }
+.meeting-chat-panel__picked {
+  display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 12px; background: var(--mr-fill-1); border: 1px solid var(--mr-line);
+}
+.meeting-chat-panel__picked img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+.meeting-chat-panel__picked-ico { width: 40px; height: 40px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: var(--mr-fill-2); flex-shrink: 0; }
+.meeting-chat-panel__picked-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meeting-chat-panel__picked-name em { font-style: normal; font-weight: 400; font-size: 11px; color: var(--mr-muted); }
+.meeting-chat-panel__picked button { border: none; background: var(--mr-fill-2); color: var(--mr-text); width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: var(--cur-pointer, pointer); }
+
+.meeting-chat-att { display: block; max-width: 100%; margin-top: 4px; }
+.meeting-chat-att.is-image { position: relative; padding: 0; border: none; background: var(--mr-fill-2); border-radius: 14px; overflow: hidden; cursor: var(--cur-pointer, pointer); }
+.meeting-chat-att.is-image img, .meeting-chat-att.is-image video { display: block; max-width: 240px; max-height: 220px; width: auto; height: auto; object-fit: cover; }
+.meeting-chat-att__play { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; background: rgba(0, 0, 0, 0.28); }
+.meeting-chat-att.is-file { display: flex; align-items: center; gap: 4px; padding: 6px; border-radius: 14px; background: var(--mr-fill-2); border: 1px solid var(--mr-line); color: var(--mr-text); }
+.meeting-chat-msg.is-mine .meeting-chat-att.is-file { background: color-mix(in srgb, var(--mr-primary) 30%, var(--mr-fill-2)); }
+.meeting-chat-att__main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; border: none; background: none; color: inherit; font: inherit; text-align: start; cursor: var(--cur-pointer, pointer); padding: 2px; }
+.meeting-chat-att__ico { width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; background: var(--mr-fill-3); }
+.meeting-chat-att__name { min-width: 0; display: flex; flex-direction: column; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meeting-chat-att__name em { font-style: normal; font-weight: 400; font-size: 11px; opacity: 0.7; }
+.meeting-chat-att__dl { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: inherit; background: var(--mr-fill-2); }
+.meeting-chat-att__dl:hover { background: var(--mr-fill-3); }
+.meeting-preview__msg { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
