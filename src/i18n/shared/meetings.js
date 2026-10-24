@@ -9,6 +9,7 @@
 // so keys stay generic rather than duplicated per page.
 export default {
   // — room redesign —
+  'Noise isolation': 'عزل الضوضاء',
   'Presenting': 'يعرض الشاشة',
   'is presenting': 'بيعرض شاشته',
   'You are presenting your screen': 'إنت بتشارك شاشتك',

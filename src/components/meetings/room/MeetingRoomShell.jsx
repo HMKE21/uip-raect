@@ -154,6 +154,13 @@ export default function MeetingRoomShell({
     return { spotlight: featured, rest, all, cols, rows: Math.ceil(n / cols) };
   }, [room.participants, room.localStream, room.micEnabled, room.cameraEnabled, room.screenSharing, room.handRaised, room.myScreenShareAllowed, room.myRole, myDisplayName, guestToken, pinnedKey]);
 
+  // newest live reaction per person -> shown on THEIR tile (their own tile = 'local'); the corner overlay shows the same stream with names
+  const reactionByTile = useMemo(() => {
+    const map = {};
+    room.reactions.forEach((r) => { map[r.key === myKey ? 'local' : r.key] = r; });
+    return map;
+  }, [room.reactions, myKey]);
+
   const recipientOptions = useMemo(
     () => Object.entries(room.participants).map(([key, p]) => ({ key, displayName: p.displayName })),
     [room.participants]
@@ -189,6 +196,7 @@ export default function MeetingRoomShell({
         cameraEnabled={p.cameraEnabled}
         screenSharing={p.screenSharing}
         handRaised={p.handRaised}
+        reaction={reactionByTile[p.key]}
         screenShareAllowed={p.screenShareAllowed}
         connectionQuality={p.connectionQuality}
         connectionState={p.connectionState}
@@ -366,7 +374,10 @@ export default function MeetingRoomShell({
           {room.reactions.length > 0 && (
             <div className="meeting-room__reactions-overlay">
               {room.reactions.map((r) => (
-                <span key={r.id} className="meeting-room__floating-reaction">{r.emoji || '👍'}</span>
+                <span key={r.id} className="meeting-room__floating-reaction">
+                  <span className="meeting-room__floating-emoji">{r.emoji || '👍'}</span>
+                  <span className="meeting-room__floating-name">{r.key === myKey ? t('You') : r.displayName}</span>
+                </span>
               ))}
             </div>
           )}
@@ -523,6 +534,10 @@ export default function MeetingRoomShell({
                   </button>
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={() => { togglePanel('polls'); setMoreOpen(false); }}>
                     <Icon name="bar-chart" size={16} /> {t('Polls')}
+                  </button>
+                  <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={room.toggleNoise} aria-pressed={room.noiseOn}>
+                    <Icon name="mic" size={16} /> {t('Noise isolation')}
+                    <span className="badge badge-neutral" style={{ marginInlineStart: 'auto' }}>{room.noiseOn ? t('On') : t('Off')}</span>
                   </button>
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={() => { togglePanel('recordings'); setMoreOpen(false); }}>
                     <Icon name="record-dot" size={16} style={room.activeRecording ? { color: '#ef4444' } : undefined} /> {t('Recordings')}

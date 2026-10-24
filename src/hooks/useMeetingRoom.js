@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { attachNoiseSuppressor, noiseSuppressSupported } from '../lib/calls/noiseSuppress';
 import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, filesApi, notesApi, pollsApi, recordingsApi } from '../lib/meetingSignaling';
 
 /**
@@ -105,6 +106,86 @@ const dbg = (...a) => {
   } catch { /* no console */ }
 };
 
+const REACTION_EMOJI = { thumbs_up: '👍', applause: '👏', laugh: '😂', heart: '❤️', celebrate: '🎉' };
+
+// Noise isolation choice is shared with 1:1 calls (same key CallContext uses), so one switch governs both.
+const NOISE_KEY = 'uip.call.noise';
+const readNoisePref = () => { try { return localStorage.getItem(NOISE_KEY) !== '0'; } catch { return true; } };
+const writeNoisePref = (on) => { try { localStorage.setItem(NOISE_KEY, on ? '1' : '0'); } catch { /* private mode */ } };
+
+/**
+ * Microphone constraints for a room. Echo cancellation is a hard `true` (the browser can't quietly skip it). Auto-gain is OFF
+ * whenever neural isolation is available: AGC keeps raising a quiet mic, which turns room noise into hiss and makes two
+ * nearby devices start whistling. The legacy goog* switches keep older Chromium / WebView builds on the same settings.
+ */
+function buildAudioConstraints(noise) {
+  return {
+    echoCancellation: true,
+    noiseSuppression: noise,
+    autoGainControl: noise && !noiseSuppressSupported(),
+    voiceIsolation: { ideal: noise },
+    channelCount: { ideal: 1 },
+    sampleRate: { ideal: 48000 },
+    advanced: [{ googEchoCancellation: true, googHighpassFilter: true, googNoiseSuppression: noise, googNoiseSuppression2: noise, googTypingNoiseDetection: true }],
+  };
+}
+
+/**
+ * Opus tuning on MY description (the other side's encoder reads it): in-band FEC (a lost packet is rebuilt instead of leaving a
+ * gap), mono, ~40 kbps (plenty for speech), no DTX (DTX makes the voice "pump" next to noise isolation). Audio only — video
+ * bitrate is handled per-peer by tuneSenders(). Anything unexpected returns the SDP untouched.
+ */
+function tuneAudioSdp(sdp) {
+  if (typeof sdp !== 'string') return sdp;
+  try {
+    const eol = sdp.includes('\r\n') ? '\r\n' : '\n';
+    const lines = sdp.split(/\r?\n/);
+    const opus = lines.map((l) => /^a=rtpmap:(\d+) opus\/48000/i.exec(l)).filter(Boolean).map((m) => m[1]);
+    if (!opus.length) return sdp;
+    const extra = { useinbandfec: '1', stereo: '0', 'sprop-stereo': '0', usedtx: '0', maxaveragebitrate: '40000', maxplaybackrate: '48000' };
+    const merge = (existing) => {
+      const map = new Map(existing.split(';').filter(Boolean).map((x) => { const [k, ...v] = x.split('='); return [k.trim(), v.join('=')]; }));
+      Object.entries(extra).forEach(([k, v]) => map.set(k, v));
+      return Array.from(map.entries()).map(([k, v]) => (v === '' ? k : `${k}=${v}`)).join(';');
+    };
+    const out = [];
+    lines.forEach((ln) => {
+      const f = /^a=fmtp:(\d+) (.*)$/.exec(ln);
+      if (f && opus.includes(f[1])) { out.push(`a=fmtp:${f[1]} ${merge(f[2])}`); return; }
+      out.push(ln);
+      const r = /^a=rtpmap:(\d+) opus\/48000/i.exec(ln);
+      if (r && !lines.some((x) => x.startsWith(`a=fmtp:${r[1]} `))) out.push(`a=fmtp:${r[1]} ${merge('')}`);
+    });
+    return out.join(eol);
+  } catch { return sdp; }
+}
+
+/**
+ * Per-peer sender limits. In a mesh every participant uploads one copy of their video PER other person, so without a cap two or
+ * three 720p streams saturate a home uplink and the packet loss hits the voice first ("robotic" / cutting audio). Voice gets a
+ * small fixed budget and top priority; video is capped and shrinks as the room grows. Must run after the local description is set.
+ */
+async function tuneSenders(pc, peerCount) {
+  const videoCap = Math.max(450000, Math.min(2200000, Math.floor(3200000 / Math.max(1, peerCount))));
+  for (const sender of pc.getSenders()) {
+    try {
+      if (!sender.track) continue;
+      const params = sender.getParameters();
+      if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+      const enc = params.encodings[0];
+      if (sender.track.kind === 'audio') {
+        enc.maxBitrate = 48000;
+        enc.priority = 'high';
+        enc.networkPriority = 'high';
+      } else {
+        enc.maxBitrate = videoCap;
+        enc.networkPriority = 'low';
+      }
+      await sender.setParameters(params);
+    } catch (e) { dbg('sender tuning skipped', e?.message); }
+  }
+}
+
 /** Keep video offers small: Chrome lists AV1/VP9/H264/VP8 + rtx/red/ulpfec variants, which can push an SDP past a signaling server's message limit. VP8/H264 are enough. */
 function preferLightCodecs(pc) {
   try {
@@ -183,6 +264,9 @@ export function useMeetingRoom({
   // Round 5 — بند 11 (Raise Hand + Reactions).
   const [handRaised, setHandRaised] = useState(false);
   const [reactions, setReactions] = useState([]); // ephemeral: [{id, key, displayName, type, emoji}], auto-pruned
+  // Noise isolation (RNNoise) — `noiseOn` is the switch, `noiseAvailable` is whether the neural graph could be built here.
+  const [noiseOn, setNoiseOn] = useState(readNoisePref);
+  const [noiseAvailable, setNoiseAvailable] = useState(false);
 
   // Round 5 — بند 9 (Screen Sharing host policies).
   const [screenSharingLocked, setScreenSharingLocked] = useState(!!screenSharingLockedInitial);
@@ -231,6 +315,8 @@ export function useMeetingRoom({
   const leftRef = useRef(false);
   const seenChatIdsRef = useRef(new Set()); // dedupe — the sender gets their own message from the REST response, but also rides the same broadcast as everyone else on the presence channel (Round 5's ChatMessageSent doesn't use toOthers())
   const reactionSeqRef = useRef(0);
+  const pushReactionRef = useRef(null);
+  const noiseRef = useRef(null); // { stream, setEnabled } from attachNoiseSuppressor()
 
   const patchParticipant = useCallback((key, patch) => {
     setParticipants((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], ...patch } } : prev));
@@ -538,8 +624,10 @@ export function useMeetingRoom({
     const pc = createPeer(key);
     preferLightCodecs(pc);
     const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    sendSignal(channelRef.current, key, myKey, 'offer', { type: offer.type, sdp: offer.sdp });
+    const tunedOffer = { type: offer.type, sdp: tuneAudioSdp(offer.sdp) };
+    await pc.setLocalDescription(tunedOffer);
+    tuneSenders(pc, Object.keys(peersRef.current).length).catch(() => {});
+    sendSignal(channelRef.current, key, myKey, 'offer', tunedOffer);
   }, [createPeer, closePeer, myKey]);
   offerToRef.current = offerTo;
 
@@ -561,8 +649,10 @@ export function useMeetingRoom({
       for (const cand of queued) await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
       preferLightCodecs(pc);
       const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      sendSignal(channelRef.current, from, myKey, 'answer', { type: answer.type, sdp: answer.sdp });
+      const tunedAnswer = { type: answer.type, sdp: tuneAudioSdp(answer.sdp) };
+      await pc.setLocalDescription(tunedAnswer);
+      tuneSenders(pc, Object.keys(peersRef.current).length).catch(() => {});
+      sendSignal(channelRef.current, from, myKey, 'answer', tunedAnswer);
     } else if (kind === 'answer') {
       const pc = peersRef.current[from];
       if (!pc) return;
@@ -592,7 +682,8 @@ export function useMeetingRoom({
     async function setup() {
       try {
         // echo cancellation + noise suppression are what stop the "voice coming back" echo and the whistle: ask for them explicitly
-        const audioC = { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: { ideal: 1 } };
+        const noisePref = readNoisePref();
+        const audioC = buildAudioConstraints(noisePref);
         let stream;
         try {
           stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: audioC });
@@ -602,6 +693,14 @@ export function useMeetingRoom({
           catch { stream = await navigator.mediaDevices.getUserMedia({ video: true }); }
         }
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        // Neural noise isolation (RNNoise): always built when supported so the in-room switch can flip it instantly. If it is
+        // unavailable we keep the browser's own suppression + echo cancellation (set above) — never break joining.
+        if (stream.getAudioTracks().length) {
+          const ns = await attachNoiseSuppressor(stream, noisePref);
+          if (cancelled) { (ns ? ns.stream : stream).getTracks().forEach((t) => t.stop()); return; }
+          if (ns) { noiseRef.current = ns; stream = ns.stream; setNoiseAvailable(true); }
+          dbg('noise isolation', ns ? 'on (RNNoise graph)' : 'unavailable, browser filter only');
+        }
         if (stream.getVideoTracks().length === 0) {
           stream.addTrack(makePlaceholderVideoTrack());
           hasCameraRef.current = false;
@@ -799,10 +898,9 @@ export function useMeetingRoom({
           patchParticipant(e.participant_key, { handRaised: e.raised, handRaisedAt: e.hand_raised_at });
         })
         .listen('.reaction.sent', (e) => {
-          reactionSeqRef.current += 1;
-          const id = reactionSeqRef.current;
-          setReactions((prev) => [...prev, { id, key: e.participant_key, displayName: e.display_name, type: e.type, emoji: e.emoji }]);
-          setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 3000);
+          // my own reaction was already shown instantly when I tapped it (sendReaction) — don't play it twice
+          if (e.participant_key === myKey) return;
+          pushReactionRef.current?.(e.participant_key, e.display_name, e.type, e.emoji);
         })
         // Round 5 — بند 9 (Screen Sharing host policies).
         .listen('.screen_share.policy.changed', (e) => {
@@ -949,6 +1047,7 @@ export function useMeetingRoom({
       }
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       localStreamRef.current = null;
+      noiseRef.current = null;
       if (screenTrackRef.current) { screenTrackRef.current.onended = null; screenTrackRef.current.stop(); screenTrackRef.current = null; }
       teardownLocalRecorder();
       if (!leftRef.current) signalingApi.leave(meetingUuid, guestToken).catch(() => {});
@@ -1017,6 +1116,14 @@ export function useMeetingRoom({
     }, 6000);
     return () => clearInterval(timer);
   }, [meetingUuid, guestToken]);
+
+  // Mesh video budget depends on how many people are connected: re-balance existing connections when someone joins/leaves.
+  const peerTotal = Object.keys(participants).length;
+  useEffect(() => {
+    Object.values(peersRef.current).forEach((pc) => {
+      if (pc.connectionState === 'connected') tuneSenders(pc, Object.keys(peersRef.current).length).catch(() => {});
+    });
+  }, [peerTotal]);
 
   // ---- local controls ----------------------------------------------------
   const toggleMic = useCallback(() => {
@@ -1194,9 +1301,40 @@ export function useMeetingRoom({
   // بيوصل لكل الحاضرين (بما فيهم إحنا، راجع docblock ParticipantReactionSent)
   // عبر الـ .reaction.sent listener فوق، عشان نضمن كل الناس بتشوف نفس
   // الترتيب/التوقيت.
+  const pushReaction = useCallback((key, displayName, type, emoji) => {
+    reactionSeqRef.current += 1;
+    const id = reactionSeqRef.current;
+    const shown = emoji || REACTION_EMOJI[type] || '👍';
+    // cap what is on screen so a spammed reaction can't pile up hundreds of animated nodes
+    setReactions((prev) => [...prev.slice(-11), { id, key, displayName, type, emoji: shown }]);
+    setTimeout(() => setReactions((prev) => prev.filter((r) => r.id !== id)), 3200);
+    return id;
+  }, []);
+  pushReactionRef.current = pushReaction;
+
+  // Optimistic: the sender sees their own reaction at once (no waiting for the socket round-trip); everyone else gets it from
+  // the .reaction.sent broadcast. If the request fails, the optimistic one is withdrawn so nobody is told something that never went out.
   const sendReaction = useCallback((type, emoji = null) => {
-    signalingApi.reaction(meetingUuid, guestToken, type, emoji).catch(() => {});
-  }, [meetingUuid, guestToken]);
+    const id = pushReaction(myKey, myDisplayName, type, emoji);
+    signalingApi.reaction(meetingUuid, guestToken, type, emoji).catch(() => {
+      setReactions((prev) => prev.filter((r) => r.id !== id));
+    });
+  }, [meetingUuid, guestToken, myKey, myDisplayName, pushReaction]);
+
+  // ---- noise isolation switch (shared with 1:1 calls) ---------------------
+  const toggleNoise = useCallback(() => {
+    setNoiseOn((prev) => {
+      const next = !prev;
+      writeNoisePref(next);
+      if (noiseRef.current) noiseRef.current.setEnabled(next);
+      else {
+        // no neural graph on this browser: at least flip the browser's own suppression live
+        const track = localStreamRef.current?.getAudioTracks()[0];
+        try { track?.applyConstraints({ noiseSuppression: next, echoCancellation: true }).catch(() => {}); } catch { /* not supported live */ }
+      }
+      return next;
+    });
+  }, []);
 
   // ---- بند 9 (Screen Sharing host policies) — host/co-host بس -----------
   // مفيش تحديث محلي هنا برضو — .screen_share.*.changed listeners فوق
@@ -1277,6 +1415,9 @@ export function useMeetingRoom({
 
     // بند 11 — Raise Hand + Reactions.
     handRaised, toggleHand, reactions, sendReaction,
+
+    // Audio — noise isolation switch.
+    noiseOn, noiseAvailable, toggleNoise,
 
     // بند 9 — Screen Sharing host policies.
     screenSharingLocked, myScreenShareAllowed, setScreenSharingLock, setParticipantScreenShareAllowed, forceStopScreenShare,

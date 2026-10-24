@@ -71,7 +71,7 @@ function useSpeaking(stream, enabled) {
 export default function ParticipantTile({
   stream, displayName, isHost, isGuest, micEnabled, cameraEnabled,
   screenSharing, connectionQuality, connectionState, isLocal, large,
-  handRaised, screenShareAllowed, canManage, onAllowScreenShare, onDenyScreenShare, onResetScreenShare, onForceStopScreenShare,
+  handRaised, reaction, screenShareAllowed, canManage, onAllowScreenShare, onDenyScreenShare, onResetScreenShare, onForceStopScreenShare,
   role, canPrimaryManage, onMute, onDisableCamera, onRemove, onPromote, onDemote, onMakeHost,
   onPin, pinned, onStopShare,
 }) {
@@ -163,6 +163,11 @@ export default function ParticipantTile({
         <button type="button" className="meeting-tile__enable-audio" onClick={() => { const el = videoRef.current; if (el) el.play().then(() => setAudioBlocked(false)).catch(() => {}); }}>
           <Icon name="volume" size={14} /> {t('Tap to enable sound')}
         </button>
+      )}
+
+      {reaction && (
+        // keyed by the reaction id so every new reaction replays the pop animation
+        <span key={reaction.id} className="meeting-tile__reaction" aria-hidden="true">{reaction.emoji || '👍'}</span>
       )}
 
       <div className="meeting-tile__badges">
