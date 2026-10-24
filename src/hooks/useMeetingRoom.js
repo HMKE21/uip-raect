@@ -3,7 +3,7 @@ import { attachNoiseSuppressor } from '../lib/calls/noiseSuppress';
 import { attachEchoGate, echoGateEnabled, setRemoteAudio, clearRemoteAudio, tightenEchoGate } from '../lib/calls/echoGate';
 import { createCameraFx, cameraFxSupported } from '../lib/cameraFx';
 import { watchScreenCapture } from '../lib/captureGuard';
-import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, meetingLifecycleApi, filesApi, notesApi, pollsApi, recordingsApi, remoteControlApi } from '../lib/meetingSignaling';
+import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, meetingLifecycleApi, filesApi, notesApi, pollsApi, recordingsApi, remoteControlApi, leaveOnUnload, isAlreadyInMeetingError, isSessionReplacedError } from '../lib/meetingSignaling';
 import { REMOTE_CONTROL_CHANNEL } from '../lib/remoteControlReceiver';
 
 /**
@@ -301,6 +301,7 @@ export function useMeetingRoom({
   // Round 6 — بند 5 (Host Controls / Participants Panel).
   const [myRole, setMyRole] = useState(isHost ? 'host' : 'participant'); // 'host' | 'co_host' | 'participant' — see docblock above for why co-host isn't seeded here
   const [meetingLocked, setMeetingLocked] = useState(!!meetingLockedInitial); // "Lock meeting" — blocks new joiners; doesn't affect anyone already in
+  const [sessionConflict, setSessionConflict] = useState(null); // 'already_open' (this tab was refused) | 'replaced' (another tab took over) — one live session per person
   const [kicked, setKicked] = useState(null); // {byDisplayName} once WE were removed by a host/co-host — MeetingRoomShell renders a dedicated screen for this
 
   // Round 7 — بند 19 (File Sharing).
@@ -713,6 +714,14 @@ export function useMeetingRoom({
     leftRef.current = false;
 
     async function setup() {
+      // one live session per person: claim it BEFORE touching camera/mic or the shared participant state
+      try {
+        await signalingApi.claimSession(meetingUuid, guestToken);
+      } catch (err) {
+        if (isAlreadyInMeetingError(err)) { if (!cancelled) setSessionConflict('already_open'); return; }
+        // any other failure (old server without the endpoint, transient network): carry on, the channel auth still enforces it
+      }
+      if (cancelled) return;
       try {
         // echo cancellation + noise suppression are what stop the "voice coming back" echo and the whistle: ask for them explicitly
         const noisePref = readNoisePref();
@@ -1104,7 +1113,9 @@ export function useMeetingRoom({
           }
         })
         .error((err) => {
-          if (!cancelled) { setError(err); setStatus('error'); }
+          if (cancelled) return;
+          if (isAlreadyInMeetingError(err)) { setSessionConflict('already_open'); return; }
+          setError(err); setStatus('error');
         });
     }
 
@@ -1143,7 +1154,7 @@ export function useMeetingRoom({
   // rendering the hook's owner while it shows the "removed" screen).
   const meetingEnded = meetingStatus === 'ended';
   useEffect(() => {
-    if (!kicked && !meetingEnded) return;
+    if (!kicked && !meetingEnded && !sessionConflict) return;
     Object.keys(peersRef.current).forEach(closePeer);
     echoRef.current?.leave(presenceChannelName(meetingUuid));
     echoRef.current?.leave(personalChannelName(meetingUuid, myKey));
@@ -1156,14 +1167,21 @@ export function useMeetingRoom({
     localStreamRef.current = null;
     setLocalStream(null);
     teardownLocalRecorder();
-  }, [kicked, meetingEnded, meetingUuid, myKey, closePeer, teardownLocalRecorder]);
+  }, [kicked, meetingEnded, sessionConflict, meetingUuid, myKey, closePeer, teardownLocalRecorder]);
 
   // ---- heartbeat --------------------------------------------------------
   useEffect(() => {
     const timer = setInterval(() => {
-      signalingApi.heartbeat(meetingUuid, guestToken).catch(() => {});
+      signalingApi.heartbeat(meetingUuid, guestToken).catch((err) => { if (isSessionReplacedError(err)) setSessionConflict('replaced'); });
     }, 25000);
     return () => clearInterval(timer);
+  }, [meetingUuid, guestToken]);
+
+  // tab closing / reloading: free our session slot right away (keepalive request) so the reloaded page is not refused by it
+  useEffect(() => {
+    const free = () => leaveOnUnload(meetingUuid, guestToken);
+    window.addEventListener('pagehide', free);
+    return () => window.removeEventListener('pagehide', free);
   }, [meetingUuid, guestToken]);
 
   // ---- lightweight connection-quality sampling from getStats() ---------
@@ -1599,6 +1617,7 @@ export function useMeetingRoom({
   const clearRcNotice = useCallback(() => setRcNotice(null), []);
 
   return {
+    sessionConflict,
     remoteControl, rcIncoming, rcPendingTarget, rcNotice, clearRcNotice,
     requestRemoteControl, respondRemoteControl, stopRemoteControl, sendRemoteInput,
     status, error, meetingStatus, notice, clearNotice,

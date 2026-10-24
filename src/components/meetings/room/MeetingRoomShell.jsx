@@ -264,6 +264,25 @@ export default function MeetingRoomShell({
     }
   }
 
+  if (room.sessionConflict) {
+    const replaced = room.sessionConflict === 'replaced';
+    return (
+      <div className="meeting-room" data-room-theme={roomTheme} style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 'var(--space-6)' }}>
+        <Icon name="alert-triangle" size={32} />
+        <p className="text-h3" style={{ margin: 'var(--space-3) 0 var(--space-2)' }}>{replaced ? t('You joined from another tab or device') : t('You are already in this meeting')}</p>
+        <p className="text-small" style={{ color: 'var(--mr-muted)', maxWidth: 420 }}>
+          {replaced
+            ? t('This meeting was opened somewhere else, so this window has been disconnected.')
+            : t('This meeting is open in another tab, browser or device. You can only be in a meeting once at a time — close the other one, then try again.')}
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-3)', flexWrap: 'wrap', justifyContent: 'center' }}>
+          {!replaced && <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>{t('Try again')}</button>}
+          <button type="button" className="btn btn-outline" onClick={() => onLeave?.()}>{t('Back to My Meetings')}</button>
+        </div>
+      </div>
+    );
+  }
+
   if (room.status === 'error') {
     return (
       <div className="meeting-room" data-room-theme={roomTheme} style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 'var(--space-6)' }}>

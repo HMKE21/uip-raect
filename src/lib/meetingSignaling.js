@@ -1,6 +1,6 @@
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
-import { api } from '../api/client';
+import { api, getTokens } from '../api/client';
 
 /**
  * Round 3 (Signaling) + Round 4 (WebRTC Core). Reverb speaks the Pusher
@@ -51,6 +51,37 @@ import { api } from '../api/client';
 
 window.Pusher = window.Pusher || Pusher;
 
+/**
+ * One id per page load (never persisted: a duplicated tab copies sessionStorage, a reload must get a fresh id). The server allows ONE live
+ * session per person per meeting — a second tab / browser / device sends a different id and is refused (HTTP 409, code `already_in_meeting`).
+ */
+export const MEETING_SESSION_ID = (typeof crypto !== 'undefined' && crypto.randomUUID)
+  ? crypto.randomUUID()
+  : `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+
+/** True for the 409 the server answers when the same person is already in this meeting from another tab / device. */
+export function isAlreadyInMeetingError(err) {
+  const e = err && (err.error || err);
+  const blob = [e?.payload?.errors?.code, e?.message, err?.message, (() => { try { return JSON.stringify(err); } catch { return ''; } })()].join(' ');
+  return /already_in_meeting|already in this meeting/i.test(blob);
+}
+/** True when THIS tab's live session was taken over by another one (heartbeat answered 409 `session_replaced`). */
+export function isSessionReplacedError(err) {
+  return !!err && (err.status === 409 || /session_replaced|another tab or device/i.test(`${err.message || ''} ${err.payload?.errors?.code || ''}`));
+}
+
+/** Tab closing / reloading: tell the server right away (keepalive survives the unload) so the next load is not refused by our own stale session. */
+export function leaveOnUnload(meetingUuid, guestToken) {
+  try {
+    const { accessToken } = getTokens();
+    fetch(`/api/v1/meetings/${meetingUuid}/signaling/release-session`, {
+      method: 'POST', keepalive: true,
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}) },
+      body: JSON.stringify({ session_id: MEETING_SESSION_ID, ...(guestToken ? { guest_token: guestToken } : {}) }),
+    }).catch(() => {});
+  } catch { /* the server's session timeout is the fallback */ }
+}
+
 export function createMeetingEcho(meetingUuid, guestToken) {
   const key = import.meta.env.VITE_REVERB_APP_KEY || '';
   const host = import.meta.env.VITE_REVERB_HOST || window.location.hostname;
@@ -71,6 +102,7 @@ export function createMeetingEcho(meetingUuid, guestToken) {
           socket_id: socketId,
           channel_name: channel.name,
           guest_token: guestToken || undefined,
+          session_id: MEETING_SESSION_ID,
         })
           .then((payload) => callback(false, payload))
           .catch((err) => callback(true, err));
@@ -100,6 +132,8 @@ function withGuestToken(guestToken, body) {
 }
 
 export const signalingApi = {
+  claimSession: (meetingUuid, guestToken) =>
+    api.post(`/api/v1/meetings/${meetingUuid}/signaling/claim-session`, withGuestToken(guestToken, { session_id: MEETING_SESSION_ID })),
   iceServers: (meetingUuid, guestToken) => {
     const qs = guestToken ? `?guest_token=${encodeURIComponent(guestToken)}` : '';
     return api.get(`/api/v1/meetings/${meetingUuid}/signaling/ice-servers${qs}`);
@@ -115,9 +149,9 @@ export const signalingApi = {
   connectionQuality: (meetingUuid, guestToken, connectionQuality) =>
     api.post(`/api/v1/meetings/${meetingUuid}/signaling/connection-quality`, withGuestToken(guestToken, { connection_quality: connectionQuality })),
   heartbeat: (meetingUuid, guestToken) =>
-    api.post(`/api/v1/meetings/${meetingUuid}/signaling/heartbeat`, withGuestToken(guestToken, {})),
+    api.post(`/api/v1/meetings/${meetingUuid}/signaling/heartbeat`, withGuestToken(guestToken, { session_id: MEETING_SESSION_ID })),
   leave: (meetingUuid, guestToken) =>
-    api.post(`/api/v1/meetings/${meetingUuid}/signaling/leave`, withGuestToken(guestToken, {})),
+    api.post(`/api/v1/meetings/${meetingUuid}/signaling/leave`, withGuestToken(guestToken, { session_id: MEETING_SESSION_ID })),
   reportFailure: (meetingUuid, guestToken, failureType, message) =>
     api.post(`/api/v1/meetings/${meetingUuid}/signaling/failure`, withGuestToken(guestToken, { failure_type: failureType, message })),
 
