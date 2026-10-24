@@ -74,6 +74,9 @@ function getUserMedia(opts = {}) {
   }
   // Forced echo breaker: whatever mic stream we end up with goes through the half-duplex gate (see lib/calls/echoGate.js).
   const withGate = async (s) => {
+    // 1:1 calls are always full duplex (both people can talk at the same time): the half-duplex gate is never put on the call mic.
+    return s;
+    // eslint-disable-next-line no-unreachable
     if (!audio || !echoGateEnabled() || !s.getAudioTracks().length) return s;
     const g = await attachEchoGate(s);
     return g ? g.stream : s;
