@@ -1318,6 +1318,10 @@ export default function Messages() {
   return (
     <>
     <div className={`msg-app${infoOpen && activeConversation ? ' has-info' : ''}${activeId ? ' thread-open' : ''}${railCollapsed && activeId ? ' rail-collapsed' : ''}${fullView ? ' is-full' : ''}`} data-msg-app data-wall={shownWall} data-wall-anim={wallAnim ? 'on' : 'off'} style={customWallUrl && shownWall === 'custom' ? { '--msg-wall-img': `url("${customWallUrl}")` } : undefined}>
+      {shownWall === 'custom' && (
+        /* The person's own photo. Delivered from JS (not only from the stylesheet) with !important so no other wallpaper rule can paint over it. */
+        <style>{`html body .msg-app[data-msg-app][data-wall="custom"] .msg-thread{background:linear-gradient(var(--wall-veil,transparent),var(--wall-veil,transparent)),var(--msg-wall-img) center / cover no-repeat,var(--bg-canvas)!important}`}</style>
+      )}
       <ConversationRail
         onDeleteConversations={requestDelete}
         onOpenTrash={() => navigate(centerBase + '/trash')}

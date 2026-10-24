@@ -257,14 +257,14 @@ html body .msg-app[data-wall="graphite"], html body .msg-app[data-wall="midnight
 html body .msg-app[data-wall]:not([data-wall="dots"]) { --wall-a: rgba(var(--t1), .30); --wall-b: rgba(var(--t2), .24); --wall-d: rgba(var(--color-primary-rgb), .20); }
 
 /* the wallpaper itself: soft colour blooms + a fine pattern, over a tinted base */
-html body .msg-app[data-msg-app][data-wall]:not([data-wall="dots"]) .msg-thread {
+html body .msg-app[data-msg-app][data-wall]:not([data-wall="dots"]):not([data-wall="custom"]) .msg-thread {
   background:
     var(--msg-pattern, radial-gradient(rgba(var(--color-primary-rgb), .14) 1.2px, transparent 1.3px) 0 0 / 24px 24px),
     radial-gradient(560px 360px at 12% 4%, rgba(var(--t1), .30), transparent 62%),
     radial-gradient(580px 400px at 95% 96%, rgba(var(--t2), .22), transparent 60%),
     linear-gradient(180deg, var(--tb1), var(--tb2));
 }
-[data-theme="dark"] body .msg-app[data-msg-app][data-wall]:not([data-wall="dots"]):not([data-wall="graphite"]):not([data-wall="midnight"]) .msg-thread {
+[data-theme="dark"] body .msg-app[data-msg-app][data-wall]:not([data-wall="dots"]):not([data-wall="graphite"]):not([data-wall="midnight"]):not([data-wall="custom"]) .msg-thread {
   background:
     radial-gradient(rgba(255, 255, 255, .06) 1.2px, transparent 1.3px) 0 0 / 24px 24px,
     radial-gradient(560px 360px at 12% 4%, rgba(var(--t1), .20), transparent 62%),
