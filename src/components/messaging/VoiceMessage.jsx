@@ -93,7 +93,7 @@ export default function VoiceMessage({ src, duration: knownDuration, disabled = 
     if (!el || disabled) return;
     if (el.paused) {
       // only one voice note at a time
-      document.querySelectorAll('audio').forEach((o) => { if (o !== el) o.pause(); });
+      document.querySelectorAll('audio').forEach((o) => { if (o !== el && !o.hasAttribute('data-persist-media')) o.pause(); });
       el.play().catch(() => {});
     } else el.pause();
   };

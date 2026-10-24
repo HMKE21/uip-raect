@@ -107,6 +107,19 @@ function notifyIncoming(call, ar) {
 // refuse to start the remote voice later (it begins asynchronously, long after the tap) - that is a classic one-way-audio cause.
 const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
 
+// The data: URL above is blocked by the site's CSP (media-src 'self' blob: https:), so the unlock clip is served from a blob: URL instead.
+let silentUrl = null;
+function silentSrc() {
+  if (silentUrl) return silentUrl;
+  try {
+    const bin = atob(SILENT_WAV.split(',')[1]);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+    silentUrl = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+  } catch { silentUrl = SILENT_WAV; }
+  return silentUrl;
+}
+
 export function CallProvider({ children }) {
   const { user, status, can, permissionsReady } = useAuth();
   const { locale } = useLanguage();
@@ -128,7 +141,7 @@ export function CallProvider({ children }) {
     try {
       el.muted = false;
       el.volume = 1;
-      el.src = SILENT_WAV;
+      el.src = silentSrc();
       const p = el.play();
       if (p && p.catch) p.catch(() => {});
     } catch { /* best effort */ }
@@ -296,7 +309,7 @@ export function CallProvider({ children }) {
       {children}
       {/* The remote voice plays here; it must stay mounted for the whole call. */}
       {/* not display:none - some WebViews / Safari pause media elements that are not rendered */}
-      <audio ref={audioRef} autoPlay playsInline style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none', left: 0, top: 0 }} />
+      <audio ref={audioRef} data-persist-media="1" autoPlay playsInline style={{ position: 'fixed', width: 1, height: 1, opacity: 0, pointerEvents: 'none', left: 0, top: 0 }} />
       {enabled && <CallUI />}
     </CallCtx.Provider>
   );

@@ -913,8 +913,11 @@ export default function ThreadPanel({
     const onPlay = (e) => {
       const el = e.target;
       if (!(el instanceof HTMLMediaElement)) return;
+      // Live call media (the other person's voice + video tiles) is never part of "one thing at a time": a call's <video>
+      // starting used to pause the call's own <audio>, which is why video calls had no sound.
+      if (el.hasAttribute('data-persist-media')) return;
       document.querySelectorAll('video, audio').forEach((m) => {
-        if (m !== el && !m.paused) m.pause();
+        if (m !== el && !m.paused && !m.hasAttribute('data-persist-media')) m.pause();
       });
     };
     document.addEventListener('play', onPlay, true);

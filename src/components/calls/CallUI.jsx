@@ -84,7 +84,7 @@ function StreamVideo({ stream, className }) {
       tracks.forEach((t) => { try { t.removeEventListener('unmute', play); } catch { /* ignore */ } });
     };
   }, [stream]);
-  return <video ref={ref} className={className} autoPlay playsInline muted />;
+  return <video ref={ref} className={className} data-persist-media="1" autoPlay playsInline muted />;
 }
 
 const debugOn = () => {
