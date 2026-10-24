@@ -72,6 +72,7 @@ export default function AiAssistantWidget({ role, user }) {
   // Chat background theme (same idea as the people-to-people messenger).
   const [wall, setWall] = useState(() => { const raw = readPref('uip_ai_wallpaper'); const v = AI_WALL_LEGACY[raw] || raw; return AI_WALLS.includes(v) ? v : 'none'; });
   const [wallOpen, setWallOpen] = useState(false);
+  const wallWrapRef = useRef(null);
   const pickWall = (id) => { setWall(id); writePref('uip_ai_wallpaper', id); setWallOpen(false); };
   // Multi-select + bulk delete of conversations.
   const [selectMode, setSelectMode] = useState(false);
@@ -238,9 +239,13 @@ export default function AiAssistantWidget({ role, user }) {
 
   useEffect(() => {
     if (!wallOpen) return undefined;
-    const off = () => setWallOpen(false);
-    document.addEventListener('click', off);
-    return () => document.removeEventListener('click', off);
+    // Close on a press OUTSIDE the picker. (The old document 'click' listener was attached while the very click that opened the
+    // picker was still bubbling, so it closed itself instantly — the themes "disappeared".)
+    const off = (e) => { if (!wallWrapRef.current || !wallWrapRef.current.contains(e.target)) setWallOpen(false); };
+    const onKey = (e) => { if (e.key === 'Escape') setWallOpen(false); };
+    document.addEventListener('pointerdown', off);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', off); document.removeEventListener('keydown', onKey); };
   }, [wallOpen]);
 
   function exitSelect() { setSelectMode(false); setSelected(new Set()); }
@@ -845,7 +850,7 @@ export default function AiAssistantWidget({ role, user }) {
                 <Icon name="panel-left" size={17} />
               </button>
             )}
-            <div className="ai-wall-wrap" onClick={(e) => e.stopPropagation()}>
+            <div className="ai-wall-wrap" ref={wallWrapRef}>
               <button type="button" className={`ai-panel__icon-btn${wallOpen ? ' is-on' : ''}`} aria-label={t('background')} title={t('background')} aria-expanded={wallOpen} onClick={() => setWallOpen((o) => !o)}>
                 <Icon name="palette" size={17} />
               </button>
