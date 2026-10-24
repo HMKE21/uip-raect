@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '../api/client';
+import { attachmentUrl } from '../components/messaging/format';
 
 /**
  * Personal chat backgrounds (the person's own photos) — shared by the people-to-people messenger and the AI assistant.
  *
- * Photos are kept in IndexedDB (a localStorage entry would hit the 5 MB limit after one picture), shrunk to at most 1920 px /
- * JPEG on the way in. They stay in the library until the person deletes them: choosing a built-in theme later does NOT remove
- * them. The selected background is stored by the callers as `img:<id>`.
+ * Photos are shrunk to at most 1920 px / JPEG on the way in and saved WITH THE ACCOUNT (GET/POST/DELETE
+ * /api/v1/account/chat-wallpapers), so they follow the person to every device. They stay in the library until the person deletes
+ * them: choosing a built-in theme later does NOT remove them. The selected background is stored by the callers as `img:<id>`.
  *
- * The library lives in this browser. If a saved `img:<id>` does not exist (another device, cleared site data) callers fall back
- * to their normal default background.
+ * Fallback: if the server can't be reached (offline, old backend) the library lives in this browser's IndexedDB instead, exactly as
+ * before. Photos that were saved only locally by the previous version are uploaded to the account once, keeping their ids, so
+ * the saved selection `img:<id>` keeps working. If a saved `img:<id>` does not exist anywhere, callers fall back to their default.
  */
 const DB = 'uip_custom_wallpapers';
 const STORE = 'images';
@@ -62,6 +65,11 @@ async function shrink(file) {
   } finally { URL.revokeObjectURL(url); }
 }
 
+const API_PATH = '/api/v1/account/chat-wallpapers';
+// stored paths are relative ("uploads/chat-wallpapers/…"): a CSS url() would resolve them against the current page, so anchor them at the root
+const fullUrl = (path) => { const u = attachmentUrl(path) || ''; return /^(https?:|blob:|data:|\/)/i.test(u) ? u : `/${u}`; };
+const serverItems = (json) => ((json && json.data && json.data.wallpapers) || []).map((w) => ({ id: w.id, url: fullUrl(w.url) }));
+
 /**
  * const wp = useCustomWallpapers();
  * wp.items            [{ id, url }]   the library (object URLs, revoked automatically)
@@ -73,9 +81,10 @@ async function shrink(file) {
 export function useCustomWallpapers() {
   const [items, setItems] = useState([]);
   const [ready, setReady] = useState(false);
-  const urls = useRef(new Map());
+  const urls = useRef(new Map()); // blob URLs of the LOCAL fallback library (revoked automatically)
+  const serverOk = useRef(false);
 
-  const apply = useCallback((rows) => {
+  const applyLocal = useCallback((rows) => {
     const next = new Map();
     const list = rows.map((r) => {
       const url = urls.current.get(r.id) || URL.createObjectURL(r.blob);
@@ -89,26 +98,72 @@ export function useCustomWallpapers() {
 
   useEffect(() => {
     let alive = true;
-    listAll().then((rows) => { if (alive) apply(rows); }).catch(() => {}).finally(() => { if (alive) setReady(true); });
+    (async () => {
+      try {
+        let json = await api.get(API_PATH);
+        serverOk.current = true;
+        // one-time move of photos the previous version kept only in this browser: same ids, so the saved selection still matches
+        const local = await listAll().catch(() => []);
+        if (local.length) {
+          const onServer = new Set(serverItems(json).map((w) => w.id));
+          for (const r of local) {
+            if (!alive) return;
+            try {
+              if (!onServer.has(r.id)) {
+                const fd = new FormData();
+                fd.append('uid', r.id);
+                fd.append('image', r.blob, 'wallpaper.jpg');
+                await api.postForm(API_PATH, fd);
+              }
+              await run('readwrite', (st) => st.delete(r.id));
+            } catch { /* leave it local; it is tried again next time */ }
+          }
+          json = await api.get(API_PATH);
+        }
+        if (alive) setItems(serverItems(json));
+      } catch {
+        serverOk.current = false;
+        const rows = await listAll().catch(() => []);
+        if (alive) applyLocal(rows);
+      } finally { if (alive) setReady(true); }
+    })();
     return () => { alive = false; };
-  }, [apply]);
+  }, [applyLocal]);
 
   useEffect(() => () => { urls.current.forEach((u) => URL.revokeObjectURL(u)); urls.current = new Map(); }, []);
 
   const add = useCallback(async (file) => {
-    const rows = await listAll().catch(() => []);
-    if (rows.length >= MAX_CUSTOM_WALLPAPERS) throw new Error('limit');
     const blob = await shrink(file);
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-    try { await run('readwrite', (s) => s.put({ id, blob, createdAt: Date.now() })); } catch { throw new Error('storage'); }
-    apply(await listAll());
+    if (serverOk.current) {
+      try {
+        const fd = new FormData();
+        fd.append('uid', id);
+        fd.append('image', blob, 'wallpaper.jpg');
+        await api.postForm(API_PATH, fd);
+        setItems(serverItems(await api.get(API_PATH)));
+        return id;
+      } catch (err) {
+        const msg = String((err && err.message) || '');
+        throw new Error(/limit/i.test(msg) ? 'limit' : 'storage');
+      }
+    }
+    const rows = await listAll().catch(() => []);
+    if (rows.length >= MAX_CUSTOM_WALLPAPERS) throw new Error('limit');
+    try { await run('readwrite', (st) => st.put({ id, blob, createdAt: Date.now() })); } catch { throw new Error('storage'); }
+    applyLocal(await listAll());
     return id;
-  }, [apply]);
+  }, [applyLocal]);
 
   const remove = useCallback(async (id) => {
-    try { await run('readwrite', (s) => s.delete(id)); } catch { /* nothing to delete */ }
-    apply(await listAll().catch(() => []));
-  }, [apply]);
+    if (serverOk.current) {
+      try { await api.del(`${API_PATH}/${encodeURIComponent(id)}`); } catch { /* keep the list as the server has it */ }
+      try { setItems(serverItems(await api.get(API_PATH))); } catch { setItems((prev) => prev.filter((w) => w.id !== id)); }
+      return;
+    }
+    try { await run('readwrite', (st) => st.delete(id)); } catch { /* nothing to delete */ }
+    applyLocal(await listAll().catch(() => []));
+  }, [applyLocal]);
 
   const urlFor = useCallback((value) => {
     const id = customWallId(value);
