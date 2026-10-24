@@ -20,10 +20,24 @@
  */
 
 const KEY = 'uip.call.halfduplex';
-export const echoGateEnabled = () => { try { return localStorage.getItem(KEY) !== '0'; } catch { return true; } };
+// ON by default again (the stats of a real call showed a clean network: the whistle is the speaker->mic loop between two devices in
+// the same room, which no browser echo canceller can remove). Switch with the URL, remembered afterwards:
+//   ?halfduplex=strict -> maximum protection: the mic is closed whenever the other side is audible, no barge-in at all
+//   ?halfduplex=1      -> normal gate (you can talk over the other side only by speaking much louder)
+//   ?halfduplex=0      -> off
+const fromUrl = () => {
+  try {
+    const v = new URLSearchParams(window.location.search).get('halfduplex');
+    if (v === '1' || v === '0' || v === 'strict') localStorage.setItem(KEY, v);
+  } catch { /* private mode / no window */ }
+};
+const mode = () => { fromUrl(); try { return localStorage.getItem(KEY) || '1'; } catch { return '1'; } };
+export const echoGateEnabled = () => mode() !== '0';
+const strictMode = () => mode() === 'strict';
 export const setEchoGateEnabled = (on) => { try { localStorage.setItem(KEY, on ? '1' : '0'); } catch { /* private mode */ } };
 
 const TICK_MS = 20;
+const REMOTE_LEVEL = 0.012; // same idea, from the receiver's inbound audioLevel stat (0..1)
 const REMOTE_PEAK = 0.02;   // a remote voice is "audible" above this (0..1 of full scale)
 const HOLD_MS = 450;        // keep the mic closed this long after the last remote sound
 const BARGE_PEAK = 0.4;     // your own clearly-louder voice breaks through (a loud speaker next to the mic can reach 0.3, so this sits above it)
@@ -62,20 +76,44 @@ export function tightenEchoGate(ms = STRICT_MS) {
   strictUntil = Math.max(strictUntil, performance.now() + ms);
 }
 
-/** Tell the gate which remote audio exists. Pass null (or a stream without audio) to forget that key. */
-export function setRemoteAudio(key, stream) {
+/**
+ * Tell the gate which remote audio exists. Pass null (or a stream without audio) to forget that key.
+ * `receiver` (the RTCRtpReceiver of that track) is optional but strongly recommended: its inbound `audioLevel` stat is a second,
+ * WebAudio-independent way to know the other person is audible. (A WebAudio analyser on a remote WebRTC track silently reads 0 in
+ * some browsers / WebViews — then the gate never closed and the speaker->mic echo went straight back to the caller.)
+ */
+export function setRemoteAudio(key, stream, receiver = null) {
   const old = remotes.get(key);
-  if (old) { try { old.src.disconnect(); } catch { /* gone */ } remotes.delete(key); }
+  if (old) {
+    try { old.src && old.src.disconnect(); } catch { /* gone */ }
+    if (old.poll) clearInterval(old.poll);
+    remotes.delete(key);
+  }
   if (!stream || !stream.getAudioTracks || !stream.getAudioTracks().length) return;
+  const entry = { src: null, an: null, buf: null, level: 0, levelAt: 0, poll: 0 };
   const c = getCtx();
-  if (!c) return;
-  try {
-    const src = c.createMediaStreamSource(stream);
-    const an = c.createAnalyser();
-    an.fftSize = 512;
-    src.connect(an);
-    remotes.set(key, { src, an, buf: new Uint8Array(an.fftSize) });
-  } catch { /* an ended / unsupported track: it simply isn't monitored */ }
+  if (c) {
+    try {
+      const src = c.createMediaStreamSource(stream);
+      const an = c.createAnalyser();
+      an.fftSize = 512;
+      src.connect(an);
+      Object.assign(entry, { src, an, buf: new Uint8Array(an.fftSize) });
+    } catch { /* an ended / unsupported track: it simply isn't monitored through WebAudio */ }
+  }
+  if (receiver && typeof receiver.getStats === 'function') {
+    let busy = false;
+    entry.poll = setInterval(() => {
+      if (busy) return;
+      busy = true;
+      receiver.getStats().then((report) => {
+        report.forEach((r) => {
+          if (r.type === 'inbound-rtp' && typeof r.audioLevel === 'number') { entry.level = r.audioLevel; entry.levelAt = performance.now(); }
+        });
+      }).catch(() => {}).finally(() => { busy = false; });
+    }, 60);
+  }
+  if (entry.an || entry.poll) remotes.set(key, entry);
 }
 
 /** Forget every remote whose key starts with `prefix` (leaving a meeting / ending a call). */
@@ -95,9 +133,13 @@ function tick() {
   if (gap > 300 || (typeof document !== 'undefined' && document.hidden)) { holdUntil = 0; openAll(); return; }
 
   let remote = 0;
-  remotes.forEach((r) => { const p = peakOf(r.an, r.buf); if (p > remote) remote = p; });
-  const strict = now < strictUntil;
-  if (remote > REMOTE_PEAK) holdUntil = now + (strict ? STRICT_HOLD_MS : HOLD_MS);
+  let statsHot = false;
+  remotes.forEach((r) => {
+    if (r.an) { const p = peakOf(r.an, r.buf); if (p > remote) remote = p; }
+    if (r.poll && now - r.levelAt < 400 && r.level > REMOTE_LEVEL) statsHot = true;
+  });
+  const strict = now < strictUntil || strictMode();
+  if (remote > REMOTE_PEAK || statsHot) holdUntil = now + (strict ? STRICT_HOLD_MS : HOLD_MS);
   const remoteActive = now < holdUntil;
 
   gates.forEach((g) => {

@@ -85,6 +85,10 @@ function getUserMedia(opts = {}) {
     let st = {};
     try { st = stream.getAudioTracks()[0].getSettings() || {}; } catch { st = {}; }
     if (st.noiseSuppression === true && st.echoCancellation !== false) { activeSuppressor = null; return withGate(stream); }
+    // Plain browser microphone by default (no WebAudio hop = no stutter / repeated chunks). The neural filter is opt-in: localStorage `uip.call.rnnoise` = '1'.
+    let useRnn = false;
+    try { useRnn = localStorage.getItem('uip.call.rnnoise') === '1'; } catch { /* private mode */ }
+    if (!useRnn) { activeSuppressor = null; return withGate(stream); }
     // Never let the optional filter hold the call at "Starting…": give it a few seconds, then go on with the plain microphone.
     const ns = await withTimeout(attachNoiseSuppressor(stream, noise), 4000, null);
     if (!ns) { activeSuppressor = null; return withGate(stream); }
@@ -256,11 +260,11 @@ export function CallProvider({ children }) {
       onPref: (key, value) => { if (key === 'noise') { try { activeSuppressor && activeSuppressor.setEnabled(!!value); } catch { /* ignore */ } try { localStorage.setItem(NOISE_KEY, value ? '1' : '0'); } catch { /* private mode */ } } },
       createPc: (cfg) => new RTCPeerConnection(cfg),
       tones: { start: startTone, stop: stopTone, blip },
-      setRemoteStream: (stream, track) => {
+      setRemoteStream: (stream, track, receiver) => {
         const el = audioRef.current;
         if (!el) return;
         // the echo gate listens to the remote voice (analysis only) to know when to close the mic
-        try { setRemoteAudio('call', track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null)); } catch { /* optional */ }
+        try { setRemoteAudio('call', track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null), receiver || null); } catch { /* optional */ }
         // Voice only: hand the <audio> a stream with just the audio track, so the video track riding in the same remote stream can never interfere.
         const src = track && track.kind === 'audio' ? new MediaStream([track]) : (stream || null);
         const cur = el.srcObject;

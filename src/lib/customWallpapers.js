@@ -67,7 +67,12 @@ async function shrink(file) {
 
 const API_PATH = '/api/v1/account/chat-wallpapers';
 // stored paths are relative ("uploads/chat-wallpapers/…"): a CSS url() would resolve them against the current page, so anchor them at the root
-const fullUrl = (path) => { const u = attachmentUrl(path) || ''; return /^(https?:|blob:|data:|\/)/i.test(u) ? u : `/${u}`; };
+// (the leading "/" must be added BEFORE attachmentUrl, which just glues VITE_UPLOADS_BASE + path → otherwise "…railway.appuploads/…")
+const fullUrl = (path) => {
+  if (!path) return '';
+  if (/^(https?:|blob:|data:)/i.test(path)) return path;
+  return attachmentUrl('/' + String(path).replace(/^\/+/, '')) || '';
+};
 const serverItems = (json) => ((json && json.data && json.data.wallpapers) || []).map((w) => ({ id: w.id, url: fullUrl(w.url) }));
 
 /**

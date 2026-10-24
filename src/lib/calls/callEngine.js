@@ -434,7 +434,7 @@ export function createCallEngine(deps) {
         try { track.onunmute = () => { if (pc === conn) attachVideo(); }; } catch { /* ignore */ }
         return;
       }
-      const attachAudio = () => { try { setRemoteStream && setRemoteStream((e.streams && e.streams[0]) || null, track); } catch { /* ignore */ } };
+      const attachAudio = () => { try { setRemoteStream && setRemoteStream((e.streams && e.streams[0]) || null, track, e.receiver || null); } catch { /* ignore */ } };
       attachAudio();
       // Same idea for sound: if the first play() was refused (autoplay policy) or happened before any packet, try again on unmute.
       try { if (track) track.onunmute = () => { if (pc === conn) attachAudio(); }; } catch { /* ignore */ }

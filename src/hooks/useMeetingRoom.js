@@ -620,7 +620,7 @@ export function useMeetingRoom({
       }
       remoteStreamsRef.current[key] = stream;
       // echo gate: analysis-only copy of this person's voice, so our mic closes while they are audible
-      if (e.track.kind === 'audio') setRemoteAudio(`meeting:${key}`, new MediaStream([e.track]));
+      if (e.track.kind === 'audio') setRemoteAudio(`meeting:${key}`, new MediaStream([e.track]), e.receiver || null);
       patchParticipant(key, { remoteStream: stream });
       // a track can be muted at first and unmute when media starts flowing — nudge React so tiles re-bind
       e.track.onunmute = () => patchParticipant(key, { remoteStream: stream });
