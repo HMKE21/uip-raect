@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { attachNoiseSuppressor, noiseSuppressSupported } from '../lib/calls/noiseSuppress';
-import { attachEchoGate, echoGateEnabled, setRemoteAudio, clearRemoteAudio } from '../lib/calls/echoGate';
+import { attachEchoGate, echoGateEnabled, setRemoteAudio, clearRemoteAudio, tightenEchoGate } from '../lib/calls/echoGate';
 import { createCameraFx, cameraFxSupported } from '../lib/cameraFx';
 import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, meetingLifecycleApi, filesApi, notesApi, pollsApi, recordingsApi } from '../lib/meetingSignaling';
 
@@ -130,7 +130,6 @@ function buildAudioConstraints(noise) {
     voiceIsolation: { ideal: noise },
     channelCount: { ideal: 1 },
     sampleRate: { ideal: 48000 },
-    latency: { ideal: 0.01 },
     advanced: [{ googEchoCancellation: true, googHighpassFilter: true, googNoiseSuppression: noise, googNoiseSuppression2: noise, googTypingNoiseDetection: true }],
   };
 }
@@ -1428,6 +1427,7 @@ export function useMeetingRoom({
     const now = Date.now();
     feedbackHitsRef.current = [...feedbackHitsRef.current.filter((t) => now - t < 30000), now];
     dbg('feedback whistle', hz, 'Hz — hits in last 30s:', feedbackHitsRef.current.length);
+    tightenEchoGate(); // first whistle already: strict half-duplex for 25 s (no barge-in, longer tail) before the mic has to be muted
     if (feedbackHitsRef.current.length < 2 || leftRef.current) return;
     feedbackHitsRef.current = [];
     localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = false; });

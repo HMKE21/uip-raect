@@ -32,6 +32,17 @@ const pct = (x) => `${Math.round(clampBoost(x) * 100)}%`;
 export const boostLabel = pct;
 
 let sharedCtx = null; // browsers cap the number of AudioContexts, so every element shares one
+// Live calls (MediaStream elements) get their OWN low-latency context: playing a remote voice through a 'playback' (large-buffer) context
+// delays the speaker output by 100s of ms relative to what the browser's echo canceller expects, so the canceller stops matching the echo
+// and a boosted participant can start repeating / whistling. Files keep the big-buffer context (no crackle on weak phones).
+let liveCtx = null;
+function getLiveCtx() {
+  if (liveCtx && liveCtx.state !== 'closed') return liveCtx;
+  const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
+  if (!AC) return null;
+  try { liveCtx = new AC({ latencyHint: 'interactive' }); } catch { try { liveCtx = new AC(); } catch { liveCtx = null; } }
+  return liveCtx;
+}
 function getCtx() {
   if (sharedCtx && sharedCtx.state !== 'closed') return sharedCtx;
   const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
@@ -141,8 +152,9 @@ async function toSameOrigin(el, rec) {
 }
 
 function wire(el, rec) {
-  const ctx = getCtx();
+  const ctx = rec.ctx && rec.ctx.state !== 'closed' ? rec.ctx : ((el.srcObject instanceof MediaStream) ? getLiveCtx() : getCtx());
   if (!ctx) return false;
+  rec.ctx = ctx;
   if (!rec.gain) {
     rec.gain = ctx.createGain();
     rec.shaper = ctx.createWaveShaper();
@@ -187,7 +199,7 @@ function softClipCurve() {
 }
 
 function setGain(rec, x) {
-  const ctx = getCtx();
+  const ctx = rec.ctx || getCtx();
   if (!ctx || !rec.gain) return;
   const t = ctx.currentTime;
   clearTimeout(rec.bypassTimer);
@@ -202,7 +214,7 @@ function setGain(rec, x) {
     if (x <= 1.001) {
       // back at 100%: once the ramp is done leave the shaper out of the path completely (null curve = pass-through)
       rec.bypassTimer = setTimeout(() => {
-        const c = getCtx();
+        const c = rec.ctx || getCtx();
         if (!c || !rec.shaped) return;
         rec.gain.gain.cancelScheduledValues(c.currentTime);
         rec.gain.gain.setValueAtTime(1, c.currentTime);
@@ -244,7 +256,7 @@ export async function applyBoost(el, x) {
     if (!rec.source) graphs.delete(el);
     return { ok: false, reason: 'graph' };
   }
-  const ctx = getCtx();
+  const ctx = rec.ctx || getCtx();
   if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
   setGain(rec, x);
   return { ok: true };
@@ -280,7 +292,7 @@ export function useVolumeBoost(ref, { src, stream } = {}) {
   useEffect(() => {
     const el = ref.current;
     if (!el) return undefined;
-    const wake = () => { const c = getCtx(); if (c && c.state === 'suspended' && graphs.has(el)) c.resume().catch(() => {}); };
+    const wake = () => { const g = graphs.get(el); const c = (g && g.ctx) || getCtx(); if (c && c.state === 'suspended' && g) c.resume().catch(() => {}); };
     el.addEventListener('play', wake);
     return () => el.removeEventListener('play', wake);
   });

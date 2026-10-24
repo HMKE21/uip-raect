@@ -26,9 +26,12 @@ export const setEchoGateEnabled = (on) => { try { localStorage.setItem(KEY, on ?
 const TICK_MS = 20;
 const REMOTE_PEAK = 0.02;   // a remote voice is "audible" above this (0..1 of full scale)
 const HOLD_MS = 450;        // keep the mic closed this long after the last remote sound
-const BARGE_PEAK = 0.3;     // your own clearly-louder voice breaks through
-const BARGE_TICKS = 2;      // ...if it stays above for 2 checks in a row (40 ms)
+const BARGE_PEAK = 0.4;     // your own clearly-louder voice breaks through (a loud speaker next to the mic can reach 0.3, so this sits above it)
+const BARGE_TICKS = 4;      // ...if it stays above for 4 checks in a row (80 ms) — a short echo burst is not a voice
 const BARGE_HOLD_MS = 300;
+// After a whistle was detected the room is acoustically bad: for a while the gate becomes strict (no barge-in, longer tail).
+const STRICT_MS = 25000;
+const STRICT_HOLD_MS = 900;
 
 let ctx = null;
 function getCtx() {
@@ -52,6 +55,12 @@ const gates = new Set();
 let timer = null;
 let holdUntil = 0;
 let lastTick = 0;
+let strictUntil = 0;
+
+/** Call when a feedback whistle was detected: barge-in is off and the mic stays closed longer for the next 25 s. */
+export function tightenEchoGate(ms = STRICT_MS) {
+  strictUntil = Math.max(strictUntil, performance.now() + ms);
+}
 
 /** Tell the gate which remote audio exists. Pass null (or a stream without audio) to forget that key. */
 export function setRemoteAudio(key, stream) {
@@ -87,13 +96,14 @@ function tick() {
 
   let remote = 0;
   remotes.forEach((r) => { const p = peakOf(r.an, r.buf); if (p > remote) remote = p; });
-  if (remote > REMOTE_PEAK) holdUntil = now + HOLD_MS;
+  const strict = now < strictUntil;
+  if (remote > REMOTE_PEAK) holdUntil = now + (strict ? STRICT_HOLD_MS : HOLD_MS);
   const remoteActive = now < holdUntil;
 
   gates.forEach((g) => {
     const mic = peakOf(g.an, g.buf);
     g.loud = mic > BARGE_PEAK ? g.loud + 1 : 0;
-    if (g.loud >= BARGE_TICKS) g.bargeUntil = now + BARGE_HOLD_MS;
+    if (g.loud >= BARGE_TICKS && !strict) g.bargeUntil = now + BARGE_HOLD_MS;
     g.set(remoteActive && now >= g.bargeUntil);
   });
 }
