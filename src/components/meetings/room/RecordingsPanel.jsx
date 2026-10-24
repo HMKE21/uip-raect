@@ -92,7 +92,7 @@ export default function RecordingsPanel({
 
       <div className="meeting-chat-panel__list">
         {sorted.length === 0 && (
-          <p className="text-caption" style={{ color: 'rgba(255,255,255,0.55)', textAlign: 'center', marginTop: 'var(--space-4)' }}>
+          <p className="text-caption" style={{ color: 'var(--mr-muted)', textAlign: 'center', marginTop: 'var(--space-4)' }}>
             {t('No recordings yet.')}
           </p>
         )}
@@ -108,7 +108,7 @@ export default function RecordingsPanel({
                   </span>
                   <span className={`badge ${meta.cls}`} style={{ fontSize: 10 }}>{t(meta.key)}</span>
                 </div>
-                <div className="text-caption" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                <div className="text-caption" style={{ color: 'var(--mr-muted)' }}>
                   {r.started_by_display_name}
                   {r.duration_seconds != null ? ` · ${formatDuration(r.duration_seconds)}` : ''}
                   {r.size_bytes != null ? ` · ${formatSize(r.size_bytes)}` : ''}

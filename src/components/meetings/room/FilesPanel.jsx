@@ -73,7 +73,7 @@ export default function FilesPanel({ files, myKey, isManager, isOpen, onClose, o
 
       <div className="meeting-chat-panel__list">
         {files.length === 0 && (
-          <p className="text-caption" style={{ color: 'rgba(255,255,255,0.55)', textAlign: 'center', marginTop: 'var(--space-4)' }}>
+          <p className="text-caption" style={{ color: 'var(--mr-muted)', textAlign: 'center', marginTop: 'var(--space-4)' }}>
             {t('No files shared yet.')}
           </p>
         )}
@@ -90,7 +90,7 @@ export default function FilesPanel({ files, myKey, isManager, isOpen, onClose, o
                 ) : (
                   <span className="meeting-files-panel__name" title={f.original_name}>{f.original_name}</span>
                 )}
-                <div className="text-caption" style={{ color: 'rgba(255,255,255,0.55)' }}>
+                <div className="text-caption" style={{ color: 'var(--mr-muted)' }}>
                   {f.uploader_display_name}{f.size_bytes != null ? ` · ${formatSize(f.size_bytes)}` : ''}
                 </div>
               </div>

@@ -86,7 +86,7 @@ export default function ParticipantsPanel({
         </label>
       )}
       {!isManager && meetingLocked && (
-        <p className="text-caption" style={{ margin: 0, padding: '6px var(--space-4)', color: 'rgba(255,255,255,0.55)' }}>
+        <p className="text-caption" style={{ margin: 0, padding: '6px var(--space-4)', color: 'var(--mr-muted)' }}>
           <Icon name="lock" size={12} style={{ verticalAlign: '-2px', marginInlineEnd: 4 }} />
           {t('This meeting is locked — no one else can join.')}
         </p>
@@ -107,7 +107,7 @@ export default function ParticipantsPanel({
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {isLocalRow ? `${p.displayName} (${t('You')})` : p.displayName}
                   </span>
-                  <span className="text-caption" style={{ color: 'rgba(255,255,255,0.55)' }}>{roleLabel(p.role)}</span>
+                  <span className="text-caption" style={{ color: 'var(--mr-muted)' }}>{roleLabel(p.role)}</span>
                 </span>
               </div>
 

@@ -344,4 +344,11 @@ export default {
   'Unpin': 'إلغاء التثبيت',
   'No TURN server is configured — audio/video may not reach people on other networks.': 'مفيش سيرفر TURN متظبط — الصوت والفيديو ممكن ما يوصلوش لناس على شبكات تانية.',
   'More': 'المزيد',
+  'Send': 'إرسال',
+  'To': 'إلى',
+  'New messages': 'رسائل جديدة',
+  'Only they will see this': 'هو بس اللي هيشوفها',
+  'Light mode': 'الوضع الفاتح',
+  'Dark mode': 'الوضع الداكن',
+  'Switch language': 'تغيير اللغة',
 };

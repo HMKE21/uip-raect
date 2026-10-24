@@ -9,11 +9,35 @@ import NotesPanel from './NotesPanel';
 import PollsPanel from './PollsPanel';
 import RecordingsPanel from './RecordingsPanel';
 import Icon from '../../Icon';
-import { useTranslations } from '../../../context/LanguageContext';
+import { useTranslations, useLanguage } from '../../../context/LanguageContext';
+import { useTheme } from '../../../context/ThemeContext';
 import i18nCommon from '../../../i18n/common';
 import i18nMeetings from '../../../i18n/shared/meetings';
 
 const translations = { ...i18nCommon, ...i18nMeetings };
+
+const ROOM_THEME_KEY = 'uip_room_theme';
+
+/**
+ * Light / dark look of the room itself. Starts from the choice made in the room last time, else from the site theme, and
+ * flipping it here only affects the call (it does not touch the account / portal theme). Video tiles stay dark in both looks.
+ */
+function useRoomTheme() {
+  const { theme } = useTheme();
+  const [roomTheme, setRoomTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem(ROOM_THEME_KEY);
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch { /* storage unavailable */ }
+    return theme === 'light' ? 'light' : 'dark';
+  });
+  const toggleRoomTheme = () => setRoomTheme((cur) => {
+    const next = cur === 'light' ? 'dark' : 'light';
+    try { localStorage.setItem(ROOM_THEME_KEY, next); } catch { /* storage unavailable */ }
+    return next;
+  });
+  return [roomTheme, toggleRoomTheme];
+}
 
 const REACTION_TYPES = [
   { type: 'thumbs_up', emoji: '👍' },
@@ -77,6 +101,8 @@ export default function MeetingRoomShell({
   isHost = false, screenSharingLockedInitial = false, chatEnabledInitial = true, meetingLockedInitial = false,
 }) {
   const t = useTranslations(translations);
+  const { locale, toggleLocale } = useLanguage();
+  const [roomTheme, toggleRoomTheme] = useRoomTheme();
   const [reactionsOpen, setReactionsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const dockRef = useRef(null);
@@ -174,10 +200,10 @@ export default function MeetingRoomShell({
 
   if (room.status === 'error') {
     return (
-      <div className="meeting-room" style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 'var(--space-6)' }}>
+      <div className="meeting-room" data-room-theme={roomTheme} style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 'var(--space-6)' }}>
         <Icon name="alert-triangle" size={32} />
         <p className="text-h3" style={{ margin: 'var(--space-3) 0 var(--space-2)' }}>{t("You haven't joined this meeting yet.")}</p>
-        <p className="text-small" style={{ color: 'rgba(255,255,255,0.7)' }}>{t('Use the meeting link to join first.')}</p>
+        <p className="text-small" style={{ color: 'var(--mr-muted)' }}>{t('Use the meeting link to join first.')}</p>
         <button type="button" className="btn btn-outline" style={{ marginTop: 'var(--space-3)' }} onClick={() => onLeave?.()}>
           {t('Back to My Meetings')}
         </button>
@@ -246,11 +272,11 @@ export default function MeetingRoomShell({
 
   if (room.kicked) {
     return (
-      <div className="meeting-room" style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 'var(--space-6)' }}>
+      <div className="meeting-room" data-room-theme={roomTheme} style={{ alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: 'var(--space-6)' }}>
         <Icon name="user-x" size={32} />
         <p className="text-h3" style={{ margin: 'var(--space-3) 0 var(--space-2)' }}>{t('You were removed from the meeting.')}</p>
         {room.kicked.byDisplayName && (
-          <p className="text-small" style={{ color: 'rgba(255,255,255,0.7)' }}>{`${t('Removed by')} ${room.kicked.byDisplayName}`}</p>
+          <p className="text-small" style={{ color: 'var(--mr-muted)' }}>{`${t('Removed by')} ${room.kicked.byDisplayName}`}</p>
         )}
         <button type="button" className="btn btn-outline" style={{ marginTop: 'var(--space-3)' }} onClick={() => onLeave?.()}>
           {t('Back to My Meetings')}
@@ -267,7 +293,7 @@ export default function MeetingRoomShell({
   const cameraTitle = !room.hasCamera ? t('Turn camera on') : room.cameraEnabled ? t('Turn camera off') : t('Turn camera on');
 
   return (
-    <div className={`meeting-room ${anyPanelOpen ? 'has-panel' : ''}`}>
+    <div className={`meeting-room ${anyPanelOpen ? 'has-panel' : ''}`} data-room-theme={roomTheme}>
       <header className="meeting-room__topbar">
         <div className="meeting-room__title">
           <span className="meeting-room__live-dot" aria-hidden="true" />
@@ -306,6 +332,19 @@ export default function MeetingRoomShell({
               <Icon name={room.screenSharingLocked ? 'lock' : 'screen-share'} size={16} />
             </button>
           )}
+          <button type="button" className="meeting-room__pill" onClick={toggleLocale} title={t('Switch language')} aria-label={t('Switch language')}>
+            <Icon name="globe" size={15} />
+            <span>{locale === 'ar' ? 'EN' : 'عربي'}</span>
+          </button>
+          <button
+            type="button"
+            className="meeting-room__icon-btn"
+            onClick={toggleRoomTheme}
+            title={roomTheme === 'light' ? t('Dark mode') : t('Light mode')}
+            aria-label={roomTheme === 'light' ? t('Dark mode') : t('Light mode')}
+          >
+            <Icon name={roomTheme === 'light' ? 'moon' : 'sun'} size={16} />
+          </button>
           <button type="button" className={`meeting-room__icon-btn ${diagOpen ? 'is-active' : ''}`} onClick={() => setDiagOpen((v) => !v)} title={t('Diagnostics')} aria-label={t('Diagnostics')}>
             <Icon name="pulse" size={16} />
           </button>

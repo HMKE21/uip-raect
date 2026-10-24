@@ -129,7 +129,7 @@ export default function NotesPanel({
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <span className="text-caption" style={{ fontWeight: 700 }}>{t('Meeting Notes')}</span>
             {notes.lastEditedByDisplayName && (
-              <span className="text-caption" style={{ color: 'rgba(255,255,255,0.5)' }}>
+              <span className="text-caption" style={{ color: 'var(--mr-muted)' }}>
                 {t('Last edited by')} {notes.lastEditedByDisplayName}
               </span>
             )}
@@ -208,7 +208,7 @@ export default function NotesPanel({
           )}
 
           {actionItems.length === 0 ? (
-            <p className="text-caption" style={{ color: 'rgba(255,255,255,0.55)' }}>{t('No action items yet.')}</p>
+            <p className="text-caption" style={{ color: 'var(--mr-muted)' }}>{t('No action items yet.')}</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {actionItems.map((item) => {
@@ -227,7 +227,7 @@ export default function NotesPanel({
                     </button>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div className={`text-small ${item.status === 'done' ? 'meeting-notes-panel__item-title--done' : ''}`}>{item.title}</div>
-                      <div className="text-caption" style={{ color: 'rgba(255,255,255,0.5)' }}>
+                      <div className="text-caption" style={{ color: 'var(--mr-muted)' }}>
                         {t(meta.labelKey)}
                         {item.assignee_display_name ? ` · ${item.assignee_display_name}` : ''}
                         {item.due_at ? ` · ${new Date(item.due_at).toLocaleDateString()}` : ''}

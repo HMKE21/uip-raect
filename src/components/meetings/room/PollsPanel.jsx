@@ -170,7 +170,7 @@ export default function PollsPanel({ polls, isManager, isOpen, onClose, onCreate
         )}
 
         {polls.length === 0 && !showForm && (
-          <p className="text-caption" style={{ color: 'rgba(255,255,255,0.55)', textAlign: 'center', marginTop: 'var(--space-4)' }}>
+          <p className="text-caption" style={{ color: 'var(--mr-muted)', textAlign: 'center', marginTop: 'var(--space-4)' }}>
             {t('No polls yet.')}
           </p>
         )}
@@ -188,7 +188,7 @@ export default function PollsPanel({ polls, isManager, isOpen, onClose, onCreate
                   {isOpenPoll ? t('Open') : t('Closed')}
                 </span>
               </div>
-              <div className="text-caption" style={{ color: 'rgba(255,255,255,0.5)', margin: '2px 0 8px' }}>
+              <div className="text-caption" style={{ color: 'var(--mr-muted)', margin: '2px 0 8px' }}>
                 {poll.total_votes} {t('votes')}
               </div>
 
