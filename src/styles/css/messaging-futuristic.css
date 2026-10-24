@@ -1,0 +1,205 @@
+/* ==========================================================================
+   Messages — "Aurora glass" look for the conversation list + stories row.
+   Loaded LAST (after messaging-mobile / laptop / redesign) so it wins over the flat rows and old chips.
+   Pure CSS: no markup was changed. RTL-safe (logical properties), light + dark, reduced-motion aware.
+   ========================================================================== */
+
+.msg-app {
+  --fx-a: var(--color-primary);
+  --fx-b: #8b5cf6;
+  --fx-c: #22d3ee;
+  --fx-grad: linear-gradient(135deg, var(--fx-a), var(--fx-b) 55%, var(--fx-c));
+  --fx-glass: color-mix(in srgb, var(--bg-surface) 72%, transparent);
+  --fx-glass-strong: color-mix(in srgb, var(--bg-surface) 90%, transparent);
+  --fx-line: color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  --fx-glow: rgba(var(--color-primary-rgb), .38);
+}
+
+/* ------------------------------------------------------------ rail surface */
+html body .msg-app .msg-rail {
+  position: relative; isolation: isolate;
+  background:
+    radial-gradient(420px 260px at 105% -6%, rgba(139, 92, 246, .16), transparent 62%),
+    radial-gradient(380px 280px at -8% 102%, rgba(34, 211, 238, .13), transparent 60%),
+    var(--bg-canvas);
+}
+html body.msg-page-active:not(.msg-thread-open) .msg-app[data-msg-app] > .msg-rail {
+  background:
+    radial-gradient(420px 260px at 105% -6%, rgba(139, 92, 246, .16), transparent 62%),
+    radial-gradient(380px 280px at -8% 102%, rgba(34, 211, 238, .13), transparent 60%),
+    var(--bg-canvas);
+}
+[data-theme="dark"] .msg-app .msg-rail { --fx-glass: color-mix(in srgb, #ffffff 5%, transparent); --fx-glass-strong: color-mix(in srgb, #ffffff 8%, transparent); --fx-line: rgba(255, 255, 255, .09); }
+
+/* ------------------------------------------------------------------ header */
+html body .msg-app .mr-head { padding: 20px 16px 10px; gap: 14px; }
+html body .msg-app .mr-title {
+  white-space: nowrap; flex-shrink: 0; font-size: 26px; font-weight: 800; letter-spacing: -.02em; line-height: 1.1;
+  background: linear-gradient(120deg, var(--text-primary) 35%, var(--fx-a) 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+}
+html body .msg-app .mr-new {
+  height: 40px; padding: 0 16px; border-radius: 999px; background: var(--fx-grad); background-size: 140% 140%;
+  box-shadow: 0 8px 22px -6px var(--fx-glow), inset 0 1px 0 rgba(255, 255, 255, .35);
+  transition: transform .18s ease, box-shadow .18s ease, background-position .4s ease;
+}
+html body .msg-app .mr-new:hover { filter: none; background-position: 100% 50%; transform: translateY(-1px); box-shadow: 0 12px 28px -6px var(--fx-glow), inset 0 1px 0 rgba(255, 255, 255, .4); }
+html body .msg-app .mr-iconbtn {
+  width: 40px; height: 40px; border-radius: 50%; background: var(--fx-glass); border-color: var(--fx-line);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
+html body .msg-app .mr-iconbtn:hover, html body .msg-app .mr-iconbtn.is-open { background: rgba(var(--color-primary-rgb), .14); color: var(--color-primary); border-color: rgba(var(--color-primary-rgb), .35); }
+html body .msg-app .mr-menu { border-radius: 18px; background: var(--fx-glass-strong); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); border-color: var(--fx-line); box-shadow: 0 24px 60px -16px rgba(10, 15, 40, .5); }
+html body .msg-app .mr-menu__item { border-radius: 12px; }
+
+html body .msg-app .mr-search {
+  height: 46px; padding: 0 16px; border-radius: 999px; background: var(--fx-glass); border: 1px solid var(--fx-line);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25);
+}
+html body .msg-app .mr-search:focus-within {
+  border-color: transparent; background: var(--fx-glass-strong);
+  box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb), .55), 0 10px 30px -10px var(--fx-glow);
+}
+html body .msg-app .mr-search svg { color: var(--color-primary); opacity: .85; }
+
+/* narrow rail (laptop 300px): keep the title on one line, "new chat" becomes a round + button */
+html body .msg-app .msg-rail { container-type: inline-size; container-name: mrail; }
+@container mrail (max-width: 340px) {
+  .mr-title { font-size: 23px; }
+  .mr-new { width: 40px; padding: 0; justify-content: center; }
+  .mr-new span { display: none; }
+}
+
+/* ----------------------------------------------------------------- filters */
+html body .msg-app .mr-filters { gap: 8px; padding: 2px 16px 12px; border-bottom: 0; }
+html body .msg-app .mr-filter {
+  height: 34px; padding: 0 15px; border-radius: 999px; background: var(--fx-glass); border: 1px solid var(--fx-line);
+  color: var(--text-secondary); font-weight: 600; transition: transform .15s ease, box-shadow .2s ease, color .15s ease, background .15s ease;
+}
+html body .msg-app .mr-filter:hover { transform: translateY(-1px); color: var(--text-primary); background: var(--fx-glass-strong); }
+html body .msg-app .mr-filter.is-active {
+  background: var(--fx-grad); border-color: transparent; color: #fff;
+  box-shadow: 0 8px 20px -8px var(--fx-glow), inset 0 1px 0 rgba(255, 255, 255, .35);
+}
+html body .msg-app .mr-filter b { background: rgba(var(--color-primary-rgb), .16); color: var(--color-primary); }
+html body .msg-app .mr-filter.is-active b { background: rgba(255, 255, 255, .26); color: #fff; }
+
+/* ----------------------------------------------------------------- stories */
+html body .msg-app .st-strip { gap: 14px; padding: 6px 16px 14px; border-bottom: 0; }
+html body .msg-app .st-tile { width: 68px; gap: 7px; }
+html body .msg-app .st-tile em { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+html body .msg-app .st-ring { width: 62px; height: 62px; padding: 3px; background: var(--fx-line); transition: transform .2s cubic-bezier(.3, 1.4, .5, 1), box-shadow .25s ease; }
+html body .msg-app .st-ring > .st-face { border: 3px solid var(--bg-canvas); }
+html body .msg-app .st-tile:hover .st-ring { transform: translateY(-2px) scale(1.04); }
+html body .msg-app .st-ring.is-new {
+  background: conic-gradient(from var(--fx-spin, 0deg), var(--fx-c), var(--fx-a), var(--fx-b), #f472b6, var(--fx-c));
+  box-shadow: 0 0 0 0 rgba(var(--color-primary-rgb), .0), 0 8px 22px -6px var(--fx-glow);
+  animation: fx-spin 6s linear infinite;
+}
+html body .msg-app .st-ring.is-mine { background: conic-gradient(from var(--fx-spin, 0deg), var(--fx-c), var(--fx-a), var(--fx-c)); box-shadow: 0 8px 20px -8px var(--fx-glow); }
+html body .msg-app .st-ring.is-seen { background: var(--fx-line); }
+html body .msg-app .st-ring--add { border: 2px dashed rgba(var(--color-primary-rgb), .45); color: var(--color-primary); background: var(--fx-glass); }
+html body .msg-app .st-plus { width: 22px; height: 22px; background: var(--fx-grad); border: 2.5px solid var(--bg-canvas); box-shadow: 0 4px 10px -2px var(--fx-glow); }
+@property --fx-spin { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+@keyframes fx-spin { to { --fx-spin: 360deg; } }
+
+/* -------------------------------------------------------------------- list */
+html body .msg-app .msg-rail__list { padding: 4px 6px 16px; }
+html body .msg-app .msg-conv-row { margin: 0; border: 0; }
+html body.msg-page-active .msg-app .msg-conv-row,
+html body.msg-page-active .msg-app .msg-conv-row:last-child { border: 0; }
+
+html body .msg-app .msg-conv,
+html body.msg-page-active .msg-app .msg-conv {
+  margin: 3px 6px; width: calc(100% - 12px); padding: 11px 14px 11px 12px; gap: 14px; border-radius: 22px;
+  background: transparent; border: 1px solid transparent; border-inline-start: 1px solid transparent;
+  transition: transform .18s ease, background .2s ease, border-color .2s ease, box-shadow .25s ease;
+}
+html body .msg-app .msg-conv:hover {
+  background: var(--fx-glass); border-color: var(--fx-line); transform: translateY(-1px);
+  box-shadow: 0 10px 26px -14px rgba(10, 15, 40, .35);
+}
+html body .msg-app .msg-conv:active { transform: scale(.985); }
+html body .msg-app .msg-conv:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
+
+/* active chat: gradient hairline border + soft glow */
+html body .msg-app .msg-conv.is-active,
+html body.msg-page-active .msg-app .msg-conv.is-active {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--bg-surface), var(--bg-surface)) padding-box,
+    var(--fx-grad) border-box;
+  box-shadow: 0 14px 34px -16px var(--fx-glow);
+}
+html body .msg-app .msg-conv-row.is-selected .msg-conv { background: rgba(var(--color-primary-rgb), .14); border-color: rgba(var(--color-primary-rgb), .35); }
+
+/* avatar: bigger, soft glow; unread = gradient ring */
+html body .msg-app .msg-conv .msg-avatar,
+html body.msg-page-active .msg-app .msg-conv .msg-avatar {
+  width: 54px; height: 54px; font-size: 17px; font-weight: 700;
+  box-shadow: 0 8px 20px -10px rgba(10, 15, 40, .55);
+  transition: box-shadow .25s ease, transform .2s ease;
+}
+html body .msg-app .msg-conv:hover .msg-avatar { transform: scale(1.04); }
+html body .msg-app .msg-conv.is-unread .msg-avatar {
+  box-shadow: 0 0 0 2.5px var(--bg-canvas), 0 0 0 4.5px rgba(var(--color-primary-rgb), .85), 0 10px 24px -8px var(--fx-glow);
+}
+html body .msg-app .msg-avatar--group { border-radius: 36%; background: linear-gradient(135deg, var(--uip-teal-500, #14b8a6), var(--fx-a)); }
+html body .msg-app .msg-conv .msg-avatar--group { border-radius: 36%; }
+
+/* text */
+html body .msg-app .msg-conv__row1 { align-items: center; }
+html body .msg-app .msg-conv__name,
+html body.msg-page-active .msg-app .msg-conv__name { font-size: 15.5px; font-weight: 650; letter-spacing: -.005em; }
+html body .msg-app .msg-conv.is-unread .msg-conv__name { font-weight: 800; }
+html body .msg-app .msg-conv__time,
+html body.msg-page-active .msg-app .msg-conv__time { font-size: 11.5px; font-weight: 600; letter-spacing: .01em; color: var(--text-secondary); opacity: .9; }
+html body .msg-app .msg-conv.is-unread .msg-conv__time { color: var(--color-primary); opacity: 1; }
+html body .msg-app .msg-conv__row2 { margin-top: 4px; }
+html body .msg-app .msg-conv__preview,
+html body.msg-page-active .msg-app .msg-conv__preview { font-size: 13.5px; line-height: 1.35; opacity: .92; }
+html body .msg-app .msg-conv.is-unread .msg-conv__preview { opacity: 1; color: var(--text-primary); }
+
+/* unread count: glowing gradient pill; dot: pulsing */
+html body .msg-app .msg-unread-count {
+  min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; display: inline-grid; place-items: center;
+  font-size: 11.5px; font-weight: 800; color: #fff; background: var(--fx-grad);
+  box-shadow: 0 6px 14px -4px var(--fx-glow), inset 0 1px 0 rgba(255, 255, 255, .4);
+}
+html body .msg-app .msg-unread-dot { width: 11px; height: 11px; background: var(--fx-grad); box-shadow: 0 0 0 4px rgba(var(--color-primary-rgb), .18); animation: fx-pulse 2.2s ease-in-out infinite; }
+@keyframes fx-pulse { 50% { box-shadow: 0 0 0 7px rgba(var(--color-primary-rgb), .0); } }
+html body .msg-app .msg-conv__pin { color: var(--fx-b); }
+
+/* delete button on hover (desktop) matches the rounded card */
+html body .msg-app .msg-conv__del { border-radius: 12px; background: var(--fx-glass-strong); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+
+/* ---------------------------------------------------------- empty + skeleton */
+html body .msg-app .msg-empty-state { margin: 18px 12px; padding: 28px 18px; border-radius: 22px; background: var(--fx-glass); border: 1px dashed var(--fx-line); }
+html body .msg-app .msg-skeleton-row { border-radius: 22px; background: var(--fx-glass); margin: 6px; }
+html body .msg-app .msg-skeleton-avatar { border-radius: 50%; }
+
+/* ----------------------------------------------------------- selection bar */
+html body .msg-app .msg-select-bar { margin: 4px 12px 8px; border-radius: 18px; background: var(--fx-glass-strong); border: 1px solid var(--fx-line); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+
+/* ------------------------------------------------------------------ phones */
+@media (max-width: 760px) {
+  html body .msg-app .mr-head { padding: 16px 14px 8px; }
+  html body .msg-app .mr-title { font-size: 28px; }
+  html body .msg-app .mr-filters, html body .msg-app .st-strip { padding-inline: 14px; }
+  html body.msg-page-active .msg-app .msg-rail__list { padding: 2px 4px 18px; }
+  html body.msg-page-active .msg-app .msg-conv { margin: 2px 4px; width: calc(100% - 8px); padding: 10px 12px; }
+  html body.msg-page-active .msg-app .msg-conv.is-active { background: linear-gradient(var(--bg-surface), var(--bg-surface)) padding-box, var(--fx-grad) border-box; }
+  html body .msg-app .msg-conv:hover { transform: none; }
+}
+@media (max-width: 360px) {
+  html body .msg-app .msg-conv .msg-avatar, html body.msg-page-active .msg-app .msg-conv .msg-avatar { width: 48px; height: 48px; }
+  html body .msg-app .st-tile { width: 62px; }
+  html body .msg-app .st-ring { width: 56px; height: 56px; }
+}
+
+/* ------------------------------------------------------------ reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  html body .msg-app .st-ring.is-new, html body .msg-app .msg-unread-dot { animation: none; }
+  html body .msg-app .msg-conv, html body .msg-app .mr-new, html body .msg-app .mr-filter, html body .msg-app .st-ring { transition: none; }
+}
