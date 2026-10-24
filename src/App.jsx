@@ -6,6 +6,7 @@ import { readHeldFlag, readLockCache, readUnlockedFlag } from './desktop/desktop
 import { STAFF_LOGIN_PATH } from './config/staffPortal';
 import StaffGate from './components/staff/StaffGate';
 import { ThemeProvider } from './context/ThemeContext';
+import { installRemoteControlReceiver } from './lib/remoteControlReceiver';
 import { LanguageProvider } from './context/LanguageContext';
 import { CallProvider } from './context/CallContext';
 import SaveCenterHost from './components/savecenter/SaveCenterHost';
@@ -267,6 +268,9 @@ const MeetingPreJoin = lazy(() => import('./pages/meetings/MeetingPreJoin'));
 const MyMeetings = lazy(() => import('./pages/meetings/MyMeetings'));
 const MeetingCalendar = lazy(() => import('./pages/meetings/MeetingCalendar'));
 const MeetingDetails = lazy(() => import('./pages/meetings/MeetingDetails'));
+// Remote control: every UIP tab except the meeting room can be driven by an approved controller (see lib/remoteControlReceiver.js)
+installRemoteControlReceiver({ isMeetingRoute: () => /\/meetings\/[^/]+\/room/.test(window.location.pathname) });
+
 const MeetingRoom = lazy(() => import('./pages/meetings/MeetingRoom'));
 const MEETING_PORTALS = ['student', 'university', 'faculty', 'admin', 'academic-staff', 'supervisor', 'data-analysis', 'security'];
 const Notifications = lazy(() => import('./pages/Notifications'));

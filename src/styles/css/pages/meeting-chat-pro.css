@@ -103,3 +103,21 @@
   .meeting-chat-panel { max-width: none; }
   .meeting-chat-msg.is-mine .meeting-chat-msg__col { max-width: 90%; }
 }
+
+/* ---- remote control (Zoom-style) ---- */
+.meeting-room__spotlight { position: relative; }
+.meeting-rc__overlay { position: absolute; inset: 0; z-index: 8; cursor: crosshair; outline: 3px solid var(--mr-primary); outline-offset: -3px; border-radius: inherit; background: transparent; }
+.meeting-rc__overlay:focus { outline-color: #12B27A; }
+.meeting-rc__bar { position: absolute; z-index: 9; inset-block-end: 12px; inset-inline: 12px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; pointer-events: none; }
+.meeting-rc__bar > * { pointer-events: auto; }
+.meeting-rc__btn, .meeting-rc__chip { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700; border: 1px solid var(--mr-line-strong); background: var(--mr-surface-2); color: var(--mr-text); box-shadow: 0 6px 18px var(--mr-shadow); }
+.meeting-rc__btn { cursor: var(--cur-pointer, pointer); background: var(--mr-primary); color: #fff; border-color: transparent; }
+.meeting-rc__chip.is-live { background: #12B27A; color: #fff; border-color: transparent; }
+.meeting-rc__chip.is-warn { background: #E5484D; }
+.meeting-rc__chip button { border: 0; border-radius: 999px; padding: 3px 10px; font-weight: 800; font-size: 12px; background: #fff; color: #111; cursor: var(--cur-pointer, pointer); }
+.meeting-rc__modal { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, .55); }
+.meeting-rc__card { width: min(420px, 100%); padding: 22px; border-radius: 18px; background: var(--mr-surface); color: var(--mr-text); border: 1px solid var(--mr-line-strong); box-shadow: 0 24px 60px rgba(0, 0, 0, .45); text-align: center; }
+.meeting-rc__card h3 { margin: 10px 0 6px; font-size: 17px; }
+.meeting-rc__card p { margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: var(--mr-muted); }
+.meeting-rc__ico { display: inline-grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: color-mix(in srgb, var(--mr-primary) 16%, transparent); color: var(--mr-primary); }
+.meeting-rc__actions { display: flex; gap: 10px; justify-content: center; }

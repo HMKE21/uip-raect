@@ -143,6 +143,18 @@ export const signalingApi = {
  * اند (راجع docblock هناك) — كيان بيانات له تاريخ (list/send) بعكس حالة
  * signaling اللحظية البحتة.
  */
+/** Remote control of a shared screen (Zoom-style). The screen owner must approve; one controller at a time. */
+export const remoteControlApi = {
+  request: (meetingUuid, guestToken, targetKey) =>
+    api.post(`/api/v1/meetings/${meetingUuid}/remote-control/request`, withGuestToken(guestToken, { target_key: targetKey })),
+  respond: (meetingUuid, guestToken, controllerKey, allow) =>
+    api.post(`/api/v1/meetings/${meetingUuid}/remote-control/respond`, withGuestToken(guestToken, { controller_key: controllerKey, allow })),
+  stop: (meetingUuid, guestToken) =>
+    api.post(`/api/v1/meetings/${meetingUuid}/remote-control/stop`, withGuestToken(guestToken, {})),
+  input: (meetingUuid, guestToken, events) =>
+    api.post(`/api/v1/meetings/${meetingUuid}/remote-control/input`, withGuestToken(guestToken, { events })),
+};
+
 export const chatApi = {
   /** history عند فتح شاشة الاجتماع/بعد إعادة اتصال. الرد بالفعل مفلتر من الباك اند لبس اللي الـ actor ده مسموحله يشوفه (عام + خاص بعته/استلمه). */
   list: (meetingUuid, guestToken, afterId) => {

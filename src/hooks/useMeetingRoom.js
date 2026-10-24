@@ -3,7 +3,8 @@ import { attachNoiseSuppressor } from '../lib/calls/noiseSuppress';
 import { attachEchoGate, echoGateEnabled, setRemoteAudio, clearRemoteAudio, tightenEchoGate } from '../lib/calls/echoGate';
 import { createCameraFx, cameraFxSupported } from '../lib/cameraFx';
 import { watchScreenCapture } from '../lib/captureGuard';
-import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, meetingLifecycleApi, filesApi, notesApi, pollsApi, recordingsApi } from '../lib/meetingSignaling';
+import { createMeetingEcho, presenceChannelName, personalChannelName, signalingApi, chatApi, hostControlApi, meetingLifecycleApi, filesApi, notesApi, pollsApi, recordingsApi, remoteControlApi } from '../lib/meetingSignaling';
+import { REMOTE_CONTROL_CHANNEL } from '../lib/remoteControlReceiver';
 
 /**
  * Round 3 (Signaling) + Round 4 (WebRTC Core). Owns:
@@ -287,6 +288,15 @@ export function useMeetingRoom({
   // Round 5 — بند 9 (Screen Sharing host policies).
   const [screenSharingLocked, setScreenSharingLocked] = useState(!!screenSharingLockedInitial);
   const [myScreenShareAllowed, setMyScreenShareAllowed] = useState(null); // tri-state override: null=no override
+
+  // Remote control of a shared screen (Zoom-style): who controls whom, requests waiting for my answer, my own pending request.
+  const [remoteControl, setRemoteControl] = useState(null); // {controllerKey, controllerName, targetKey} while granted
+  const [rcIncoming, setRcIncoming] = useState([]); // [{controllerKey, controllerName}] asking to control MY screen
+  const [rcPendingTarget, setRcPendingTarget] = useState(null); // targetKey I asked, waiting for the answer
+  const [rcNotice, setRcNotice] = useState(null); // 'denied' | 'stopped'
+  const rcChannelRef = useRef(null);
+  const remoteControlRef = useRef(null);
+  remoteControlRef.current = remoteControl;
 
   // Round 6 — بند 5 (Host Controls / Participants Panel).
   const [myRole, setMyRole] = useState(isHost ? 'host' : 'participant'); // 'host' | 'co_host' | 'participant' — see docblock above for why co-host isn't seeded here
@@ -960,6 +970,29 @@ export function useMeetingRoom({
             setNotice({ type: 'screen_share_force_stopped', by: e.stopped_by_display_name });
           }
         })
+        // Remote control (Zoom-style).
+        .listen('.remote_control.requested', (e) => {
+          if (e.target_key !== myKey) return;
+          setRcIncoming((list) => (list.some((r) => r.controllerKey === e.controller_key) ? list : [...list, { controllerKey: e.controller_key, controllerName: e.controller_name }]));
+        })
+        .listen('.remote_control.changed', (e) => {
+          const iAmTarget = e.target_key === myKey;
+          const iAmController = e.controller_key === myKey;
+          setRcIncoming((list) => list.filter((r) => r.controllerKey !== e.controller_key));
+          if (e.status === 'granted') {
+            setRemoteControl({ controllerKey: e.controller_key, controllerName: e.controller_name, targetKey: e.target_key });
+            setRcPendingTarget(null);
+            if (iAmTarget) rcChannelRef.current?.postMessage({ type: 'state', active: true, controllerName: e.controller_name });
+          } else {
+            setRemoteControl(null);
+            if (iAmController) { setRcPendingTarget(null); setRcNotice(e.status); }
+            if (iAmTarget) rcChannelRef.current?.postMessage({ type: 'state', active: false });
+          }
+        })
+        .listen('.remote_control.input', (e) => {
+          if (e.target_key !== myKey) return;
+          rcChannelRef.current?.postMessage({ type: 'input', events: e.events });
+        })
         // Round 6 — بند 5 (Host Controls / Participants Panel).
         .listen('.meeting.lock_changed', (e) => {
           setMeetingLocked(e.locked);
@@ -1534,7 +1567,40 @@ export function useMeetingRoom({
   }, [meetingUuid, guestToken]);
   const closePoll = useCallback((pollId) => pollsApi.close(meetingUuid, guestToken, pollId), [meetingUuid, guestToken]);
 
+  // ---- remote control actions ----
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return undefined;
+    const ch = new BroadcastChannel(REMOTE_CONTROL_CHANNEL);
+    rcChannelRef.current = ch;
+    // a receiving tab's Stop button / closing it ends the session for everyone
+    ch.onmessage = (m) => {
+      if (m.data?.type === 'stop-request' || m.data?.type === 'receiver-closed') remoteControlApi.stop(meetingUuid, guestToken).catch(() => {});
+    };
+    return () => { ch.close(); rcChannelRef.current = null; };
+  }, [meetingUuid, guestToken]);
+
+  const requestRemoteControl = useCallback(async (targetKey) => {
+    setRcNotice(null);
+    setRcPendingTarget(targetKey);
+    try { await remoteControlApi.request(meetingUuid, guestToken, targetKey); }
+    catch (err) { setRcPendingTarget(null); setRcNotice(err?.message || 'failed'); }
+  }, [meetingUuid, guestToken]);
+
+  const respondRemoteControl = useCallback((controllerKey, allow) => {
+    setRcIncoming((list) => list.filter((r) => r.controllerKey !== controllerKey));
+    return remoteControlApi.respond(meetingUuid, guestToken, controllerKey, allow).catch((err) => setRcNotice(err?.message || 'failed'));
+  }, [meetingUuid, guestToken]);
+
+  const stopRemoteControl = useCallback(() => remoteControlApi.stop(meetingUuid, guestToken).catch(() => {}), [meetingUuid, guestToken]);
+  const sendRemoteInput = useCallback((events) => {
+    if (remoteControlRef.current?.controllerKey !== myKey) return;
+    remoteControlApi.input(meetingUuid, guestToken, events).catch(() => {});
+  }, [meetingUuid, guestToken, myKey]);
+  const clearRcNotice = useCallback(() => setRcNotice(null), []);
+
   return {
+    remoteControl, rcIncoming, rcPendingTarget, rcNotice, clearRcNotice,
+    requestRemoteControl, respondRemoteControl, stopRemoteControl, sendRemoteInput,
     status, error, meetingStatus, notice, clearNotice,
     localStream, screenStream, hasCamera, micEnabled, cameraEnabled, screenSharing, canShareScreen,
     participants, meshCapacity, hasTurn,

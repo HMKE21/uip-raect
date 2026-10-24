@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBackLayer } from '../../../lib/backStack';
 import { useMeetingRoom, meetingLog } from '../../../hooks/useMeetingRoom';
+import RemoteControlLayer from './RemoteControlLayer';
 import ParticipantTile from './ParticipantTile';
 import { ReactionLayer } from './ReactionFx';
 import { CAMERA_FILTERS, CAMERA_BACKGROUNDS, scenePreview } from '../../../lib/cameraFx';
@@ -512,6 +513,7 @@ export default function MeetingRoomShell({
                   </div>
                 )}
                 {renderTile(tiles.spotlight)}
+                <RemoteControlLayer room={room} myKey={myKey} presenter={presenterTile && tiles.spotlight.key === presenterTile.key ? presenterTile : null} t={t} />
               </div>
               {tiles.rest.length > 0 && <div className="meeting-room__strip">{tiles.rest.map(renderTile)}</div>}
             </>
