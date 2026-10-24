@@ -267,6 +267,9 @@ export function useMeetingRoom({
   // Noise isolation (RNNoise) — `noiseOn` is the switch, `noiseAvailable` is whether the neural graph could be built here.
   const [noiseOn, setNoiseOn] = useState(readNoisePref);
   const [noiseAvailable, setNoiseAvailable] = useState(false);
+  // "Speakers off" (same room): when two devices sit in one room each mic hears the other's speaker, which no software can cancel
+  // (it is a different device's output, so the echo canceller has no reference). Cutting remote playback on this device breaks the loop.
+  const [speakersMuted, setSpeakersMuted] = useState(false);
 
   // Round 5 — بند 9 (Screen Sharing host policies).
   const [screenSharingLocked, setScreenSharingLocked] = useState(!!screenSharingLockedInitial);
@@ -315,6 +318,8 @@ export function useMeetingRoom({
   const leftRef = useRef(false);
   const seenChatIdsRef = useRef(new Set()); // dedupe — the sender gets their own message from the REST response, but also rides the same broadcast as everyone else on the presence channel (Round 5's ChatMessageSent doesn't use toOthers())
   const reactionSeqRef = useRef(0);
+  const feedbackHitsRef = useRef([]); // timestamps of detected feedback whistles
+  const onFeedbackRef = useRef(null);
   const pushReactionRef = useRef(null);
   const noiseRef = useRef(null); // { stream, setEnabled } from attachNoiseSuppressor()
 
@@ -696,7 +701,7 @@ export function useMeetingRoom({
         // Neural noise isolation (RNNoise): always built when supported so the in-room switch can flip it instantly. If it is
         // unavailable we keep the browser's own suppression + echo cancellation (set above) — never break joining.
         if (stream.getAudioTracks().length) {
-          const ns = await attachNoiseSuppressor(stream, noisePref);
+          const ns = await attachNoiseSuppressor(stream, noisePref, { onFeedback: (hz) => onFeedbackRef.current?.(hz) });
           if (cancelled) { (ns ? ns.stream : stream).getTracks().forEach((t) => t.stop()); return; }
           if (ns) { noiseRef.current = ns; stream = ns.stream; setNoiseAvailable(true); }
           dbg('noise isolation', ns ? 'on (RNNoise graph)' : 'unavailable, browser filter only');
@@ -1321,6 +1326,24 @@ export function useMeetingRoom({
     });
   }, [meetingUuid, guestToken, myKey, myDisplayName, pushReaction]);
 
+  // ---- acoustic feedback between nearby devices ---------------------------
+  // The mic-side detector (noiseSuppress.js) calls this each time a feedback whistle starts. One blip is handled by its notch filter;
+  // a repeat inside 30 s means the loop is real (another device in the room), so we mute THIS mic — that cuts the loop at once, from
+  // either side — tell the user why, and point them at "Speakers off". Unmuting is a normal tap on the mic button.
+  onFeedbackRef.current = (hz) => {
+    const now = Date.now();
+    feedbackHitsRef.current = [...feedbackHitsRef.current.filter((t) => now - t < 30000), now];
+    dbg('feedback whistle', hz, 'Hz — hits in last 30s:', feedbackHitsRef.current.length);
+    if (feedbackHitsRef.current.length < 2 || leftRef.current) return;
+    feedbackHitsRef.current = [];
+    localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = false; });
+    setMicEnabled(false);
+    signalingApi.mediaState(meetingUuid, guestToken, { mic_enabled: false }).catch(() => {});
+    setNotice({ type: 'echo_detected' });
+  };
+
+  const toggleSpeakers = useCallback(() => setSpeakersMuted((v) => !v), []);
+
   // ---- noise isolation switch (shared with 1:1 calls) ---------------------
   const toggleNoise = useCallback(() => {
     setNoiseOn((prev) => {
@@ -1417,7 +1440,7 @@ export function useMeetingRoom({
     handRaised, toggleHand, reactions, sendReaction,
 
     // Audio — noise isolation switch.
-    noiseOn, noiseAvailable, toggleNoise,
+    noiseOn, noiseAvailable, toggleNoise, speakersMuted, toggleSpeakers,
 
     // بند 9 — Screen Sharing host policies.
     screenSharingLocked, myScreenShareAllowed, setScreenSharingLock, setParticipantScreenShareAllowed, forceStopScreenShare,

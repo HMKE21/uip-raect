@@ -197,6 +197,7 @@ export default function MeetingRoomShell({
         screenSharing={p.screenSharing}
         handRaised={p.handRaised}
         reaction={reactionByTile[p.key]}
+        speakersMuted={room.speakersMuted}
         screenShareAllowed={p.screenShareAllowed}
         connectionQuality={p.connectionQuality}
         connectionState={p.connectionState}
@@ -233,6 +234,7 @@ export default function MeetingRoomShell({
     if (notice.type === 'muted_by_host') {
       return `${t('You were muted by the host.')}${notice.by ? ` (${notice.by})` : ''}`;
     }
+    if (notice.type === 'echo_detected') return t('Audio feedback detected — another device nearby is looping your voice, so your mic was muted. Use headphones, or turn Speakers off in More if you are in the same room as them.');
     if (notice.type === 'camera_unavailable') return t("Couldn't open a camera. Check the browser's camera permission and that no other app is using it.");
     if (notice.type === 'screen_share_unsupported') return t("This browser can't share your screen.");
     if (notice.type === 'screen_share_failed') return t('Screen sharing could not start. Please try again.');
@@ -538,6 +540,10 @@ export default function MeetingRoomShell({
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={room.toggleNoise} aria-pressed={room.noiseOn}>
                     <Icon name="mic" size={16} /> {t('Noise isolation')}
                     <span className="badge badge-neutral" style={{ marginInlineStart: 'auto' }}>{room.noiseOn ? t('On') : t('Off')}</span>
+                  </button>
+                  <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={room.toggleSpeakers} aria-pressed={room.speakersMuted} title={t('Turn off if another participant is sitting next to you')}>
+                    <Icon name="volume" size={16} /> {t('Speakers off (same room)')}
+                    <span className="badge badge-neutral" style={{ marginInlineStart: 'auto' }}>{room.speakersMuted ? t('On') : t('Off')}</span>
                   </button>
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={() => { togglePanel('recordings'); setMoreOpen(false); }}>
                     <Icon name="record-dot" size={16} style={room.activeRecording ? { color: '#ef4444' } : undefined} /> {t('Recordings')}

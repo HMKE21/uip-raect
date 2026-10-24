@@ -19,7 +19,7 @@ export const noiseSuppressSupported = () => rnnoiseSupported();
  * @param {boolean} enabled     initial state of the isolation switch
  * @returns {Promise<null | { stream: MediaStream, setEnabled: (on: boolean) => void }>}
  */
-export async function attachNoiseSuppressor(stream, enabled = true) {
+export async function attachNoiseSuppressor(stream, enabled = true, opts = {}) {
   if (!noiseSuppressSupported()) return null;
   const micTrack = stream && stream.getAudioTracks && stream.getAudioTracks()[0];
   if (!micTrack) return null;
@@ -65,7 +65,7 @@ export async function attachNoiseSuppressor(stream, enabled = true) {
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0;
     mix.connect(analyser);
-    const stopHowl = watchHowl(ctx, analyser, howl);
+    const stopHowl = watchHowl(ctx, analyser, howl, opts && opts.onFeedback);
 
     let first = true;
     const setEnabled = (on) => {
@@ -113,7 +113,7 @@ export async function attachNoiseSuppressor(stream, enabled = true) {
  * neighbourhood and stays on the same bin for ~0.8 s, then park a narrow notch on it. When the peak is gone for ~3 s the notch is
  * moved out of the audible range again. Returns a function that stops the watcher.
  */
-function watchHowl(ctx, analyser, notch) {
+function watchHowl(ctx, analyser, notch, onFeedback) {
   const n = analyser.frequencyBinCount;
   const data = new Float32Array(n);
   const binHz = ctx.sampleRate / analyser.fftSize;
@@ -142,6 +142,7 @@ function watchHowl(ctx, analyser, notch) {
           active = true;
           notch.frequency.setTargetAtTime(k * binHz, ctx.currentTime, 0.01);
           try { console.warn('[call] feedback tone suppressed at', Math.round(k * binHz), 'Hz'); } catch { /* diagnostics only */ }
+          try { if (onFeedback) onFeedback(Math.round(k * binHz)); } catch { /* the callback must never break the call */ }
         }
       } else {
         hold = 0;

@@ -73,7 +73,7 @@ export default function ParticipantTile({
   screenSharing, connectionQuality, connectionState, isLocal, large,
   handRaised, reaction, screenShareAllowed, canManage, onAllowScreenShare, onDenyScreenShare, onResetScreenShare, onForceStopScreenShare,
   role, canPrimaryManage, onMute, onDisableCamera, onRemove, onPromote, onDemote, onMakeHost,
-  onPin, pinned, onStopShare,
+  onPin, pinned, onStopShare, speakersMuted,
 }) {
   const videoRef = useRef(null);
   const vb = useVolumeBoost(videoRef, { stream });   // louder remote participants (never for your own mic)
@@ -92,7 +92,7 @@ export default function ParticipantTile({
     const el = videoRef.current;
     if (!el) return undefined;
     if (el.srcObject !== (stream || null)) el.srcObject = stream || null;
-    el.muted = !!isLocal; // your own tile must NEVER play your own mic (that is the echo you hear)
+    el.muted = !!isLocal || !!speakersMuted; // your own tile must NEVER play your own mic (that is the echo you hear); "speakers off" silences everyone for same-room use
     if (!stream || isLocal) return undefined;
     el.volume = 1;
     const play = () => {
@@ -109,7 +109,7 @@ export default function ParticipantTile({
       window.removeEventListener('keydown', play, true);
       stream.removeEventListener && stream.removeEventListener('addtrack', play);
     };
-  }, [stream, isLocal]);
+  }, [stream, isLocal, speakersMuted]);
 
   const cls = ['meeting-tile'];
   if (pinned) cls.push('is-pinned');

@@ -10,6 +10,9 @@
 export default {
   // — room redesign —
   'Noise isolation': 'عزل الضوضاء',
+  'Speakers off (same room)': 'إيقاف السماعات (نفس الأوضة)',
+  'Turn off if another participant is sitting next to you': 'فعّلها لو فيه مشارك تاني قاعد جنبك',
+  'Audio feedback detected — another device nearby is looping your voice, so your mic was muted. Use headphones, or turn Speakers off in More if you are in the same room as them.': 'اتكشف صدى صوتي — فيه جهاز قريب منك بيرجّع صوتك، فقفلنا الميكروفون بتاعك. استخدم سماعات، أو شغّل «إيقاف السماعات» من «المزيد» لو قاعد في نفس الأوضة معاهم.',
   'Presenting': 'يعرض الشاشة',
   'is presenting': 'بيعرض شاشته',
   'You are presenting your screen': 'إنت بتشارك شاشتك',
