@@ -544,6 +544,7 @@ export default function MeetingRoomShell({
 
         <ChatPanel
           messages={room.chatMessages}
+          reactionLog={room.reactionLog}
           unreadCount={room.chatUnreadCount}
           enabled={room.chatEnabled}
           myKey={myKey}
