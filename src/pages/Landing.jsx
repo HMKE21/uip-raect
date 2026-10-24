@@ -9,24 +9,132 @@ import ProjectCard from '../components/ProjectCard';
 import SiteFooter from '../components/SiteFooter';
 import CountUp from '../components/CountUp';
 import LandingNav from '../components/LandingNav';
-import LandingBackdrop from '../components/LandingBackdrop';
-import useScrollReveal from '../hooks/useScrollReveal';
 import useAppDownload from '../hooks/useAppDownload';
 import AppDownloadLink from '../components/AppDownloadLink';
 import { roleHome } from '../config/roleHome';
 
 /**
- * Landing page for both pillars of the platform (graduation projects + the Exam & Assessment System). Originally a port of app/Views/public/landing.php — Readiness Ring hero visual
- * (restyled in the Admin design language, classes .lp2-*, see styles/css/landing.css), same featured-projects grid
- * (GET /api/v1/public/landing). PublicLandingController redirects an
- * already-authenticated visitor straight to their dashboard instead of
- * rendering the page at all; mirrored here via useAuth() + <Navigate>,
- * since a SPA route can't do that server-side redirect before rendering.
- * Was previously hardcoded to "/dashboard" regardless of role, which sent
- * an already-authenticated student to the generic pilot Dashboard.jsx
- * instead of /student/dashboard — now routed through the same roleHome()
- * map Login.jsx/TwoFactor.jsx use, keyed off the decoded JWT's role claim.
+ * Landing page (.lp2 palette + .lp3 layout, see styles/css/landing.css and landing-v3.css).
+ *
+ * UIP is no longer "projects + exams": it is a whole campus in one tab — chat, voice/video calls (1:1 and groups),
+ * video meetings, a cloud "My PC" desktop with a code editor / office files / terminal, an AI assistant and tutor,
+ * exams, graduation projects and the staff portals. The page is built around that: the hero is a miniature of the
+ * My PC desktop (drawn in CSS, no screenshots) and each section shows the real thing in a small window.
+ *
+ * An already-authenticated visitor is sent to their dashboard (same as before, via roleHome()).
+ * Live numbers come from GET /api/v1/public/landing and are never hard-coded.
  */
+
+/* ---------- small window frame used by every mock ---------- */
+function Win({ title, icon, className = '', children, style }) {
+  return (
+    <div className={`lp3-win ${className}`} style={style} aria-hidden="true">
+      <div className="lp3-win__bar">
+        <span className="lp3-win__title">{icon && <Icon name={icon} size={12} />}{title}</span>
+        <span className="lp3-win__ctl"><i /><i /><i /></span>
+      </div>
+      <div className="lp3-win__body">{children}</div>
+    </div>
+  );
+}
+
+function Av({ children, tone = 1 }) {
+  return <span className={`lp3-av lp3-av--${tone}`}>{children}</span>;
+}
+
+function ChatMock({ t }) {
+  return (
+    <div className="lp3-chat">
+      <div className="lp3-msg"><Av tone={2}>{t('S', 'س')}</Av><p>{t('Who is presenting first tomorrow?', 'مين هيعرض الأول بكرة؟')}</p></div>
+      <div className="lp3-msg"><Av tone={3}>{t('M', 'م')}</Av><p>{t('Me. Starting a call so we can rehearse.', 'أنا. هبدأ مكالمة نراجع فيها.')}</p></div>
+      <div className="lp3-msg lp3-msg--card">
+        <Av tone={3}>{t('M', 'م')}</Av>
+        <div className="lp3-callcard">
+          <b><Icon name="video" size={13} /> {t('Group video call', 'مكالمة فيديو جماعية')}</b>
+          <span className="lp3-callcard__btn">{t('Join call', 'انضم للمكالمة')}</span>
+        </div>
+      </div>
+      <div className="lp3-msg lp3-msg--me"><p>{t('Joining now', 'داخل دلوقتي')}</p></div>
+    </div>
+  );
+}
+
+function MeetMock({ t, big = false }) {
+  const tiles = [['A', 1, true], ['N', 2, false], ['Y', 3, false], ['R', 4, false]];
+  return (
+    <div className={`lp3-meet ${big ? 'lp3-meet--big' : ''}`}>
+      <div className="lp3-meet__grid">
+        {tiles.map(([c, tone, speaking]) => (
+          <div key={c} className={`lp3-tile ${speaking ? 'is-speaking' : ''}`}>
+            <Av tone={tone}>{c}</Av>
+          </div>
+        ))}
+      </div>
+      <div className="lp3-meet__bar">
+        <i><Icon name="mic" size={11} /></i>
+        <i><Icon name="video" size={11} /></i>
+        <i><Icon name="screen-share" size={11} /></i>
+        <i><Icon name="hand" size={11} /></i>
+        <i className="is-end" title={t('Leave', 'خروج')}><Icon name="logout" size={11} /></i>
+      </div>
+    </div>
+  );
+}
+
+function CodeMock({ t }) {
+  return (
+    <div className="lp3-code">
+      <pre dir="ltr" className="lp3-code__src">
+        <span className="c-k">def</span> <span className="c-f">average</span>(nums):{'\n'}
+        {'    '}<span className="c-k">return</span> <span className="c-f">sum</span>(nums) / <span className="c-f">len</span>(nums){'\n'}
+        {'\n'}
+        <span className="c-f">print</span>(<span className="c-f">average</span>([])) <span className="c-c"># ?</span>
+      </pre>
+      <div className="lp3-tutor">
+        <span className="lp3-tutor__who"><Icon name="ai-spark" size={13} /> {t('AI tutor', 'المعلم الذكي')}</span>
+        <p>{t('An empty list divides by zero. Check len(nums) first, then decide what to return.', 'القايمة الفاضية هتقسم على صفر. اتأكد من len(nums) الأول وبعدين قرر هترجّع إيه.')}</p>
+      </div>
+    </div>
+  );
+}
+
+function ExplorerMock({ t }) {
+  const rows = [
+    ['folder', t('Graduation project', 'مشروع التخرج'), '—'],
+    ['file', t('Report.docx', 'التقرير.docx'), '2.4 MB'],
+    ['file', 'slides.pptx', '8.1 MB'],
+    ['terminal', 'main.py', '3 KB'],
+    ['archive', 'dataset.zip', '41 MB'],
+  ];
+  return (
+    <ul className="lp3-files">
+      {rows.map(([ic, name, size]) => (
+        <li key={name}><Icon name={ic} size={14} /><span dir="auto">{name}</span><em>{size}</em></li>
+      ))}
+    </ul>
+  );
+}
+
+function ExamMock({ t }) {
+  return (
+    <div className="lp3-exam">
+      <div className="lp3-exam__top"><span><Icon name="clock" size={13} /> 21:42</span><span>{t('Question 14 of 20', 'سؤال 14 من 20')}</span></div>
+      <p>{t('Which HTTP status code means a resource was created?', 'أي كود HTTP بيدل إن المورد اتعمل بنجاح؟')}</p>
+      <ul>
+        <li>200</li>
+        <li className="is-picked"><Icon name="check-circle" size={14} /> 201</li>
+        <li>204</li>
+        <li>301</li>
+      </ul>
+      <small><Icon name="shield" size={12} /> {t('Answers auto-save. The server keeps the time.', 'الإجابات بتتحفظ تلقائيًا والسيرفر هو اللي بيحسب الوقت.')}</small>
+    </div>
+  );
+}
+
+function Point({ icon, children }) {
+  return <li><span className="lp3-pt__ico"><Icon name={icon} size={16} /></span><span>{children}</span></li>;
+}
+
 export default function Landing() {
   const { status, user } = useAuth();
   const { locale } = useLanguage();
@@ -36,7 +144,6 @@ export default function Landing() {
 
   const [featured, setFeatured] = useState([]);
   const [liveStats, setLiveStats] = useState(null);
-  const [tab, setTab] = useState('project');
 
   useEffect(() => {
     let alive = true;
@@ -50,262 +157,230 @@ export default function Landing() {
     return () => { alive = false; };
   }, []);
 
-  // Scroll-reveal: cards / headings fade + rise as they enter the viewport (skipped for reduced motion).
-  useScrollReveal('.lp2--fx main .lp2-head, .lp2--fx main .lp2-card, .lp2--fx main .lp2-flow__item, .lp2--fx main .pp-card, .lp2--fx main .lp2-cta', [featured.length], status !== 'authenticated');
-
   if (status === 'authenticated') {
     return <Navigate to={roleHome(user?.role)} replace />;
   }
 
-  const steps = [
-    ['upload', t('Upload your project', 'ارفع مشروعك'), t('Document your idea, attach your files, link your GitHub if you like.', 'وثّق فكرتك، أضف ملفاتك، واربط الكود على GitHub لو حابب.')],
-    ['sparkles', t('Get your score', 'خد تقييمك'), t('AI analyzes feasibility, market fit, documentation, and innovation instantly.', 'الذكاء الاصطناعي يحلل الجدوى والسوق والتوثيق والابتكار فورًا.')],
-    ['check-circle', t('University sign-off', 'اعتماد الجامعة'), t('Your university reviews and approves it before it goes public.', 'جامعتك تراجع وتعتمد المشروع قبل ما ينشر للعامة.')],
-    ['eye', t('Get discovered', 'اتكتشف'), t('Your university and the wider platform see exactly this kind of work.', 'جامعتك ومنصات المنصة الأوسع تشوف مشاريع زي بتاعتك بالظبط.')],
-  ];
-
-  const roles = [
-    ['award', t('Student', 'طالب'), t('Publish your graduation project, take your exams online, and see your results in one place.', 'انشر مشروع تخرجك، وادخل امتحاناتك أونلاين، وشوف نتايجك في مكان واحد.')],
-    ['users', t('Instructor', 'دكتور / مدرّس'), t('Build question banks and exams, target the right students, and grade faster with AI assistance.', 'اعمل بنوك أسئلة وامتحانات، ووجّهها للطلاب المناسبين، وصحّح أسرع بمساعدة الذكاء الاصطناعي.')],
-    ['building', t('University', 'جامعة'), t("Approve student projects and monitor exams and results across faculties.", 'اعتمد مشاريع الطلاب وتابع الامتحانات والنتائج على مستوى الكليات.')],
-  ];
-
-  const signals = [
-    [t('Technical feasibility', 'الجدوى التقنية'), 91],
-    [t('Market potential', 'إمكانات السوق'), 84],
-    [t('Documentation', 'جودة التوثيق'), 88],
-    [t('Innovation level', 'مستوى الابتكار'), 85],
-  ];
-
-  // Real platform numbers from GET /api/v1/public/landing (live DB counts, never hard-coded).
   const stats = [
-    [liveStats?.projects_scored, t('Projects scored', 'مشروع اتقيّم')],
-    [liveStats?.published_projects, t('Published projects', 'مشروع منشور')],
-    [liveStats?.partner_universities, t('Partner universities', 'جامعة شريكة')],
-    [liveStats?.active_students, t('Active students', 'طالب نشط')],
+    [liveStats?.active_students, t('active students', 'طالب نشط')],
+    [liveStats?.partner_universities, t('partner universities', 'جامعة شريكة')],
+    [liveStats?.published_projects, t('published projects', 'مشروع منشور')],
+    [liveStats?.projects_scored, t('projects scored by AI', 'مشروع اتقيّم بالذكاء الاصطناعي')],
   ];
 
-  const examFeatures = [
-    ['layers', t('Question banks & exam builder', 'بنوك أسئلة ومنشئ امتحانات'), t('Build reusable banks, then compose exams with MCQ, true/false, short-answer and essay questions.', 'ابنِ بنوك أسئلة قابلة لإعادة الاستخدام، وركّب منها امتحانات (اختيار من متعدد، صح/خطأ، إجابة قصيرة، مقالي).')],
-    ['users', t('Precise targeting', 'استهداف دقيق'), t('Assign an exam to a faculty, department, year, group, or even specific students.', 'وجّه الامتحان لكلية أو قسم أو فرقة أو مجموعة، أو لطلاب بعينهم.')],
-    ['clock', t('Server-side timer & auto-save', 'مؤقت من السيرفر وحفظ تلقائي'), t('Answers save as students go, and time is enforced by the server, so a refresh or dropped connection never costs them work.', 'الإجابات بتتحفظ تلقائيًا والوقت بيتحسب من السيرفر، فالريفريش أو قطع النت مايضيّعش شغل الطالب.')],
-    ['shield', t('Secure exam mode', 'وضع الامتحان الآمن'), t('Tab-switch and fullscreen events are logged, with optional camera snapshots and a single active session per student.', 'تسجيل تبديل التابات وخروج الشاشة الكاملة، مع لقطات كاميرا اختيارية وجلسة واحدة نشطة لكل طالب.')],
-    ['ai-spark', t('AI-assisted grading', 'تصحيح بمساعدة الذكاء الاصطناعي'), t('MCQ is graded instantly; short-answer and essay get an AI suggestion that the instructor reviews and accepts.', 'الاختيار من متعدد بيتصحح فورًا، والإجابات القصيرة والمقالية بياخدوا اقتراح تصحيح من الذكاء الاصطناعي والدكتور بيراجعه ويعتمده.')],
-    ['bar-chart', t('Analytics & results', 'تحليلات ونتائج'), t('Question-level analytics, instructor/faculty/university dashboards, result publishing and CSV export.', 'تحليلات على مستوى السؤال، ولوحات للدكتور والكلية والجامعة، ونشر النتائج وتصديرها.')],
+  const steps = [
+    [t('Upload', 'ارفع'), t('Describe your idea and attach files or your GitHub repo.', 'اكتب فكرتك وأضف ملفاتك أو رابط GitHub.')],
+    [t('Get scored', 'خد تقييمك'), t('AI rates feasibility, market fit, documentation and innovation.', 'الذكاء الاصطناعي يقيّم الجدوى والسوق والتوثيق والابتكار.')],
+    [t('Get approved', 'اتعتمد'), t('Your university reviews it before it goes public.', 'جامعتك تراجعه قبل ما يتنشر.')],
+    [t('Get discovered', 'اتكتشف'), t('Published projects are open to universities and companies.', 'المشاريع المنشورة بتظهر للجامعات والشركات.')],
   ];
 
-  const examSteps = [
-    t('Build', 'جهّز'), t('Target', 'استهدف'), t('Take', 'امتحن'), t('Grade', 'صحّح'), t('Analyze', 'حلّل'),
-  ];
-
-  const examLines = [
-    [t('Questions answered', 'أسئلة تمت الإجابة عنها'), 14, 20],
-    [t('Time elapsed', 'الوقت المنقضي'), 38, 60],
+  const audiences = [
+    [t('Students', 'الطلاب'), [
+      t('Courses, timetable, attendance and grades', 'المواد والجدول والحضور والدرجات'),
+      t('Assignments and exams in one place', 'التكاليف والامتحانات في مكان واحد'),
+      t('Portfolio, patents and GitHub link', 'بورتفوليو وبراءات اختراع وربط GitHub'),
+      t('Graduation certificate with public verification', 'شهادة تخرج بتتحقق منها أي جهة'),
+    ]],
+    [t('Instructors and supervisors', 'الدكاترة والمشرفون'), [
+      t('Question banks and exam builder', 'بنوك أسئلة ومنشئ امتحانات'),
+      t('AI-assisted grading you review', 'تصحيح بمساعدة الذكاء الاصطناعي وبمراجعتك'),
+      t('Course content, attendance, timetable', 'محتوى المواد والحضور والجدول'),
+      t('Project grading and similarity checks', 'تقييم المشاريع وفحص التشابه'),
+    ]],
+    [t('Universities and faculties', 'الجامعات والكليات'), [
+      t('Approve student projects and graduation', 'اعتماد المشاريع والتخرج'),
+      t('Registration, fees, summer terms', 'التسجيل والرسوم والفصل الصيفي'),
+      t('University email and announcements', 'البريد الجامعي والإعلانات'),
+      t('Chat oversight and reports', 'متابعة الشات والبلاغات'),
+    ]],
+    [t('Data and security teams', 'فرق البيانات والأمن'), [
+      t('Dashboards, KPIs, forecasting, data quality', 'لوحات ومؤشرات وتنبؤ وجودة بيانات'),
+      t('Exam analytics and AI insights', 'تحليلات الامتحانات ورؤى الذكاء الاصطناعي'),
+      t('Incidents, alerts and security logs', 'الحوادث والتنبيهات وسجلات الأمان'),
+      t('Sessions and device control', 'التحكم في الجلسات والأجهزة'),
+    ]],
   ];
 
   return (
-    <div className="lp2 lp2--fx">
+    <div className="lp2 lp3">
       <LandingNav anchors />
 
-      <header className="lp2-hero">
-        <LandingBackdrop />
-        <div className="lp2-shell lp2-hero__grid">
-          <div className="animate-rise-in">
-            <span className="lp2-pill"><Icon name="sparkles" size={14} /> {t('Projects and exams, one platform', 'مشاريع وامتحانات، في منصة واحدة')}</span>
-            <h1>
-              {t('Publish your projects. ', 'انشر مشاريعك. ')}
-              <span>{t('Run your exams. All on UIP.', 'وادِّ امتحاناتك. كله على UIP.')}</span>
-            </h1>
-            <p className="lp2-lead">
+      {/* ------------------------------------------------------------- hero */}
+      <header className="lp3-hero">
+        <div className="lp3-shell lp3-hero__grid">
+          <div className="lp3-hero__copy">
+            <h1>{t('Your whole campus, in one tab.', 'جامعتك كلها في تبويب واحد.')}</h1>
+            <p className="lp3-lead">
               {t(
-                'UIP brings graduation projects and a complete online exam system together: get an instant AI Readiness Score for your project, and build, run, grade and analyze exams, securely.',
-                'UIP بتجمع مشاريع التخرج ومنصة امتحانات أونلاين متكاملة: خُد درجة جاهزية فورية لمشروعك بالذكاء الاصطناعي، وجهّز وادِّ وصحّح وحلّل الامتحانات بأمان.'
+                'Chat and call your groups, meet on video, sit exams, publish your graduation project, and write code on your own cloud PC, with an AI tutor next to you.',
+                'اتكلم مع مجموعاتك واتصل بيهم، اجتمع بالفيديو، امتحن، انشر مشروع تخرجك، واكتب كود على جهازك الشخصي السحابي، ومعاك معلم ذكي جنبك.',
               )}
             </p>
-            <div className="lp2-hero__ctas">
-              <Link to="/auth/register" className="btn btn-primary btn-lg"><Icon name="sparkles" size={18} /> {t('Create your free account', 'انشئ حسابك المجاني')}</Link>
-              <Link to="/auth/login" className="btn btn-outline btn-lg">{t('I already have an account', 'عندي حساب بالفعل')}</Link>
+            <div className="lp3-cta">
+              <Link to="/auth/register" className="btn btn-primary btn-lg">{t('Create a free account', 'اعمل حساب مجاني')}</Link>
+              <Link to="/auth/login" className="btn btn-outline btn-lg">{t('Log in', 'تسجيل الدخول')}</Link>
               {app && <AppDownloadLink app={app} className="btn btn-outline btn-lg" iconSize={18} logo />}
             </div>
-            <p className="lp2-note"><Icon name="check-circle" size={14} /> {t('Free for students, always. No credit card required.', 'مجاني للطلاب دايمًا. مفيش بطاقة ائتمان مطلوبة.')}</p>
+            <p className="lp3-note">{t('Free for students. No credit card.', 'مجاني للطلاب. من غير كريدت كارد.')}</p>
           </div>
 
-          <div className="animate-rise-in" style={{ animationDelay: '.12s' }}>
-            <div className="lp2-tabs" role="tablist">
-              <button type="button" role="tab" aria-selected={tab === 'project'} className={tab === 'project' ? 'is-active' : ''} onClick={() => setTab('project')}><Icon name="projects" size={14} /> {t('Projects', 'المشاريع')}</button>
-              <button type="button" role="tab" aria-selected={tab === 'exam'} className={tab === 'exam' ? 'is-active' : ''} onClick={() => setTab('exam')}><Icon name="note" size={14} /> {t('Exams', 'الامتحانات')}</button>
+          <div className="lp3-stage">
+            <div className="lp3-desk" aria-label={t('A preview of the My PC desktop', 'معاينة لسطح مكتب My PC')} role="img">
+              <Win title={t('Project team', 'فريق المشروع')} icon="chat" className="lp3-w lp3-w--chat"><ChatMock t={t} /></Win>
+              <Win title={t('Rehearsal', 'بروفة العرض')} icon="video" className="lp3-w lp3-w--meet"><MeetMock t={t} /></Win>
+              <Win title="main.py" icon="terminal" className="lp3-w lp3-w--code"><CodeMock t={t} /></Win>
+              <div className="lp3-dock" aria-hidden="true">
+                {['folder', 'terminal', 'note', 'calendar', 'chat', 'video', 'ai-spark'].map((n) => <i key={n}><Icon name={n} size={14} /></i>)}
+              </div>
             </div>
-
-            {tab === 'project' ? (
-              <div className="lp2-mock" aria-label={t('Sample readiness score', 'عينة من درجة الجاهزية')}>
-                <div className="lp2-mock__bar">
-                  <span className="lp2-mock__title">{t('AI Readiness Score', 'درجة الجاهزية')}</span>
-                  <span className="lp2-mock__sample">{t('Sample', 'عينة')}</span>
-                </div>
-                <div className="lp2-mock__body">
-                  <ReadinessRing score={87} size={150} caption={t('Readiness', 'الجاهزية')} />
-                  <div className="lp2-signals">
-                    {signals.map(([label, value]) => (
-                      <div className="lp2-signal" key={label}>
-                        <div className="lp2-signal__top"><span>{label}</span><strong>{value}</strong></div>
-                        <div className="lp2-signal__track"><span style={{ width: `${value}%` }} /></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <div className="lp2-mock__foot">
-                  <span className="lp2-badge"><Icon name="check-circle" size={13} /> {t('Ready to publish', 'جاهز للنشر')}</span>
-                  <span>{t('A sample of the score your project gets seconds after upload.', 'عينة من التقييم اللي مشروعك بياخده بعد ثواني من الرفع.')}</span>
-                </div>
-              </div>
-            ) : (
-              <div className="lp2-mock" aria-label={t('Sample exam session', 'عينة من جلسة امتحان')}>
-                <div className="lp2-mock__bar">
-                  <span className="lp2-mock__title">{t('Exam in progress', 'امتحان جارٍ')}</span>
-                  <span className="lp2-mock__sample">{t('Sample', 'عينة')}</span>
-                </div>
-                <div className="lp2-exam">
-                  <div className="lp2-exam__timer"><Icon name="clock" size={16} /> <strong>21:42</strong> <span>{t('left', 'متبقي')}</span></div>
-                  <div className="lp2-exam__q">
-                    <small>{t('Question 14 of 20', 'سؤال 14 من 20')}</small>
-                    <p>{t('Which HTTP status code means a resource was created?', 'أي كود HTTP بيدل إن المورد اتعمل بنجاح؟')}</p>
-                    <ul>
-                      <li>200</li>
-                      <li className="is-picked"><Icon name="check-circle" size={14} /> 201</li>
-                      <li>204</li>
-                      <li>301</li>
-                    </ul>
-                  </div>
-                  {examLines.map(([label, v, max]) => (
-                    <div className="lp2-signal" key={label}>
-                      <div className="lp2-signal__top"><span>{label}</span><strong>{v}/{max}</strong></div>
-                      <div className="lp2-signal__track"><span style={{ width: `${(v / max) * 100}%` }} /></div>
-                    </div>
-                  ))}
-                </div>
-                <div className="lp2-mock__foot">
-                  <span className="lp2-badge"><Icon name="shield" size={13} /> {t('Secure mode', 'وضع آمن')}</span>
-                  <span>{t('Answers auto-save. The timer runs on the server.', 'الإجابات بتتحفظ تلقائيًا والمؤقت شغّال من السيرفر.')}</span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="lp2-shell">
-          <div className="lp2-stats">
+        <div className="lp3-shell">
+          <ul className="lp3-stats">
             {stats.map(([num, label]) => (
-              <div key={label}><div className="lp2-stats__num">{num == null ? '—' : <CountUp value={num} locale={locale} />}</div><div className="lp2-stats__label">{label}</div></div>
+              <li key={label}><strong>{num == null ? '—' : <CountUp value={num} locale={locale} />}</strong><span>{label}</span></li>
             ))}
-          </div>
+          </ul>
         </div>
       </header>
 
       <main>
-        <section className="lp2-section lp2-shell" id="how">
-          <div className="lp2-head">
-            <span className="lp2-eyebrow">{t('Projects', 'المشاريع')}</span>
-            <h2>{t('From upload to opportunity, in four steps', 'من الرفع للفرصة، في أربع خطوات')}</h2>
+        {/* ------------------------------------------------------- talk */}
+        <section className="lp3-row lp3-shell" id="talk">
+          <div className="lp3-row__text">
+            <h2>{t('Talk, call and meet without leaving UIP', 'اتكلم واتصل واجتمع من غير ما تسيب UIP')}</h2>
+            <p>{t('Study groups, class chats and project teams get everything they need to stay in touch.', 'مجموعات المذاكرة وشاتات الدفعات وفرق المشاريع عندهم كل اللي يحتاجوه عشان يفضلوا على تواصل.')}</p>
+            <ul className="lp3-points">
+              <Point icon="chat">{t('Direct and group chat with voice notes, polls, location, stories and pinned messages.', 'شات فردي وجماعي مع رسائل صوتية واستطلاعات ولوكيشن وستوريز ورسائل مثبّتة.')}</Point>
+              <Point icon="phone">{t('Voice and video calls, one to one or for a whole group.', 'مكالمات صوت وفيديو، فردية أو لمجموعة كاملة.')}</Point>
+              <Point icon="meeting-type">{t('Video meetings you join from a link, with a waiting room, screen sharing, raised hands, polls and recording.', 'اجتماعات فيديو بتدخلها من رابط، مع غرفة انتظار ومشاركة شاشة ورفع إيد واستطلاعات وتسجيل.')}</Point>
+              <Point icon="shield">{t('Everyone is warned when someone screenshots or records a meeting.', 'الكل بيتنبّه لو حد صوّر الشاشة أو سجّلها أثناء الاجتماع.')}</Point>
+            </ul>
           </div>
-          <div className="lp2-steps">
-            {steps.map(([icon, title, desc], i) => (
-              <div className="lp2-card lp2-step" key={title}>
-                <div className="lp2-step__top">
-                  <span className="lp2-icon"><Icon name={icon} size={18} /></span>
-                  <span className="lp2-step__num">0{i + 1}</span>
-                </div>
-                <h3>{title}</h3>
-                <p>{desc}</p>
-              </div>
-            ))}
+          <div className="lp3-row__art">
+            <Win title={t('Study group', 'مجموعة المذاكرة')} icon="users" className="lp3-win--flow"><MeetMock t={t} big /></Win>
           </div>
         </section>
 
-        <section className="lp2-section lp2-shell" id="exams">
-          <div className="lp2-head">
-            <span className="lp2-eyebrow">{t('Exams', 'الامتحانات')}</span>
-            <h2>{t('A complete online exam platform, built in', 'منصة امتحانات أونلاين متكاملة، جوّه المنصة')}</h2>
-            <p className="lp2-head__sub">{t('Everything from the question bank to the analytics dashboard, with no extra tools to stitch together.', 'من بنك الأسئلة لحد لوحة التحليلات، من غير أدوات إضافية تلزق فيها.')}</p>
+        {/* -------------------------------------------------------- my pc */}
+        <section className="lp3-row lp3-row--flip lp3-shell" id="pc">
+          <div className="lp3-row__text">
+            <h2>{t('My PC: a personal computer that lives in your browser', 'جهازك الشخصي My PC جوه متصفحك')}</h2>
+            <p>{t('Your files, tools and settings follow you to any phone or laptop. Open it and it looks like a desktop.', 'ملفاتك وأدواتك وإعداداتك معاك على أي موبايل أو لابتوب. تفتحه تلاقيه سطح مكتب كامل.')}</p>
+            <ul className="lp3-points">
+              <Point icon="folder">{t('Folders and files with share links, version history and storage you can see.', 'مجلدات وملفات مع روابط مشاركة وسجل نسخ ومساحة تخزين واضحة.')}</Point>
+              <Point icon="terminal">{t('A code editor with autocomplete for many languages, plus a terminal.', 'محرر أكواد بإكمال تلقائي لعدة لغات، مع ترمينال.')}</Point>
+              <Point icon="file">{t('Open and edit Word, Excel, PowerPoint and PDF files, or browse ZIP archives.', 'افتح وعدّل ملفات Word وExcel وPowerPoint وPDF، أو تصفّح ملفات ZIP.')}</Point>
+              <Point icon="note">{t('Notes, calendar and calculator, with wallpapers, a lock screen and window snapping.', 'ملاحظات وتقويم وآلة حاسبة، مع خلفيات وشاشة قفل وتقسيم النوافذ.')}</Point>
+            </ul>
           </div>
-          <div className="lp2-flow" aria-label={t('Exam workflow', 'مراحل الامتحان')}>
-            {examSteps.map((label, i) => (
-              <span key={label} className="lp2-flow__item"><b>{i + 1}</b>{label}</span>
-            ))}
-          </div>
-          <div className="lp2-features">
-            {examFeatures.map(([icon, title, desc]) => (
-              <div className="lp2-card" key={title}>
-                <span className="lp2-icon"><Icon name={icon} size={18} /></span>
-                <h3>{title}</h3>
-                <p>{desc}</p>
-              </div>
-            ))}
+          <div className="lp3-row__art">
+            <Win title={t('This PC', 'جهازي')} icon="monitor" className="lp3-win--flow"><ExplorerMock t={t} /></Win>
           </div>
         </section>
 
-        {featured.length > 0 && (
-          <section className="lp2-section lp2-shell" id="featured">
-            <div className="lp2-head lp2-head--row">
-              <div>
-                <span className="lp2-eyebrow">{t('Featured', 'مشاريع مميزة')}</span>
-                <h2>{t('Some of the best work published on the platform', 'من أفضل اللي اتنشر على المنصة')}</h2>
-              </div>
-              <Link to="/projects" className="btn btn-outline">{t('Explore all projects', 'استكشف كل المشاريع')} <Icon name="arrow-right" size={16} /></Link>
-            </div>
-            <div className="public-projects-grid">
-              {featured.map((p, i) => (
-                <ProjectCard key={p.uuid || p.slug || i} project={p} locale={locale} index={i} showUniversity />
-              ))}
-            </div>
-          </section>
-        )}
-
-        <section className="lp2-section lp2-shell" id="roles">
-          <div className="lp2-head">
-            <span className="lp2-eyebrow">{t("Who it's for", 'مين يستفيد')}</span>
-            <h2>{t('One platform, every side of learning and innovation', 'منصة واحدة، لكل أطراف التعليم والابتكار')}</h2>
+        {/* ----------------------------------------------------------- ai */}
+        <section className="lp3-row lp3-shell" id="ai">
+          <div className="lp3-row__text">
+            <h2>{t('AI that works beside you, not instead of you', 'ذكاء اصطناعي جنبك، مش بدالك')}</h2>
+            <p>{t('Ask, get explained, get reviewed. It points to the problem and you fix it.', 'اسأل واتشرحلك واتراجعلك. بيشاور على المشكلة وإنت اللي بتحلها.')}</p>
+            <ul className="lp3-points">
+              <Point icon="ai-spark">{t('A tutor inside the code editor that explains errors and reviews your code.', 'معلم جوه محرر الأكواد بيشرح الأخطاء وبيراجع كودك.')}</Point>
+              <Point icon="bot">{t('An assistant chat for questions about your courses, projects and the platform.', 'شات مساعد للأسئلة عن موادك ومشاريعك والمنصة.')}</Point>
+              <Point icon="sparkles">{t('An AI readiness score for every project: feasibility, market, documentation, innovation.', 'درجة جاهزية لكل مشروع: الجدوى والسوق والتوثيق والابتكار.')}</Point>
+              <Point icon="bar-chart">{t('AI analysis and insights for instructors, universities and data teams.', 'تحليلات ورؤى بالذكاء الاصطناعي للدكاترة والجامعات وفرق البيانات.')}</Point>
+            </ul>
           </div>
-          <div className="lp2-roles">
-            {roles.map(([icon, title, desc]) => (
-              <div className="lp2-card lp2-role" key={title}>
-                <span className="lp2-icon"><Icon name={icon} size={20} /></span>
+          <div className="lp3-row__art">
+            <Win title="main.py" icon="terminal" className="lp3-win--flow"><CodeMock t={t} /></Win>
+            <div className="lp3-ring" aria-hidden="true">
+              <ReadinessRing score={87} size={116} caption={t('Readiness', 'الجاهزية')} />
+            </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------- exams */}
+        <section className="lp3-row lp3-row--flip lp3-shell" id="exams">
+          <div className="lp3-row__text">
+            <h2>{t('Exams that run themselves', 'امتحانات بتمشي لوحدها')}</h2>
+            <p>{t('From the question bank to the analytics dashboard, with nothing to stitch together.', 'من بنك الأسئلة لحد لوحة التحليلات، من غير ما تجمّع أدوات.')}</p>
+            <ul className="lp3-points">
+              <Point icon="layers">{t('Reusable question banks. MCQ, true/false, short answer and essay.', 'بنوك أسئلة قابلة لإعادة الاستخدام: اختيار من متعدد وصح/غلط وإجابة قصيرة ومقالي.')}</Point>
+              <Point icon="users">{t('Target a faculty, department, year, group or single students.', 'وجّه الامتحان لكلية أو قسم أو سنة أو مجموعة أو طلاب بعينهم.')}</Point>
+              <Point icon="lock">{t('Secure mode logs tab switches and can snapshot the camera. One active session per student.', 'الوضع الآمن بيسجل تبديل التابات وممكن يصوّر بالكاميرا. جلسة واحدة نشطة لكل طالب.')}</Point>
+              <Point icon="ai-spark">{t('Grading with AI suggestions that the instructor approves, then results and CSV export.', 'تصحيح باقتراحات ذكاء اصطناعي يعتمدها الدكتور، ثم النتائج والتصدير CSV.')}</Point>
+            </ul>
+          </div>
+          <div className="lp3-row__art">
+            <Win title={t('Exam in progress', 'امتحان جارٍ')} icon="clock" className="lp3-win--flow"><ExamMock t={t} /></Win>
+          </div>
+        </section>
+
+        {/* ----------------------------------------------------- projects */}
+        <section className="lp3-block lp3-shell" id="projects">
+          <div className="lp3-block__head">
+            <h2>{t('Publish your graduation project and get found', 'انشر مشروع تخرجك واتكتشف')}</h2>
+          </div>
+          <ol className="lp3-steps">
+            {steps.map(([title, desc], i) => (
+              <li key={title}><b>{i + 1}</b><h3>{title}</h3><p>{desc}</p></li>
+            ))}
+          </ol>
+          {featured.length > 0 && (
+            <>
+              <div className="lp3-block__head lp3-block__head--row">
+                <h3>{t('Published on UIP', 'اتنشر على UIP')}</h3>
+                <Link to="/projects" className="btn btn-outline">{t('Explore all projects', 'استكشف كل المشاريع')} <Icon name="arrow-right" size={16} /></Link>
+              </div>
+              <div className="public-projects-grid">
+                {featured.map((p, i) => (
+                  <ProjectCard key={p.uuid || p.slug || i} project={p} locale={locale} index={i} showUniversity />
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+
+        {/* ------------------------------------------------------ roles */}
+        <section className="lp3-block lp3-shell" id="roles">
+          <div className="lp3-block__head">
+            <h2>{t('One account, the right tools for your role', 'حساب واحد، والأدوات المناسبة لدورك')}</h2>
+          </div>
+          <div className="lp3-aud">
+            {audiences.map(([title, items]) => (
+              <div key={title}>
                 <h3>{title}</h3>
-                <p>{desc}</p>
+                <ul>{items.map((x) => <li key={x}>{x}</li>)}</ul>
               </div>
             ))}
           </div>
         </section>
 
         {app && (
-          <section className="lp2-section lp2-shell" id="app">
-            <div className="lp2-card lp2-app">
-              <div className="lp2-app__info">
-                <span className="lp2-app__logo"><img src="/images/logo/uip-mark.png" srcSet="/images/logo/uip-mark@2x.png 2x" alt="UIP" /></span>
-                <div>
-                  <span className="lp2-eyebrow">{t('Mobile app', 'تطبيق الموبايل')}{app.version ? ` · v${app.version}` : ''}</span>
-                  <h2>{app.native ? t('Enjoying UIP? Share the app with your friends', 'عجبتك UIP؟ شارك التطبيق مع أصحابك') : t('Take UIP with you — get the Android app', 'خد UIP معاك — حمّل تطبيق الأندرويد')}</h2>
-                  <p>{app.native ? t('Send the download link on WhatsApp, Telegram or anywhere you like.', 'ابعت رابط التحميل على واتساب أو تيليجرام أو أي مكان.') : t('Exams, messages and notifications on your phone, even when the app is closed.', 'الامتحانات والرسائل والإشعارات على موبايلك، حتى لو التطبيق مقفول.')}</p>
-                </div>
+          <section className="lp3-block lp3-shell" id="app">
+            <div className="lp3-app">
+              <span className="lp3-app__logo"><img src="/images/logo/uip-mark.png" srcSet="/images/logo/uip-mark@2x.png 2x" alt="UIP" /></span>
+              <div className="lp3-app__text">
+                <h2>{app.native ? t('Enjoying UIP? Share the app with your friends', 'عجبتك UIP؟ شارك التطبيق مع أصحابك') : t('Take UIP with you', 'خد UIP معاك')}</h2>
+                <p>{app.native ? t('Send the download link on WhatsApp, Telegram or anywhere you like.', 'ابعت رابط التحميل على واتساب أو تيليجرام أو أي مكان.') : t('Calls, chat and notifications work best in the Android app.', 'المكالمات والشات والإشعارات بتشتغل أحسن في تطبيق الأندرويد.')}</p>
               </div>
               {app.native ? (
                 <AppDownloadLink app={app} className="btn btn-primary btn-lg" iconSize={18} logo />
               ) : (
                 <a href={app.url} className="btn btn-primary btn-lg app-dl" target="_blank" rel="noopener noreferrer">
-                  <span className="app-dl__logo" aria-hidden="true"><img src="/images/logo/uip-mark.png" srcSet="/images/logo/uip-mark@2x.png 2x" alt="" width="28" height="28" /></span>
                   <Icon name="download" size={18} /> {t('Download for Android', 'تحميل للأندرويد')}
                 </a>
               )}
             </div>
-            {!app.native && <p className="lp2-app__note">{t('If Android asks, allow installing from this source. The file is an .apk.', 'لو أندرويد سألك، اسمح بالتثبيت من المصدر ده. الملف بصيغة .apk.')}</p>}
+            {!app.native && <p className="lp3-app__note">{t('If Android asks, allow installing from this source. The file is an .apk.', 'لو أندرويد سألك، اسمح بالتثبيت من المصدر ده. الملف .apk.')}</p>}
           </section>
         )}
 
-        <section className="lp2-shell lp2-cta-wrap">
-          <div className="lp2-cta">
-            <h2>{t('Ready to publish your project or run your next exam?', 'جاهز تنشر مشروعك أو تعمل امتحانك الجاي؟')}</h2>
-            <p>{t('Signup takes under a minute.', 'التسجيل بياخد أقل من دقيقة.')}</p>
-            <Link to="/auth/register" className="btn btn-lg">{t('Create your free account now', 'انشئ حسابك المجاني الآن')}</Link>
-          </div>
+        <section className="lp3-shell lp3-final">
+          <h2>{t('Open your campus. It takes a minute.', 'افتح جامعتك. بياخد دقيقة.')}</h2>
+          <Link to="/auth/register" className="btn btn-primary btn-lg">{t('Create a free account', 'اعمل حساب مجاني')}</Link>
         </section>
       </main>
 

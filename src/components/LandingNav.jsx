@@ -41,9 +41,11 @@ export default function LandingNav({ anchors = false }) {
     <>
       {anchors ? (
         <>
-          <a href="#how">{t('Projects', 'المشاريع')}</a>
+          <a href="#talk">{t('Chat and meetings', 'الشات والاجتماعات')}</a>
+          <a href="#pc">{t('My PC', 'My PC')}</a>
+          <a href="#ai">{t('AI', 'الذكاء الاصطناعي')}</a>
           <a href="#exams">{t('Exams', 'الامتحانات')}</a>
-          <a href="#roles">{t("Who it's for", 'لمين المنصة')}</a>
+          <a href="#projects">{t('Projects', 'المشاريع')}</a>
         </>
       ) : (
         <Link to="/" aria-current={pathname === '/' ? 'page' : undefined}>{t('Home', 'الرئيسية')}</Link>
