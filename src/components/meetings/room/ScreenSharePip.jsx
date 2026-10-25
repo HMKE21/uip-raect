@@ -20,7 +20,7 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 /** Default width: ~22 % of the stage, between 180 and 320 px, never wider than the stage allows (phones). */
 const defaultWidth = (host) => clamp(Math.round(host.width * 0.22), 180, Math.min(320, Math.max(MIN_W, host.width - MARGIN * 2)));
 
-function ScreenSharePip({ stream, onStop, t }) {
+function ScreenSharePip({ stream, onStop, t, onPopOut, popped }) {
   const hostRef = useRef(null);   // the zero-size anchor; its parent is the stage we live in
   const boxRef = useRef(null);
   const videoRef = useRef(null);
@@ -152,6 +152,11 @@ function ScreenSharePip({ stream, onStop, t }) {
         <span className="mshare-bar__dot" aria-hidden="true" />
         <Icon name="screen-share" size={14} />
         <span className="mshare-bar__txt">{t('You are presenting your screen')}</span>
+        {onPopOut && (
+          <button type="button" className="mshare-bar__pop" onClick={onPopOut} title={popped ? t('Close floating window') : t('Open floating window')}>
+            <Icon name="external-link" size={13} /> {t('Floating window')}
+          </button>
+        )}
         <button type="button" className="mshare-bar__stop" onClick={onStop}>
           <Icon name="stop" size={13} /> {t('Stop Sharing')}
         </button>

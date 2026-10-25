@@ -8,6 +8,11 @@
 // prefix" convention as Messages/Notifications) plus the dashboard widget,
 // so keys stay generic rather than duplicated per page.
 export default {
+  'Floating window': 'نافذة عائمة',
+  'Open floating window': 'فتح النافذة العائمة (فوق أي برنامج)',
+  'Close floating window': 'إغلاق النافذة العائمة',
+  'Back to meeting': 'الرجوع للاجتماع',
+  'Meeting': 'الاجتماع',
   'Effects': 'الفلاتر والخلفيات',
   'Backgrounds': 'الخلفيات',
   'Filters': 'الفلاتر',

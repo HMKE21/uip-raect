@@ -46,3 +46,9 @@
   .mshare-pip__rz { width: 28px; height: 28px; }
 }
 @media (prefers-reduced-motion: reduce) { .mshare-pip, .mshare-bar__dot { transition: none; animation: none; } }
+
+.mshare-bar__pop {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 999px; cursor: pointer; flex: none;
+  background: rgba(255,255,255,.12); color: inherit; border: 1px solid rgba(255,255,255,.18); font: inherit; font-size: 12px; font-weight: 600;
+}
+.mshare-bar__pop:hover { background: rgba(255,255,255,.2); }

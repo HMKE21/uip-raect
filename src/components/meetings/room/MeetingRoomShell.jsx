@@ -3,6 +3,7 @@ import { useBackLayer } from '../../../lib/backStack';
 import { useMeetingRoom, meetingLog } from '../../../hooks/useMeetingRoom';
 import RemoteControlLayer from './RemoteControlLayer';
 import ScreenSharePip from './ScreenSharePip';
+import FloatingMeetPip, { useDocPip } from './FloatingMeetPip';
 import Whiteboard from './Whiteboard';
 import { BoardStore } from '../../../lib/whiteboard/boardStore';
 import ParticipantTile from './ParticipantTile';
@@ -139,6 +140,8 @@ export default function MeetingRoomShell({
     } catch { /* unreadable image: keep the current look */ } finally { setFxBusy(null); }
   }
   const [leaveOpen, setLeaveOpen] = useState(false);
+  // Floating always-on-top window (Document Picture-in-Picture) — shown while you present, like Google Meet.
+  const pip = useDocPip();
   const [ending, setEnding] = useState(false);
   const [endError, setEndError] = useState(null);
   const dockRef = useRef(null);
@@ -280,6 +283,14 @@ export default function MeetingRoomShell({
       setEnding(false);
     }
   }
+
+  // open it automatically when you start presenting (works while the click's permission is still fresh; otherwise use the button),
+  // and close it when the presentation ends.
+  const sharingNow = !!room.screenSharing;
+  useEffect(() => {
+    if (sharingNow) pip.open();
+    else if (pip.isOpen) pip.close();
+  }, [sharingNow]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (room.sessionConflict) {
     const replaced = room.sessionConflict === 'replaced';
@@ -557,10 +568,27 @@ export default function MeetingRoomShell({
 
           {room.screenSharing && room.screenStream && (
             <>
-              <ScreenSharePip stream={room.screenStream} onStop={room.toggleScreenShare} t={t} />
+              <ScreenSharePip stream={room.screenStream} onStop={room.toggleScreenShare} t={t} onPopOut={pip.supported ? (pip.isOpen ? pip.close : pip.open) : undefined} popped={pip.isOpen} />
               {!tiles.spotlight && <RemoteControlLayer room={room} myKey={myKey} presenter={null} t={t} />}
             </>
           )}
+
+          <FloatingMeetPip
+            win={pip.win}
+            people={tiles.all}
+            elapsed={elapsed}
+            t={t}
+            state={{ micEnabled: room.micEnabled, cameraEnabled: room.cameraEnabled, handRaised: room.handRaised, screenSharing: room.screenSharing, unread: unread }}
+            actions={{
+              toggleMic: room.toggleMic,
+              toggleCamera: room.toggleCamera,
+              toggleHand: room.toggleHand,
+              stopShare: room.toggleScreenShare,
+              openChat: () => { window.focus(); if (!chatOpen) togglePanel('chat'); },
+              back: () => { window.focus(); },
+              leave: () => { window.focus(); handleLeave(); },
+            }}
+          />
 
           {board && board.visible && (
             <Whiteboard store={board} t={t} isManager={room.isManager} onClose={() => board.hideForMe()} />
