@@ -774,13 +774,28 @@ function setupMediaPermissions() {
 // stops screen recording and Cast, and hides the app preview in the recent-apps list. It is switched on only
 // while an exam attempt is open (not on the result page) or a My PC share page (/s/<token>) is open, and off everywhere else.
 let screenSecure = null;
-function applyScreenSecurity(path) {
-  const want = /^\/student\/exam-attempt\/[^/]+\/?$/.test(path) || /^\/s\/[A-Za-z0-9]+\/?$/.test(path);
+let routeSecure = false;   // the current page needs it (exam / shared PC page)
+let extraSecure = 0;       // overlays that need it while open (view-once media)
+function syncScreenSecurity() {
+  const want = routeSecure || extraSecure > 0;
   if (want === screenSecure) return;
   screenSecure = want;
   import('@capacitor-community/privacy-screen')
     .then(({ PrivacyScreen }) => (want ? PrivacyScreen.enable() : PrivacyScreen.disable()))
     .catch(() => { screenSecure = null; });
+}
+function applyScreenSecurity(path) {
+  routeSecure = /^\/student\/exam-attempt\/[^/]+\/?$/.test(path) || /^\/s\/[A-Za-z0-9]+\/?$/.test(path);
+  syncScreenSecurity();
+}
+/**
+ * Turn Android's FLAG_SECURE on while something sensitive is on screen (view-once photo / video) and off again after.
+ * Ref-counted, so it never fights the exam / shared-PC rule above. In a normal browser there is no such switch: no-op.
+ */
+export function setContentSecure(on) {
+  if (!isNative) return;
+  extraSecure = Math.max(0, extraSecure + (on ? 1 : -1));
+  syncScreenSecurity();
 }
 
 // ---- Exam mode: full screen + screen pinning ---------------------------------------------
