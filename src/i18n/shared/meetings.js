@@ -420,6 +420,7 @@ export default {
   'Unpin': 'إلغاء التثبيت',
   'No TURN server is configured — audio/video may not reach people on other networks.': 'مفيش سيرفر TURN متظبط — الصوت والفيديو ممكن ما يوصلوش لناس على شبكات تانية.',
   'More': 'المزيد',
+  'More options': 'خيارات أخرى',
   'Send': 'إرسال',
   'To': 'إلى',
   'New messages': 'رسائل جديدة',

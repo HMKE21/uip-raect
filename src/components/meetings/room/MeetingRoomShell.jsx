@@ -578,6 +578,7 @@ export default function MeetingRoomShell({
             people={tiles.all}
             elapsed={elapsed}
             title={meetingTitle}
+            screenStream={room.screenStream}
             t={t}
             state={{ micEnabled: room.micEnabled, cameraEnabled: room.cameraEnabled, handRaised: room.handRaised, screenSharing: room.screenSharing, unread: unread }}
             actions={{

@@ -137,6 +137,51 @@ button{font:inherit;color:inherit}
 @media (max-width:340px){.fp__b{width:36px;height:36px}.fp__b.leave{width:46px}.fp__pill{gap:4px;padding:5px}.fp__stop span{display:none}.fp__stop{padding:0 10px}.fp__meta.hide-xs{display:none}.fp__sharetxt small{display:none}}
 @media (max-height:310px){.fp__strip{display:none}.fp__sharetxt small{display:none}}
 @media (max-height:215px){.fp__top,.fp__stage{display:none}.fp__share{margin-top:8px}}
+/* presenting layout: live preview of the shared screen + your camera bubble */
+.fp__ban{display:flex;align-items:center;gap:10px;margin:10px 10px 8px;padding:7px 12px 7px 8px;padding-inline:8px 12px;border-radius:999px;background:var(--panel);border:1px solid var(--line);flex:none}
+.fp__ban .fp__av{width:34px;height:34px;font-size:14px;flex:none;box-shadow:none}
+.fp__bantxt{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.fp__bantxt b{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;overflow:hidden;white-space:nowrap}
+.fp__bantxt b span{overflow:hidden;text-overflow:ellipsis}
+.fp__bantxt small{font-size:11px;color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fp__ban .fp__dot{width:8px;height:8px}
+.fp__pv{position:relative;flex:1;min-height:0;margin:0 10px;border-radius:14px;overflow:hidden;background:#0d0e10;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+.fp__pv video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#0d0e10}
+.fp__pvEmpty{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--mut);font-size:12px}
+.fp__me{position:absolute;inset-inline-start:8px;bottom:8px;width:92px;height:68px;border-radius:12px;overflow:hidden;background:var(--tile);box-shadow:0 4px 14px rgba(0,0,0,.55),0 0 0 2px rgba(255,255,255,.14);display:flex;align-items:center;justify-content:center;z-index:2}
+.fp__me video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.fp__me .fp__av{width:34px;height:34px;font-size:15px}
+.fp__me.is-speaking{box-shadow:0 4px 14px rgba(0,0,0,.55),0 0 0 2px var(--green)}
+.fp__me .mic{position:absolute;inset-inline-end:4px;bottom:4px;z-index:2;width:18px;height:18px;border-radius:50%;background:#d93025;display:flex;align-items:center;justify-content:center}
+.fp__ppl{position:absolute;inset-inline-end:8px;top:8px;z-index:2;display:flex;flex-direction:column;gap:6px;align-items:center}
+.fp__pa{position:relative;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.5),0 0 0 2px rgba(0,0,0,.35)}
+.fp__pa.is-speaking{box-shadow:0 2px 8px rgba(0,0,0,.5),0 0 0 2px var(--green)}
+.fp__pa .m{position:absolute;inset-inline-end:-3px;bottom:-3px;width:14px;height:14px;border-radius:50%;background:#d93025;display:flex;align-items:center;justify-content:center;border:1.5px solid #0d0e10}
+.fp__pa .h{position:absolute;inset-inline-start:-4px;top:-4px;font-size:11px;line-height:1}
+.fp__pa.more{background:rgba(0,0,0,.6);backdrop-filter:blur(6px);font-size:11px}
+.fp__live{position:absolute;inset-inline-start:8px;top:8px;z-index:2;display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 9px;border-radius:999px;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);font-size:11px;font-weight:700}
+.fp__live .fp__dot{width:7px;height:7px}
+
+/* controls (Meet style) */
+.fp__bar{gap:0}
+.fp__pill{background:transparent;border:0;box-shadow:none;padding:0;gap:10px}
+.fp__b{width:52px;height:46px;border-radius:999px}
+.fp__b.leave{width:68px}
+.fp__b.is-share{background:#a8c7fa;color:#062e6f}
+.fp__b.is-open{background:#4b4f58}
+.fp__more-wrap{position:relative;display:inline-flex}
+.fp__menu{position:absolute;bottom:calc(100% + 10px);inset-inline-start:0;min-width:210px;padding:6px;border-radius:14px;background:#2b2d33;border:1px solid var(--line);box-shadow:0 14px 34px rgba(0,0,0,.55);z-index:20;animation:fpm .12s ease-out}
+@keyframes fpm{from{opacity:0;transform:translateY(6px)}}
+.fp__mi{display:flex;align-items:center;gap:11px;width:100%;height:40px;padding:0 12px;border:0;border-radius:9px;background:transparent;color:var(--txt);font-size:13px;font-weight:600;cursor:pointer;text-align:start}
+.fp__mi:hover{background:rgba(255,255,255,.08)}
+.fp__mi.on{color:var(--acc)}
+.fp__mi .n{margin-inline-start:auto;min-width:18px;height:18px;padding:0 5px;border-radius:99px;background:var(--red);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.fp__mi .c{margin-inline-start:auto;color:var(--mut);font-size:12px}
+.fp__b .fp__badge{border-color:var(--bg)}
+@media (max-width:340px){.fp__b{width:44px;height:42px}.fp__b.leave{width:56px}.fp__pill{gap:6px}.fp__me{width:72px;height:54px}}
+@media (max-height:310px){.fp__ppl,.fp__me{display:none}}
+@media (max-height:215px){.fp__ban,.fp__pv{display:none}}
+
 @media (prefers-reduced-motion:reduce){.fp__dot,.fp__eq i{animation:none}}
 `;
 
@@ -182,27 +227,75 @@ const MiniTile = memo(function MiniTile({ p, you, speaking, t, compact }) {
   );
 });
 
-function Panel({ people, elapsed, title, t, state, actions }) {
+/** Live preview of the screen you are presenting (the same stream the room shares) — like Meet's mini window. */
+const SharePreview = memo(function SharePreview({ stream }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    el.srcObject = stream || null;
+    if (stream) el.play?.().catch(() => {});
+    return () => { el.srcObject = null; };
+  }, [stream]);
+  return stream ? <video ref={ref} muted autoPlay playsInline /> : null;
+});
+
+/** Your own camera bubble, floating over the preview. */
+const MeBubble = memo(function MeBubble({ p, speaking, t }) {
+  const ref = useRef(null);
+  const show = !!p.remoteStream && p.cameraEnabled !== false;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    el.srcObject = show ? p.remoteStream : null;
+    if (show) el.play?.().catch(() => {});
+    return () => { el.srcObject = null; };
+  }, [show, p.remoteStream]);
+  const initial = (p.displayName || '?').trim().charAt(0).toUpperCase() || '?';
+  return (
+    <div className={`fp__me${speaking && p.micEnabled !== false ? ' is-speaking' : ''}`} title={`${p.displayName} (${t('You')})`}>
+      {show ? <video ref={ref} muted autoPlay playsInline /> : <span className="fp__av" style={{ background: avatarColor(p.displayName) }}>{initial}</span>}
+      {p.micEnabled === false && <span className="mic"><Icon name="mic-off" size={11} /></span>}
+    </div>
+  );
+});
+
+function Panel({ people, elapsed, title, t, state, actions, screenStream, doc }) {
   const [speakingMap, setSpeakingMap] = useState({});
   const [lastSpeaker, setLastSpeaker] = useState(null);
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef(null);
   const report = useCallback((k, on) => {
     setSpeakingMap((m) => (!!m[k] === on ? m : { ...m, [k]: on }));
     if (on) setLastSpeaker(k);
   }, []);
 
+  // close the ⋮ menu on any outside click / Escape (listeners live on the floating window's own document)
+  useEffect(() => {
+    if (!menu || !doc) return undefined;
+    const away = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenu(false); };
+    const esc = (e) => { if (e.key === 'Escape') setMenu(false); };
+    doc.addEventListener('pointerdown', away);
+    doc.addEventListener('keydown', esc);
+    return () => { doc.removeEventListener('pointerdown', away); doc.removeEventListener('keydown', esc); };
+  }, [menu, doc]);
+
   const sharing = !!state.screenSharing;
+  const me = people.find((p) => p.isLocal) || null;
   const remotes = people.filter((p) => !p.isLocal);
-  // Stage priority: someone presenting to you > whoever spoke last > first other person > you (when alone).
-  const featured = remotes.find((p) => p.screenSharing)
-    || remotes.find((p) => p.key === lastSpeaker)
-    || remotes[0]
-    || people[0]
-    || null;
+  const remotePresenter = remotes.find((p) => p.screenSharing) || null;
+  // Someone ELSE presenting (or nobody) -> stage layout. YOU presenting -> live preview of your screen + your camera bubble.
+  const featured = remotePresenter || remotes.find((p) => p.key === lastSpeaker) || remotes[0] || people[0] || null;
   const others = people.filter((p) => featured && p.key !== featured.key);
   const MAX = 4;
   const shown = others.length > MAX ? others.slice(0, MAX - 1) : others;
   const extra = others.length - shown.length;
   const tile = (p, compact) => <MiniTile key={p.key} p={p} you={p.isLocal ? t('You') : null} speaking={!!speakingMap[p.key]} t={t} compact={compact} />;
+  const useShareLayout = sharing && !remotePresenter;
+  const chips = remotes.slice(0, 3);
+  const chipExtra = remotes.length - chips.length;
+  const act = (fn) => () => { setMenu(false); fn(); };
+  const sub = [title, elapsed].filter(Boolean).join(' · ');
 
   return (
     <div className="fp" role="region" aria-label={title || t('Meeting')}>
@@ -210,56 +303,106 @@ function Panel({ people, elapsed, title, t, state, actions }) {
         <SpeakWatcher key={p.key} k={p.key} stream={p.remoteStream} enabled={p.micEnabled !== false} report={report} />
       ))}
 
-      <div className="fp__top">
-        <span className="fp__ttl" title={title || ''}>{title || t('Meeting')}</span>
-        <span className="fp__meta hide-xs" dir="ltr"><Icon name="clock" size={13} /> {elapsed}</span>
-        <span className="fp__meta" title={t('Participants')}><Icon name="users" size={13} /> {people.length}</span>
-      </div>
-
-      {sharing && (
-        <div className="fp__share">
-          <span className="fp__dot" />
-          <span className="fp__sharetxt">
-            <b>{t('You are presenting your screen')}</b>
-            <small>{t('Everyone in the meeting can see your screen')}</small>
-          </span>
-          <button type="button" className="fp__stop" onClick={actions.stopShare} title={t('Stop Sharing')} aria-label={t('Stop Sharing')}>
-            <Icon name="stop" size={13} /><span>{t('Stop Sharing')}</span>
-          </button>
-        </div>
-      )}
-
-      <div className="fp__stage">
-        {featured && <div className="fp__main">{tile(featured, false)}</div>}
-        {others.length > 0 && (
-          <div className="fp__strip">
-            {shown.map((p) => tile(p, true))}
-            {extra > 0 && <div className="fp__tile fp__more" dir="ltr">+{extra}</div>}
+      {useShareLayout ? (
+        <>
+          <div className="fp__ban">
+            <span className="fp__av" style={{ background: avatarColor(me?.displayName) }}>{(me?.displayName || '?').trim().charAt(0).toUpperCase()}</span>
+            <span className="fp__bantxt">
+              <b><span className="fp__dot" /><span>{t('You are presenting your screen')}</span></b>
+              <small dir="auto">{sub}</small>
+            </span>
+            <span className="fp__meta" title={t('Participants')}><Icon name="users" size={13} /> {people.length}</span>
           </div>
-        )}
-      </div>
+
+          <div className="fp__pv">
+            {screenStream
+              ? <SharePreview stream={screenStream} />
+              : <span className="fp__pvEmpty"><Icon name="screen-share" size={26} />{t('Your shared screen')}</span>}
+            <span className="fp__live"><span className="fp__dot" />{t('Presenting')}</span>
+            {remotes.length > 0 && (
+              <div className="fp__ppl">
+                {chips.map((p) => (
+                  <span key={p.key} className={`fp__pa${speakingMap[p.key] && p.micEnabled !== false ? ' is-speaking' : ''}`} style={{ background: avatarColor(p.displayName) }} title={p.displayName}>
+                    {(p.displayName || '?').trim().charAt(0).toUpperCase()}
+                    {p.handRaised && <i className="h" style={{ fontStyle: 'normal' }}>✋</i>}
+                    {p.micEnabled === false && <i className="m"><Icon name="mic-off" size={8} /></i>}
+                  </span>
+                ))}
+                {chipExtra > 0 && <span className="fp__pa more" dir="ltr">+{chipExtra}</span>}
+              </div>
+            )}
+            {me && <MeBubble p={me} speaking={!!speakingMap[me.key]} t={t} />}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="fp__top">
+            <span className="fp__ttl" title={title || ''}>{title || t('Meeting')}</span>
+            <span className="fp__meta hide-xs" dir="ltr"><Icon name="clock" size={13} /> {elapsed}</span>
+            <span className="fp__meta" title={t('Participants')}><Icon name="users" size={13} /> {people.length}</span>
+          </div>
+          {sharing && (
+            <div className="fp__share">
+              <span className="fp__dot" />
+              <span className="fp__sharetxt"><b>{t('You are presenting your screen')}</b></span>
+              <button type="button" className="fp__stop" onClick={actions.stopShare} title={t('Stop Sharing')} aria-label={t('Stop Sharing')}>
+                <Icon name="stop" size={13} /><span>{t('Stop Sharing')}</span>
+              </button>
+            </div>
+          )}
+          <div className="fp__stage">
+            {featured && <div className="fp__main">{tile(featured, false)}</div>}
+            {others.length > 0 && (
+              <div className="fp__strip">
+                {shown.map((p) => tile(p, true))}
+                {extra > 0 && <div className="fp__tile fp__more" dir="ltr">+{extra}</div>}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <div className="fp__bar">
         <div className="fp__pill" role="toolbar">
-          <button type="button" className={`fp__b${state.micEnabled ? '' : ' is-off'}`} onClick={actions.toggleMic} aria-pressed={!state.micEnabled} title={state.micEnabled ? t('Mute') : t('Unmute')} aria-label={state.micEnabled ? t('Mute') : t('Unmute')}>
-            <Icon name={state.micEnabled ? 'mic' : 'mic-off'} size={19} />
-          </button>
-          <button type="button" className={`fp__b${state.cameraEnabled ? '' : ' is-off'}`} onClick={actions.toggleCamera} aria-pressed={!state.cameraEnabled} title={state.cameraEnabled ? t('Camera') : t('Camera off')} aria-label={state.cameraEnabled ? t('Camera') : t('Camera off')}>
-            <Icon name={state.cameraEnabled ? 'video' : 'video-off'} size={19} />
-          </button>
-          <button type="button" className={`fp__b${state.handRaised ? ' is-on' : ''}`} onClick={actions.toggleHand} aria-pressed={!!state.handRaised} title={state.handRaised ? t('Lower Hand') : t('Raise Hand')} aria-label={state.handRaised ? t('Lower Hand') : t('Raise Hand')}>
-            <Icon name="hand" size={19} />
-          </button>
-          <button type="button" className="fp__b" onClick={actions.openChat} title={t('Chat')} aria-label={t('Chat')}>
-            <Icon name="message-square" size={19} />
-            {state.unread ? <span className="fp__badge">{state.unread > 9 ? '9+' : state.unread}</span> : null}
-          </button>
-          <button type="button" className="fp__b" onClick={actions.back} title={t('Back to meeting')} aria-label={t('Back to meeting')}>
-            <Icon name="external-link" size={18} />
-          </button>
-          <span className="fp__sep" />
           <button type="button" className="fp__b leave" onClick={actions.leave} title={t('Leave Meeting')} aria-label={t('Leave Meeting')}>
-            <Icon name="logout" size={19} />
+            <Icon name="logout" size={20} />
+          </button>
+
+          <div className="fp__more-wrap" ref={menuRef}>
+            <button type="button" className={`fp__b${menu ? ' is-open' : ''}`} onClick={() => setMenu((v) => !v)} aria-haspopup="menu" aria-expanded={menu} title={t('More options')} aria-label={t('More options')}>
+              <Icon name="more-vertical" size={20} />
+              {state.unread ? <span className="fp__badge">{state.unread > 9 ? '9+' : state.unread}</span> : null}
+            </button>
+            {menu && (
+              <div className="fp__menu" role="menu">
+                <button type="button" role="menuitem" className={`fp__mi${state.handRaised ? ' on' : ''}`} onClick={act(actions.toggleHand)}>
+                  <Icon name="hand" size={17} />{state.handRaised ? t('Lower Hand') : t('Raise Hand')}
+                </button>
+                <button type="button" role="menuitem" className="fp__mi" onClick={act(actions.openChat)}>
+                  <Icon name="message-square" size={17} />{t('Chat')}
+                  {state.unread ? <span className="n">{state.unread > 9 ? '9+' : state.unread}</span> : null}
+                </button>
+                <button type="button" role="menuitem" className="fp__mi" onClick={act(actions.back)}>
+                  <Icon name="external-link" size={17} />{t('Back to meeting')}
+                </button>
+                <button type="button" role="menuitem" className="fp__mi" onClick={() => setMenu(false)}>
+                  <Icon name="users" size={17} />{t('Participants')}<span className="c">{people.length}</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {sharing && (
+            <button type="button" className="fp__b is-share" onClick={actions.stopShare} title={t('Stop Sharing')} aria-label={t('Stop Sharing')} aria-pressed="true">
+              <Icon name="screen-share" size={20} />
+            </button>
+          )}
+
+          <button type="button" className={`fp__b${state.cameraEnabled ? '' : ' is-off'}`} onClick={actions.toggleCamera} aria-pressed={!state.cameraEnabled} title={state.cameraEnabled ? t('Camera') : t('Camera off')} aria-label={state.cameraEnabled ? t('Camera') : t('Camera off')}>
+            <Icon name={state.cameraEnabled ? 'video' : 'video-off'} size={20} />
+          </button>
+          <button type="button" className={`fp__b${state.micEnabled ? '' : ' is-off'}`} onClick={actions.toggleMic} aria-pressed={!state.micEnabled} title={state.micEnabled ? t('Mute') : t('Unmute')} aria-label={state.micEnabled ? t('Mute') : t('Unmute')}>
+            <Icon name={state.micEnabled ? 'mic' : 'mic-off'} size={20} />
           </button>
         </div>
       </div>
@@ -268,7 +411,7 @@ function Panel({ people, elapsed, title, t, state, actions }) {
 }
 
 /** Renders the panel INTO the floating window `win` (a React portal into that window's document). */
-function FloatingMeetPip({ win, people, elapsed, title, t, state, actions }) {
+function FloatingMeetPip({ win, people, elapsed, title, t, state, actions, screenStream }) {
   const [host, setHost] = useState(null);
   useEffect(() => {
     if (!win) { setHost(null); return undefined; }
@@ -283,7 +426,7 @@ function FloatingMeetPip({ win, people, elapsed, title, t, state, actions }) {
     return () => { try { root.remove(); style.remove(); } catch { /* window gone */ } setHost(null); };
   }, [win]);
   if (!win || !host) return null;
-  return createPortal(<Panel people={people} elapsed={elapsed} title={title} t={t} state={state} actions={actions} />, host);
+  return createPortal(<Panel people={people} elapsed={elapsed} title={title} t={t} state={state} actions={actions} screenStream={screenStream} doc={win.document} />, host);
 }
 
 export default memo(FloatingMeetPip);
