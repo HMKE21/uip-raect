@@ -116,7 +116,7 @@ export default function ParticipantTile({
 
   const initial = (displayName || '?').trim().charAt(0).toUpperCase() || '?';
   const presentingSelf = !!isLocal && !!screenSharing;
-  const showVideo = !!stream && !presentingSelf && (!!screenSharing || cameraEnabled !== false);
+  const showVideo = !!stream && (isLocal ? cameraEnabled !== false : (!!screenSharing || cameraEnabled !== false));
   const poor = connectionState === 'disconnected' || connectionQuality === 'poor' || connectionQuality === 'reconnecting';
 
   // The <video> stays mounted even while the camera is off: it is also what plays this participant's VOICE.
@@ -161,13 +161,13 @@ export default function ParticipantTile({
         muted={isLocal}
         onDoubleClick={onPin}
         style={{
-          objectFit: screenSharing ? 'contain' : 'cover',
-          transform: isLocal && !screenSharing ? 'scaleX(-1)' : 'none',
+          objectFit: screenSharing && !isLocal ? 'contain' : 'cover',
+          transform: isLocal ? 'scaleX(-1)' : 'none',
           opacity: showVideo ? 1 : 0,
         }}
       />
 
-      {presentingSelf && (
+      {presentingSelf && !showVideo && (
         <div className="meeting-tile__presenting-card" onDoubleClick={onPin}>
           <span className="meeting-tile__presenting-icon"><Icon name="screen-share" size={30} /></span>
           <strong>{t('You are presenting your screen')}</strong>

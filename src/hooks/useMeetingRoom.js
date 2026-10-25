@@ -184,10 +184,11 @@ async function tuneSenders(pc, peerCount) {
         enc.priority = 'high';
         enc.networkPriority = 'high';
       } else {
-        enc.maxBitrate = videoCap;
-        enc.networkPriority = 'low';
+        const isScreen = sender.track.contentHint === 'detail'; // only the screen track is tagged 'detail'
+        enc.maxBitrate = isScreen ? Math.max(700000, Math.min(2500000, Math.floor(4000000 / Math.max(1, peerCount)))) : videoCap;
+        enc.networkPriority = isScreen ? 'medium' : 'low';
         enc.scaleResolutionDownBy = 1;          // never shrink the picture on purpose
-        enc.maxFramerate = 30;
+        enc.maxFramerate = isScreen ? 24 : 30;
         // camera: with 1-2 peers keep it sharp and drop fps first; in bigger rooms let resolution fall too (a 720p picture can't fit 300 kbps)
         if (sender.track.contentHint !== 'detail') params.degradationPreference = peerCount <= 2 ? 'maintain-resolution' : 'balanced';
       }
@@ -629,6 +630,11 @@ export function useMeetingRoom({
         if (!stream.getTracks().includes(e.track)) stream.addTrack(e.track);
       }
       remoteStreamsRef.current[key] = stream;
+      if (e.track.kind === 'video' && e.receiver) {
+        // smallest jitter buffer the browser allows -> a shared screen follows the presenter with minimal lag (Chrome 114+; no-op elsewhere)
+        try { if ('jitterBufferTarget' in e.receiver) e.receiver.jitterBufferTarget = 0; } catch { /* unsupported */ }
+        try { if ('playoutDelayHint' in e.receiver) e.receiver.playoutDelayHint = 0; } catch { /* unsupported */ }
+      }
       // echo gate: analysis-only copy of this person's voice, so our mic closes while they are audible
       if (e.track.kind === 'audio') setRemoteAudio(`meeting:${key}`, new MediaStream([e.track]), e.receiver || null);
       patchParticipant(key, { remoteStream: stream });
@@ -1357,8 +1363,11 @@ export function useMeetingRoom({
       // 1080p / 30 fps made weaker laptops and phones stall (the encoder, not the network). Slides, documents and code stay sharp at
       // 15 fps, so cap there; the browser still downscales further on its own if the machine struggles.
       displayStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: { ideal: 12, max: 15 }, width: { ideal: 1600, max: 1920 }, height: { ideal: 900, max: 1080 } },
+        video: { frameRate: { ideal: 24, max: 30 }, width: { ideal: 1600, max: 1920 }, height: { ideal: 900, max: 1080 } },
         audio: false,
+        // Chrome/Edge hints (ignored elsewhere): don't offer this meeting tab (it would mirror itself), let the presenter switch the
+        // shared tab/window without restarting, and offer whole screens — the same picker behaviour as Google Meet.
+        selfBrowserSurface: 'exclude', surfaceSwitching: 'include', monitorTypeSurfaces: 'include', systemAudio: 'exclude',
       });
       screenTrack = displayStream.getVideoTracks()[0];
       if (!screenTrack) throw new Error('No screen track');
@@ -1395,7 +1404,12 @@ export function useMeetingRoom({
           const params = sender.getParameters();
           params.degradationPreference = 'balanced'; // 'maintain-resolution' froze the share on slow machines; balanced trades fps/pixels as needed
           if (!params.encodings || !params.encodings.length) params.encodings = [{}];
-          params.encodings[0].maxBitrate = 2_500_000; // a bounded bitrate keeps the uplink (and the encoder) from choking
+          const peers = Math.max(1, Object.keys(cameraTrackSendersRef.current).length);
+          const enc = params.encodings[0];
+          enc.maxBitrate = Math.max(700_000, Math.min(2_500_000, Math.floor(4_000_000 / peers))); // bounded per peer: keeps the uplink (and the encoder) from choking
+          enc.maxFramerate = 24;
+          enc.scaleResolutionDownBy = 1;
+          enc.networkPriority = 'medium'; // above the camera default ('low'), still below the voice ('high')
           await sender.setParameters(params);
         } catch { /* not supported everywhere */ }
       }));

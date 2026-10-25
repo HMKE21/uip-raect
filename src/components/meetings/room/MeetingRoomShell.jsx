@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useBackLayer } from '../../../lib/backStack';
 import { useMeetingRoom, meetingLog } from '../../../hooks/useMeetingRoom';
 import RemoteControlLayer from './RemoteControlLayer';
+import ScreenSharePip from './ScreenSharePip';
 import ParticipantTile from './ParticipantTile';
 import { ReactionLayer } from './ReactionFx';
 import { CAMERA_FILTERS, CAMERA_BACKGROUNDS, scenePreview } from '../../../lib/cameraFx';
@@ -219,7 +220,9 @@ export default function MeetingRoomShell({
     };
     const all = [local, ...remote];
     // Equal grid by default; a big "spotlight" + side strip only when someone shares their screen or you pinned a tile.
-    const presenter = all.find((p) => p.screenSharing) || null;
+    // Someone ELSE presenting -> they fill the stage. When YOU present you keep the normal grid and get a small floating preview
+    // instead (ScreenSharePip) — like Meet — so you never stare at a giant picture of your own screen.
+    const presenter = all.find((p) => p.screenSharing && !p.isLocal) || null;
     const featured = all.find((p) => all.length > 1 && p.key === pinnedKey) || presenter || null;
     const rest = featured ? all.filter((p) => p.key !== featured.key) : all;
     const n = all.length;
@@ -393,7 +396,7 @@ export default function MeetingRoomShell({
     );
   }
 
-  const presenterTile = tiles.all.find((p) => p.screenSharing) || null;
+  const presenterTile = tiles.all.find((p) => p.screenSharing && !p.isLocal) || null;
   const anyPanelOpen = openPanel !== null;
   const unread = room.chatUnreadCount > 0 && !chatOpen ? (room.chatUnreadCount > 9 ? '9+' : room.chatUnreadCount) : null;
   const moreActive = filesOpen || notesOpen || pollsOpen || recordingsOpen;
@@ -537,6 +540,13 @@ export default function MeetingRoomShell({
               {tiles.rest.length > 0 && <div className="meeting-room__strip">{tiles.rest.map(renderTile)}</div>}
             </>
           ) : tiles.all.map(renderTile)}
+
+          {room.screenSharing && room.screenStream && (
+            <>
+              <ScreenSharePip stream={room.screenStream} onStop={room.toggleScreenShare} t={t} />
+              {!tiles.spotlight && <RemoteControlLayer room={room} myKey={myKey} presenter={null} t={t} />}
+            </>
+          )}
 
           <ReactionLayer reactions={room.reactions} myKey={myKey} youLabel={t('You')} />
         </div>

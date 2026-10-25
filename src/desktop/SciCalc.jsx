@@ -71,7 +71,7 @@ function Dec({ s }) {
   const [m, e] = s.split('×10^');
   return e === undefined ? s : <>{m}×10<sup>{e}</sup></>;
 }
-const Rad = ({ k }) => <span className="sc-rad"><i>√</i><b>{k}</b></span>;
+const Rad = ({ k }) => <span className="ucalc-rad"><i>√</i><b>{k}</b></span>;
 function TermView({ t, first }) {
   const one = t.k === 1 && t.p === 0;
   const a = Math.abs(t.c);
@@ -89,7 +89,7 @@ function Value({ v, dec }) {
   return (
     <>
       {n.neg && '−'}
-      {n.den === 1 ? top : <span className="sc-frac"><span>{top}</span><span>{n.den}</span></span>}
+      {n.den === 1 ? top : <span className="ucalc-frac"><span>{top}</span><span>{n.den}</span></span>}
     </>
   );
 }
@@ -225,40 +225,40 @@ export default function SciCalc({ tt }) {
 
   const prev = !done && !pm && hist[0] && !text ? hist[0] : null;
   return (
-    <div className={`sc ${shift ? 'on-s' : ''} ${alpha ? 'on-a' : ''}`} ref={root} tabIndex={0} onKeyDown={onKey} dir="ltr" aria-label="UIP Scientific Calculator">
-      <header className="sc-head">
-        <span className="sc-logo"><Logo /></span>
-        <span className="sc-brand">UIP</span>
-        <span className="sc-model"><b>Scientific</b><small>Natural Display</small></span>
-        <button type="button" className={`sc-hbtn ${showHist ? 'on' : ''}`} onClick={() => setShowHist((v) => !v)} title={tt('History', 'السجل')} aria-label={tt('History', 'السجل')}>
+    <div className={`ucalc ${shift ? 'on-s' : ''} ${alpha ? 'on-a' : ''}`} ref={root} tabIndex={0} onKeyDown={onKey} dir="ltr" aria-label="UIP Scientific Calculator">
+      <header className="ucalc-head">
+        <span className="ucalc-logo"><Logo /></span>
+        <span className="ucalc-brand">UIP</span>
+        <span className="ucalc-model"><b>Scientific</b><small>Natural Display</small></span>
+        <button type="button" className={`ucalc-hbtn ${showHist ? 'on' : ''}`} onClick={() => setShowHist((v) => !v)} title={tt('History', 'السجل')} aria-label={tt('History', 'السجل')}>
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" /></svg>
         </button>
       </header>
 
-      <div className="sc-lcd" aria-live="polite">
-        <div className="sc-status">
+      <div className="ucalc-lcd" aria-live="polite">
+        <div className="ucalc-status">
           <span className={shift ? 'on s' : 's'}>SHIFT</span><span className={alpha ? 'on a' : 'a'}>ALPHA</span><span className={hyp ? 'on' : ''}>hyp</span>
           <button type="button" onClick={() => setAng((a) => ({ D: 'R', R: 'G', G: 'D' }[a]))} title={`DRG · ${ANG_LONG[ang]}`}>{ANG[ang]}</button>
           <span className={vars.M && vars.M.f !== 0 ? 'on' : ''}>M</span>
-          <span className="on sc-mode">{pm ? (pm.kind === 'calc' ? 'CALC' : 'SOLVE') : dec ? 'Decimal' : 'Math'}</span>
+          <span className="on ucalc-mode">{pm ? (pm.kind === 'calc' ? 'CALC' : 'SOLVE') : dec ? 'Decimal' : 'Math'}</span>
         </div>
-        <div className="sc-prev">{prev ? <>{pretty(balance(prev.e))} = <Value v={prev.v} dec={false} /></> : ''}</div>
-        <div className="sc-in" aria-label={tt('Expression', 'العملية')}>
-          {pm && <b className="sc-ask">{pm.vars[pm.i]} =</b>}
-          <span>{pretty(text.slice(0, pos))}</span><i className="sc-caret" ref={caret} /><span>{pretty(text.slice(pos))}</span>
+        <div className="ucalc-prev">{prev ? <>{pretty(balance(prev.e))} = <Value v={prev.v} dec={false} /></> : ''}</div>
+        <div className="ucalc-in" aria-label={tt('Expression', 'العملية')}>
+          {pm && <b className="ucalc-ask">{pm.vars[pm.i]} =</b>}
+          <span>{pretty(text.slice(0, pos))}</span><i className="ucalc-caret" ref={caret} /><span>{pretty(text.slice(pos))}</span>
         </div>
-        <div className="sc-out">
-          {res?.err ? <b className="sc-err">{res.err}</b> : res?.v ? <>{res.label && <em>{res.label}</em>}<Value v={res.v} dec={dec} /></> : <span className="sc-zero">{text ? '' : '0'}</span>}
+        <div className="ucalc-out">
+          {res?.err ? <b className="ucalc-err">{res.err}</b> : res?.v ? <>{res.label && <em>{res.label}</em>}<Value v={res.v} dec={dec} /></> : <span className="ucalc-zero">{text ? '' : '0'}</span>}
         </div>
-        {res?.note && <div className="sc-note">{res.note}</div>}
+        {res?.note && <div className="ucalc-note">{res.note}</div>}
 
         {showHist && (
-          <div className="sc-hist" role="dialog" aria-label={tt('History', 'السجل')}>
-            <div className="sc-hist-top">
+          <div className="ucalc-hist" role="dialog" aria-label={tt('History', 'السجل')}>
+            <div className="ucalc-hist-top">
               <b>{tt('History', 'السجل')}</b>
               {hist.length > 0 && <button type="button" onClick={() => setHist([])}>{tt('Clear', 'مسح')}</button>}
             </div>
-            {hist.length === 0 ? <p className="sc-hist-empty">{tt('No calculations yet', 'مفيش عمليات لسه')}</p> : (
+            {hist.length === 0 ? <p className="ucalc-hist-empty">{tt('No calculations yet', 'مفيش عمليات لسه')}</p> : (
               <ul>
                 {hist.map((h, i) => (
                   <li key={i}><button type="button" onClick={() => recall(h.e)} title={tt('Edit this expression', 'عدّل العملية دي')}>
@@ -271,9 +271,9 @@ export default function SciCalc({ tt }) {
         )}
       </div>
 
-      <div className="sc-keys">
+      <div className="ucalc-keys">
         {ROWS.map((row, ri) => row.keys.map((k, ki) => (
-          <button key={`${ri}-${ki}`} type="button" className={`sc-k h-${row.h} ${k.cls}${k.m.act === 'hyp' && hyp ? ' lit' : ''}`} style={{ gridColumn: `span ${row.w || 5}` }}
+          <button key={`${ri}-${ki}`} type="button" className={`ucalc-k h-${row.h} ${k.cls}${k.m.act === 'hyp' && hyp ? ' lit' : ''}`} style={{ gridColumn: `span ${row.w || 5}` }}
             onClick={() => { press(k); root.current?.focus(); }} aria-label={k.l}>
             {k.s?.l && <i className="s">{k.s.l}</i>}{k.a?.l && <i className="a">{k.a.l}</i>}
             <span>{k.l}</span>
