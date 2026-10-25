@@ -3,6 +3,8 @@ import { useBackLayer } from '../../../lib/backStack';
 import { useMeetingRoom, meetingLog } from '../../../hooks/useMeetingRoom';
 import RemoteControlLayer from './RemoteControlLayer';
 import ScreenSharePip from './ScreenSharePip';
+import Whiteboard from './Whiteboard';
+import { BoardStore } from '../../../lib/whiteboard/boardStore';
 import ParticipantTile from './ParticipantTile';
 import { ReactionLayer } from './ReactionFx';
 import { CAMERA_FILTERS, CAMERA_BACKGROUNDS, scenePreview } from '../../../lib/cameraFx';
@@ -195,6 +197,18 @@ export default function MeetingRoomShell({
     meetingUuid, guestToken, myKey, myDisplayName, deviceDefaults,
     isHost, screenSharingLockedInitial, chatEnabledInitial, meetingLockedInitial,
   });
+
+  // Shared whiteboard: the store listens to the meeting channel for the whole stay (so nothing drawn while the board is hidden is lost).
+  const [board, setBoard] = useState(null);
+  const [, wbTick] = useState(0);
+  useEffect(() => {
+    if (!room.wbSend || !myKey) return undefined;
+    const store = new BoardStore({ send: room.wbSend, on: room.wbOn, myKey, myName: myDisplayName, isManager: room.isManager });
+    const off = store.subscribe((kind) => { if (kind === 'open') wbTick((n) => n + 1); });
+    setBoard(store);
+    return () => { off(); store.destroy(); setBoard(null); };
+  }, [room.wbSend, room.wbOn, myKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { board?.setIdentity(myDisplayName, room.isManager); }, [board, myDisplayName, room.isManager]);
 
   // Host / moderator tools inside the room: the join link + who is waiting at the door. (A guest has no meeting record to read.)
   const canHost = !guestToken && room.isManager;
@@ -399,7 +413,7 @@ export default function MeetingRoomShell({
   const presenterTile = tiles.all.find((p) => p.screenSharing && !p.isLocal) || null;
   const anyPanelOpen = openPanel !== null;
   const unread = room.chatUnreadCount > 0 && !chatOpen ? (room.chatUnreadCount > 9 ? '9+' : room.chatUnreadCount) : null;
-  const moreActive = filesOpen || notesOpen || pollsOpen || recordingsOpen;
+  const moreActive = filesOpen || notesOpen || pollsOpen || recordingsOpen || !!(board && board.open);
 
   const cameraTitle = !room.hasCamera ? t('Turn camera on') : room.cameraEnabled ? t('Turn camera off') : t('Turn camera on');
 
@@ -546,6 +560,10 @@ export default function MeetingRoomShell({
               <ScreenSharePip stream={room.screenStream} onStop={room.toggleScreenShare} t={t} />
               {!tiles.spotlight && <RemoteControlLayer room={room} myKey={myKey} presenter={null} t={t} />}
             </>
+          )}
+
+          {board && board.visible && (
+            <Whiteboard store={board} t={t} isManager={room.isManager} onClose={() => board.hideForMe()} />
           )}
 
           <ReactionLayer reactions={room.reactions} myKey={myKey} youLabel={t('You')} />
@@ -739,7 +757,7 @@ export default function MeetingRoomShell({
                 icon="more-horizontal"
                 label={t('More')}
                 state={moreOpen || moreActive ? 'is-active' : ''}
-                dot={!!room.activeRecording}
+                dot={!!room.activeRecording || !!(board && board.open && !board.visible)}
                 onClick={() => { setMoreOpen((v) => !v); setReactionsOpen(false); }}
               />
               {moreOpen && (
@@ -752,6 +770,10 @@ export default function MeetingRoomShell({
                   </button>
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={() => { togglePanel('notes'); setMoreOpen(false); }}>
                     <Icon name="note" size={16} /><span className="meeting-room__menu-text">{t('Notes & Action Items')}</span>
+                  </button>
+                  <button type="button" role="menuitem" className="meeting-room__menu-item" disabled={!board} onClick={() => { if (board) { if (board.visible) board.hideForMe(); else board.showForMe(); } setMoreOpen(false); }}>
+                    <Icon name="edit" size={16} /><span className="meeting-room__menu-text">{board?.visible ? t('Hide whiteboard') : t('Whiteboard')}</span>
+                    {board && board.open && !board.visible && <span className="meeting-room__menu-badge" aria-hidden="true">●</span>}
                   </button>
                   <button type="button" role="menuitem" className="meeting-room__menu-item" onClick={() => { togglePanel('polls'); setMoreOpen(false); }}>
                     <Icon name="bar-chart" size={16} /><span className="meeting-room__menu-text">{t('Polls')}</span>

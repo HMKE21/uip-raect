@@ -329,6 +329,10 @@ export function useMeetingRoom({
 
   const echoRef = useRef(null);
   const channelRef = useRef(null);
+  // Whiteboard transport: small client events ("whispers") on the same presence channel the calls use — no server round-trip, no DB.
+  const wbHandlersRef = useRef(new Set());
+  const wbSend = useCallback((payload) => { try { channelRef.current?.whisper('wb', payload); } catch { /* channel not ready yet */ } }, []);
+  const wbOn = useCallback((fn) => { wbHandlersRef.current.add(fn); return () => wbHandlersRef.current.delete(fn); }, []);
   const personalChannelRef = useRef(null);
   const peersRef = useRef({}); // key -> RTCPeerConnection
   const pendingCandidatesRef = useRef({}); // key -> RTCIceCandidateInit[] queued before remote description is set
@@ -922,6 +926,7 @@ export function useMeetingRoom({
           });
         })
         .listenForWhisper('signal', handleSignal)
+        .listenForWhisper('wb', (e) => { wbHandlersRef.current.forEach((fn) => { try { fn(e); } catch { /* a bad whiteboard message must never break the call */ } }); })
         .listenForWhisper('capture', (e) => {
           // someone else's screenshot / recording warning (client event: it never goes through Laravel)
           if (!e || e.key === myKey) return;
@@ -1647,7 +1652,7 @@ export function useMeetingRoom({
   const clearRcNotice = useCallback(() => setRcNotice(null), []);
 
   return {
-    sessionConflict,
+    sessionConflict, wbSend, wbOn,
     remoteControl, rcIncoming, rcPendingTarget, rcNotice, clearRcNotice,
     requestRemoteControl, respondRemoteControl, stopRemoteControl, sendRemoteInput,
     status, error, meetingStatus, notice, clearNotice,

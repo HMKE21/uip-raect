@@ -121,3 +121,5 @@
 .meeting-rc__card p { margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: var(--mr-muted); }
 .meeting-rc__ico { display: inline-grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: color-mix(in srgb, var(--mr-primary) 16%, transparent); color: var(--mr-primary); }
 .meeting-rc__actions { display: flex; gap: 10px; justify-content: center; }
+
+.meeting-room__menu-badge { margin-inline-start: auto; color: #22c55e; font-size: 10px; line-height: 1; }
