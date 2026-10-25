@@ -24,6 +24,7 @@ import { useAuth } from '../../context/AuthContext';
 import { MAX_TAGS_PER_ITEM, MAX_TAG_LEN, tagColor, tokenFromLink, useDriveMarks } from '../../lib/driveMarks';
 import { afterGuard } from '../../lib/saveCenter';
 import { isSystemNode } from '../../desktop/sync';
+import { onDriveChanged } from '../../lib/driveEvents';
 import { FileGlyph, FolderGlyph } from '../../desktop/OsIcons';
 import { extOf, isTextName, opensInEditor } from '../../lib/driveFileKinds';
 import { useSharedClip } from '../../lib/driveClipboard';
@@ -464,7 +465,7 @@ export default function StudentMyPC({ embedded = false, onOpenWindow }) {
     return () => { live = false; };
   }, [specialKey, query, folderParam, inTrash]); // eslint-disable-line react-hooks/exhaustive-deps
   const showSpecial = (sp) => { keepSpecial.current = !!(folderParam || inTrash); setSel(new Set()); setQuery(''); setSpecial(sp); if (sp.type === 'shared') setResults(null); if (folderParam || inTrash) setParams({}); setSide(false); };
-  useEffect(() => { const h = () => reload({ quiet: true }); window.addEventListener('uip-drive-changed', h); return () => window.removeEventListener('uip-drive-changed', h); }, [reload]);
+  useEffect(() => onDriveChanged(() => reload({ quiet: true })), [reload]);
   useEffect(() => { try { window.localStorage.setItem('mp-view', view); } catch { /* storage unavailable */ } }, [view]);
 
   // search (debounced)

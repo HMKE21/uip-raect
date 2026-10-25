@@ -5,6 +5,8 @@ import { usePrivateParams } from '../lib/privateParams';
 import Icon from '../components/Icon';
 import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
+import { onDriveChanged } from '../lib/driveEvents';
+import { isRealtimeConnected } from '../lib/realtime';
 import CloudTray from './CloudTray';
 import DeleteProgressHost from '../components/DeleteProgress';
 import { NotifFlyout, NotifToasts, NotifTray } from './NotificationCenter';
@@ -175,7 +177,8 @@ function useDesktopFolder() {
       setSt((s) => ({ ...s, error: errorMessage(err), ready: true }));
     }
   }, []);
-  useEffect(() => { reload(); const h = setInterval(() => { if (document.visibilityState !== 'hidden') reload(); }, 45000); return () => clearInterval(h); }, [reload]);
+  // with the realtime socket connected the server pushes changes: the poll is only a safety net (3 min); without it, 45 s as before
+  useEffect(() => { reload(); let last = Date.now(); const h = setInterval(() => { if (document.visibilityState === 'hidden') return; if (Date.now() - last < (isRealtimeConnected() ? 180000 : 45000) - 2000) return; last = Date.now(); reload(); }, 15000); return () => clearInterval(h); }, [reload]);
   // optimistic: drop items from the list right away (e.g. after "Move to…"); the next reload brings back anything that failed
   const hideLocal = useCallback((ids) => { const gone = new Set(ids); setSt((x) => ({ ...x, items: x.items.filter((n) => !gone.has(n.id)) })); }, []);
   return [st, reload, hideLocal];
@@ -368,7 +371,7 @@ export default function DesktopOS() {
   }, [openFileWin, openNode]);
 
   // a viewer / editor window saved something in My PC -> refresh the desktop icons
-  useEffect(() => { const h = () => reloadDesk(); window.addEventListener('uip-drive-changed', h); return () => window.removeEventListener('uip-drive-changed', h); }, [reloadDesk]);
+  useEffect(() => onDriveChanged(() => reloadDesk()), [reloadDesk]);
 
   // F5 / right-click > Refresh: re-read the Desktop folder, the Recycle Bin state AND every open Explorer window (they listen to the same event),
   // instead of silently re-fetching one list. The event makes the desktop reload itself, so reloadDesk is not called twice.
@@ -438,8 +441,8 @@ export default function DesktopOS() {
       } catch { /* offline: keep what is shown */ }
     };
     run();
-    window.addEventListener('uip-drive-changed', run);
-    return () => { dead = true; window.removeEventListener('uip-drive-changed', run); };
+    const off = onDriveChanged(run);
+    return () => { dead = true; off(); };
   }, [shortcutIds, setPrefs]);
   const addShortcuts = useCallback((ids) => {
     const cur = shortcutsRef.current;

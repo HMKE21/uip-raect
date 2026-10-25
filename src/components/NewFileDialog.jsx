@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './Icon';
 import { errorMessage } from '../api/client';
-import { drive } from '../lib/driveApi';
+import { drive, primeBlob } from '../lib/driveApi';
 import { NEW_GROUPS, NEW_TYPES, cleanName, createFile, defaultName, typeById } from '../lib/officeFmt/create';
 import '../styles/css/new-file.css';
 
@@ -72,6 +72,7 @@ export default function NewFileDialog({ locale = 'en', parentId = null, kinds, i
       const res = await drive.upload(parentId, file);
       const node = res?.data?.items?.[0] ?? res?.items?.[0];
       if (!node) throw new Error(res?.data?.failed?.[0]?.message || tt('The file could not be saved.', 'تعذّر حفظ الملف.'));
+      primeBlob(node.id, file); // the editor opens the bytes we just built instead of downloading them again
       window.dispatchEvent(new Event('uip-drive-changed'));
       onCreated?.(node);
       onClose?.();

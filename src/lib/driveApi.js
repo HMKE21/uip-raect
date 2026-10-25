@@ -208,8 +208,18 @@ async function readWithProgress(res, onProgress) {
   return new Blob(chunks, { type });
 }
 
+// bytes we already hold (a file this device just created): the first open uses them instead of downloading them back from the server
+const primed = new Map();
+export function primeBlob(id, blob) {
+  if (id == null || !blob) return;
+  const k = String(id); primed.set(k, blob);
+  setTimeout(() => { if (primed.get(k) === blob) primed.delete(k); }, 120000);
+}
+
 /** A file's bytes (private → authenticated request; with direct storage: a signed bucket URL, validated against the local copy first). */
 export async function fetchDriveBlob(id, { onProgress } = {}) {
+  const hit = primed.get(String(id));
+  if (hit) { primed.delete(String(id)); onProgress?.(100); return hit; } // single use: later opens revalidate against the server as usual
   const key = `blob:drive:${id}`;
   const cached = await getDraft(key); // { etag, blob } from an earlier open (IndexedDB)
   const have = cached?.kind === 'cache' && cached.blob && cached.etag ? cached : null;

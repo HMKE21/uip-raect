@@ -13,3 +13,15 @@ export const DRIVE_FAILED = 'uip-drive-failed';
 export function emitDriveFailed(detail) {
   try { window.dispatchEvent(new CustomEvent(DRIVE_FAILED, { detail })); } catch { /* no window (SSR / tests) */ }
 }
+
+/**
+ * Listen to 'uip-drive-changed', coalesced: one create / save / move fires the event several times (local write, realtime echo,
+ * every open Explorer window, the desktop), and each listener used to re-fetch immediately. Now a burst becomes ONE reload.
+ * Returns the unsubscribe function.
+ */
+export function onDriveChanged(fn, wait = 250) {
+  let t = 0;
+  const h = (e) => { clearTimeout(t); t = setTimeout(() => fn(e), wait); };
+  window.addEventListener('uip-drive-changed', h);
+  return () => { clearTimeout(t); window.removeEventListener('uip-drive-changed', h); };
+}

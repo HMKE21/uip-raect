@@ -4,6 +4,13 @@ import SheetGrid from './SheetGrid';
 import useDocHistory from './useDocHistory';
 import { buildSheets, loadTheme, MAX_CELLS, readSheets } from '../../lib/officeFmt/xlsx';
 
+// Local autosave stores the cells as JSON (milliseconds) instead of building a whole .xlsx on the main thread every few seconds.
+const DRAFT_MIME = 'application/x-uip-sheets+json';
+const readAny = async (blob, ext) => {
+  if (blob?.type === DRAFT_MIME) { const j = JSON.parse(await blob.text()); if (Array.isArray(j) && j.length) return j; }
+  return readSheets(blob, ext);
+};
+
 /** Read-only professional grid for the viewer (all sheets, find, sort-free, copy). */
 export function XlsxPreview({ blob, ext, tt, rtl }) {
   const [sheets, setSheets] = useState(null); const [i, setI] = useState(0); const [err, setErr] = useState('');
@@ -27,7 +34,7 @@ export default function XlsxView({ blob, fileName, ext, tt, rtl, guardRef, onSav
 
   useEffect(() => {
     let dead = false;
-    readSheets(blob, ext).then((s) => {
+    readAny(blob, ext).then((s) => {
       if (dead) return;
       const big = s.some((x) => x.cells.length * (x.cells[0]?.length || 1) > MAX_CELLS);
       if (big) { setState({ status: 'error', msg: tt('This sheet is too large to edit in the browser.', 'الجدول كبير جدًا للتعديل داخل المتصفح.') }); return; }
@@ -41,12 +48,13 @@ export default function XlsxView({ blob, fileName, ext, tt, rtl, guardRef, onSav
   const cur = sheets[sheet];
   const onChange = useCallback((cells) => h.set(sheets.map((s, i) => (i === sheet ? { ...s, cells } : s))), [h, sheets, sheet]);
   const build = useCallback(() => buildSheets(sheets, ext, { rtl, theme }), [sheets, ext, rtl, theme]);
+  const draftBuild = useCallback(() => new Blob([JSON.stringify(sheets)], { type: DRAFT_MIME }), [sheets]);
 
   if (state.status === 'loading') return <div className="ed ed--center"><span className="st-fv-spinner" /><p className="ed__hint">{tt('Opening the sheet…', 'جارٍ فتح الجدول…')}</p></div>;
   if (state.status === 'error') return <div className="ed ed--center"><p className="ed__err">{state.msg}</p><button type="button" className="ed__btn" onClick={onClose}>{tt('Close', 'إغلاق')}</button></div>;
 
   return (
-    <OfficeShell fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={h.dirty} build={build} onSaved={h.markSaved} draftKey={draftKey} draftToken={h.value}
+    <OfficeShell fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={h.dirty} build={build} onSaved={h.markSaved} draftKey={draftKey} draftToken={h.value} draftBuild={draftBuild} draftDelay={4000}
       status={sheets.length > 1 && (
         <div className="xg__tabs" role="tablist">
           {sheets.map((s, i) => <button key={i} type="button" role="tab" aria-selected={sheet === i} className={sheet === i ? 'is-on' : ''} onClick={() => setSheet(i)}>{s.name}</button>)}
