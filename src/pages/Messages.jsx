@@ -1300,6 +1300,13 @@ export default function Messages() {
     return () => window.removeEventListener('uip:pull-refresh', onPull);
   }, [loadThread]);
 
+  // "Message" from the Stories viewers list: open that chat
+  useEffect(() => {
+    const onOpen = (e) => { const id = e.detail?.id; if (id) { loadInboxRef.current?.(); openConversation(id); } };
+    window.addEventListener('uip-open-conversation', onOpen);
+    return () => window.removeEventListener('uip-open-conversation', onOpen);
+  }, [openConversation]);
+
   const refreshAfterSafety = () => {
     if (activeIdRef.current) loadThread(activeIdRef.current, null, false);
     loadInbox();

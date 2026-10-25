@@ -72,3 +72,15 @@ export function readPref(k, fallback) {
 export function writePref(k, v) {
   try { localStorage.setItem('uip.story.' + k, v); } catch { /* private mode */ }
 }
+
+/** "Today, 3:44 pm" / "Yesterday, 11:51 pm" / a date — the way the viewers list reads in WhatsApp. */
+export function when(iso, ar) {
+  const d = parseServerDate(iso);
+  if (isNaN(d.getTime())) return '';
+  const time = d.toLocaleTimeString(ar ? 'ar-EG' : 'en-US', { hour: 'numeric', minute: '2-digit' });
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(d)) / 86400000);
+  if (diff <= 0) return `${ar ? 'اليوم' : 'Today'}, ${time}`;
+  if (diff === 1) return `${ar ? 'أمس' : 'Yesterday'}, ${time}`;
+  return `${d.toLocaleDateString(ar ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' })}, ${time}`;
+}

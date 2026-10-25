@@ -5,7 +5,7 @@ import Icon from '../../Icon';
 import { useLanguage } from '../../../context/LanguageContext';
 import { useBackLayer } from '../../../lib/backStack';
 import Face from './Face';
-import { API, bgCss, ago, endsIn, slideMs, mediaUrl } from './storyUtils';
+import { API, bgCss, ago, endsIn, slideMs, mediaUrl, when } from './storyUtils';
 
 // bare U+2764 renders as a black text glyph; append the emoji variation selector so it shows as the coloured heart
 const emo = (r) => (r ? String(r).replace(/\u2764(?!\uFE0F)/g, '\u2764\uFE0F') : r);
@@ -31,6 +31,8 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
   const [menu, setMenu] = useState(false);
   const [sheet, setSheet] = useState(null);         // null | { loading, error, viewers, count, hidden_count, receipts_off }
   const [confirmDel, setConfirmDel] = useState(false);
+  const [person, setPerson] = useState(null);        // a viewer whose card is open
+  const [opening, setOpening] = useState(false);
   const [pickReact, setPickReact] = useState(false);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
@@ -109,6 +111,7 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
     setMenu(false);
     setTyping(false);
     setBurst(null);
+    setPerson(null);
     if (!mine && !seenSent.current.has(story.id)) {
       seenSent.current.add(story.id);
       api.post(`${API}/${story.id}/view`).catch(() => {});
@@ -149,7 +152,8 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
     const onKey = (e) => {
       const inField = /^(INPUT|TEXTAREA)$/.test(e.target?.tagName || '');
       if (e.key === 'Escape') {
-        if (sheet) setSheet(null);
+        if (person) setPerson(null);
+        else if (sheet) setSheet(null);
         else if (confirmDel) setConfirmDel(false);
         else if (menu) setMenu(false);
         else if (pickReact) setPickReact(false);
@@ -166,7 +170,7 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [ar, goNext, goPrev, sheet, confirmDel, menu, pickReact, typing, onClose]);
+  }, [ar, goNext, goPrev, sheet, person, confirmDel, menu, pickReact, typing, onClose]);
 
   // ---- pointer: tap zones, hold to pause, swipe down to close
   const onDown = (e) => {
@@ -242,6 +246,23 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
       setSheet({ loading: false, ...res.data });
     } catch (err) {
       setSheet({ loading: false, error: errorMessage(err), viewers: [], count: 0, hidden_count: 0 });
+    }
+  };
+
+  // open (or create) the one-to-one chat with a viewer, then let the Messages page show it
+  const messageUser = async (v) => {
+    if (opening) return;
+    setOpening(true);
+    try {
+      const res = await api.post(`${API.replace(/\/stories$/, '')}/conversations/direct`, { recipient_id: v.id, body: '' });
+      const id = res?.data?.conversation?.id;
+      setSheet(null); setPerson(null);
+      onClose();
+      if (id) window.dispatchEvent(new CustomEvent('uip-open-conversation', { detail: { id } }));
+    } catch (err) {
+      say(errorMessage(err));
+    } finally {
+      setOpening(false);
     }
   };
 
@@ -437,11 +458,17 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
         )}
 
         {sheet && (
-          <div className="sv__sheet-back" onClick={() => setSheet(null)}>
-            <div className="sv__sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('Viewers', 'المشاهدين')}>
+          <div className="sv__sheet-back" onClick={() => { if (person) setPerson(null); else setSheet(null); }}>
+            <div className="sv__sheet sv__sheet--viewers" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={t('Viewers', 'المشاهدين')}>
+              <div className="sv__grab" aria-hidden="true" />
               <div className="sv__sheet-head">
-                <h3>{t('Viewed by', 'تمت المشاهدة بواسطة')}{sheet.count != null ? ` (${sheet.count})` : ''}</h3>
-                <button type="button" className="sv__btn sv__btn--dark" onClick={() => setSheet(null)} aria-label={t('Close', 'إغلاق')}><Icon name="x" size={18} /></button>
+                <h3>{t('Viewed by', 'تمت المشاهدة بواسطة')}{sheet.count != null ? ` ${sheet.count}` : ''}</h3>
+                <div className="sv__sheet-tools">
+                  <button type="button" className="sv__tool is-danger" onClick={() => { setSheet(null); setConfirmDel(true); }} aria-label={t('Delete this story', 'حذف الاستوري')} title={t('Delete this story', 'حذف الاستوري')}>
+                    <Icon name="trash" size={19} />
+                  </button>
+                  <button type="button" className="sv__tool" onClick={() => setSheet(null)} aria-label={t('Close', 'إغلاق')}><Icon name="x" size={19} /></button>
+                </div>
               </div>
               <div className="sv__sheet-body">
                 {sheet.loading && <p className="sv__muted">{t('Loading…', 'جاري التحميل…')}</p>}
@@ -453,16 +480,34 @@ export default function StoryViewer({ queue, startGi = 0, reactions = [], onClos
                   <p className="sv__muted">{sheet.count ? t('Some viewers keep their views private.', 'في ناس مخفيين مشاهدتهم.') : t('No views yet', 'لسه محدش شاف')}</p>
                 )}
                 {(sheet.viewers || []).map((v) => (
-                  <div className="sv__viewer" key={v.id}>
-                    <Face name={v.full_name} src={v.avatar_path} />
-                    <div><strong>{v.full_name}</strong><small>{ago(v.viewed_at, ar)}</small></div>
-                    {v.reaction && <span className="sv__viewer-react" aria-hidden="true">{emo(v.reaction)}</span>}
+                  <div className="sv__viewer" key={v.id} role="button" tabIndex={0} onClick={() => setPerson(v)} onKeyDown={(e) => { if (e.key === 'Enter') setPerson(v); }}>
+                    <span className="sv__vface">
+                      <Face name={v.full_name} src={v.avatar_path} />
+                      {v.reaction && <i className="sv__vbadge" aria-hidden="true">{emo(v.reaction)}</i>}
+                    </span>
+                    <div className="sv__vtext"><strong dir="auto">{v.full_name}</strong><small>{when(v.viewed_at, ar)}</small></div>
+                    <button type="button" className="sv__vmsg" onClick={(e) => { e.stopPropagation(); messageUser(v); }} aria-label={t('Message', 'راسله')} title={t('Message', 'راسله')}>
+                      <Icon name="message-square" size={19} />
+                    </button>
                   </div>
                 ))}
                 {!sheet.loading && !sheet.receipts_off && sheet.hidden_count > 0 && sheet.viewers?.length > 0 && (
                   <p className="sv__muted">{t(`+ ${sheet.hidden_count} private`, `+ ${sheet.hidden_count} مخفيين`)}</p>
                 )}
               </div>
+
+              {person && (
+                <div className="sv__person" role="dialog" aria-label={person.full_name}>
+                  <button type="button" className="sv__tool sv__person-x" onClick={() => setPerson(null)} aria-label={t('Close', 'إغلاق')}><Icon name="x" size={19} /></button>
+                  <span className="sv__pface"><Face name={person.full_name} src={person.avatar_path} /></span>
+                  <strong dir="auto">{person.full_name}</strong>
+                  <small>{t('Viewed', 'شاف')} · {when(person.viewed_at, ar)}</small>
+                  {person.reaction && <span className="sv__preact">{t('Reacted', 'تفاعل')} {emo(person.reaction)}</span>}
+                  <button type="button" className="sv__danger sv__pmsg" onClick={() => messageUser(person)} disabled={opening}>
+                    <Icon name="message-square" size={17} /> {t('Send message', 'ابعت رسالة')}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
