@@ -2,6 +2,7 @@ import { useBackLayer } from '../lib/backStack';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, reportClientIssue } from '../api/client';
+import { onRealtime } from '../lib/realtime';
 import { useAuth } from '../context/AuthContext';
 import ConversationRail from '../components/messaging/ConversationRail';
 import ConfirmDialog from '../components/messaging/ConfirmDialog';
@@ -511,9 +512,14 @@ export default function Messages() {
 
   // Active-conversation poll (new messages + typing).
   useEffect(() => {
-    const h = setInterval(() => {
+    let busy = false;
+    let again = false;
+    const runPoll = () => {
       const id = activeIdRef.current;
       if (!id || document.hidden) return;
+      // never two polls at once (they share since_id / the server clock); a ping that lands meanwhile re-polls right after
+      if (busy) { again = true; return; }
+      busy = true;
       api
         .get(BASE + '/conversations/' + id + '/poll', { since_id: lastPollIdRef.current, ...(pollClockRef.current ? { changes_since: pollClockRef.current } : {}) })
         .then((res) => {
@@ -609,9 +615,32 @@ export default function Messages() {
             loadInboxRef.current?.();
             setLastError(localizeError('Conversation not found.'));
           }
+        })
+        .finally(() => {
+          busy = false;
+          if (again) { again = false; runPoll(); }
         });
-    }, POLL_MS);
-    return () => clearInterval(h);
+    };
+    const h = setInterval(runPoll, POLL_MS); // safety net only — the socket below delivers in ~100 ms
+
+    // Realtime (Reverb): the server pings every member of the conversation the moment anything changes in it
+    // (new message, edit, delete, reaction, read receipt, poll vote, typing…); we fetch the delta immediately.
+    let typingClear = null;
+    let inboxTimer = null;
+    const offRt = onRealtime('messaging', (d, topic) => {
+      const cid = d?.conversation_id;
+      if (topic === 'resync' || (cid && String(cid) === String(activeIdRef.current))) runPoll();
+      if (d?.kind === 'typing' && cid && String(cid) === String(activeIdRef.current)) {
+        // the typing flag expires on the server (~6 s) and "stopped typing" sends no ping: look again shortly after
+        clearTimeout(typingClear);
+        typingClear = setTimeout(runPoll, 4200);
+      }
+      if (d?.kind !== 'typing') {
+        clearTimeout(inboxTimer);
+        inboxTimer = setTimeout(() => loadInboxRef.current?.(), 80);
+      }
+    });
+    return () => { clearInterval(h); offRt(); clearTimeout(typingClear); clearTimeout(inboxTimer); };
   }, []);
 
   // Presence heartbeat.

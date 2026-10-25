@@ -146,7 +146,7 @@ export default function Topbar({ role, user, onMenuClick, onLogout, collapsed = 
     window.addEventListener('uip:push-received', on);
     return () => window.removeEventListener('uip:push-received', on);
   }, [loadBell]);
-  useLive(loadBell, { watch: /\/(notifications|messaging|messages|exams?|appeals?)(\/|$|\?)/, interval: 30000 });
+  useLive(loadBell, { watch: /\/(notifications|messaging|messages|exams?|appeals?)(\/|$|\?)/, interval: 30000, topics: ['notification', 'messaging'] });
 
   const searchPlaceholder = pick(brand.search?.placeholder, locale);
   const searchResultsRoute = brand.search?.route;

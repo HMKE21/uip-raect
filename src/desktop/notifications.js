@@ -103,7 +103,7 @@ export function useDesktopNotifications({ uid, ar, tt, quiet = false }) {
 
   useEffect(() => { refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setLocal(loadLocal(uid)); }, [uid]);
-  useLive(refresh, { watch: /\/(notifications|messaging|messages|exams?|appeals?)(\/|$|\?)/, interval: 30000 });
+  useLive(refresh, { watch: /\/(notifications|messaging|messages|exams?|appeals?)(\/|$|\?)/, interval: 30000, topics: ['notification', 'messaging'] });
   useEffect(() => {
     const on = () => refresh();
     window.addEventListener('uip:push-received', on);

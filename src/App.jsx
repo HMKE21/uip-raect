@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PageLoading from './components/PageLoading';
 import MyPcAccessGate from './components/MyPcAccessGate';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import RealtimeBridge from './components/RealtimeBridge';
 import { readHeldFlag, readLockCache, readUnlockedFlag } from './desktop/desktopApi';
 import { STAFF_LOGIN_PATH } from './config/staffPortal';
 import StaffGate from './components/staff/StaffGate';
@@ -306,6 +307,7 @@ export default function App() {
         <DeviceGate>
         <AuthProvider>
           <AccountSettingsSync />
+          <RealtimeBridge />
           <SaveCenterHost />
           {/* MFA requirements policy: a role that must have 2FA (grace period over) sees the setup page instead of the app. */}
           <MfaGate>

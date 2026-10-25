@@ -289,6 +289,19 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   const index = Math.max(0, found);
   const [view, setView] = useState({ status: 'loading', progress: 0 });
   const [retryKey, setRetryKey] = useState(0);
+  // Realtime (My PC): the file being viewed was saved on another tab/device → show the new content right away.
+  // Skipped while this viewer is in edit mode so unsaved local changes are never overwritten.
+  const openIdRef = useRef(null);
+  useEffect(() => {
+    const h = (e) => {
+      const id = e?.detail?.id;
+      const cur = openIdRef.current;
+      if (id == null || cur == null || String(id) !== String(cur) || editingRef.current) return;
+      setRetryKey((k) => k + 1);
+    };
+    window.addEventListener('uip-drive-node-changed', h);
+    return () => window.removeEventListener('uip-drive-node-changed', h);
+  }, []);
   const [sheet, setSheet] = useState(0);
   const [fullscreen, setFullscreen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -310,6 +323,7 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
   const cache = useRef(new Map());
 
   const file = list[index];
+  openIdRef.current = file ? (file.driveId ?? file.id) : null;
   lastRoot.current = rootOf(file);
   const ext = extOf(file?.original_name);
   const canSave = !!(onSaveFile || onSaveZip);

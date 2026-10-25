@@ -292,7 +292,7 @@ export default function Notifications() {
   useEffect(() => { loadCounts(); }, [loadCounts]);
 
   // New notifications from other people / other tabs show up on their own.
-  useLive(() => { load(); loadCounts(); }, { watch: /(?!)/, interval: 20000 });
+  useLive(() => { load(); loadCounts(); }, { watch: /(?!)/, interval: 20000, topics: ['notification'] });
 
   // Debounced search box, same 350ms as the old JS.
   const [searchInput, setSearchInput] = useState('');

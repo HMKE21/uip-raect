@@ -95,7 +95,7 @@ function DashboardShell() {
       .catch(() => {});
   }, [isStudentShell]);
   useEffect(() => { loadUnreadMessages(); }, [loadUnreadMessages]);
-  useLive(loadUnreadMessages, { watch: /\/(messaging|messages)(\/|$|\?)/, interval: 30000, enabled: isStudentShell });
+  useLive(loadUnreadMessages, { watch: /\/(messaging|messages)(\/|$|\?)/, interval: 30000, enabled: isStudentShell, topics: ['messaging'] });
 
   // Desktop: collapse the sidebar to icons. Mobile (<=768px, where the
   // sidebar is an off-canvas drawer): open/close the drawer instead.
