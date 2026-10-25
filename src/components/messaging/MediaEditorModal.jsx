@@ -727,6 +727,7 @@ const ImageEditor = forwardRef(function ImageEditor({ file, tx, onReady, onError
     opsRef.current = opsRef.current.filter((o) => o === 'adj');
     setCrop({ x: 0, y: 0, w: 1, h: 1 });
     setAspect('free');
+    setAdj(DEFAULT_ADJ); // "Reset" also removes the colour filter (it is still one undo step away)
   };
   const canUndo = history.length > 0 || texts.length > 0 || (adjN >= 0 && adjStack.current.length > 1);
 
@@ -749,6 +750,7 @@ const ImageEditor = forwardRef(function ImageEditor({ file, tx, onReady, onError
 
   useImperativeHandle(ref, () => ({
     cancel() {},
+    isDirty() { return history.length > 0 || textsRef.current.length > 0 || (filtOk && !adjIsDefault(adj)) || qk !== 'orig'; },
     async getResult() {
       const filtered = filtOk && !adjIsDefault(adj);
       const flat = cur ? withTexts(cur, textsRef.current) : cur;
@@ -1239,7 +1241,7 @@ const ImageEditor = forwardRef(function ImageEditor({ file, tx, onReady, onError
             <button type="button" className="mx-ed__iconbtn" title={tx.rotate} aria-label={tx.rotate} onClick={() => cur && push(rotateCanvas(bake() || cur, 1))}><EdIcon name="rotate" /></button>
             <button type="button" className="mx-ed__iconbtn" title={tx.flip} aria-label={tx.flip} onClick={() => cur && push(flipCanvas(bake() || cur))}><EdIcon name="flip" /></button>
             <button type="button" className="mx-ed__iconbtn" title={tx.undo} aria-label={tx.undo} disabled={!canUndo} onClick={undo}><EdIcon name="undo" /></button>
-            <button type="button" className="mx-ed__iconbtn" title={tx.reset} aria-label={tx.reset} disabled={!history.length && !texts.length} onClick={reset}><EdIcon name="reset" /></button>
+            <button type="button" className="mx-ed__iconbtn" title={tx.reset} aria-label={tx.reset} disabled={!history.length && !texts.length && adjIsDefault(adj)} onClick={reset}><EdIcon name="reset" /></button>
           </div>
         </div>
 
@@ -2267,6 +2269,7 @@ const VideoEditor = forwardRef(function VideoEditor({ file, tx, onReady, onError
     cancel() {
       abortRef.current?.();
     },
+    isDirty() { return edited; },
     async getResult() {
       if (!edited || !trimOk) return file;
       return exportVideo({
@@ -2432,7 +2435,7 @@ const VideoEditor = forwardRef(function VideoEditor({ file, tx, onReady, onError
             <div className="mx-ed__actions">
               <button type="button" className="mx-ed__iconbtn" title={tx.rotate} aria-label={tx.rotate} onClick={rotate}><EdIcon name="rotate" /></button>
               <button type="button" className="mx-ed__iconbtn" title={tx.flip} aria-label={tx.flip} onClick={doFlip}><EdIcon name="flip" /></button>
-              <button type="button" className="mx-ed__iconbtn" title={tx.reset} aria-label={tx.reset} disabled={!cropChanged && !rot && !flip} onClick={() => { setRot(0); setFlip(false); resetCrop(); }}><EdIcon name="reset" /></button>
+              <button type="button" className="mx-ed__iconbtn" title={tx.reset} aria-label={tx.reset} disabled={!cropChanged && !rot && !flip && adjIsDefault(adj)} onClick={() => { setRot(0); setFlip(false); resetCrop(); setAdj(DEFAULT_ADJ); }}><EdIcon name="reset" /></button>
             </div>
           </div>
         )}
@@ -2730,6 +2733,7 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
 
   const [caption, setCaption] = useState(initialCaption);
   // "View once" / "timer" (same options as the camera): null = normal. Travels on the File as `uipView`, like camera shots.
+  const [confirmClose, setConfirmClose] = useState(false);
   const [viewMode, setViewMode] = useState(file.uipView?.mode || null);
   const [viewSecs, setViewSecs] = useState(file.uipView?.seconds || 10);
   const [ready, setReady] = useState(false);
@@ -2753,9 +2757,15 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
     return () => URL.revokeObjectURL(u);
   }, [gif, file]);
 
+  // X / Esc with unsaved edits asks first: one mis-tap used to throw away every edit and drop the user back in the chat.
+  const requestClose = useCallback(() => {
+    if (busy) return;
+    if (edRef.current?.isDirty?.()) setConfirmClose(true); else onCancel();
+  }, [busy, onCancel]);
+
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape' && !busy && document.activeElement?.tagName !== 'INPUT') onCancel();
+      if (e.key === 'Escape' && !busy && document.activeElement?.tagName !== 'INPUT') requestClose();
     };
     document.addEventListener('keydown', onKey);
     const unlock = lockScroll();
@@ -2763,7 +2773,7 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
       document.removeEventListener('keydown', onKey);
       unlock();
     };
-  }, [busy, onCancel]);
+  }, [busy, onCancel, requestClose]);
 
   const finish = async (send) => {
     if (busy) return;
@@ -2803,7 +2813,7 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
     <div className={`mx-ed${phone ? ' mx-ed--phone' : ''}`} ref={rootRef} role="dialog" aria-modal="true" aria-label={tx.title}>
       {phone ? (
         <div className="mx-ph__top">
-          <button type="button" className="mx-ph__round" onClick={onCancel} disabled={busy} aria-label={tx.close} title={tx.close}>
+          <button type="button" className="mx-ph__round" onClick={requestClose} disabled={busy} aria-label={tx.close} title={tx.close}>
             <EdIcon name="x" size={22} />
           </button>
           <button type="button" className="mx-ph__pill" disabled={busy || failed || !ready} onClick={() => finish(false)}>
@@ -2812,7 +2822,7 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
         </div>
       ) : (
         <header className="mx-ed__top">
-          <button type="button" className="mx-ed__iconbtn" onClick={onCancel} disabled={busy} aria-label={tx.close} title={tx.close}>
+          <button type="button" className="mx-ed__iconbtn" onClick={requestClose} disabled={busy} aria-label={tx.close} title={tx.close}>
             <EdIcon name="x" />
           </button>
           <strong className="mx-ed__title">{gif ? tx.previewTitle : saveMode ? tx.titleSave : tx.title}</strong>
@@ -2883,6 +2893,18 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
           </>
         )}
       </footer>
+
+      {confirmClose && (
+        <div className="mx-ed__busy" role="alertdialog" aria-modal="true" aria-label={locale === 'ar' ? 'تجاهل التعديلات؟' : 'Discard edits?'}>
+          <div className="mx-ed__busy-card">
+            <p>{locale === 'ar' ? 'تجاهل التعديلات؟' : 'Discard your edits?'}</p>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button type="button" className="btn btn-primary mx-ed__btn" autoFocus onClick={() => setConfirmClose(false)}>{locale === 'ar' ? 'متابعة التعديل' : 'Keep editing'}</button>
+              <button type="button" className="btn btn-outline mx-ed__btn" onClick={onCancel}>{locale === 'ar' ? 'تجاهل وخروج' : 'Discard'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {busy && isVideo && (
         <div className="mx-ed__busy" role="status">
