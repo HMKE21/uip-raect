@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
 import { useResizeGrip } from './useResizeGrip';
 import { AppPicker, ModeSwitch } from './RunPicker';
+import { enableFastRenderer } from '../../lib/termRenderer';
 
 const STATE_LABEL = {
   idle: ['Ready', 'جاهز'], connecting: ['Connecting…', 'جاري الاتصال…'], starting: ['Starting…', 'جاري التشغيل…'],
@@ -47,6 +48,7 @@ export default function SandboxPanel({ tt, sandbox, apps, allApps, app, onSelect
       } });
       const fit = new FitAddon();
       term.loadAddon(fit); term.open(hostRef.current);
+      enableFastRenderer(term); // GPU renderer: the default DOM renderer is what made long output freeze the page
       termRef.current = term; fitRef.current = fit;
       const doFit = () => { try { fit.fit(); } catch { /* hidden */ } };
       doFit();

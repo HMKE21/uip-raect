@@ -3,6 +3,7 @@ import { zipSync, strToU8 } from 'fflate';
 import Icon from '../components/Icon';
 import { UipMark } from './OsIcons';
 import { useSandbox } from '../components/zipbench/runner/useSandbox';
+import { enableFastRenderer } from '../lib/termRenderer';
 
 /** One real shell per student, in an isolated container on the uip-sandbox gateway (same gateway the code editor uses). */
 const TOKEN_PATH = '/api/v1/drive/terminal-token';
@@ -44,6 +45,7 @@ export default function TerminalApp({ tt }) {
       term = new Terminal({ fontFamily: "'Cascadia Code', Consolas, 'SF Mono', Menlo, monospace", fontSize: 13, cursorBlink: true, scrollback: 5000, lineHeight: 1.25, cursorStyle: 'bar', cursorWidth: 2, theme: THEME });
       const fit = new FitAddon();
       term.loadAddon(fit); term.open(hostRef.current);
+      enableFastRenderer(term); // GPU renderer: the default DOM renderer is what made long output freeze the page
       termRef.current = term; fitRef.current = fit;
       const doFit = () => { try { fit.fit(); } catch { /* hidden */ } };
       doFit();

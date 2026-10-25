@@ -37,10 +37,21 @@ export function useSandbox(projectId, tokenPath) {
   const [error, setError] = useState('');
   const [expiresAt, setExpiresAt] = useState(0);
 
-  const emit = useCallback((d) => {
+  // Output frames are merged and written to the terminal at most every ~16 ms: one xterm write + one buffer trim per batch
+  // instead of per WebSocket message (a busy shell sends hundreds per second, and each used to re-copy the 200 KB history).
+  const pendRef = useRef('');
+  const pendTimer = useRef(null);
+  const flushOut = useCallback(() => {
+    pendTimer.current = null;
+    const d = pendRef.current; pendRef.current = '';
+    if (!d) return;
     outRef.current = (outRef.current + d).slice(-OUT_CAP);
     sinkRef.current?.write(d);
   }, []);
+  const emit = useCallback((d) => {
+    pendRef.current += d;
+    if (!pendTimer.current) pendTimer.current = setTimeout(flushOut, 16);
+  }, [flushOut]);
 
   /** <SandboxPanel> hands in its xterm instance; everything printed so far is replayed into it. */
   const attach = useCallback((term) => {
@@ -63,7 +74,7 @@ export function useSandbox(projectId, tokenPath) {
     runRef.current += 1;
     const run = runRef.current;
     setError(''); setHint('');
-    if (!resume) { outRef.current = ''; sinkRef.current?.reset?.(); setPreviewUrl(null); }
+    if (!resume) { outRef.current = ''; pendRef.current = ''; sinkRef.current?.reset?.(); setPreviewUrl(null); }
     setPhase('connecting'); setStatusText('');
     lastRef.current = { kind, entry, choice };
     sizeRef.current = { cols, rows };
@@ -115,7 +126,7 @@ export function useSandbox(projectId, tokenPath) {
     if (last) connect({ ...last, cols, rows, resume: true });
   }, [connect]);
 
-  const restart = useCallback((cols, rows) => { outRef.current = ''; sinkRef.current?.reset?.(); send({ t: 'restart', cols, rows }); setPhase('running'); }, [send]);
+  const restart = useCallback((cols, rows) => { outRef.current = ''; pendRef.current = ''; sinkRef.current?.reset?.(); send({ t: 'restart', cols, rows }); setPhase('running'); }, [send]);
   const stop = useCallback(() => { send({ t: 'stop' }); setPreviewUrl(null); }, [send]);
   const input = useCallback((d) => send({ t: 'input', d }), [send]);
   const resize = useCallback((cols, rows) => { sizeRef.current = { cols, rows }; send({ t: 'resize', cols, rows }); }, [send]);
