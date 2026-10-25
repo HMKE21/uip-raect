@@ -15,6 +15,7 @@ import { roleHome } from '../config/roleHome';
 import { displayName, initials, OPEN_AI_EVENT } from './Sidebar';
 import { usePageMetaValue } from '../context/PageMetaContext';
 import { parseServerDate } from '../utils/serverDate';
+import { VirtualLauncher } from '../virtual/ModeCard';
 import { isSoundEnabled, setSoundEnabled, playSound, SOUND_EVENT } from '../lib/notificationSound';
 
 const TXT = {
@@ -215,6 +216,7 @@ export default function Topbar({ role, user, onMenuClick, onLogout, collapsed = 
             <input type="search" placeholder={searchPlaceholder} aria-label={searchPlaceholder} value={searchValue} onChange={(e) => setSearchValue(e.target.value)} />
           </form>
         )}
+        <VirtualLauncher />
         <button
           type="button"
           className="topbar__icon-btn"

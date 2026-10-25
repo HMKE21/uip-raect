@@ -20,7 +20,7 @@
  *
  * It relies on react-router storing the stack position in history.state.idx (same thing native.js uses).
  */
-import { forwardRef, useCallback, useEffect, useRef } from 'react';
+import { createContext, forwardRef, useCallback, useContext, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 
 // Everything below is "a layer on top of the page" that should be closed by Back.
@@ -192,13 +192,17 @@ export function useSeedBackStack(home, skip = false) {
  * Returns a click handler for a "Back" control. Goes back one real step when this tab has a previous
  * screen of the app; otherwise (page opened directly) goes to `fallback`, replacing the current entry.
  */
+/** A window of the virtual mode has its own in-memory history: it provides its own "position in the stack" here. */
+export const HistoryIndexContext = createContext(null);
+
 export function useSmartBack(fallback = '/') {
   const navigate = useNavigate();
+  const indexOf = useContext(HistoryIndexContext);
   return useCallback((e) => {
     e?.preventDefault?.();
-    if (historyIndex() > 0) navigate(-1);
+    if ((indexOf ? indexOf() : historyIndex()) > 0) navigate(-1);
     else navigate(fallback, { replace: true });
-  }, [navigate, fallback]);
+  }, [navigate, fallback, indexOf]);
 }
 
 /** Drop-in replacement for <Link to={parent}> used as a "Back to ..." control. */

@@ -1,5 +1,6 @@
 import { memo, useId } from 'react';
 import Icon from '../components/Icon';
+import { VM_BY_ID, isVmApp } from '../virtual/catalog';
 
 /** Big colourful desktop / start-menu glyphs. Folder / PC / bin are hand-drawn SVG, the rest use the shared Icon set on a gradient tile. */
 let uid = 0;
@@ -151,8 +152,20 @@ export function UipMark({ size = 18 }) {
   );
 }
 
+/** Icon of a platform app of the virtual mode (courses, exams…): same squircle as the system apps, tinted by its group. */
+export function VmTile({ app, size = 48 }) {
+  const a = VM_BY_ID[app];
+  const [c1, c2] = a?.colors || ['#60a5fa', '#2563eb'];
+  return (
+    <span className="os-tile vm-tile" style={{ width: size, height: size, background: `linear-gradient(180deg, ${c1}, ${c2})`, borderRadius: Math.round(size * 0.225) }}>
+      <Icon name={a?.icon || 'grid'} size={Math.round(size * 0.54)} />
+    </span>
+  );
+}
+
 /** One glyph for an app id (Launchpad / Dock / Mission Control). */
 export function AppGlyph({ app, size = 48, full }) {
+  if (isVmApp(app)) return <VmTile app={app} size={size} />;
   if (app === 'explorer') return <ExplorerTile size={size} />;
   if (app === 'bin') return <BinGlyph size={size} full={full} />;
   if (app === 'launchpad') return <LaunchpadGlyph size={size} />;

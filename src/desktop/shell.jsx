@@ -322,13 +322,27 @@ export function StartMenu({ ar, tt, user, apps, desktopItems, onOpenApp, onOpenN
         <input autoFocus value={q} dir="auto" onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} placeholder={tt('Search apps and your files…', 'ابحث في التطبيقات وملفاتك…')} />
       </div>
       <div className="os-start__body">
-        <h4>{q ? tt('Apps', 'التطبيقات') : tt('Applications', 'التطبيقات')}</h4>
-        <div className="os-start__grid">
-          {list.map((a) => (
-            <button key={a.id} type="button" onClick={() => onOpenApp(a)}><AppGlyph app={a.glyph} size={64} /><span dir="auto">{ar ? a.ar : a.en}</span></button>
-          ))}
-          {!list.length && <p className="os-start__empty">{tt('No matching apps.', 'مفيش تطبيقات مطابقة.')}</p>}
-        </div>
+        {/* apps may carry a `group` ({en, ar}): the platform's pages and the system apps get their own headings */}
+        {(() => {
+          const sections = [];
+          list.forEach((a) => {
+            const k = a.group ? a.group.en : '';
+            let sec = sections.find((x) => x.k === k);
+            if (!sec) { sec = { k, title: a.group, items: [] }; sections.push(sec); }
+            sec.items.push(a);
+          });
+          if (!sections.length) return <><h4>{q ? tt('Apps', 'التطبيقات') : tt('Applications', 'التطبيقات')}</h4><div className="os-start__grid"><p className="os-start__empty">{tt('No matching apps.', 'مفيش تطبيقات مطابقة.')}</p></div></>;
+          return sections.map((sec, i) => (
+            <div key={sec.k || 'sys'}>
+              <h4>{sec.title ? (ar ? sec.title.ar : sec.title.en) : (i === 0 && !q ? tt('Applications', 'التطبيقات') : q ? tt('Apps', 'التطبيقات') : tt('System', 'النظام'))}</h4>
+              <div className="os-start__grid">
+                {sec.items.map((a) => (
+                  <button key={a.id} type="button" onClick={() => onOpenApp(a)}><AppGlyph app={a.glyph} size={64} /><span dir="auto">{ar ? a.ar : a.en}</span></button>
+                ))}
+              </div>
+            </div>
+          ));
+        })()}
         {q.trim().length >= 2 && (
           <>
             <h4>{tt('My PC files', 'ملفات جهازي')}</h4>

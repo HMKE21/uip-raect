@@ -17,6 +17,7 @@ import { getPortalBrand } from '../config/portalBrand';
 import { ExamLockProvider, useExamLock } from '../context/ExamLockContext';
 import { useBackLayer, useSeedBackStack } from '../lib/backStack';
 import { roleHome } from '../config/roleHome';
+import { VirtualGuard } from '../virtual/virtualMode';
 
 // "UIP / DASHBOARD" eyebrow shown above every Insight-portal page title.
 function useEyebrow(role, enabled) {
@@ -39,7 +40,10 @@ export default function DashboardLayout() {
   const { user } = useAuth();
   return (
     <ExamLockProvider enabled={user?.role === 'student'}>
-      <DashboardShell />
+      {/* virtual mode: a student's portal page is shown as a window of the desktop instead (exam / meeting room / print pages stay full pages) */}
+      <VirtualGuard>
+        <DashboardShell />
+      </VirtualGuard>
     </ExamLockProvider>
   );
 }

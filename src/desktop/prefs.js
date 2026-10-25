@@ -1,3 +1,4 @@
+import { VM_DESK_ICONS, VM_DOCK_ICONS } from '../virtual/catalog';
 const prefsKey = (uid) => `uip_desktop_prefs_v1_${uid ?? 'anon'}`; // per account: another student on the same browser never inherits it
 export const DEFAULT_PREFS = { wallpaper: 'sequoia', customWallpaper: null, accent: '#0a84ff', iconSize: 'm', dockMag: true, openMax: true, brightness: 100, hiddenIcons: [], hiddenDock: [], shortcuts: [], fontScale: 'm', reduceMotion: false, highContrast: false };
 /** macOS accent palette (blue, purple, pink, red, orange, yellow, green, graphite) + the old UIP indigo. */
@@ -13,10 +14,12 @@ export const DESK_ICONS = [
   ['sys:explorer', 'This PC', 'جهازي', 'explorer'], ['sys:bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'], ['sys:portal', 'UIP Portal', 'بوابة UIP', 'portal'],
   ['sys:logout', 'Sign out', 'تسجيل الخروج', 'logout'],
   ['sys:settings', 'Settings', 'الإعدادات', 'settings'], ['sys:shortcuts', 'Shortcuts', 'الاختصارات', 'shortcuts'],
+  ...VM_DESK_ICONS, // the platform's pages (only listed in Settings while the virtual mode is on)
 ];
 export const DOCK_ICONS = [
   ['launchpad', 'Launchpad', 'لوحة التطبيقات', 'launchpad'], ['explorer', 'This PC', 'جهازي', 'explorer'], ['settings', 'Settings', 'الإعدادات', 'settings'],
   ['shortcuts', 'Keyboard shortcuts', 'اختصارات الكيبورد', 'shortcuts'], ['notes', 'Notes', 'الملاحظات', 'notes'], ['calendar', 'Calendar', 'التقويم', 'calendar'], ['calculator', 'Calculator', 'الآلة الحاسبة', 'calculator'], ['terminal', 'UIP Terminal', 'ترمينال UIP', 'terminal'], ['lock', 'Lock screen', 'قفل الشاشة', 'lock'], ['portal', 'UIP Portal', 'بوابة UIP', 'portal'], ['logout', 'Sign out', 'تسجيل الخروج', 'logout'], ['bin', 'Recycle Bin', 'سلة المحذوفات', 'bin'],
+  ...VM_DOCK_ICONS,
 ];
 export const NO_ICONS = []; // one shared empty list, so memo dependencies do not change on every render
 /** ids of My PC items the person put on the desktop as shortcuts (the items themselves stay where they are). */

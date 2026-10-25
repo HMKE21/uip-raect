@@ -11,6 +11,9 @@ import { SharedLinksPanel } from '../components/MySharedLinks';
 import { wipeLocalData } from '../lib/wipeLocalData';
 import { fetchBackupAll } from '../lib/driveApi';
 import { saveBlob } from '../lib/exporter';
+import { VM_APPS, isVmApp, isVmDeskKey } from '../virtual/catalog';
+import ModeCard from '../virtual/ModeCard';
+import { useVirtualMode } from '../virtual/virtualMode';
 
 const StudentMyPC = lazy(() => import('../pages/student/StudentMyPC'));
 
@@ -28,6 +31,8 @@ export const APPS = {
   viewer: { en: 'Viewer', ar: 'العارض', size: { w: 1000, h: 660 }, singleton: false, pin: false },
   editor: { en: 'Code editor', ar: 'محرر الأكواد', size: { w: 1120, h: 700 }, singleton: false, pin: false },
 };
+// The platform's own pages as apps of the virtual mode (one window each; see ../virtual). Never pinned here: the Dock adds the ones the mode wants.
+VM_APPS.forEach((a) => { APPS[a.id] = { en: a.en, ar: a.ar, size: a.size, singleton: true, pin: false, virtual: true }; });
 export const PINNED = Object.keys(APPS).filter((k) => APPS[k].pin);
 
 /** The existing My PC page, embedded: same drive API, same editors, now living inside a window. */
@@ -225,6 +230,11 @@ function LockSettings({ tt, lockEnabled, onLockChanged }) {
 
 export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, toggleTheme, toggleLocale, usage, user, lockEnabled, onLockChanged, sec, onSec, onLockNow, onSleepNow, onSelfLogout }) {
   const [tab, setTab] = useState(tabProp || 'personalize');
+  const vm = useVirtualMode();
+  const showVm = vm.supported && (vm.available || vm.enabled);
+  // the platform's icons are only listed (and restorable) while the virtual mode is on
+  const deskList = vm.enabled ? DESK_ICONS : DESK_ICONS.filter((d) => !isVmDeskKey(d[0]));
+  const dockList = vm.enabled ? DOCK_ICONS : DOCK_ICONS.filter((d) => !isVmApp(d[0]));
   const [err, setErr] = useState('');
   const file = useRef(null);
   useEffect(() => { if (tabProp) setTab(tabProp); }, [tabProp]);
@@ -246,6 +256,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
     ['links', 'link', tt('Shared links', 'الروابط المشاركة')],
     ['security', 'shield', tt('Security & devices', 'الأمان والأجهزة')],
     ['lock', 'lock', tt('Lock password', 'باسورد القفل')],
+    ...(showVm ? [['vm', 'grid', tt('UIP OS (virtual mode)', 'UIP OS (الوضع الافتراضي)')]] : []),
     ['system', 'monitor', tt('System', 'النظام')],
     ['about', 'info', tt('About', 'حول')],
   ];
@@ -257,6 +268,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
         ))}
       </nav>
       <div className="os-set__main">
+        {tab === 'vm' && showVm && <Section title={tt('UIP OS — Virtual mode', 'UIP OS — الوضع الافتراضي')}><div className="vm-set"><ModeCard inDesktop /></div></Section>}
         {tab === 'personalize' && (
           <>
             <Section title={tt('Desktop background', 'خلفية سطح المكتب')}>
@@ -294,10 +306,10 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
             </Section>
             <Section title={tt('Desktop icons', 'أيقونات سطح المكتب')}>
               <p className="os-set__hint os-set__hint--top">{tt('Remove an icon with right-click ▸ Remove, or the Delete key. Turn it back on here.', 'احذف أي أيقونة بالزر اليمين ▸ حذف، أو بزر Delete. وشغّلها تاني من هنا.')}</p>
-              <IconToggles list={DESK_ICONS} hidden={hiddenList(prefs.hiddenIcons)} ar={ar} onToggle={(k, on) => { const cur = hiddenList(prefs.hiddenIcons); setPrefs({ hiddenIcons: on ? cur.filter((x) => x !== k) : [...new Set([...cur, k])] }); }} />
+              <IconToggles list={deskList} hidden={hiddenList(prefs.hiddenIcons)} ar={ar} onToggle={(k, on) => { const cur = hiddenList(prefs.hiddenIcons); setPrefs({ hiddenIcons: on ? cur.filter((x) => x !== k) : [...new Set([...cur, k])] }); }} />
             </Section>
             <Section title={tt('Dock icons', 'أيقونات الـ Dock')}>
-              <IconToggles list={DOCK_ICONS} hidden={hiddenList(prefs.hiddenDock)} ar={ar} onToggle={(k, on) => { const cur = hiddenList(prefs.hiddenDock); setPrefs({ hiddenDock: on ? cur.filter((x) => x !== k) : [...new Set([...cur, k])] }); }} />
+              <IconToggles list={dockList} hidden={hiddenList(prefs.hiddenDock)} ar={ar} onToggle={(k, on) => { const cur = hiddenList(prefs.hiddenDock); setPrefs({ hiddenDock: on ? cur.filter((x) => x !== k) : [...new Set([...cur, k])] }); }} />
               <div className="os-ic-actions">
                 <button type="button" className="os-btn" disabled={!hiddenList(prefs.hiddenIcons).length && !hiddenList(prefs.hiddenDock).length} onClick={() => setPrefs({ hiddenIcons: [], hiddenDock: [] })}>{tt('Restore all icons', 'استرجاع كل الأيقونات')}</button>
               </div>

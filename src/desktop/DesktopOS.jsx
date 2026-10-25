@@ -40,6 +40,8 @@ import { useDesktopWidgets } from './widgetsStore';
 import { opensInEditor } from '../lib/driveFileKinds';
 import WindowFrame from './Window';
 import { useIsMobileOS } from './useIsMobileOS';
+import { VM_APPS, VM_BY_ID, VM_DESKTOP, VM_DOCK, VM_BY_KEY, deskIconKey, isVmApp, resolveTarget, vmId } from '../virtual/catalog';
+import { readVirtualCache, takeVirtualOpen, useVirtualMode } from '../virtual/virtualMode';
 
 // Heavy parts load on demand: the file viewer + office editors only when a file is opened, the phone UI only on phones.
 const ViewerWindow = lazy(() => import('./FileWindows').then((m) => ({ default: m.ViewerWindow })));
@@ -51,6 +53,7 @@ import SnapAssist from './SnapAssist';
 import { CalendarApp, NotesApp } from './miniApps';
 import SciCalc from './SciCalc';
 const TerminalApp = lazy(() => import('./TerminalApp'));
+const VirtualApp = lazy(() => import('../virtual/VirtualApp'));
 import './desktop.css';
 import './mac.css';
 import './extras.css';
@@ -192,7 +195,7 @@ export default function DesktopOS() {
   const dir = ar ? 'rtl' : 'ltr';
   const tt = useCallback((en, a) => (ar ? a : en), [ar]);
   const { theme, mode, setMode, toggleTheme } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, logout, can } = useAuth();
   const navigate = useNavigate();
   const [, setParams] = usePrivateParams();
   usePageMeta(ar ? 'جهازي' : 'My PC', '');
@@ -200,7 +203,11 @@ export default function DesktopOS() {
   const uidRef = useRef(user?.id); uidRef.current = user?.id;
   const [prefs, setPrefsState] = useState(() => loadPrefs(user?.id));
   const setPrefs = useCallback((patch) => setPrefsState((p) => { const n = { ...p, ...patch }; savePrefs(n, uidRef.current); return n; }), []);
-  const [wm, rawDispatch] = useReducer(wmReducer, user?.id, (uid) => restoreWm(uid, APPS) || initialWm);
+  const [wm, rawDispatch] = useReducer(wmReducer, user?.id, (uid) => {
+    // windows of the platform's pages are only restored while the virtual mode is on
+    const known = readVirtualCache(uid) === true ? APPS : Object.fromEntries(Object.entries(APPS).filter(([k]) => !isVmApp(k)));
+    return restoreWm(uid, known) || initialWm;
+  });
   // remember the open windows so a refresh / crash / closed tab brings them back (editors restore their unsaved edits themselves)
   useEffect(() => { const t = setTimeout(() => saveWm(uidRef.current, wm), 400); return () => clearTimeout(t); }, [wm]);
   // a window may veto its own close (unsaved edits in the code editor / image editor): guards register here
@@ -222,6 +229,8 @@ export default function DesktopOS() {
   const widgets = useDesktopWidgets(user?.id); // sticky notes + clock / calendar / to-do widgets (synced to the account)
   const [newWidgetId, setNewWidgetId] = useState(null);
   const [extOver, setExtOver] = useState(null); // desktop folder icon hovered by a file dragged in from a window
+  const vmode = useVirtualMode();
+  const virtual = vmode.enabled; // the student works on the whole platform from inside this desktop (see ../virtual)
   const mobile = useIsMobileOS(); // phone-sized screen -> <MobileShell> (a purpose-built phone UI) instead of the windowed desktop
   const [overlay, setOverlay] = useState(null); // 'start' | 'run' | 'taskview' | 'qs' | 'cal' | 'notif'
   const battery = useBattery();
@@ -282,6 +291,22 @@ export default function DesktopOS() {
     setOverlay(null);
   }, [dispatch]);
   const openExplorer = useCallback((params = {}) => { setParams(params); openApp('explorer'); }, [openApp, setParams]);
+  // ---- virtual mode: a portal URL (/student/courses, /student/my-exams/5…) shown as a window of this desktop ----------------------
+  const openVirtualPath = useCallback((path, extra = {}) => {
+    const t = resolveTarget(path);
+    if (t.kind === 'explorer') { openExplorer({}); return true; }
+    if (t.kind !== 'app') return false;
+    const a = t.app;
+    openApp(a.id, { go: path, nonce: Date.now() }, { maximized: prefs.openMax !== false, ...extra });
+    return true;
+  }, [openApp, openExplorer, prefs.openMax]);
+  const openVirtualPathRef = useRef(openVirtualPath); openVirtualPathRef.current = openVirtualPath;
+  // a portal page that was redirected here (a notification link, a bookmark, "back to exams" after an exam…) opens as a window, once
+  useEffect(() => {
+    if (!virtual) return;
+    const p = takeVirtualOpen();
+    if (p) openVirtualPathRef.current(p);
+  }, [virtual]);
   // Save Center toasts ("Set up cloud backup") open Settings ▸ Storage & backup in this desktop
   useEffect(() => {
     const h = (e) => { if (e.detail) e.detail.handled = true; openApp('settings', { tab: 'cloud' }); };
@@ -313,6 +338,11 @@ export default function DesktopOS() {
       case 'security': openApp('settings', { tab: 'security' }); break;
       case 'portal': // leaving the desktop asks first: Enter (or the Exit button) confirms, Esc / Cancel stays
         setOverlay(null);
+        if (virtual) { // virtual mode: "the portal" IS this desktop, so leaving it means switching the mode off
+          ask({ kind: 'confirm', title: tt('Switch back to the normal portal?', 'الرجوع للمنصة العادية؟'), text: tt('UIP OS (virtual mode) will be turned off. You can turn it on again from Settings ▸ UIP OS. Your files stay saved.', 'هيتقفل UIP OS (الوضع الافتراضي). تقدر تشغّله تاني من الإعدادات ▸ UIP OS. ملفاتك فاضلة محفوظة.'), action: tt('Switch back', 'رجوع'), icon: 'logout' })
+            .then((ok) => (ok ? vmode.setEnabled(false).then(() => navigate(roleHome(user?.role))).catch((e) => flash(e?.message || tt('Could not switch the mode.', 'مقدرناش نغيّر الوضع.'), 'error')) : null));
+          break;
+        }
         ask({ kind: 'confirm', title: tt('Exit to the UIP portal?', 'الخروج إلى بوابة UIP؟'), text: tt('You will leave the desktop and go back to the portal. Your files stay saved.', 'هتخرج من سطح المكتب وترجع للبوابة. ملفاتك فاضلة محفوظة.'), action: tt('Exit', 'خروج'), icon: 'logout' })
           .then((ok) => { if (ok) navigate(roleHome(user?.role)); });
         break;
@@ -332,9 +362,11 @@ export default function DesktopOS() {
           note: tt('Passwords saved by the browser itself can only be removed from the browser settings.', 'الباسوردات اللي المتصفح نفسه حافظها بتتمسح من إعدادات المتصفح بس.'),
         })).then((v) => { if (v === 'wipe') logout({ wipe: true }); else if (v === 'keep') logout(); });
         break;
-      default: break;
+      default:
+        if (isVmApp(id)) openVirtualPath(VM_BY_ID[id].route);
+        break;
     }
-  }, [ask, logout, navigate, openApp, openExplorer, setLocked, tt, user?.role]);
+  }, [ask, flash, logout, navigate, openApp, openExplorer, openVirtualPath, setLocked, tt, user?.role, virtual, vmode]);
 
   // images / PDFs / media / ZIPs open in a Viewer window, text & code in a Code-editor window (one window per file)
   const openFileWin = useCallback((p) => {
@@ -409,11 +441,13 @@ export default function DesktopOS() {
   // pinned apps (one button each) + every other open window (one button per window, e.g. each opened file)
   const hiddenDock = hiddenList(prefs.hiddenDock);
   const hiddenIcons = hiddenList(prefs.hiddenIcons);
+  // virtual mode: the platform's main apps are pinned right after This PC
+  const pinned = useMemo(() => (virtual ? ['explorer', ...VM_DOCK.filter((k) => VM_BY_KEY[k]).map(vmId), ...PINNED.filter((k) => k !== 'explorer')] : PINNED), [virtual]);
   const taskItems = useMemo(() => [
     // a Dock app the person removed stays out of the Dock, except while one of its windows is open (so that window can still be reached)
-    ...PINNED.filter((app) => !hiddenDock.includes(app) || wm.list.some((w) => w.app === app)).map((app) => ({ key: app, app })),
-    ...wm.list.filter((w) => !PINNED.includes(w.app)).map((w) => ({ key: w.id, app: w.app, winId: w.id })),
-  ], [wm.list, hiddenDock]);
+    ...pinned.filter((app) => !hiddenDock.includes(app) || wm.list.some((w) => w.app === app)).map((app) => ({ key: app, app })),
+    ...wm.list.filter((w) => !pinned.includes(w.app)).map((w) => ({ key: w.id, app: w.app, winId: w.id })),
+  ], [wm.list, hiddenDock, pinned]);
   const winOf = useCallback((it) => (it.winId ? wm.list.find((x) => x.id === it.winId) : wm.list.find((x) => x.app === it.app)), [wm.list]);
   const taskClick = useCallback((it) => {
     const w = winOf(it);
@@ -466,7 +500,9 @@ export default function DesktopOS() {
     { key: 'sys:logout', sys: true, label: tt('Sign out', 'تسجيل الخروج'), glyph: 'logout', run: () => runCommand('logout') },
     { key: 'sys:settings', sys: true, label: tt('Settings', 'الإعدادات'), glyph: 'settings', run: () => runCommand('settings') },
     { key: 'sys:shortcuts', sys: true, label: tt('Shortcuts', 'الاختصارات'), glyph: 'shortcuts', run: () => runCommand('shortcuts') },
-  ], [tt, openExplorer, runCommand]);
+    // virtual mode: the platform's main pages sit on the desktop like installed apps
+    ...(virtual ? VM_DESKTOP.filter((k) => VM_BY_KEY[k]).map((k) => ({ key: deskIconKey(k), sys: true, label: ar ? VM_BY_KEY[k].ar : VM_BY_KEY[k].en, glyph: vmId(k), run: () => runCommand(vmId(k)) })) : []),
+  ], [tt, ar, virtual, openExplorer, runCommand]);
   const deskItems = useMemo(() => desk.items.filter((n) => !isSystemNode(n)), [desk.items]); // hide the hidden settings files
   // shortcut icons carry `lnk` (NOT `node`): copy / cut / delete / drag-to-folder act on real desktop files only, never on the original
   const openShortcut = useCallback((n) => {
@@ -525,14 +561,16 @@ export default function DesktopOS() {
     if (!link) { if (it.src === 'local' || it.localId) openApp('explorer'); return; } // an upload entry → the file explorer
     if (/^(https?:)?\/\//i.test(link)) { window.open(link, '_blank', 'noopener,noreferrer'); return; }
     if (/^\/[a-z-]+\/my-pc(\/|$)/.test(link)) { navigate(link); return; }
+    if (virtual && openVirtualPath(link)) return; // virtual mode: the page opens as a window, the desktop is not left
     ask({ kind: 'confirm', title: tt('Open this in the portal?', 'فتح ده في البوابة؟'), text: tt('You will leave the desktop and go to the portal page. Your files stay saved.', 'هتخرج من سطح المكتب وتروح لصفحة في البوابة. ملفاتك فاضلة محفوظة.'), action: tt('Open', 'فتح'), icon: 'logout' })
       .then((ok) => { if (ok) navigate(link); });
-  }, [ask, navigate, nc, openApp, tt]);
+  }, [ask, navigate, nc, openApp, openVirtualPath, tt, virtual]);
   const notifAll = useCallback(() => {
     setOverlay(null);
+    if (virtual && openVirtualPath(`/${roleHome(user?.role).split('/')[1]}/notifications`)) return;
     ask({ kind: 'confirm', title: tt('Open all notifications?', 'فتح كل الإشعارات؟'), text: tt('You will leave the desktop and go to the Notifications page. Your files stay saved.', 'هتخرج من سطح المكتب وتروح لصفحة الإشعارات. ملفاتك فاضلة محفوظة.'), action: tt('Open', 'فتح'), icon: 'logout' })
       .then((ok) => { if (ok) navigate(`/${roleHome(user?.role).split('/')[1]}/notifications`); });
-  }, [ask, navigate, tt, user?.role]);
+  }, [ask, navigate, openVirtualPath, tt, user?.role, virtual]);
   sleepRef.current = sleep;
   const secRef = useRef(sec); secRef.current = sec;
   const onWake = useCallback(() => { wake(); if (secRef.current.lockAfterSleep && lockOnRef.current === true) setLocked(true); }, [wake, setLocked]);
@@ -943,7 +981,7 @@ export default function DesktopOS() {
   const runText = (t) => { const id = RUN_ALIASES[t.toLowerCase()]; if (!id) return false; setOverlay(null); runCommand(id); return true; };
   const fullscreen = () => { if (document.fullscreenElement) document.exitFullscreen?.(); else document.documentElement.requestFullscreen?.().catch(() => {}); };
 
-  const startApps = useMemo(() => [
+  const sysApps = useMemo(() => [
     { id: 'explorer', en: 'This PC', ar: 'جهازي', glyph: 'explorer' },
     { id: 'bin', en: 'Recycle Bin', ar: 'سلة المحذوفات', glyph: 'bin' },
     { id: 'settings', en: 'Settings', ar: 'الإعدادات', glyph: 'settings' },
@@ -959,10 +997,16 @@ export default function DesktopOS() {
     { id: 'portal', en: 'UIP Portal', ar: 'بوابة UIP', glyph: 'portal' },
     { id: 'logout', en: 'Sign out', ar: 'تسجيل الخروج', glyph: 'logout' },
   ], []);
+  // virtual mode: the platform's pages first (grouped like the sidebar), then the system apps under their own heading
+  const startApps = useMemo(() => (virtual
+    ? [...VM_APPS.filter((a) => !a.perm || can(a.perm)).map((a) => ({ id: a.id, en: a.en, ar: a.ar, glyph: a.id, group: a.group })), ...sysApps.map((a) => ({ ...a, group: { en: 'My PC & tools', ar: 'جهازي والأدوات' } }))]
+    : sysApps), [virtual, sysApps, can]);
 
   const wp = prefs.wallpaper === 'custom' ? { dark: true } : wallpaperById(prefs.wallpaper);
   // A window body is rebuilt only when ITS inputs change. Without this every desktop re-render (toast, icon selection, a focus change, the battery…)
   // re-rendered every open window — the viewer, the code editor, Settings — which is what made the desktop feel heavy.
+  const wmRef = useRef(wm); wmRef.current = wm;
+  const liveWin = (id) => wmRef.current.list.find((x) => x.id === id);
   const bodyCache = useRef(new Map());
   const cached = (w, deps, make) => {
     const c = bodyCache.current.get(w.id);
@@ -983,10 +1027,25 @@ export default function DesktopOS() {
       case 'taskmgr': return <TaskManagerApp list={wm.list} ar={ar} tt={tt} usage={desk.usage} onEnd={(id) => dispatch({ type: 'close', id })} onFocus={(id) => dispatch({ type: 'focus', id })} />;
       case 'shortcuts': return <ShortcutsApp ar={ar} tt={tt} />;
       case 'notes': return <NotesApp uid={user?.id} tt={tt} ar={ar} />;
-      case 'calendar': return <CalendarApp uid={user?.id} role={user?.role} tt={tt} ar={ar} onGo={(p) => navigate(p)} />;
+      case 'calendar': return <CalendarApp uid={user?.id} role={user?.role} tt={tt} ar={ar} onGo={(p) => { if (!(virtual && openVirtualPath(p))) navigate(p); }} />;
       case 'calculator': return <SciCalc tt={tt} />;
       case 'terminal': return <Suspense fallback={WinFallback}><TerminalApp tt={tt} /></Suspense>;
-      default: return null;
+      default:
+        if (isVmApp(w.app)) {
+          // a platform page with its own private router (see ../virtual/VirtualApp). Rebuilt only when it is asked to show another page.
+          return cached(w, [w.props.go, w.props.nonce, ar], () => (
+            <Suspense fallback={WinFallback}>
+              <VirtualApp
+                appId={w.app} start={w.props.go} nonce={w.props.nonce} cur={w.props.cur} ar={ar}
+                onLocation={(p) => { if (p !== liveWin(w.id)?.props?.cur) rawDispatch({ type: 'patch', id: w.id, patch: { props: { ...liveWin(w.id)?.props, cur: p } } }); }}
+                onOpenPath={(p) => openVirtualPathRef.current(p)}
+                onLeave={(p) => navigate(p)}
+                onTab={(p) => window.open(p, '_blank', 'noopener,noreferrer')}
+              />
+            </Suspense>
+          ));
+        }
+        return null;
     }
   };
 
@@ -1069,7 +1128,7 @@ export default function DesktopOS() {
       onMiddle: () => w && dispatch({ type: 'close', id: w.id }),
       onContext: (e) => {
         e.preventDefault(); e.stopPropagation();
-        setMenu({ x: e.clientX, y: e.clientY - 110, items: [{ label, icon: 'eye', onClick: () => taskClick(it) }, ...(w ? [{ label: tt('Close window', 'إغلاق النافذة'), icon: 'x', hint: 'Alt+W', onClick: () => dispatch({ type: 'close', id: w.id }) }] : []), ...(PINNED.includes(it.app) && it.key === it.app ? ['sep', { label: tt('Remove from Dock', 'إزالة من الـ Dock'), icon: 'trash', danger: true, onClick: () => hideDockIcon(it.app, !!w) }] : [])] });
+        setMenu({ x: e.clientX, y: e.clientY - 110, items: [{ label, icon: 'eye', onClick: () => taskClick(it) }, ...(w ? [{ label: tt('Close window', 'إغلاق النافذة'), icon: 'x', hint: 'Alt+W', onClick: () => dispatch({ type: 'close', id: w.id }) }] : []), ...(pinned.includes(it.app) && it.key === it.app ? ['sep', { label: tt('Remove from Dock', 'إزالة من الـ Dock'), icon: 'trash', danger: true, onClick: () => hideDockIcon(it.app, !!w) }] : [])] });
       },
       i,
     };
@@ -1137,7 +1196,7 @@ export default function DesktopOS() {
               onClick={(e) => clickIcon(e, ic)} onDoubleClick={(e) => { e.stopPropagation(); ic.run(); }} onContextMenu={(e) => iconMenu(e, ic)}
             >
               <span className="os-icon__g">
-                {ic.node ? <NodeGlyph node={ic.node} size={cell.g} /> : ic.lnk ? <><NodeGlyph node={ic.lnk} size={cell.g} /><i className="os-icon__lnk" aria-hidden="true"><Icon name="external-link" size={Math.max(10, Math.round(cell.g / 4))} /></i></> : ic.glyph === 'explorer' ? <PcGlyph size={cell.g} /> : ic.glyph === 'bin' ? <BinGlyph size={cell.g} full={desk.binFull} /> : <Tile kind={ic.glyph} size={cell.g} />}
+                {ic.node ? <NodeGlyph node={ic.node} size={cell.g} /> : ic.lnk ? <><NodeGlyph node={ic.lnk} size={cell.g} /><i className="os-icon__lnk" aria-hidden="true"><Icon name="external-link" size={Math.max(10, Math.round(cell.g / 4))} /></i></> : ic.glyph === 'explorer' ? <PcGlyph size={cell.g} /> : ic.glyph === 'bin' ? <BinGlyph size={cell.g} full={desk.binFull} /> : isVmApp(ic.glyph) ? <AppGlyph app={ic.glyph} size={cell.g} /> : <Tile kind={ic.glyph} size={cell.g} />}
               </span>
               <span className="os-icon__l" dir="auto">{ic.label}</span>
             </button>

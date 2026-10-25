@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import PageLoading from './components/PageLoading';
+import { VirtualModeProvider } from './virtual/virtualMode';
 import MyPcAccessGate from './components/MyPcAccessGate';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import RealtimeBridge from './components/RealtimeBridge';
@@ -307,6 +308,8 @@ export default function App() {
         <DeviceGate>
         <AuthProvider>
           <AccountSettingsSync />
+          {/* Virtual mode (UIP OS): the student's choice to run the whole platform inside the My PC desktop. */}
+          <VirtualModeProvider>
           <RealtimeBridge />
           <SaveCenterHost />
           {/* MFA requirements policy: a role that must have 2FA (grace period over) sees the setup page instead of the app. */}
@@ -808,6 +811,7 @@ export default function App() {
           </CallProvider>
           </AccessGate>
           </MfaGate>
+          </VirtualModeProvider>
         </AuthProvider>
         </DeviceGate>
       </ThemeProvider>
