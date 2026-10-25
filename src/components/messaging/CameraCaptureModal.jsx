@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useBackLayer } from '../../lib/backStack';
 
 const FILTERS = [
   { id: 'none', en: 'Normal', ar: 'عادي', css: 'none' },
@@ -31,6 +32,9 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
   const [secs, setSecs] = useState(0);
   const audioRef = useRef(null);
 
+  // Phone Back / gesture closes ONLY the camera (not the whole chat underneath). Ignored while a video is being recorded.
+  useBackLayer(true, () => { if (!recRef.current || recRef.current.state === 'inactive') onClose(); });
+
   const canFilter = typeof document !== 'undefined' && 'filter' in document.createElement('canvas').getContext('2d');
   filterRef.current = canFilter ? (FILTERS.find((f) => f.id === filter)?.css || 'none') : 'none';
 
@@ -44,8 +48,9 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
   const draw = () => {
     const v = videoRef.current; const c = canvasRef.current;
     if (v && c && v.videoWidth) {
-      if (c.width !== v.videoWidth) { c.width = v.videoWidth; c.height = v.videoHeight; }
+      if (c.width !== v.videoWidth || c.height !== v.videoHeight) { c.width = v.videoWidth; c.height = v.videoHeight; }
       const ctx = c.getContext('2d');
+      ctx.imageSmoothingQuality = 'high';
       ctx.filter = filterRef.current;
       ctx.drawImage(v, 0, 0, c.width, c.height);
     }
@@ -60,10 +65,12 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
       setError(ar ? 'المتصفح لا يدعم الكاميرا (يتطلب HTTPS).' : 'Camera is not supported (HTTPS required).');
       return undefined;
     }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }, audio: false })
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 } }, audio: false })
       .then((s) => {
         if (cancelled) { s.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = s;
+        // Ask the sensor for its best size on devices that ignored the first request (phones often fall back to 640x480).
+        try { s.getVideoTracks()[0]?.applyConstraints({ width: { ideal: 1920 }, height: { ideal: 1080 } }).catch(() => {}); } catch { /* ignore */ }
         const v = videoRef.current;
         if (v) { v.srcObject = s; v.play?.().catch(() => {}); }
         setReady(true);
@@ -88,9 +95,17 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
     return () => document.removeEventListener('keydown', esc);
   }, [onClose]);
 
-  const snap = () => {
+  const snap = async () => {
     const c = canvasRef.current;
     if (!c || !c.width) return;
+    // No filter: take a real full-sensor still (much sharper than a frame of the preview stream). Falls back to the canvas.
+    const track = streamRef.current?.getVideoTracks()[0];
+    if (filterRef.current === 'none' && track && typeof window.ImageCapture !== 'undefined') {
+      try {
+        const blob = await new window.ImageCapture(track).takePhoto();
+        if (blob && blob.size) { onCapture(new File([blob], `photo-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' })); return; }
+      } catch { /* not supported on this device → canvas below */ }
+    }
     c.toBlob((b) => {
       if (b) onCapture(new File([b], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' }));
     }, 'image/jpeg', 0.92);
@@ -112,7 +127,7 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
       a.getAudioTracks().forEach((t) => out.addTrack(t));
     } catch { /* record without sound */ }
     const pref = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find((m) => MediaRecorder.isTypeSupported?.(m));
-    const rec = new MediaRecorder(out, { ...(pref ? { mimeType: pref } : {}), videoBitsPerSecond: 3_000_000, audioBitsPerSecond: 128_000 });
+    const rec = new MediaRecorder(out, { ...(pref ? { mimeType: pref } : {}), videoBitsPerSecond: 5_000_000, audioBitsPerSecond: 128_000 });
     rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
     rec.onstop = () => {
       setRecording(false);
@@ -131,15 +146,15 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
   const btn = { border: 0, borderRadius: 999, padding: '10px 18px', cursor: 'pointer', fontWeight: 600 };
   const thumbBase = { flex: '0 0 auto', border: '2px solid transparent', borderRadius: 10, padding: 0, background: 'none', cursor: 'pointer', color: '#fff', fontSize: 12, textAlign: 'center' };
   return createPortal(
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onMouseDown={(e) => { if (e.target === e.currentTarget && !recording) onClose(); }}>
-      <div style={{ background: '#111', borderRadius: 16, padding: 14, width: 'min(560px,100%)', maxHeight: '100%', overflowY: 'auto', color: '#fff' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100dvh', background: 'rgba(0,0,0,.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', padding: 'max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left))' }} onMouseDown={(e) => { if (e.target === e.currentTarget && !recording) onClose(); }}>
+      <div style={{ background: '#111', borderRadius: 16, padding: 12, boxSizing: 'border-box', width: 'min(560px,100%)', height: 'min(100%, 820px)', display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden', color: '#fff' }}>
         {/* kept "visible" (tiny + almost transparent): browsers throttle display:none / off-screen media, which made the picture stutter */}
         <video ref={videoRef} muted playsInline style={{ position: 'fixed', right: 0, bottom: 0, width: 64, height: 36, opacity: 0.01, pointerEvents: 'none', zIndex: -1 }} />
         {error ? <p style={{ padding: 24, textAlign: 'center' }}>{error}</p> : (
-          <canvas ref={canvasRef} style={{ width: '100%', borderRadius: 12, background: '#000', transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
+          <canvas ref={canvasRef} style={{ flex: '1 1 0', minHeight: 120, width: '100%', objectFit: 'contain', borderRadius: 12, background: '#000', transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
         )}
         {!error && canFilter && (
-          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginTop: 10, paddingBottom: 4 }} role="listbox" aria-label={ar ? 'الفلاتر' : 'Filters'}>
+          <div style={{ display: 'flex', flexShrink: 0, gap: 8, overflowX: 'auto', paddingBottom: 4 }} role="listbox" aria-label={ar ? 'الفلاتر' : 'Filters'}>
             {FILTERS.map((f) => (
               <button key={f.id} type="button" role="option" aria-selected={filter === f.id} disabled={recording} onClick={() => setFilter(f.id)}
                 style={{ ...thumbBase, opacity: recording && filter !== f.id ? 0.4 : 1, borderColor: filter === f.id ? '#e53e6b' : 'transparent' }}>
@@ -150,15 +165,15 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
           </div>
         )}
         {!error && canVideo && (
-          <div style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 10 }}>
+          <div style={{ display: 'flex', flexShrink: 0, gap: 6, justifyContent: 'center', }}>
             {[['photo', ar ? 'صورة' : 'Photo'], ['video', ar ? 'فيديو' : 'Video']].map(([k, l]) => (
               <button key={k} type="button" disabled={recording} onClick={() => setMode(k)}
                 style={{ ...btn, padding: '6px 16px', background: mode === k ? '#fff' : '#374151', color: mode === k ? '#111' : '#fff' }}>{l}</button>
             ))}
           </div>
         )}
-        {recording && <div style={{ textAlign: 'center', marginTop: 8, color: '#f87171', fontWeight: 700 }}>● {fmt(secs)}</div>}
-        <div style={{ display: 'flex', gap: 14, justifyContent: 'center', alignItems: 'center', marginTop: 12 }}>
+        {recording && <div style={{ textAlign: 'center', flexShrink: 0, marginTop: 8, color: '#f87171', fontWeight: 700 }}>● {fmt(secs)}</div>}
+        <div style={{ display: 'flex', flexShrink: 0, gap: 14, justifyContent: 'center', alignItems: 'center' }}>
           <button type="button" style={{ ...btn, background: '#fff', color: '#111' }} onClick={() => { if (recording) recRef.current?.stop(); onClose(); }}>{ar ? 'إغلاق' : 'Close'}</button>
           {!error && (
             <button type="button" aria-label={mode === 'photo' ? (ar ? 'التقاط' : 'Capture') : (recording ? (ar ? 'إيقاف' : 'Stop') : (ar ? 'تسجيل' : 'Record'))}
