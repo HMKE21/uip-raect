@@ -28,6 +28,7 @@ import { useCall } from '../../context/callCtx';
 import EmojiPicker from './EmojiPicker';
 import AttachMenu from './AttachMenu';
 import CameraCaptureModal from './CameraCaptureModal';
+import ViewOnceMedia from './ViewOnceMedia';
 import LinkCard, { firstUrl } from './LinkCard';
 import { LocationBubble, LiveLocationBubble, LocationShareModal } from './LocationMessage';
 import '../../styles/css/messaging-pro.css';
@@ -351,7 +352,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
         {m.attachments && m.attachments.length > 0 && (
           m.pending || m.failed
             ? <PendingAttachments attachments={m.attachments} pct={m.upload_progress || 0} uploading={!!m.pending} />
-            : <MessageAttachments attachments={m.attachments} onOpenLightbox={onOpenLightbox} onOpenVideo={onOpenVideo} autoCache={isRecentMessage(m)} />
+            : <MessageAttachments attachments={m.attachments} onOpenLightbox={onOpenLightbox} onOpenVideo={onOpenVideo} autoCache={isRecentMessage(m)} mine={!!m.is_mine} ar={t('en','ar') === 'ar'} />
         )}
         {m.body && captioned ? <div className="msg-caption">{renderBody(m.body, others)}</div> : null}
       </>
@@ -774,8 +775,10 @@ function InlineVideo({ attachment, src: remoteSrc, poster, name, duration, auto 
   );
 }
 
-function MessageAttachments({ attachments, onOpenLightbox, onOpenVideo, autoCache }) {
+function MessageAttachments({ attachments, onOpenLightbox, onOpenVideo, autoCache, mine, ar }) {
   const t = useT();
+  const protectedMedia = attachments.filter((a) => a.view_mode);
+  attachments = attachments.filter((a) => !a.view_mode);
   const images = attachments.filter((a) => a.kind === 'image');
   const others = attachments.filter((a) => a.kind !== 'image');
   // Tapping an image enlarges it in place inside the bubble (tap again to shrink).
@@ -789,6 +792,7 @@ function MessageAttachments({ attachments, onOpenLightbox, onOpenVideo, autoCach
     });
   return (
     <div className="msg-attachments">
+      {protectedMedia.map((a, i) => <ViewOnceMedia key={a.id ?? `vo${i}`} attachment={a} mine={mine} ar={ar} />)}
       {images.length > 0 && (
         <div className={`msg-attach-image-grid${images.length === 1 ? ' single' : ''}${expanded.size ? ' has-expanded' : ''}`}>
           {images.map((a, i) => (
@@ -1464,6 +1468,11 @@ export default function ThreadPanel({
                       <div className="msg-upload-item__name">{pf.file.name.slice(0, 14)}</div>
                     )}
                   </button>
+                  {pf.file.uipView && (
+                    <span style={{ position: 'absolute', left: 4, bottom: 4, background: 'rgba(0,0,0,.7)', color: '#fff', borderRadius: 8, padding: '1px 6px', fontSize: 11, fontWeight: 700 }} aria-hidden="true">
+                      {pf.file.uipView.mode === 'once' ? '①' : `⏱${pf.file.uipView.seconds}`}
+                    </span>
+                  )}
                   {editable && (
                     <span className="msg-upload-item__edit" aria-hidden="true"><Icon name="edit" size={11} /></span>
                   )}
@@ -1556,8 +1565,16 @@ export default function ThreadPanel({
               />
             )}
             {showCamera && (
-              <CameraCaptureModal ar={ar} onClose={() => setShowCamera(false)}
-                onCapture={(file) => { setShowCamera(false); handleFiles([file]); }} />
+              <CameraCaptureModal ar={ar} allowViewOnce onClose={() => setShowCamera(false)}
+                onCapture={(file) => {
+                  setShowCamera(false);
+                  // Like WhatsApp: "Done" in the camera editor sends it straight away (with the typed caption).
+                  if (!canSend || !typeOk(fileKind(file))) { handleFiles([file]); return; }
+                  const files = [...pendingFiles.map((p) => p.file), file];
+                  const cap = text;
+                  setText(''); setShowEmoji(false);
+                  onSend(cap, files);
+                }} />
             )}
             <input type="file" accept="image/*,video/*" capture="environment" hidden ref={cameraInputRef}
               onChange={(e) => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }} />
@@ -1662,11 +1679,12 @@ export default function ThreadPanel({
           initialCaption={text}
           onCancel={() => setEditIdx(null)}
           onDone={(f, cap) => {
-            if (f !== editPf.file) onReplaceFile(editIdx, f);
+            if (f !== editPf.file) { if (editPf.file.uipView && !f.uipView) f.uipView = editPf.file.uipView; onReplaceFile(editIdx, f); }
             setText(cap);
             setEditIdx(null);
           }}
           onSend={(f, cap) => {
+            if (editPf.file.uipView && !f.uipView) f.uipView = editPf.file.uipView;
             const files = pendingFiles.map((p, i) => (i === editIdx ? f : p.file));
             setEditIdx(null);
             setText('');

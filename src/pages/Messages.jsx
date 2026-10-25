@@ -684,6 +684,7 @@ export default function Messages() {
       prev.map((pf, idx) => {
         if (idx !== i) return pf;
         if (pf.previewUrl) URL.revokeObjectURL(pf.previewUrl);
+        if (pf.file?.uipView && !file.uipView) file.uipView = pf.file.uipView; // view-once / timer survives editing
         return { file, denoise: !!pf.denoise, previewUrl: /^(image|video)\//.test(file.type) ? URL.createObjectURL(file) : null };
       })
     );
@@ -715,6 +716,10 @@ export default function Messages() {
     smallIdx.forEach((i) => fd.append('attachments[]', files[i], files[i].name));
     const order = [...smallIdx, ...bigIdx];
     if (denoise && denoise.some(Boolean)) order.forEach((i) => fd.append('denoise[]', denoise[i] ? '1' : '0'));
+    // view once / timer (camera shots): same order as the files; the server only honours it for photos and videos
+    if (order.some((i) => files[i]?.uipView)) {
+      order.forEach((i) => { const v = files[i]?.uipView; fd.append('view_mode[]', v ? v.mode : ''); fd.append('view_seconds[]', v?.seconds ? String(v.seconds) : ''); });
+    }
     patchTmp(tmpId, { pending: true, failed: false, upload_progress: 0, upload_error: null });
     let lastPct = -1;
     const ctrl = new AbortController();
@@ -1016,7 +1021,7 @@ export default function Messages() {
   const lightboxImages = useMemo(
     () =>
       messages.flatMap((m) =>
-        (m.attachments || []).filter((a) => a.kind === 'image').map((a) => attachmentUrl(a.url))
+        (m.attachments || []).filter((a) => a.kind === 'image' && a.url && !a.view_mode).map((a) => attachmentUrl(a.url))
       ),
     [messages]
   );

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBackLayer } from '../../lib/backStack';
+import CameraReview from './CameraReview';
 
 const FILTERS = [
   { id: 'none', en: 'Normal', ar: 'عادي', css: 'none' },
@@ -15,7 +16,7 @@ const FILTERS = [
 ];
 
 /** In-app camera capture (desktop + Android APK) (getUserMedia) with live filters. Returns a File via onCapture. */
-export default function CameraCaptureModal({ ar, onCapture, onClose }) {
+export default function CameraCaptureModal({ ar, onCapture, onClose, allowViewOnce = false }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -31,9 +32,17 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
   const [mode, setMode] = useState('photo'); // photo | video
   const [secs, setSecs] = useState(0);
   const audioRef = useRef(null);
+  const [review, setReview] = useState(null); // { kind: 'photo' | 'video', file } — edit / send-options step after a shot
+  const [attempt, setAttempt] = useState(0);
 
   // Phone Back / gesture closes ONLY the camera (not the whole chat underneath). Ignored while a video is being recorded.
-  useBackLayer(true, () => { if (!recRef.current || recRef.current.state === 'inactive') onClose(); });
+  useBackLayer(true, () => {
+    if (review) { retake(); return; }
+    if (!recRef.current || recRef.current.state === 'inactive') onClose();
+  });
+
+  const retake = () => { setReview(null); setAttempt((a) => a + 1); };
+  const toReview = (kind, file) => { stop(); setReady(false); setReview({ kind, file }); };
 
   const canFilter = typeof document !== 'undefined' && 'filter' in document.createElement('canvas').getContext('2d');
   filterRef.current = canFilter ? (FILTERS.find((f) => f.id === filter)?.css || 'none') : 'none';
@@ -81,7 +90,7 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
         : (ar ? 'لا توجد كاميرا متاحة.' : 'No camera available.')));
     return () => { cancelled = true; stop(); stopAudio(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [facing, ar]);
+  }, [facing, ar, attempt]);
 
   useEffect(() => {
     if (!recording) { setSecs(0); return undefined; }
@@ -103,11 +112,11 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
     if (filterRef.current === 'none' && track && typeof window.ImageCapture !== 'undefined') {
       try {
         const blob = await new window.ImageCapture(track).takePhoto();
-        if (blob && blob.size) { onCapture(new File([blob], `photo-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' })); return; }
+        if (blob && blob.size) { toReview('photo', new File([blob], `photo-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' })); return; }
       } catch { /* not supported on this device → canvas below */ }
     }
     c.toBlob((b) => {
-      if (b) onCapture(new File([b], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+      if (b) toReview('photo', new File([b], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' }));
     }, 'image/jpeg', 0.92);
   };
 
@@ -134,7 +143,7 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
       stopAudio();
       const type = (rec.mimeType || 'video/webm').split(';')[0];
       const ext = type.includes('mp4') ? 'mp4' : 'webm';
-      onCapture(new File([new Blob(chunksRef.current, { type })], `video-${Date.now()}.${ext}`, { type }));
+      toReview('video', new File([new Blob(chunksRef.current, { type })], `video-${Date.now()}.${ext}`, { type }));
     };
     recRef.current = rec; rec.start(1000); setRecording(true);
   };
@@ -148,6 +157,11 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
   return createPortal(
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100dvh', background: 'rgba(0,0,0,.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box', padding: 'max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left))' }} onMouseDown={(e) => { if (e.target === e.currentTarget && !recording) onClose(); }}>
       <div style={{ background: '#111', borderRadius: 16, padding: 12, boxSizing: 'border-box', width: 'min(560px,100%)', height: 'min(100%, 820px)', display: 'flex', flexDirection: 'column', gap: 8, overflow: 'hidden', color: '#fff' }}>
+        {review ? (
+          <CameraReview ar={ar} kind={review.kind} file={review.file} allowViewOnce={allowViewOnce} onBack={retake}
+            onSend={(f, o) => { if (o?.mode) f.uipView = { mode: o.mode, seconds: o.seconds }; onCapture(f); }} />
+        ) : (
+          <>
         {/* kept "visible" (tiny + almost transparent): browsers throttle display:none / off-screen media, which made the picture stutter */}
         <video ref={videoRef} muted playsInline style={{ position: 'fixed', right: 0, bottom: 0, width: 64, height: 36, opacity: 0.01, pointerEvents: 'none', zIndex: -1 }} />
         {error ? <p style={{ padding: 24, textAlign: 'center' }}>{error}</p> : (
@@ -184,6 +198,8 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
           )}
           {!error && <button type="button" style={{ ...btn, background: '#374151', color: '#fff' }} disabled={recording} onClick={() => setFacing((f) => (f === 'user' ? 'environment' : 'user'))}>{facing === 'user' ? (ar ? 'الخلفية' : 'Rear') : (ar ? 'الأمامية' : 'Front')}</button>}
         </div>
+          </>
+        )}
       </div>
     </div>,
     document.body,
