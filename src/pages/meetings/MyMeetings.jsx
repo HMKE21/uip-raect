@@ -91,6 +91,7 @@ function CreateMeetingModal({ onClose, onCreated, initialType = 'instant' }) {
   const [maxParticipants, setMaxParticipants] = useState('');
   const [waitingRoomEnabled, setWaitingRoomEnabled] = useState(true);
   const [allowGuests, setAllowGuests] = useState(true); // link-first: anyone with the link can join without an account
+  const [hideChatHistory, setHideChatHistory] = useState(false); // false = late joiners can read the earlier chat, true = they start with an empty chat
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -109,6 +110,7 @@ function CreateMeetingModal({ onClose, onCreated, initialType = 'instant' }) {
         max_participants: maxParticipants ? Number(maxParticipants) : null,
         waiting_room_enabled: waitingRoomEnabled,
         allow_guests: allowGuests,
+        settings: { chat_history: hideChatHistory ? 'hide' : 'keep' },
         password: password.trim() || null,
       });
       onCreated(json.data.uuid);
@@ -179,6 +181,7 @@ function CreateMeetingModal({ onClose, onCreated, initialType = 'instant' }) {
             <div className="mtg-toggles">
               <ToggleRow checked={waitingRoomEnabled} onChange={setWaitingRoomEnabled} title={t('Waiting Room')} hint={t('Enable a waiting room — you approve each participant before they join.')} />
               <ToggleRow checked={allowGuests} onChange={setAllowGuests} title={t('Allow Guests')} hint={t('Allow people without an account to join with a link.')} />
+              <ToggleRow checked={hideChatHistory} onChange={setHideChatHistory} title={t('Hide earlier chat from late joiners')} hint={t('Off: people who join later can read what was said before them. On: they only see messages sent after they join.')} />
             </div>
 
             {error && <p className="form-error" style={{ margin: 0 }}>{error}</p>}

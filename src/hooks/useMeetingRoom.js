@@ -289,10 +289,10 @@ export function useMeetingRoom({
   // Round 5 — بند 7/8 (Chat).
   const [chatMessages, setChatMessages] = useState([]); // ascending by id, already filtered server-side to what we're allowed to see
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
-  // مفيش listener لـ "allow_chat اتغيّر لايف" في الأحداث المتاحة في Round 5 —
-  // الهوست بيقدر يبدّلها بس من Meeting Settings (خارج غرفة الاجتماع نفسها)،
-  // فمفيش setter هنا لحد ما Round 6 (Host Controls) يضيف الحدث اللايف ده.
-  const [chatEnabled] = useState(chatEnabledInitial);
+  // Live chat policy (host-controlled, pushed over `.chat.settings.changed`): on/off, history for late joiners, who is silenced.
+  const [chatEnabled, setChatEnabled] = useState(chatEnabledInitial);
+  const [chatHistory, setChatHistory] = useState('keep'); // 'keep' | 'hide'
+  const [chatMutedKeys, setChatMutedKeys] = useState([]);
 
   // Round 5 — بند 11 (Raise Hand + Reactions).
   const [handRaised, setHandRaised] = useState(false);
@@ -321,6 +321,8 @@ export function useMeetingRoom({
 
   // Round 6 — بند 5 (Host Controls / Participants Panel).
   const [myRole, setMyRole] = useState(isHost ? 'host' : 'participant'); // 'host' | 'co_host' | 'participant' — see docblock above for why co-host isn't seeded here
+  const myRoleRef = useRef(isHost ? 'host' : 'participant');
+  myRoleRef.current = myRole;
   const [meetingLocked, setMeetingLocked] = useState(!!meetingLockedInitial); // "Lock meeting" — blocks new joiners; doesn't affect anyone already in
   const [sessionConflict, setSessionConflict] = useState(null); // 'already_open' (this tab was refused) | 'replaced' (another tab took over) — one live session per person
   const [kicked, setKicked] = useState(null); // {byDisplayName} once WE were removed by a host/co-host — MeetingRoomShell renders a dedicated screen for this
@@ -400,6 +402,18 @@ export function useMeetingRoom({
     }));
   }, []);
 
+
+  /** A message was deleted (by its sender or a moderator): it vanishes from this screen for good. */
+  const removeChatMessage = useCallback((messageId) => {
+    setChatMessages((prev) => prev.filter((m) => m.id !== messageId));
+  }, []);
+
+  const applyChatSettings = useCallback((s) => {
+    if (!s) return;
+    if (typeof s.chat_enabled === 'boolean') setChatEnabled(s.chat_enabled);
+    if (s.chat_history) setChatHistory(s.chat_history === 'hide' ? 'hide' : 'keep');
+    if (Array.isArray(s.muted_keys)) setChatMutedKeys(s.muted_keys);
+  }, []);
 
   // ---- بند 18 (Recording) — hidden compositing surface -------------------
   // Kept current at all times (not just while a recording is running) so
@@ -660,7 +674,9 @@ export function useMeetingRoom({
         try { if ('playoutDelayHint' in e.receiver) e.receiver.playoutDelayHint = 0; } catch { /* unsupported */ }
       }
       // echo gate: analysis-only copy of this person's voice, so our mic closes while they are audible
-      if (e.track.kind === 'audio') setRemoteAudio(`meeting:${key}`, new MediaStream([e.track]), e.receiver || null);
+      // (only when the half-duplex gate is actually on — it is OFF by default, and without this check every remote voice still got a
+      // WebAudio analyser + a getStats() poll every 60 ms: with 4 other people that is ~65 stats calls per second doing nothing.)
+      if (e.track.kind === 'audio' && echoGateEnabled()) setRemoteAudio(`meeting:${key}`, new MediaStream([e.track]), e.receiver || null);
       patchParticipant(key, { remoteStream: stream });
       // a track can be muted at first and unmute when media starts flowing — nudge React so tiles re-bind
       e.track.onunmute = () => patchParticipant(key, { remoteStream: stream });
@@ -862,6 +878,11 @@ export function useMeetingRoom({
           seenChatIdsRef.current.add(m.id);
         });
         setChatMessages(chatJson.data?.messages || []);
+        if (chatJson.data?.settings) {
+          setChatEnabled(!!chatJson.data.settings.chat_enabled);
+          setChatHistory(chatJson.data.settings.chat_history === 'hide' ? 'hide' : 'keep');
+          setChatMutedKeys(chatJson.data.settings.muted_keys || []);
+        }
       } catch (err) {
         if (!cancelled) { setError(err); setStatus('error'); }
         return;
@@ -883,6 +904,7 @@ export function useMeetingRoom({
         appendChatMessage(e);
         setChatUnreadCount((n) => n + 1);
       });
+      personalChannel.listen('.chat.message.deleted', (e) => removeChatMessage(e.message_id));
 
       channel
         .here((members) => {
@@ -979,6 +1001,22 @@ export function useMeetingRoom({
         .listen('.chat.message.sent', (e) => {
           appendChatMessage(e);
           if (e.sender_key !== myKey) setChatUnreadCount((n) => n + 1);
+        })
+        .listen('.chat.message.deleted', (e) => removeChatMessage(e.message_id))
+        .listen('.chat.cleared', () => {
+          // public chat wiped by a host; private messages stay
+          setChatMessages((prev) => prev.filter((m) => m.is_private));
+          setChatUnreadCount(0);
+        })
+        .listen('.chat.settings.changed', (e) => applyChatSettings(e))
+        .listen('.meeting.mute_all', (e) => {
+          // "mute everyone": moderators keep their mic, everybody else switches theirs off (and tells the room)
+          if (e.muted_by_key === myKey) return;
+          if (myRoleRef.current === 'host' || myRoleRef.current === 'co_host') return;
+          localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = false; });
+          setMicEnabled(false);
+          signalingApi.mediaState(meetingUuid, guestToken, { mic_enabled: false }).catch(() => {});
+          setNotice({ type: 'muted_by_host', by: e.muted_by_display_name });
         })
         .listen('.chat.message.reaction_changed', (e) => {
           applyChatReactionChange(e.message_id, e.actor_key, e.emoji, e.added);
@@ -1270,6 +1308,15 @@ export function useMeetingRoom({
     Object.values(peersRef.current).forEach((pc) => {
       if (pc.connectionState === 'connected') tuneSenders(pc, Object.keys(peersRef.current).length).catch(() => {});
     });
+    // The camera itself is captured once and then encoded once PER other person, so in a bigger room also capture less: 720p30 in
+    // a 5-person call is pure waste when every tile is 240p. Back to full quality when the room shrinks. Best effort only.
+    const track = rawCameraTrackRef.current;
+    if (track && track.readyState === 'live' && track.applyConstraints) {
+      const small = peerTotal >= 3;
+      track.applyConstraints(small
+        ? { width: { ideal: 640 }, height: { ideal: 360 }, frameRate: { ideal: peerTotal >= 4 ? 20 : 24 } }
+        : { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }).catch(() => {});
+    }
   }, [peerTotal]);
 
   // ---- local controls ----------------------------------------------------
@@ -1514,6 +1561,23 @@ export function useMeetingRoom({
 
   const markChatRead = useCallback(() => setChatUnreadCount(0), []);
 
+  /**
+   * Delete a message for everyone (own message, or ANY public message when host / co-host). It is removed from this screen as soon
+   * as the server confirms; everybody else drops it from the broadcast. Resolves/rejects so the panel can show an inline error.
+   */
+  const deleteChatMessage = useCallback(async (messageId) => {
+    await chatApi.destroy(meetingUuid, guestToken, messageId);
+    removeChatMessage(messageId);
+  }, [meetingUuid, guestToken, removeChatMessage]);
+
+  // Chat moderation (host / co-host; the server re-checks). State comes back through `.chat.settings.changed` for everyone,
+  // the caller included, so there is no local optimistic copy to keep in sync.
+  const setChatEnabledForAll = useCallback((enabled) => hostControlApi.chatSettings(meetingUuid, { chat_enabled: !!enabled }), [meetingUuid]);
+  const setChatHistoryMode = useCallback((mode) => hostControlApi.chatSettings(meetingUuid, { chat_history: mode === 'hide' ? 'hide' : 'keep' }), [meetingUuid]);
+  const setParticipantChatMuted = useCallback((targetKey, muted) => hostControlApi.chatMute(meetingUuid, targetKey, !!muted), [meetingUuid]);
+  const clearChatForAll = useCallback(() => hostControlApi.chatClear(meetingUuid), [meetingUuid]);
+  const muteEveryone = useCallback(() => hostControlApi.muteAll(meetingUuid), [meetingUuid]);
+
   // ---- بند 11 (Raise Hand + Reactions) -----------------------------------
   // بنحدّث حالتنا محليًا فورًا (الـ .hand.raised listener فوق بيتجاهل
   // eventنا الراجع لنفسنا عمدًا — راجع الدوكبلوك هناك) بدل ما نستنى رحلة
@@ -1697,6 +1761,8 @@ export function useMeetingRoom({
 
     // بند 7/8 — Chat.
     chatMessages, chatUnreadCount, chatEnabled, sendChatMessage, reactToChatMessage, markChatRead,
+    chatHistory, chatMutedKeys, deleteChatMessage,
+    setChatEnabledForAll, setChatHistoryMode, setParticipantChatMuted, clearChatForAll, muteEveryone,
 
     // بند 11 — Raise Hand + Reactions.
     handRaised, toggleHand, reactions, reactionLog, sendReaction,

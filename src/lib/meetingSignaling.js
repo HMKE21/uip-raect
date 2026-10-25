@@ -212,6 +212,9 @@ export const chatApi = {
     }
     return api.post(`/api/v1/meetings/${meetingUuid}/chat`, withGuestToken(guestToken, data));
   },
+  /** Delete a message for EVERYONE: its sender, or a host/co-host (public messages). */
+  destroy: (meetingUuid, guestToken, messageId) =>
+    api.del(`/api/v1/meetings/${meetingUuid}/chat/${messageId}`, withGuestToken(guestToken, {})),
   /** toggle: نفس الإيموجي تاني من نفس الشخص بيشيلها. */
   react: (meetingUuid, guestToken, messageId, emoji) =>
     api.post(`/api/v1/meetings/${meetingUuid}/chat/${messageId}/react`, withGuestToken(guestToken, { emoji })),
@@ -245,6 +248,18 @@ export const hostControlApi = {
     api.post(`/api/v1/meetings/${meetingUuid}/host-controls/demote`, { participant_key: targetKey }),
   transferHost: (meetingUuid, targetKey) =>
     api.post(`/api/v1/meetings/${meetingUuid}/host-controls/transfer-host`, { participant_key: targetKey }),
+  /** Live chat policy: { chat_enabled?: bool, chat_history?: 'keep' | 'hide' }. */
+  chatSettings: (meetingUuid, changes) =>
+    api.post(`/api/v1/meetings/${meetingUuid}/host-controls/chat-settings`, changes),
+  /** Silence / un-silence one person in the chat. */
+  chatMute: (meetingUuid, targetKey, muted) =>
+    api.post(`/api/v1/meetings/${meetingUuid}/host-controls/chat-mute`, { participant_key: targetKey, muted }),
+  /** Wipe the public chat for everybody. */
+  chatClear: (meetingUuid) =>
+    api.post(`/api/v1/meetings/${meetingUuid}/host-controls/chat-clear`, {}),
+  /** Mute every participant except moderators. */
+  muteAll: (meetingUuid) =>
+    api.post(`/api/v1/meetings/${meetingUuid}/host-controls/mute-all`, {}),
 };
 
 /**

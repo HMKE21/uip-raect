@@ -105,6 +105,7 @@ function EditMeetingModal({ meeting, onClose, onSaved }) {
   const [maxParticipants, setMaxParticipants] = useState(meeting.max_participants || '');
   const [waitingRoomEnabled, setWaitingRoomEnabled] = useState(!!meeting.waiting_room_enabled);
   const [allowGuests, setAllowGuests] = useState(!!meeting.allow_guests);
+  const [hideChatHistory, setHideChatHistory] = useState(meeting.settings?.chat_history === 'hide');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
@@ -121,6 +122,7 @@ function EditMeetingModal({ meeting, onClose, onSaved }) {
         max_participants: maxParticipants ? Number(maxParticipants) : null,
         waiting_room_enabled: waitingRoomEnabled,
         allow_guests: allowGuests,
+        settings: { chat_history: hideChatHistory ? 'hide' : 'keep' },
       });
       onSaved(json.data);
     } catch (err) {
@@ -168,6 +170,11 @@ function EditMeetingModal({ meeting, onClose, onSaved }) {
           <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <input type="checkbox" checked={allowGuests} onChange={(e) => setAllowGuests(e.target.checked)} />
             {t('Allow Guests')}
+          </label>
+
+          <label className="text-small" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="checkbox" checked={hideChatHistory} onChange={(e) => setHideChatHistory(e.target.checked)} />
+            {t('Hide earlier chat from late joiners')}
           </label>
 
           {error && <p className="form-error">{error}</p>}

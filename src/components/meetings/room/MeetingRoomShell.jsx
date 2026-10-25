@@ -613,6 +613,9 @@ export default function MeetingRoomShell({
           onRemove={(key) => room.removeParticipant(key)}
           onPromote={(key) => room.promoteParticipant(key)}
           onDemote={(key) => room.demoteParticipant(key)}
+          onMuteAll={() => room.muteEveryone()}
+          onSetChatMuted={(key, muted) => room.setParticipantChatMuted(key, muted)}
+          chatMutedKeys={room.chatMutedKeys}
           onMakeHost={(key) => {
             if (!window.confirm(t('Make this participant the host? You will become a moderator.'))) return Promise.resolve();
             return room.transferHost(key);
@@ -630,6 +633,13 @@ export default function MeetingRoomShell({
           onSend={room.sendChatMessage}
           onReact={room.reactToChatMessage}
           onMarkRead={room.markChatRead}
+          isManager={room.isManager}
+          chatHistory={room.chatHistory}
+          iAmMuted={room.chatMutedKeys.includes(myKey)}
+          onDelete={room.deleteChatMessage}
+          onSetEnabled={room.setChatEnabledForAll}
+          onSetHistory={room.setChatHistoryMode}
+          onClear={room.clearChatForAll}
         />
 
         <FilesPanel

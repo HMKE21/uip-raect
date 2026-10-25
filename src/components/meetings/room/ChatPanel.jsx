@@ -41,6 +41,8 @@ function avatarColor(name) {
  */
 export default function ChatPanel({
   messages, unreadCount, enabled, myKey, recipientOptions, isOpen, onClose, onSend, onReact, onMarkRead,
+  isManager = false, chatHistory = 'keep', iAmMuted = false,
+  onDelete = null, onSetEnabled = null, onSetHistory = null, onClear = null,
 }) {
   const t = useTranslations(translations);
   const [body, setBody] = useState('');
@@ -51,6 +53,11 @@ export default function ChatPanel({
   const [picked, setPicked] = useState(null); // file waiting to be sent with the next message
   const [previewFile, setPreviewFile] = useState(null);
   const [dragOver, setDragOver] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null); // message waiting for "Delete for everyone?" confirmation
+  const [deletingId, setDeletingId] = useState(null);
+  const [settingsOpen, setSettingsOpen] = useState(false); // host / co-host chat controls popover
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [busyControl, setBusyControl] = useState(false);
   const [pickedUrl, setPickedUrl] = useState(null);
   const [editFile, setEditFile] = useState(null); // image / video open in the media editor (same editor as the platform chat)
   const [showCamera, setShowCamera] = useState(false);
@@ -164,6 +171,33 @@ export default function ChatPanel({
     submit();
   }
 
+  async function confirmDelete(id) {
+    if (!onDelete || deletingId) return;
+    setDeletingId(id);
+    setSendError(null);
+    try {
+      await onDelete(id);
+    } catch (err) {
+      setSendError(err?.message || t('Could not delete this message.'));
+    } finally {
+      setDeletingId(null);
+      setConfirmDeleteId(null);
+    }
+  }
+
+  async function control(action) {
+    if (busyControl) return;
+    setBusyControl(true);
+    setSendError(null);
+    try {
+      await action();
+    } catch (err) {
+      setSendError(err?.message || t('This action could not be completed.'));
+    } finally {
+      setBusyControl(false);
+    }
+  }
+
   function handleKeyDown(e) {
     // Enter sends, Shift+Enter = new line; never while an IME (Arabic/CJK keyboards) is still composing a word
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -210,10 +244,62 @@ export default function ChatPanel({
         <span className="meeting-chat-panel__header-ico" aria-hidden="true"><Icon name="message-square" size={16} /></span>
         <strong>{t('Chat')}</strong>
         {unreadCount > 0 && <span className="badge badge-primary">{unreadCount}</span>}
-        <button type="button" className="meeting-room__control-btn" style={{ marginInlineStart: 'auto' }} onClick={onClose} title={t('Close')} aria-label={t('Close')}>
+        {isManager && (
+          <button
+            type="button"
+            className={`meeting-room__control-btn mc-ctl-btn ${settingsOpen ? 'is-on' : ''}`}
+            style={{ marginInlineStart: 'auto' }}
+            onClick={() => { setSettingsOpen((o) => !o); setConfirmClear(false); }}
+            title={t('Chat controls')}
+            aria-label={t('Chat controls')}
+            aria-expanded={settingsOpen}
+          >
+            <Icon name="settings" size={16} />
+          </button>
+        )}
+        <button type="button" className="meeting-room__control-btn" style={isManager ? undefined : { marginInlineStart: 'auto' }} onClick={onClose} title={t('Close')} aria-label={t('Close')}>
           <Icon name="x" size={16} />
         </button>
       </div>
+
+      {isManager && settingsOpen && (
+        <div className="mc-ctl" role="group" aria-label={t('Chat controls')}>
+          <label className="mc-ctl__row">
+            <span><strong>{t('Allow chat')}</strong><em>{t('Turn it off to stop everyone from posting.')}</em></span>
+            <input type="checkbox" checked={!!enabled} disabled={busyControl} onChange={(e) => control(() => onSetEnabled(e.target.checked))} />
+          </label>
+          <div className="mc-ctl__row mc-ctl__row--col">
+            <span><strong>{t('Earlier messages for people who join later')}</strong></span>
+            <div className="mc-ctl__seg" role="radiogroup" aria-label={t('Earlier messages for people who join later')}>
+              <button type="button" role="radio" aria-checked={chatHistory !== 'hide'} className={chatHistory !== 'hide' ? 'is-on' : ''} disabled={busyControl} onClick={() => chatHistory === 'hide' && control(() => onSetHistory('keep'))}>
+                <Icon name="eye" size={13} /> {t('Keep visible')}
+              </button>
+              <button type="button" role="radio" aria-checked={chatHistory === 'hide'} className={chatHistory === 'hide' ? 'is-on' : ''} disabled={busyControl} onClick={() => chatHistory !== 'hide' && control(() => onSetHistory('hide'))}>
+                <Icon name="eye-off" size={13} /> {t('Hide')}
+              </button>
+            </div>
+          </div>
+          <div className="mc-ctl__row">
+            {confirmClear ? (
+              <>
+                <span><strong>{t('Clear the chat for everyone?')}</strong></span>
+                <span className="mc-ctl__btns">
+                  <button type="button" onClick={() => setConfirmClear(false)}>{t('Cancel')}</button>
+                  <button type="button" className="is-danger" disabled={busyControl} onClick={() => control(async () => { await onClear(); setConfirmClear(false); })}>{t('Clear')}</button>
+                </span>
+              </>
+            ) : (
+              <button type="button" className="mc-ctl__clear" onClick={() => setConfirmClear(true)}>
+                <Icon name="trash" size={14} /> {t('Clear chat for everyone')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {chatHistory === 'hide' && (
+        <p className="mc-note"><Icon name="eye-off" size={12} /> {isManager ? t('Earlier messages are hidden from people who join later.') : t('You only see messages sent after you joined.')}</p>
+      )}
 
       <div className="meeting-chat-panel__list" ref={listRef} onScroll={handleScroll}>
         {messages.length === 0 && (
@@ -231,11 +317,19 @@ export default function ChatPanel({
             return (
               <Fragment key={m.id}>
                 {day}
-                <div className="meeting-chat-sys"><span dir="auto">{m.body}</span></div>
+                <div className="meeting-chat-sys">
+                  <span dir="auto">{m.body}</span>
+                  {isManager && onDelete && (
+                    <button type="button" className="mc-del mc-del--sys" onClick={() => confirmDelete(m.id)} disabled={deletingId === m.id} title={t('Delete')} aria-label={t('Delete')}>
+                      <Icon name="x" size={11} />
+                    </button>
+                  )}
+                </div>
               </Fragment>
             );
           }
           const mine = m.sender_key === myKey;
+          const canDelete = !!onDelete && (mine || (isManager && !m.is_private));
           const cls = ['meeting-chat-msg', mine ? 'is-mine' : '', first ? 'is-first' : '', last ? 'is-last' : '', m.is_private ? 'is-private' : ''].filter(Boolean).join(' ');
           return (
             <Fragment key={m.id}>
@@ -266,8 +360,21 @@ export default function ChatPanel({
                     {QUICK_REACTIONS.map((emoji) => (
                       <button key={emoji} type="button" onClick={(e) => { onReact(m.id, emoji); e.currentTarget.blur(); }} title={t('React')}>{emoji}</button>
                     ))}
+                    {canDelete && (
+                      <button type="button" className="mc-del" onClick={(e) => { setConfirmDeleteId(m.id); e.currentTarget.blur(); }} title={mine ? t('Delete for everyone') : t('Delete this message (moderator)')} aria-label={t('Delete for everyone')}>
+                        <Icon name="trash" size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
+
+                {confirmDeleteId === m.id && (
+                  <div className="mc-confirm" role="alertdialog" aria-label={t('Delete for everyone?')}>
+                    <span>{t('Delete for everyone?')}</span>
+                    <button type="button" onClick={() => setConfirmDeleteId(null)} disabled={deletingId === m.id}>{t('Cancel')}</button>
+                    <button type="button" className="is-danger" onClick={() => confirmDelete(m.id)} disabled={deletingId === m.id}>{deletingId === m.id ? '…' : t('Delete')}</button>
+                  </div>
+                )}
 
                 {m.reactions.length > 0 && (
                   <div className="meeting-chat-msg__reactions">
@@ -298,7 +405,13 @@ export default function ChatPanel({
         </button>
       )}
 
-      {enabled ? (
+      {sendError && !(enabled && !(iAmMuted && !isManager)) && <p className="form-error meeting-chat-panel__error" style={{ margin: '0 12px 8px' }}>{sendError}</p>}
+
+      {enabled && iAmMuted && !isManager ? (
+        <p className="meeting-chat-panel__disabled">
+          <Icon name="lock" size={13} /> {t('The host has turned off your chat.')}
+        </p>
+      ) : enabled ? (
         <form className="meeting-chat-panel__compose" onSubmit={handleSubmit}>
           {sendError && <p className="form-error meeting-chat-panel__error">{sendError}</p>}
 

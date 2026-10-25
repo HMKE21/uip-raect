@@ -32,6 +32,7 @@ export default function ParticipantsPanel({
   people, myRole, meetingLocked, isOpen, onClose,
   waiting = null, onInvite = null,
   onLockMeeting, onMute, onDisableCamera, onRemove, onPromote, onDemote, onMakeHost,
+  onMuteAll = null, onSetChatMuted = null, chatMutedKeys = [],
 }) {
   const t = useTranslations(translations);
   const [busyKey, setBusyKey] = useState(null);
@@ -117,6 +118,18 @@ export default function ParticipantsPanel({
           />
         </label>
       )}
+      {isManager && onMuteAll && (
+        <div className="meeting-participants-panel__lock-row">
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="mic-off" size={14} />
+            {t('Mute everyone')}
+          </span>
+          <button type="button" className="mc-pill" disabled={busyKey === '__muteall__'} onClick={() => run('__muteall__', onMuteAll)}>
+            {busyKey === '__muteall__' ? '…' : t('Mute all')}
+          </button>
+        </div>
+      )}
+      {rowError?.key === '__muteall__' && <p className="form-error" style={{ margin: '4px 16px' }}>{rowError.message}</p>}
       {!isManager && meetingLocked && (
         <p className="text-caption" style={{ margin: 0, padding: '6px var(--space-4)', color: 'var(--mr-muted)' }}>
           <Icon name="lock" size={12} style={{ verticalAlign: '-2px', marginInlineEnd: 4 }} />
@@ -147,6 +160,7 @@ export default function ParticipantsPanel({
                 {!p.micEnabled && <Icon name="mic-off" size={14} style={{ color: '#f87171' }} title={t('Muted')} />}
                 {p.cameraEnabled === false && <Icon name="video-off" size={14} style={{ color: '#f87171' }} title={t('Camera off')} />}
                 {p.handRaised && <Icon name="hand" size={14} style={{ color: '#fbbf24' }} title={t('Hand raised')} />}
+                {chatMutedKeys.includes(p.key) && <Icon name="message-square" size={14} style={{ color: '#f87171' }} title={t('Chat turned off for this person')} />}
               </div>
 
               {canManageRow && (
@@ -154,6 +168,17 @@ export default function ParticipantsPanel({
                   {p.micEnabled && (
                     <button type="button" disabled={busy} onClick={() => run(p.key, () => onMute(p.key))} title={t('Mute')}>
                       <Icon name="mic-off" size={14} />
+                    </button>
+                  )}
+                  {onSetChatMuted && p.role !== 'host' && p.role !== 'co_host' && (
+                    <button
+                      type="button"
+                      className={chatMutedKeys.includes(p.key) ? 'is-on' : ''}
+                      disabled={busy}
+                      onClick={() => run(p.key, () => onSetChatMuted(p.key, !chatMutedKeys.includes(p.key)))}
+                      title={chatMutedKeys.includes(p.key) ? t('Allow this person to chat') : t('Turn off chat for this person')}
+                    >
+                      <Icon name="message-square" size={14} />
                     </button>
                   )}
                   {p.cameraEnabled !== false && (
