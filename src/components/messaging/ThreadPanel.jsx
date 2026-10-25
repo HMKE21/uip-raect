@@ -1677,14 +1677,15 @@ export default function ThreadPanel({
           key={`${editIdx}-${editPf.file.name}-${editPf.file.size}`}
           file={editPf.file}
           initialCaption={text}
+          allowViewOnce
           onCancel={() => setEditIdx(null)}
           onDone={(f, cap) => {
-            if (f !== editPf.file) { if (editPf.file.uipView && !f.uipView) f.uipView = editPf.file.uipView; onReplaceFile(editIdx, f); }
+            if (f !== editPf.file) { if (editPf.file.uipView && f.uipView === undefined) f.uipView = editPf.file.uipView; onReplaceFile(editIdx, f); }
             setText(cap);
             setEditIdx(null);
           }}
           onSend={(f, cap) => {
-            if (editPf.file.uipView && !f.uipView) f.uipView = editPf.file.uipView;
+            if (editPf.file.uipView && f.uipView === undefined) f.uipView = editPf.file.uipView;
             const files = pendingFiles.map((p, i) => (i === editIdx ? f : p.file));
             setEditIdx(null);
             setText('');

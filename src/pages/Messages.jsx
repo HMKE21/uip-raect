@@ -684,7 +684,7 @@ export default function Messages() {
       prev.map((pf, idx) => {
         if (idx !== i) return pf;
         if (pf.previewUrl) URL.revokeObjectURL(pf.previewUrl);
-        if (pf.file?.uipView && !file.uipView) file.uipView = pf.file.uipView; // view-once / timer survives editing
+        if (pf.file?.uipView && file.uipView === undefined) file.uipView = pf.file.uipView; // view-once / timer survives editing
         return { file, denoise: !!pf.denoise, previewUrl: /^(image|video)\//.test(file.type) ? URL.createObjectURL(file) : null };
       })
     );

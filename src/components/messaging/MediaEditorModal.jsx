@@ -2722,13 +2722,16 @@ function usePhone() {
 }
 
 /** `saveMode`: used outside chat (My PC viewer) — no caption / Send, the confirm button reads "Save" and calls onDone(file). */
-export default function MediaEditorModal({ file, initialCaption = '', onCancel, onDone, onSend, saveMode = false }) {
+export default function MediaEditorModal({ file, initialCaption = '', onCancel, onDone, onSend, saveMode = false, allowViewOnce = false }) {
   const { locale } = useLanguage();
   const tx = TEXTS[locale === 'ar' ? 'ar' : 'en'];
   const isVideo = (file.type || '').startsWith('video/');
   const gif = !isVideo && isGif(file);
 
   const [caption, setCaption] = useState(initialCaption);
+  // "View once" / "timer" (same options as the camera): null = normal. Travels on the File as `uipView`, like camera shots.
+  const [viewMode, setViewMode] = useState(file.uipView?.mode || null);
+  const [viewSecs, setViewSecs] = useState(file.uipView?.seconds || 10);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -2771,6 +2774,7 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
     t0Ref.current = performance.now();
     try {
       const out = gif ? file : await edRef.current.getResult();
+      if (allowViewOnce && !saveMode) out.uipView = viewMode ? { mode: viewMode, seconds: viewMode === 'timer' ? viewSecs : null } : null;
       if (send) onSend(out, caption.trim());
       else onDone(out, caption.trim());
     } catch (e) {
@@ -2830,6 +2834,20 @@ export default function MediaEditorModal({ file, initialCaption = '', onCancel, 
       )}
 
       {err && <div className="mx-ed__err" role="alert">{err}</div>}
+
+      {allowViewOnce && !saveMode && (
+        <div className="mx-ed__view" role="radiogroup" aria-label={locale === 'ar' ? 'طريقة العرض' : 'How it is opened'}
+          style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, padding: '8px 12px 0', justifyContent: 'center' }}>
+          {[[null, locale === 'ar' ? 'عادي' : 'Normal'], ['once', `① ${locale === 'ar' ? 'مرة واحدة' : 'View once'}`], ['timer', `⏱ ${locale === 'ar' ? 'تايمر' : 'Timer'}`]].map(([m, label]) => (
+            <button key={String(m)} type="button" role="radio" aria-checked={viewMode === m} disabled={busy} onClick={() => setViewMode(m)}
+              style={{ border: 0, borderRadius: 999, padding: '6px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13, background: viewMode === m ? '#e53e6b' : 'rgba(255,255,255,.12)', color: '#fff' }}>{label}</button>
+          ))}
+          {viewMode === 'timer' && [3, 5, 10, 30].map((n) => (
+            <button key={n} type="button" disabled={busy} onClick={() => setViewSecs(n)}
+              style={{ border: 0, borderRadius: 999, padding: '6px 12px', cursor: 'pointer', fontSize: 13, background: viewSecs === n ? '#e53e6b' : 'rgba(255,255,255,.12)', color: '#fff' }}>{n}{locale === 'ar' ? 'ث' : 's'}</button>
+          ))}
+        </div>
+      )}
 
       <footer className="mx-ed__foot">
         {saveMode ? <span style={{ flex: 1 }} /> : <input

@@ -69,21 +69,24 @@ export default function VoiceMessage({ src, duration: knownDuration, disabled = 
     const el = audioRef.current;
     if (!el) return undefined;
     let alive = true;
-    const onMeta = () => {
-      if (Number.isFinite(el.duration)) { setDuration(el.duration); return; }
-      if (!Number(knownDuration)) probeDuration(src).then((d) => { if (alive && d) setDuration(d); });
-    };
+    // Only read the length here. Old recordings without a length header are probed when they are first PLAYED (see toggle):
+    // probing every voice note on mount made the whole chat download every file and seek inside it -> heavy, jumpy playback.
+    const onMeta = () => { if (Number.isFinite(el.duration)) setDuration(el.duration); };
+    const onPause = () => setPlaying(false);
+    const onPlay = () => setPlaying(true);
     const onTime = () => { if (el.currentTime < 1e100) setTime(el.currentTime); };
     const onEnd = () => { setPlaying(false); setTime(0); };
     el.addEventListener('loadedmetadata', onMeta);
     el.addEventListener('timeupdate', onTime);
     el.addEventListener('ended', onEnd);
-    el.addEventListener('pause', () => setPlaying(false));
-    el.addEventListener('play', () => setPlaying(true));
+    el.addEventListener('pause', onPause);
+    el.addEventListener('play', onPlay);
     return () => {
       el.removeEventListener('loadedmetadata', onMeta);
       el.removeEventListener('timeupdate', onTime);
       el.removeEventListener('ended', onEnd);
+      el.removeEventListener('pause', onPause);
+      el.removeEventListener('play', onPlay);
       alive = false;
     };
   }, [src, knownDuration]);
@@ -95,6 +98,7 @@ export default function VoiceMessage({ src, duration: knownDuration, disabled = 
       // only one voice note at a time
       document.querySelectorAll('audio').forEach((o) => { if (o !== el && !o.hasAttribute('data-persist-media')) o.pause(); });
       el.play().catch(() => {});
+      if (!duration && !Number.isFinite(el.duration)) probeDuration(src).then((d) => { if (d) setDuration(d); });
     } else el.pause();
   };
   const cycleSpeed = () => {
@@ -144,7 +148,7 @@ export default function VoiceMessage({ src, duration: knownDuration, disabled = 
   const progress = duration ? time / duration : 0;
   return (
     <div className={`vm${playing ? ' is-playing' : ''}`} dir="ltr">
-      <audio ref={audioRef} src={src} preload="auto" />
+      <audio ref={audioRef} src={src} preload="metadata" />
       <button type="button" className="vm__play" onClick={toggle} disabled={disabled} aria-label={playing ? 'Pause' : 'Play'}>
         {playing ? <PauseIcon /> : <PlayIcon />}
       </button>

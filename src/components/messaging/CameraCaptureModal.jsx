@@ -15,6 +15,9 @@ const FILTERS = [
   { id: 'noir', en: 'Noir', ar: 'داكن', css: 'grayscale(1) contrast(1.5) brightness(.85)' },
 ];
 
+const canNormalize = () => typeof window !== 'undefined' && window.isSecureContext !== false
+  && typeof VideoEncoder === 'function' && typeof VideoDecoder === 'function' && typeof VideoFrame === 'function';
+
 /** In-app camera capture (desktop + Android APK) (getUserMedia) with live filters. Returns a File via onCapture. */
 export default function CameraCaptureModal({ ar, onCapture, onClose, allowViewOnce = false }) {
   const videoRef = useRef(null);
@@ -34,6 +37,8 @@ export default function CameraCaptureModal({ ar, onCapture, onClose, allowViewOn
   const audioRef = useRef(null);
   const [review, setReview] = useState(null); // { kind: 'photo' | 'video', file } — edit / send-options step after a shot
   const [attempt, setAttempt] = useState(0);
+  const [fixing, setFixing] = useState(false);
+  const recStartRef = useRef(0);
 
   // Phone Back / gesture closes ONLY the camera (not the whole chat underneath). Ignored while a video is being recorded.
   useBackLayer(true, () => {
@@ -135,16 +140,41 @@ export default function CameraCaptureModal({ ar, onCapture, onClose, allowViewOn
       audioRef.current = a;
       a.getAudioTracks().forEach((t) => out.addTrack(t));
     } catch { /* record without sound */ }
-    const pref = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find((m) => MediaRecorder.isTypeSupported?.(m));
-    const rec = new MediaRecorder(out, { ...(pref ? { mimeType: pref } : {}), videoBitsPerSecond: 5_000_000, audioBitsPerSecond: 128_000 });
+    // H.264 first (hardware encoder on phones / most PCs). VP8 before VP9: VP9 is software-encoded in real time and at 1080p
+    // the encoder cannot keep up, so it silently drops frames -> the clip looks smooth live but jumpy once played.
+    const pref = ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=h264,opus', 'video/webm;codecs=vp8,opus', 'video/webm;codecs=vp9,opus', 'video/webm'].find((m) => MediaRecorder.isTypeSupported?.(m));
+    // record at 720p30: half the pixels of 1080p, which is what keeps a real-time encoder from falling behind
+    const vt = streamRef.current?.getVideoTracks()[0];
+    try { await vt?.applyConstraints({ width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }); } catch { /* keep current size */ }
+    const rec = new MediaRecorder(out, { ...(pref ? { mimeType: pref } : {}), videoBitsPerSecond: 2_500_000, audioBitsPerSecond: 96_000 });
     rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
-    rec.onstop = () => {
+    rec.onstop = async () => {
       setRecording(false);
       stopAudio();
       const type = (rec.mimeType || 'video/webm').split(';')[0];
       const ext = type.includes('mp4') ? 'mp4' : 'webm';
-      toReview('video', new File([new Blob(chunksRef.current, { type })], `video-${Date.now()}.${ext}`, { type }));
+      let file = new File([new Blob(chunksRef.current, { type })], `video-${Date.now()}.${ext}`, { type });
+      // MediaRecorder output has variable frame timing, no duration / seek index and drifting timestamps: players stutter on it.
+      // Re-mux it through the WebCodecs pipeline (constant 30 fps, regular keyframes, index up front) before it is sent.
+      const secsRec = (performance.now() - recStartRef.current) / 1000;
+      if (canNormalize() && secsRec > 0.5) {
+        setFixing(true);
+        try {
+          const { fastExportVideo } = await import('../../lib/fastVideoExport');
+          const fixed = await fastExportVideo({
+            file, start: 0, end: secsRec + 1, mute: false, cleanAudio: null,
+            params: { rot: 0, flip: false, crop: { x: 0, y: 0, w: 1, h: 1 }, filter: 'none' },
+            quality: { max: 1280 }, bits: { v: 2_500_000, a: 96_000 },
+            drawOverlay: null, onProgress: () => {}, abortRef: { current: null },
+            maxBytes: 45 * 1024 * 1024, copyMaxBytes: 0, // copyMaxBytes 0: never stream-copy, always re-time + re-encode
+          });
+          if (fixed && fixed.size > 500) file = fixed;
+        } catch { /* no WebCodecs encoder here: send the raw recording as before */ }
+        setFixing(false);
+      }
+      toReview('video', file);
     };
+    recStartRef.current = performance.now();
     recRef.current = rec; rec.start(1000); setRecording(true);
   };
 
@@ -187,11 +217,12 @@ export default function CameraCaptureModal({ ar, onCapture, onClose, allowViewOn
           </div>
         )}
         {recording && <div style={{ textAlign: 'center', flexShrink: 0, marginTop: 8, color: '#f87171', fontWeight: 700 }}>● {fmt(secs)}</div>}
+        {fixing && <div style={{ textAlign: 'center', flexShrink: 0, marginTop: 8, fontWeight: 600 }}>{ar ? 'جارٍ تجهيز الفيديو…' : 'Preparing video…'}</div>}
         <div style={{ display: 'flex', flexShrink: 0, gap: 14, justifyContent: 'center', alignItems: 'center' }}>
           <button type="button" style={{ ...btn, background: '#fff', color: '#111' }} onClick={() => { if (recording) recRef.current?.stop(); onClose(); }}>{ar ? 'إغلاق' : 'Close'}</button>
           {!error && (
             <button type="button" aria-label={mode === 'photo' ? (ar ? 'التقاط' : 'Capture') : (recording ? (ar ? 'إيقاف' : 'Stop') : (ar ? 'تسجيل' : 'Record'))}
-              disabled={!ready} onClick={shutter}
+              disabled={!ready || fixing} onClick={shutter}
               style={{ width: 66, height: 66, borderRadius: '50%', border: '4px solid #fff', background: 'transparent', padding: 4, cursor: 'pointer' }}>
               <span style={{ display: 'block', width: '100%', height: '100%', background: mode === 'video' ? '#dc2626' : '#fff', borderRadius: recording ? 8 : '50%', transition: 'border-radius .15s' }} />
             </button>

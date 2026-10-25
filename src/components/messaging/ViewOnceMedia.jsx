@@ -104,11 +104,11 @@ export default function ViewOnceMedia({ attachment, mine, ar }) {
   return (
     <>
       <button type="button" disabled={disabled} onClick={() => { if (state === 'error') setState('idle'); setTimeout(open, 0); }}
-        style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1.5px dashed currentColor', borderRadius: 14, background: 'transparent', color: 'inherit', padding: '10px 14px', cursor: disabled ? 'default' : 'pointer', opacity: state === 'gone' || mine ? 0.65 : 1, minWidth: 170, textAlign: 'start', font: 'inherit' }}>
+        style={{ display: 'flex', alignItems: 'center', gap: 10, border: '2px dashed #4f46e5', borderRadius: 14, background: '#ffffff', color: '#111827', padding: '12px 16px', cursor: disabled ? 'default' : 'pointer', minWidth: 190, textAlign: 'start', font: 'inherit', boxShadow: '0 1px 3px rgba(0,0,0,.15)' }}>
         <span style={{ fontSize: 22 }} aria-hidden="true">{state === 'gone' ? '🚫' : icon}</span>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <strong style={{ fontSize: 14 }}>{what} · {badge}</strong>
-          <span style={{ fontSize: 12, opacity: 0.8 }}>{label}</span>
+          <strong style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>{what} · {badge}</strong>
+          <span style={{ fontSize: 13, fontWeight: 600, color: state === 'gone' || mine ? '#4b5563' : '#4f46e5' }}>{label}</span>
         </span>
       </button>
       {state === 'open' && createPortal(
