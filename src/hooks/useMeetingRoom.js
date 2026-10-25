@@ -252,8 +252,9 @@ export function useMeetingRoom({
 }) {
   const [participants, setParticipants] = useState({}); // key -> {displayName, role, isHost, isGuest, micEnabled, cameraEnabled, screenSharing, handRaised, screenShareAllowed, connectionState, connectionQuality, remoteStream}
   const [localStream, setLocalStream] = useState(null);
-  const [micEnabled, setMicEnabled] = useState(!(deviceDefaults?.mute_on_entry ?? false));
-  const [cameraEnabled, setCameraEnabled] = useState(deviceDefaults?.camera_on_entry ?? true);
+  // Always join with the mic AND camera OFF — the person turns them on themselves (meeting-level defaults no longer force them on).
+  const [micEnabled, setMicEnabled] = useState(false);
+  const [cameraEnabled, setCameraEnabled] = useState(false);
   const cameraEnabledRef = useRef(cameraEnabled);
   cameraEnabledRef.current = cameraEnabled;
   const [screenSharing, setScreenSharing] = useState(false);

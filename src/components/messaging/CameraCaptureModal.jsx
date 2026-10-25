@@ -60,7 +60,7 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
       setError(ar ? 'المتصفح لا يدعم الكاميرا (يتطلب HTTPS).' : 'Camera is not supported (HTTPS required).');
       return undefined;
     }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false })
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing }, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30, max: 30 } }, audio: false })
       .then((s) => {
         if (cancelled) { s.getTracks().forEach((t) => t.stop()); return; }
         streamRef.current = s;
@@ -101,14 +101,18 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
     const c = canvasRef.current;
     if (!c || !c.captureStream || typeof MediaRecorder === 'undefined') return;
     chunksRef.current = [];
-    const out = c.captureStream(30);
+    // No filter -> record the camera's own stream: every frame goes straight to the encoder (smooth, perfectly in sync).
+    // The old path always re-drew the picture on a canvas first, so any hiccup in the page became dropped / frozen frames.
+    // A filter needs the canvas, so only then is it used (the filter picker is locked while recording).
+    const direct = filterRef.current === 'none' && streamRef.current?.getVideoTracks().length > 0;
+    const out = direct ? new MediaStream(streamRef.current.getVideoTracks()) : c.captureStream(30);
     try {
-      const a = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const a = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
       audioRef.current = a;
       a.getAudioTracks().forEach((t) => out.addTrack(t));
     } catch { /* record without sound */ }
     const pref = ['video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find((m) => MediaRecorder.isTypeSupported?.(m));
-    const rec = pref ? new MediaRecorder(out, { mimeType: pref }) : new MediaRecorder(out);
+    const rec = new MediaRecorder(out, { ...(pref ? { mimeType: pref } : {}), videoBitsPerSecond: 3_000_000, audioBitsPerSecond: 128_000 });
     rec.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
     rec.onstop = () => {
       setRecording(false);
@@ -129,15 +133,16 @@ export default function CameraCaptureModal({ ar, onCapture, onClose }) {
   return createPortal(
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.75)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onMouseDown={(e) => { if (e.target === e.currentTarget && !recording) onClose(); }}>
       <div style={{ background: '#111', borderRadius: 16, padding: 14, width: 'min(560px,100%)', maxHeight: '100%', overflowY: 'auto', color: '#fff' }}>
-        <video ref={videoRef} muted playsInline style={{ display: 'none' }} />
+        {/* kept "visible" (tiny + almost transparent): browsers throttle display:none / off-screen media, which made the picture stutter */}
+        <video ref={videoRef} muted playsInline style={{ position: 'fixed', right: 0, bottom: 0, width: 64, height: 36, opacity: 0.01, pointerEvents: 'none', zIndex: -1 }} />
         {error ? <p style={{ padding: 24, textAlign: 'center' }}>{error}</p> : (
           <canvas ref={canvasRef} style={{ width: '100%', borderRadius: 12, background: '#000', transform: facing === 'user' ? 'scaleX(-1)' : 'none' }} />
         )}
         {!error && canFilter && (
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginTop: 10, paddingBottom: 4 }} role="listbox" aria-label={ar ? 'الفلاتر' : 'Filters'}>
             {FILTERS.map((f) => (
-              <button key={f.id} type="button" role="option" aria-selected={filter === f.id} onClick={() => setFilter(f.id)}
-                style={{ ...thumbBase, borderColor: filter === f.id ? '#e53e6b' : 'transparent' }}>
+              <button key={f.id} type="button" role="option" aria-selected={filter === f.id} disabled={recording} onClick={() => setFilter(f.id)}
+                style={{ ...thumbBase, opacity: recording && filter !== f.id ? 0.4 : 1, borderColor: filter === f.id ? '#e53e6b' : 'transparent' }}>
                 <span style={{ display: 'block', width: 64, height: 44, borderRadius: 8, background: 'linear-gradient(135deg,#f97316,#22c55e 50%,#3b82f6)', filter: f.css }} />
                 <span style={{ display: 'block', marginTop: 3 }}>{ar ? f.ar : f.en}</span>
               </button>

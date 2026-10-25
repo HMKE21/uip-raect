@@ -183,3 +183,7 @@
 .ed__ocr { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 10px; background: rgba(255, 255, 255, .05); margin-bottom: 8px; }
 .ed__bar { height: 4px; border-radius: 99px; background: rgba(255, 255, 255, .12); overflow: hidden; }
 .ed__bar i { display: block; height: 100%; background: var(--ed-accent); transition: width .2s; }
+
+/* Image / PDF text box: neutralise the global textarea reset (focus ring + "transition: all" made it jump and lag while typing). */
+.ed__textedit, .ed__textedit:hover, .ed__textedit:focus { transition: none; box-shadow: none; border: 1px solid #3b82f6; border-radius: 4px; background: rgba(255,255,255,.7); }
+.ed__textedit:focus { box-shadow: 0 0 0 3px rgba(59,130,246,.16); }

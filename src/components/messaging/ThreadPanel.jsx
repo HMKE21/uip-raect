@@ -1199,12 +1199,12 @@ export default function ThreadPanel({
         const engine = createVoiceEngine(stream, { noiseCancel, getCanvas: () => waveCanvasRef.current });
         voiceEngineRef.current = engine;
         const recStream = engine.recordStream;
-        const recorder = mime ? new MediaRecorder(recStream, { mimeType: mime, audioBitsPerSecond: 48000 }) : new MediaRecorder(recStream);
+        const recorder = mime ? new MediaRecorder(recStream, { mimeType: mime, audioBitsPerSecond: 64000 }) : new MediaRecorder(recStream);
         recordingChunksRef.current = [];
         recorder.ondataavailable = (e) => {
           if (e.data.size) recordingChunksRef.current.push(e.data);
         };
-        recorder.start();
+        recorder.start(500); // timeslice: chunks are flushed steadily instead of one big buffer at the very end
         mediaRecorderRef.current = recorder;
         recordingStartRef.current = Date.now();
         setIsRecording(true);

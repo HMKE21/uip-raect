@@ -80,3 +80,12 @@
   .wb__sw { width: 26px; height: 26px; }
 }
 @media (prefers-reduced-motion: reduce) { .wb__tool, .wb__sw, .wb__btn { transition: none; } }
+
+/* Text / sticky-note box. The site-wide reset gives EVERY textarea width:100%, a 1px border, big padding, a focus ring and
+   "transition: all" — the box opened as wide as the whole page, and the transition made autoSize() measure the OLD (100%) width.
+   Pin it to its content: no width from the reset, no animation, no global ring. */
+.wb .wb__editor { width: auto; max-width: none; transition: none; box-sizing: content-box; border: 1.5px solid #3b82f6; border-radius: 8px; padding: 3px 7px; background: rgba(255,255,255,.88); box-shadow: 0 0 0 3px rgba(59,130,246,.16); caret-color: #3b82f6; }
+.wb .wb__editor:hover, .wb .wb__editor:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.16); }
+.wb .wb__editor.is-note, .wb .wb__editor.is-note:hover, .wb .wb__editor.is-note:focus { box-sizing: border-box; box-shadow: 0 6px 18px rgba(0,0,0,.2), 0 0 0 3px rgba(59,130,246,.18); }
+.wb.is-dark .wb__editor:not(.is-note) { background: rgba(20,22,28,.9); }
+.wb .wb__editor::placeholder { color: rgba(100,110,130,.75); opacity: 1; }

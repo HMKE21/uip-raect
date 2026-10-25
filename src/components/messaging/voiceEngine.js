@@ -23,7 +23,9 @@ export function createVoiceEngine(stream, { noiseCancel = true, getCanvas } = {}
 
   let ctx;
   try {
-    ctx = new AC({ sampleRate: RNNOISE_SAMPLE_RATE }); // RNNoise only works at 48 kHz
+    // 'playback' = larger audio buffers: no crackle / dropouts when the main thread (React, the waveform) or a Bluetooth mic is busy.
+    // Latency does not matter here — nothing is played back live, the stream is only recorded.
+    ctx = new AC({ sampleRate: RNNOISE_SAMPLE_RATE, latencyHint: 'playback' }); // RNNoise only works at 48 kHz
   } catch {
     try { ctx = new AC(); } catch { return fallback; }
   }
@@ -132,10 +134,18 @@ export function createVoiceEngine(stream, { noiseCancel = true, getCanvas } = {}
 
     // noise floor: drops instantly to quieter rooms, creeps up slowly (so a long word does not become "noise")
     floor = rms < floor ? rms : floor + (rms - floor) * 0.0015;
-    const open = rms > Math.max(0.014, floor * 2.4);
-    if (open) hang = 260; else hang = Math.max(0, hang - dt);
-    // with RNNoise the gate only has to mop up what is left, so it stays gentle (no pumping); without it, it is strict.
-    if (on) gate.gain.setTargetAtTime(open || hang > 0 ? 1 : (neural ? 0.35 : 0.1), ctx.currentTime, open ? 0.008 : 0.14);
+    // The gate used to close at rms < 0.014 (~ -37 dBFS) down to x0.35 / x0.1. A normal laptop / phone mic delivers quiet speech
+    // right around that level (auto-gain is off while RNNoise runs), so soft words and the tails of sentences were muted and the
+    // recording came out chopped into pieces. Now: RNNoise on = no gate at all (the network already removes the noise between
+    // words); RNNoise missing = a much lower threshold, a long hang time and only a mild attenuation, so speech is never cut.
+    // A hidden tab stops requestAnimationFrame, so the gate must never be left closed there.
+    const open = rms > Math.max(0.005, floor * 3);
+    if (open) hang = 450; else hang = Math.max(0, hang - dt);
+    if (on) {
+      const closed = neural ? 1 : 0.5;
+      const pass = open || hang > 0 || document.hidden;
+      gate.gain.setTargetAtTime(pass ? 1 : closed, ctx.currentTime, pass ? 0.01 : 0.25);
+    }
 
     const target = Math.min(1, Math.pow(rms * 4.2, 0.8));
     level += (target - level) * (target > level ? 0.55 : 0.18); // fast attack, slow release

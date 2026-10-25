@@ -75,8 +75,8 @@ export default function MeetingPreJoin() {
   const [cameraId, setCameraId] = useState('');
   const [microphoneId, setMicrophoneId] = useState('');
   const [speakerId, setSpeakerId] = useState('');
-  const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [micEnabled, setMicEnabled] = useState(true);
+  const [cameraEnabled, setCameraEnabled] = useState(false); // join with camera + mic off by default
+  const [micEnabled, setMicEnabled] = useState(false);
   const [mediaError, setMediaError] = useState(null);
   const [displayName, setDisplayName] = useState('');
 

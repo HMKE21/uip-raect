@@ -412,3 +412,10 @@
 
 /* GIF preview (no tools) */
 .mx-ed--phone .mx-ed__tools { order: 3; padding: 12px 16px max(12px, env(safe-area-inset-bottom)); border-radius: 22px 22px 0 0; background: #181b25; }
+
+/* Chat media editor text box: it inherited width:100% from the global input reset, so it stretched across the whole picture.
+   Size it to what is typed (field-sizing) with a compact fixed fallback for older browsers. */
+.mx-ed__textinput { width: auto; transition: none; box-shadow: none; border: 1.5px solid rgba(255,255,255,.85); border-radius: 8px; padding: 3px 10px; background: rgba(0,0,0,.4); backdrop-filter: blur(4px); caret-color: #fff; field-sizing: content; }
+.mx-ed__textinput:hover, .mx-ed__textinput:focus { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.18); }
+.mx-ed__textinput::placeholder { color: rgba(255,255,255,.65); }
+@supports not (field-sizing: content) { .mx-ed__textinput { width: min(90%, 14em); } }
