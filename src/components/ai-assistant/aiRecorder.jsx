@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
-import { createVoiceEngine } from '../messaging/voiceEngine';
-import { rnnoiseSupported } from '../../lib/rnnoise';
+import { createVoiceEngine, voiceConstraints } from '../messaging/voiceEngine';
 
 /**
  * Voice recording for the AI assistant composer.
@@ -71,10 +70,7 @@ export function useVoiceRecorder({ onComplete, onError } = {}) {
     let stream;
     try {
       const nc = ncRef.current;
-      // RNNoise (in voiceEngine) cleans the raw mic; the browser's own processing only steps in when RNNoise cannot run
-      stream = await navigator.mediaDevices.getUserMedia({ audio: nc && rnnoiseSupported()
-        ? { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-        : { channelCount: 1, echoCancellation: true, noiseSuppression: nc, autoGainControl: nc } });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: voiceConstraints(nc) });
     } catch (err) {
       cbRef.current.onError?.(err && (err.name === 'NotAllowedError' || err.name === 'SecurityError') ? 'denied' : 'nomic');
       return;

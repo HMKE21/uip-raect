@@ -16,16 +16,42 @@ import { createRnnoiseNode, rnnoiseSupported, RNNOISE_SAMPLE_RATE } from '../../
 const BAR = 3;
 const GAP = 2;
 
+/**
+ * WHY THE RECORDING USED TO CRACKLE: the old chain  mic → Web Audio graph (RNNoise worklet, filters, limiter, gate) →
+ * MediaStreamDestination → MediaRecorder  put a real-time audio graph in the recording path. Any hiccup there is baked
+ * permanently into the file: the AudioContext clock drifts against the microphone's clock (USB / Bluetooth / phone mics,
+ * 44.1 vs 48 kHz), the RNNoise worklet misses its deadline on weak CPUs, the graph is re-wired live when RNNoise finishes
+ * loading, and the per-frame gate gain keeps pumping the level.  Result: clicks, uneven volume, "not smooth".
+ *
+ * Now the recorder gets the raw microphone stream directly (the browser's native, glitch-free pipeline). The Web Audio
+ * graph is used ONLY for the live level meter, so even if it stutters the recording is untouched. "Noise cancel" uses the
+ * browser's own noise suppression (switchable live). Set LIVE_PROCESSING = true to bring the old RNNoise chain back.
+ */
+export const LIVE_PROCESSING = false;
+
+/** getUserMedia audio constraints for a voice note. AGC is left OFF on purpose: it pumps the level in every pause. */
+export function voiceConstraints(noiseCancel) {
+  const live = LIVE_PROCESSING && rnnoiseSupported();
+  return {
+    channelCount: 1,
+    echoCancellation: !(live && noiseCancel),
+    noiseSuppression: live ? false : !!noiseCancel,
+    autoGainControl: false,
+  };
+}
+
 export function createVoiceEngine(stream, { noiseCancel = true, getCanvas } = {}) {
   const AC = window.AudioContext || window.webkitAudioContext;
   const fallback = { recordStream: stream, setNoiseCancel() {}, stop() {}, supported: false };
   if (!AC) return fallback;
+  const live = LIVE_PROCESSING && rnnoiseSupported();
 
   let ctx;
   try {
     // 'playback' = larger audio buffers: no crackle / dropouts when the main thread (React, the waveform) or a Bluetooth mic is busy.
     // Latency does not matter here — nothing is played back live, the stream is only recorded.
-    ctx = new AC({ sampleRate: RNNOISE_SAMPLE_RATE, latencyHint: 'playback' }); // RNNoise only works at 48 kHz
+    // Meter-only context follows the device's own rate (no resampling); only the RNNoise chain needs a fixed 48 kHz.
+    ctx = new AC(live ? { sampleRate: RNNOISE_SAMPLE_RATE, latencyHint: 'playback' } : { latencyHint: 'playback' });
   } catch {
     try { ctx = new AC(); } catch { return fallback; }
   }
@@ -33,7 +59,7 @@ export function createVoiceEngine(stream, { noiseCancel = true, getCanvas } = {}
   let raf = 0;
   let stopped = false;
   let neural = false; // RNNoise node is in the graph
-  let neuralFailed = !rnnoiseSupported(); // RNNoise cannot run here (or failed to load): the browser's own processing takes over
+  let neuralFailed = !live; // RNNoise cannot run here (or failed to load): the browser's own processing takes over
 
   const src = ctx.createMediaStreamSource(stream);
   const analyser = ctx.createAnalyser();
@@ -41,48 +67,56 @@ export function createVoiceEngine(stream, { noiseCancel = true, getCanvas } = {}
   analyser.smoothingTimeConstant = 0.4;
   src.connect(analyser);
 
-  const dest = ctx.createMediaStreamDestination();
-  const rawGain = ctx.createGain();
-  const procGain = ctx.createGain();
-  src.connect(rawGain); rawGain.connect(dest);
-
-  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 30; hp.Q.value = 0.6;   // rumble, AC hum, wind
-  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 16000; lp.Q.value = 0.7;   // hiss above speech
-  // brick-wall limiter (no compressor: it lifted the room noise in every pause and squeezed the voice)
-  const comp = ctx.createDynamicsCompressor();
-  comp.threshold.value = -3; comp.knee.value = 0; comp.ratio.value = 20; comp.attack.value = 0.003; comp.release.value = 0.1;
-  const gate = ctx.createGain();
-  // denoiseIn → denoiseOut is a straight wire until RNNoise finishes loading, then it is re-routed through the network.
-  const denoiseIn = ctx.createGain();
-  const denoiseOut = ctx.createGain();
-  src.connect(hp); hp.connect(denoiseIn); denoiseIn.connect(denoiseOut);
-  denoiseOut.connect(lp); lp.connect(comp); comp.connect(gate); gate.connect(procGain); procGain.connect(dest);
-
+  // Meter-only mode (default): nothing here touches the recording. Noise cancel = the browser's native suppression.
   const track = stream.getAudioTracks()[0];
-  const applyMode = () => {
-    const t = ctx.currentTime;
-    rawGain.gain.setTargetAtTime(on ? 0 : 1, t, 0.03);
-    procGain.gain.setTargetAtTime(on ? 1 : 0, t, 0.03);
-    if (!on) gate.gain.setTargetAtTime(1, t, 0.02);
-    // RNNoise does the heavy lifting; stacking the browser's echo canceller / suppressor / auto-gain on top of it only adds
-    // artefacts (measured: ~4 dB lost on the cleaned voice, and the gain control lifts the room noise in every pause), so
-    // they step aside while RNNoise runs or is about to. Only when it cannot run does the browser's processing take over.
-    const useBrowser = !(on && !neuralFailed);
-    try { track?.applyConstraints({ noiseSuppression: on && useBrowser, echoCancellation: useBrowser, autoGainControl: on && useBrowser }).catch(() => {}); } catch { /* not supported live */ }
+  let dest = null; let gate = null;
+  let applyMode = () => {
+    try { track?.applyConstraints({ noiseSuppression: on }).catch(() => {}); } catch { /* not supported live */ }
   };
-  applyMode();
-  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
 
-  createRnnoiseNode(ctx).then((rn) => {
-    if (!rn) { neuralFailed = true; applyMode(); return; }
-    if (stopped) { try { rn.disconnect(); } catch { /* gone */ } return; }
-    try {
-      denoiseIn.disconnect(denoiseOut);
-      denoiseIn.connect(rn); rn.connect(denoiseOut);
-      neural = true;
-      applyMode();
-    } catch { /* keep the filter chain */ }
-  });
+  if (live) {
+    dest = ctx.createMediaStreamDestination();
+    const rawGain = ctx.createGain();
+    const procGain = ctx.createGain();
+    src.connect(rawGain); rawGain.connect(dest);
+
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 30; hp.Q.value = 0.6;   // rumble, AC hum, wind
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 16000; lp.Q.value = 0.7;   // hiss above speech
+    // brick-wall limiter (no compressor: it lifted the room noise in every pause and squeezed the voice)
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -3; comp.knee.value = 0; comp.ratio.value = 20; comp.attack.value = 0.003; comp.release.value = 0.1;
+    gate = ctx.createGain();
+    // denoiseIn → denoiseOut is a straight wire until RNNoise finishes loading, then it is re-routed through the network.
+    const denoiseIn = ctx.createGain();
+    const denoiseOut = ctx.createGain();
+    src.connect(hp); hp.connect(denoiseIn); denoiseIn.connect(denoiseOut);
+    denoiseOut.connect(lp); lp.connect(comp); comp.connect(gate); gate.connect(procGain); procGain.connect(dest);
+
+    applyMode = () => {
+      const t = ctx.currentTime;
+      rawGain.gain.setTargetAtTime(on ? 0 : 1, t, 0.03);
+      procGain.gain.setTargetAtTime(on ? 1 : 0, t, 0.03);
+      if (!on) gate.gain.setTargetAtTime(1, t, 0.02);
+      // RNNoise does the heavy lifting; stacking the browser's echo canceller / suppressor / auto-gain on top of it only adds
+      // artefacts (measured: ~4 dB lost on the cleaned voice, and the gain control lifts the room noise in every pause), so
+      // they step aside while RNNoise runs or is about to. Only when it cannot run does the browser's processing take over.
+      const useBrowser = !(on && !neuralFailed);
+      try { track?.applyConstraints({ noiseSuppression: on && useBrowser, echoCancellation: useBrowser, autoGainControl: on && useBrowser }).catch(() => {}); } catch { /* not supported live */ }
+    };
+    applyMode();
+
+    createRnnoiseNode(ctx).then((rn) => {
+      if (!rn) { neuralFailed = true; applyMode(); return; }
+      if (stopped) { try { rn.disconnect(); } catch { /* gone */ } return; }
+      try {
+        denoiseIn.disconnect(denoiseOut);
+        denoiseIn.connect(rn); rn.connect(denoiseOut);
+        neural = true;
+        applyMode();
+      } catch { /* keep the filter chain */ }
+    });
+  }
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
 
   // ---- meter + gate + waveform
   const buf = new Uint8Array(analyser.fftSize);
@@ -141,7 +175,7 @@ export function createVoiceEngine(stream, { noiseCancel = true, getCanvas } = {}
     // A hidden tab stops requestAnimationFrame, so the gate must never be left closed there.
     const open = rms > Math.max(0.005, floor * 3);
     if (open) hang = 450; else hang = Math.max(0, hang - dt);
-    if (on) {
+    if (live && on && gate) {
       const closed = neural ? 1 : 0.5;
       const pass = open || hang > 0 || document.hidden;
       gate.gain.setTargetAtTime(pass ? 1 : closed, ctx.currentTime, pass ? 0.01 : 0.25);
@@ -158,7 +192,7 @@ export function createVoiceEngine(stream, { noiseCancel = true, getCanvas } = {}
   return {
     supported: true,
     get neural() { return neural; },
-    recordStream: dest.stream,
+    recordStream: dest ? dest.stream : stream, // meter-only mode records the raw mic stream directly
     setNoiseCancel(v) { on = !!v; applyMode(); },
     stop() {
       stopped = true;

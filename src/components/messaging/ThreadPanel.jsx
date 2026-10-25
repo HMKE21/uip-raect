@@ -17,8 +17,8 @@ import { parseServerDate } from '../../utils/serverDate';
 import { useLanguage } from '../../context/LanguageContext';
 import MediaEditorModal, { isEditableMedia } from './MediaEditorModal';
 import VoiceMessage, { isVoiceAttachment } from './VoiceMessage';
-import { createVoiceEngine } from './voiceEngine';
-import { rnnoiseSupported, warmRnnoise } from '../../lib/rnnoise';
+import { createVoiceEngine, voiceConstraints, LIVE_PROCESSING } from './voiceEngine';
+import { warmRnnoise } from '../../lib/rnnoise';
 import { saveAttachmentsToPhone, isAutoSaveOn } from '../../lib/autoSaveMedia';
 import { useCachedVideo } from '../../lib/mediaCache';
 import { isNative, canCacheNatively } from '../../native';
@@ -899,7 +899,7 @@ export default function ThreadPanel({
   const [recordingTime, setRecordingTime] = useState('00:00');
   const [noiseCancel, setNoiseCancel] = useState(() => { try { return localStorage.getItem('uip_voice_nc') !== '0'; } catch { return true; } });
   // fetch the noise-cancelling network ahead of time so the first words of a voice note are cleaned too
-  useEffect(() => { if (noiseCancel) warmRnnoise(); }, [noiseCancel]);
+  useEffect(() => { if (noiseCancel && LIVE_PROCESSING) warmRnnoise(); }, [noiseCancel]);
   const voiceEngineRef = useRef(null);
   const waveCanvasRef = useRef(null);
   const [editIdx, setEditIdx] = useState(null); // index into pendingFiles being previewed/edited
@@ -1187,9 +1187,7 @@ export default function ThreadPanel({
       return;
     }
     navigator.mediaDevices
-      .getUserMedia({ audio: noiseCancel && rnnoiseSupported()
-        ? { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false } // RNNoise cleans it (see voiceEngine)
-        : { channelCount: 1, echoCancellation: true, noiseSuppression: noiseCancel, autoGainControl: noiseCancel } })
+      .getUserMedia({ audio: voiceConstraints(noiseCancel) })
       .then((stream) => {
         recordingStreamRef.current = stream;
         // Explicit codec + a fixed voice bitrate: the browser default can pick a heavy/odd encoding that stutters on playback.
