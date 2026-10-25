@@ -169,10 +169,22 @@ function tuneAudioSdp(sdp) {
  * three 720p streams saturate a home uplink and the packet loss hits the voice first ("robotic" / cutting audio). Voice gets a
  * small fixed budget and top priority; video is capped and shrinks as the room grows. Must run after the local description is set.
  */
+/**
+ * Camera quality tier by room size. In a mesh the browser ENCODES the camera once per other person and DECODES one stream per other
+ * person, so the cost grows with (n-1): at 5 people a laptop was running 4 x 720p30 encoders + 4 decoders, the CPU / uplink saturated,
+ * packets were dropped and the voice froze for everybody. Tiles are small in a big room anyway, so the picture shrinks as people join
+ * (360p at 3 peers, 240p at 4, 180p from 5) and the frame rate drops with it: ~15x less encoding work at 6 people than before.
+ */
+function cameraTier(peerCount) {
+  if (peerCount <= 1) return { scale: 1, fps: 30, bps: 1_500_000 };   // 1:1 — full quality
+  if (peerCount === 2) return { scale: 1.5, fps: 30, bps: 800_000 };  // 480p
+  if (peerCount === 3) return { scale: 2, fps: 24, bps: 450_000 };    // 360p
+  if (peerCount === 4) return { scale: 3, fps: 20, bps: 250_000 };    // 240p
+  return { scale: 4, fps: 15, bps: 150_000 };                         // 180p, 5+ others
+}
+
 async function tuneSenders(pc, peerCount) {
-  // Total video upload budget ~1.6 Mbps split across peers (a typical home / ADSL / mobile uplink is 1-5 Mbps; going over it makes the
-  // router queue packets and the voice stutters, lags and turns robotic). 1 peer: up to 1.5 Mbps, 4 peers: 400 kbps each.
-  const videoCap = Math.max(200000, Math.min(1500000, Math.floor(1600000 / Math.max(1, peerCount))));
+  const tier = cameraTier(peerCount);
   for (const sender of pc.getSenders()) {
     try {
       if (!sender.track) continue;
@@ -180,17 +192,24 @@ async function tuneSenders(pc, peerCount) {
       if (!params.encodings || !params.encodings.length) params.encodings = [{}];
       const enc = params.encodings[0];
       if (sender.track.kind === 'audio') {
+        // the voice always gets its own small, high-priority budget so it survives when video has to back off
         enc.maxBitrate = 64000;
         enc.priority = 'high';
         enc.networkPriority = 'high';
       } else {
         const isScreen = sender.track.contentHint === 'detail'; // only the screen track is tagged 'detail'
-        enc.maxBitrate = isScreen ? Math.max(700000, Math.min(2500000, Math.floor(4000000 / Math.max(1, peerCount)))) : videoCap;
-        enc.networkPriority = isScreen ? 'medium' : 'low';
-        enc.scaleResolutionDownBy = 1;          // never shrink the picture on purpose
-        enc.maxFramerate = isScreen ? 24 : 30;
-        // camera: with 1-2 peers keep it sharp and drop fps first; in bigger rooms let resolution fall too (a 720p picture can't fit 300 kbps)
-        if (sender.track.contentHint !== 'detail') params.degradationPreference = peerCount <= 2 ? 'maintain-resolution' : 'balanced';
+        if (isScreen) {
+          enc.maxBitrate = Math.max(600000, Math.min(2500000, Math.floor(3_000_000 / Math.max(1, peerCount))));
+          enc.networkPriority = 'medium';
+          enc.scaleResolutionDownBy = 1;          // text must stay readable
+          enc.maxFramerate = peerCount >= 4 ? 12 : 24;
+        } else {
+          enc.maxBitrate = tier.bps;
+          enc.networkPriority = 'low';
+          enc.scaleResolutionDownBy = tier.scale;
+          enc.maxFramerate = tier.fps;
+          params.degradationPreference = peerCount <= 2 ? 'maintain-resolution' : 'balanced';
+        }
       }
       await sender.setParameters(params);
     } catch (e) { dbg('sender tuning skipped', e?.message); }
@@ -1197,7 +1216,13 @@ export function useMeetingRoom({
   }, [meetingUuid, guestToken]);
 
   // ---- lightweight connection-quality sampling from getStats() ---------
+  // Old version flagged EVERYONE as "weak network" in a 5-person room although every connection was fine: it took the packet loss
+  // since the call began (not the last few seconds), read RTT from whichever candidate pair happened to be "succeeded" (unused pairs
+  // have a long RTT) and a single noisy sample was enough. Now: only the audio stream decides loss, over the last interval, on the
+  // pair that is really in use, and "poor" needs two bad samples in a row.
   useEffect(() => {
+    const prev = new WeakMap(); // pc -> { lost, recv } at the previous sample
+    let badStreak = 0;
     const timer = setInterval(async () => {
       const peers = Object.values(peersRef.current);
       if (peers.length === 0) return;
@@ -1205,27 +1230,35 @@ export function useMeetingRoom({
       const rank = { excellent: 0, good: 1, poor: 2, reconnecting: 3 };
       for (const pc of peers) {
         try {
+          if (pc.connectionState === 'new' || pc.connectionState === 'connecting') continue; // still joining: no verdict yet
           const stats = await pc.getStats();
-          let rtt = null; let lost = 0; let received = 0;
+          let selectedId = null; let rtt = null; let lost = 0; let recv = 0;
+          const pairs = [];
           stats.forEach((report) => {
-            if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.currentRoundTripTime != null) {
-              rtt = report.currentRoundTripTime;
-            }
-            if (report.type === 'inbound-rtp' && !report.isRemote) {
-              lost += report.packetsLost || 0;
-              received += report.packetsReceived || 0;
+            if (report.type === 'transport' && report.selectedCandidatePairId) selectedId = report.selectedCandidatePairId;
+            if (report.type === 'candidate-pair') pairs.push(report);
+            if (report.type === 'inbound-rtp' && !report.isRemote && (report.kind || report.mediaType) === 'audio') {
+              lost += Math.max(0, report.packetsLost || 0);
+              recv += report.packetsReceived || 0;
             }
           });
-          const lossRatio = received > 0 ? lost / (received + lost) : 0;
+          const active = pairs.find((r) => r.id === selectedId) || pairs.find((r) => r.nominated && r.state === 'succeeded');
+          if (active && active.currentRoundTripTime != null) rtt = active.currentRoundTripTime;
+          const before = prev.get(pc) || { lost: 0, recv: 0 };
+          prev.set(pc, { lost, recv });
+          const dLost = Math.max(0, lost - before.lost); const dRecv = Math.max(0, recv - before.recv);
+          const lossRatio = dRecv + dLost >= 50 ? dLost / (dRecv + dLost) : 0; // needs enough packets in the window to mean anything
           let quality = 'excellent';
-          if (pc.connectionState !== 'connected') quality = 'reconnecting';
-          else if (lossRatio > 0.08 || (rtt != null && rtt > 0.4)) quality = 'poor';
-          else if (lossRatio > 0.02 || (rtt != null && rtt > 0.2)) quality = 'good';
+          if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') quality = 'reconnecting';
+          else if (lossRatio > 0.12 || (rtt != null && rtt > 0.6)) quality = 'poor';
+          else if (lossRatio > 0.04 || (rtt != null && rtt > 0.3)) quality = 'good';
           if (rank[quality] > rank[worst]) worst = quality;
         } catch {
           // getStats() failing on one peer shouldn't block the others.
         }
       }
+      badStreak = worst === 'poor' ? badStreak + 1 : 0;
+      if (worst === 'poor' && badStreak < 2) worst = 'good'; // one bad sample is noise, not a weak network
       signalingApi.connectionQuality(meetingUuid, guestToken, worst).catch(() => {});
     }, 6000);
     return () => clearInterval(timer);
