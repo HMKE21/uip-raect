@@ -577,6 +577,7 @@ export default function MeetingRoomShell({
             win={pip.win}
             people={tiles.all}
             elapsed={elapsed}
+            title={meetingTitle}
             t={t}
             state={{ micEnabled: room.micEnabled, cameraEnabled: room.cameraEnabled, handRaised: room.handRaised, screenSharing: room.screenSharing, unread: unread }}
             actions={{

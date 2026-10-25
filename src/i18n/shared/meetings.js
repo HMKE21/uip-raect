@@ -62,6 +62,7 @@ export default {
   'Presenting': 'يعرض الشاشة',
   'is presenting': 'بيعرض شاشته',
   'You are presenting your screen': 'إنت بتشارك شاشتك',
+  'Everyone in the meeting can see your screen': 'كل اللي في الاجتماع شايفين شاشتك',
   'Everyone in the meeting can see it, even with your camera off.': 'كل اللي في الاجتماع شايفينها، حتى لو الكاميرا مقفولة.',
   'Weak connection': 'اتصال ضعيف',
   "Couldn't open a camera. Check the browser's camera permission and that no other app is using it.": 'مقدرناش نفتح الكاميرا. اتأكد من صلاحية الكاميرا في المتصفح وإن مفيش برنامج تاني بيستخدمها.',
