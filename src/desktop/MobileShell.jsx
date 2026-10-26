@@ -139,7 +139,7 @@ export default function MobileShell(p) {
     brightness, setBrightness, fullscreen, fs, wallpaper, lightWp,
     shortcuts = [], onShortcutOpen, onShortcutRemove,
     widgets = [], newWidgetId = null, onWidgetAdd, onWidgetChange, onWidgetRemove,
-    nc = null, onOpenNotif, onAllNotif, prefs = null, setPrefs = () => {},
+    nc = null, onOpenNotif, onAllNotif, aiEnabled = false, prefs = null, setPrefs = () => {},
     vmApps = [], // virtual mode: the platform's pages ([{ id, en, ar, group }]) — they are apps of this phone too
   } = p;
 
@@ -173,6 +173,7 @@ export default function MobileShell(p) {
 
   // ---- home content ---------------------------------------------------------------------------------------
   const sysApps = useMemo(() => [
+    ...(aiEnabled ? [{ key: 'ai', app: 'ai', label: tt('UIP AI Assistant', 'مساعد UIP الذكي'), run: () => runCommand('ai') }] : []),
     { key: 'explorer', app: 'explorer', label: tt('This PC', 'جهازي'), run: () => openExplorer({}) },
     { key: 'bin', app: 'bin', label: tt('Recycle Bin', 'سلة المحذوفات'), run: () => openExplorer({ view: 'trash' }) },
     { key: 'settings', app: 'settings', label: tt('Settings', 'الإعدادات'), run: () => runCommand('settings') },
@@ -183,7 +184,7 @@ export default function MobileShell(p) {
     { key: 'terminal', app: 'terminal', label: tt('UIP Terminal', 'ترمينال UIP'), run: () => runCommand('terminal') },
     { key: 'taskmgr', app: 'taskmgr', label: tt('Task Manager', 'مدير المهام'), run: () => runCommand('taskmgr') },
     { key: 'portal', app: 'portal', label: tt('UIP Portal', 'بوابة UIP'), run: () => runCommand('portal') },
-  ], [tt, openExplorer, runCommand]);
+  ], [tt, openExplorer, runCommand, aiEnabled]);
   // platform pages as phone apps, grouped like the portal's sidebar; the Dock keeps the four you reach for most
   const vmItems = useMemo(() => vmApps.map((a) => ({ key: a.id, app: a.id, label: ar ? a.ar : a.en, group: a.group, run: () => runCommand(a.id) })), [vmApps, ar, runCommand]);
   const vmGroups = useMemo(() => {
@@ -216,8 +217,8 @@ export default function MobileShell(p) {
   const selNodes = useMemo(() => nodesOf(selIds), [nodesOf, selIds]);
   const usage = desk.usage;
   const dockApps = vmItems.length
-    ? [...['vm:dashboard', 'vm:courses', 'vm:messages'].map((id) => vmItems.find((a) => a.key === id)).filter(Boolean), sysApps.find((a) => a.key === 'explorer')].filter(Boolean)
-    : sysApps.filter((a) => ['explorer', 'bin', 'settings', 'portal'].includes(a.key));
+    ? [...['vm:dashboard', 'vm:courses', 'vm:messages'].map((id) => vmItems.find((a) => a.key === id)).filter(Boolean), sysApps.find((a) => a.key === 'ai') || sysApps.find((a) => a.key === 'explorer')].filter(Boolean)
+    : sysApps.filter((a) => ['ai', 'explorer', 'settings', 'portal'].includes(a.key));
 
   const toggleSel = (id) => setSelIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); if (!n.size) setSelecting(false); return n; });
   const endSelect = () => { setSelecting(false); setSelIds(new Set()); };

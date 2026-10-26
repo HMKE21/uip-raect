@@ -167,7 +167,8 @@ function DashboardShell() {
           layouts/footer.php's <?php if (Session::userId()): ?>
           [data-ai-assistant-root] — every portal that uses DashboardLayout
           gets the widget. */}
-      {user && can('ai.assistant_use') && <AiAssistantWidget role={user.role} user={user} />}
+      {/* inside My PC the desktop mounts its own copy (this page is hidden under it) */}
+      {user && can('ai.assistant_use') && !/\/my-pc(\/|$)/.test(pathname) && <AiAssistantWidget role={user.role} user={user} />}
     </div>
     </PageMetaProvider>
   );

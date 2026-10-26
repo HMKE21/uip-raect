@@ -103,6 +103,7 @@ const TILES = {
   lock: ['#6b7280', '#1f2937', 'lock'],
   logout: ['#fb7185', '#e11d48', 'logout'],
   search: ['#5ac8fa', '#6366f1', 'search'],
+  ai: ['#c084fc', '#6366f1', 'sparkles'],
   viewer: ['#38bdf8', '#2563eb', 'eye'],
   editor: ['#818cf8', '#7c3aed', 'terminal'],
 };

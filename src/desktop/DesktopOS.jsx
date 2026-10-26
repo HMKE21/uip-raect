@@ -13,6 +13,8 @@ import { NotifFlyout, NotifToasts, NotifTray } from './NotificationCenter';
 import { useDesktopNotifications } from './notifications';
 import { lockScroll } from '../lib/scrollLock';
 import { roleHome } from '../config/roleHome';
+import AiAssistantWidget from '../components/ai-assistant/AiAssistantWidget';
+import { OPEN_AI_EVENT } from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { usePageMeta } from '../context/PageMetaContext';
@@ -142,6 +144,7 @@ function planMove(group, layout, dx, dy, cell, size) {
 }
 
 const RUN_ALIASES = {
+  ai: 'ai', assistant: 'ai',
   explorer: 'explorer', 'this pc': 'explorer', thispc: 'explorer', pc: 'explorer', 'جهازي': 'explorer',
   settings: 'settings', control: 'settings', 'الإعدادات': 'settings',
   personalize: 'personalize', 'التخصيص': 'personalize',
@@ -350,6 +353,7 @@ export default function DesktopOS() {
       case 'taskmgr': openApp('taskmgr'); break;
       case 'shortcuts': openApp('shortcuts'); break;
       case 'notes': case 'calendar': case 'calculator': case 'terminal': openApp(id); break;
+      case 'ai': setOverlay(null); window.dispatchEvent(new Event(OPEN_AI_EVENT)); break;
       case 'run': setOverlay('run'); break;
       case 'lock': setOverlay(null); setLocked(true); break;
       case 'sleep': setOverlay(null); sleepRef.current?.(); break;
@@ -1001,6 +1005,7 @@ export default function DesktopOS() {
   const fullscreen = () => { if (document.fullscreenElement) document.exitFullscreen?.(); else document.documentElement.requestFullscreen?.().catch(() => {}); };
 
   const sysApps = useMemo(() => [
+    ...(can('ai.assistant_use') ? [{ id: 'ai', en: 'UIP AI Assistant', ar: 'مساعد UIP الذكي', glyph: 'ai' }] : []),
     { id: 'explorer', en: 'This PC', ar: 'جهازي', glyph: 'explorer' },
     { id: 'bin', en: 'Recycle Bin', ar: 'سلة المحذوفات', glyph: 'bin' },
     { id: 'settings', en: 'Settings', ar: 'الإعدادات', glyph: 'settings' },
@@ -1015,7 +1020,7 @@ export default function DesktopOS() {
     { id: 'lock', en: 'Lock', ar: 'قفل', glyph: 'lock' },
     { id: 'portal', en: 'UIP Portal', ar: 'بوابة UIP', glyph: 'portal' },
     { id: 'logout', en: 'Sign out', ar: 'تسجيل الخروج', glyph: 'logout' },
-  ], []);
+  ], [can]);
   // virtual mode: the platform's pages first (grouped like the sidebar), then the system apps under their own heading
   const startApps = useMemo(() => (virtual
     ? [...VM_APPS.filter((a) => !a.perm || can(a.perm)).map((a) => ({ id: a.id, en: a.en, ar: a.ar, glyph: a.id, group: a.group })), ...sysApps.map((a) => ({ ...a, group: { en: 'My PC & tools', ar: 'جهازي والأدوات' } }))]
@@ -1185,6 +1190,7 @@ export default function DesktopOS() {
         if (overlay === 'notif' && !e.target.closest('.os-fly, .os-tray__notif')) setOverlay(null);
       }}
     >
+      {can('ai.assistant_use') && <AiAssistantWidget role={user?.role} user={user} />}
       {mobile ? (
         <Suspense fallback={null}>
         <MobileShell
@@ -1194,7 +1200,7 @@ export default function DesktopOS() {
           battery={battery} online={online} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale}
           brightness={brightness} setBrightness={(v) => setPrefs({ brightness: v })} fullscreen={fullscreen} fs={fs}
           wallpaper={wallpaperCss(prefs)} lightWp={wp.dark === false}
-          nc={nc} onOpenNotif={openNotif} onAllNotif={notifAll} prefs={prefs} setPrefs={setPrefs}
+          aiEnabled={can('ai.assistant_use')} nc={nc} onOpenNotif={openNotif} onAllNotif={notifAll} prefs={prefs} setPrefs={setPrefs}
           vmApps={virtual ? startApps.filter((x) => isVmApp(x.id)) : []}
           shortcuts={lnkIcons.map((i) => i.lnk)} onShortcutOpen={openShortcut} onShortcutRemove={(n) => removeShortcuts([n.id])}
           widgets={widgets.items} newWidgetId={newWidgetId} onWidgetChange={(id, patch) => widgets.update(id, patch)} onWidgetRemove={removeWidget}

@@ -1,5 +1,5 @@
 /* UIP Desktop — a Windows-style shell around "My PC". Scoped to .os (rendered in a portal on <body>). */
-html.os-active .ai-fab, html.os-active .ai-panel { display: none !important; }
+html.os-active .ai-fab { display: none !important; } /* the assistant opens from the nav / Start menu / App Library instead of its floating button */
 html.os-active body.os-dragging, body.os-dragging { user-select: none; }
 body.os-dragging iframe { pointer-events: none; }
 
