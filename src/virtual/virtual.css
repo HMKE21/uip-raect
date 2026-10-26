@@ -1,7 +1,7 @@
 /* Virtual mode (UIP OS): the platform's pages as windows of the My PC desktop. */
 
 /* ---- a platform page inside a window ------------------------------------------------------------------ */
-.vm-shell.app-shell { display: block; min-height: 0; height: 100%; overflow: auto; background: var(--bg-canvas); color: var(--text-primary); overscroll-behavior: contain; }
+.vm-shell.app-shell { position: relative; display: block; min-height: 0; height: 100%; overflow: auto; background: var(--bg-canvas); color: var(--text-primary); overscroll-behavior: contain; }
 .vm-shell .app-shell__content { min-height: 100%; }
 .vm-shell.app-shell--insight .app-shell__main { padding: 22px 26px 44px; max-width: 1480px; }
 @media (max-width: 760px) { .vm-shell.app-shell--insight .app-shell__main { padding: 16px 14px 32px; } }
@@ -57,3 +57,18 @@
 .vm-welcome__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .vm-welcome__grid button { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border-subtle); background: var(--bg-surface); color: var(--text-primary); cursor: pointer; text-align: start; font: inherit; font-size: 13.5px; }
 .vm-welcome__grid button:hover { border-color: var(--color-primary, #6366f1); }
+
+/* ---- pages that were written for a full browser tab, now living in a window ------------------------------------ */
+/* no top bar here, so nothing should keep room for one */
+.vm-shell { --topbar-height: 0px; --topbar-h: 0px; --safe-top: 0px; --safe-bottom: 0px; }
+/* "Full platform" messenger: it was position:fixed over the whole BROWSER (so it covered the window's title bar and the Dock and
+   ran under the menu bar). In a window it fills the WINDOW instead. */
+html body .vm-shell .msg-app[data-msg-app].is-full {
+  position: absolute !important; inset: 0 !important; z-index: 2; width: auto !important; max-width: none !important;
+  height: auto !important; min-height: 0 !important; padding-top: 0;
+}
+.vm-shell:has(.msg-app[data-msg-app].is-full) { overflow: hidden; }
+/* that rule hides .topbar / .sidebar of the real portal; the desktop's own windows must not be affected by it */
+html body:has(.msg-app[data-msg-app].is-full) .os :is(.topbar, .sidebar, .app-shell__main > .breadcrumb) { visibility: visible; }
+/* wide laptop / monitor: long text pages read better in a column than stretched edge to edge */
+.vm-shell .app-shell__main { margin-inline: auto; }

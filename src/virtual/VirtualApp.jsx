@@ -98,8 +98,27 @@ export default function VirtualApp({ appId, start, nonce, cur, ar, onLocation, o
   const histIndex = useCallback(() => hist.index, [hist]);
 
   const blocked = app?.perm && !can(app.perm);
+  // The page inside runs in a WINDOW, not in the browser: tell its CSS how big that window really is, so `100vh` / `100vw`
+  // (rewritten at build time to calc(N * var(--os-vh|--os-vw, 1vh|1vw)), see vite.config.js) mean "this window".
+  const shellRef = useRef(null);
+  useLayoutEffect(() => {
+    const el = shellRef.current;
+    if (!el) return undefined;
+    const apply = () => {
+      const w = el.clientWidth; const h = el.clientHeight;
+      if (!w || !h) return;
+      el.style.setProperty('--os-vw', `${w / 100}px`);
+      el.style.setProperty('--os-vh', `${h / 100}px`);
+    };
+    apply();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    let raf = 0;
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(apply); });
+    ro.observe(el);
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
+  }, []);
   return (
-    <div className="vm-shell app-shell app-shell--insight app-shell--student" data-portal="student" data-vm-app={app?.key}>
+    <div ref={shellRef} className="vm-shell app-shell app-shell--insight app-shell--student" data-portal="student" data-vm-app={app?.key}>
       <div className="app-shell__content">
         <main className="app-shell__main">
           {blocked ? <NoPermission permission={app.perm} /> : (

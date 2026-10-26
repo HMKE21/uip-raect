@@ -31,8 +31,8 @@ export function wmReducer(s, a) {
       if (ex) return focus(s, ex.id, a.props ? { props: { ...ex.props, ...a.props } } : undefined);
       const { aw, ah } = a.area;
       const size = a.size || { w: 920, h: 600 };
-      const w = Math.min(size.w, aw - 16);
-      const h = Math.min(size.h, ah - 16);
+      const w = Math.min(size.w, Math.round(aw * 0.92)); // restoring on a laptop never gives an edge-to-edge window
+      const h = Math.min(size.h, Math.round(ah * 0.9));
       const step = (s.seq % 7) * 30;
       const x = clamp(Math.round((aw - w) / 2) + step - 90, 8, Math.max(8, aw - w - 8));
       const y = clamp(Math.round((ah - h) / 3) + step - 60, 8, Math.max(8, ah - h - 8));

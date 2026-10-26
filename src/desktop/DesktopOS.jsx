@@ -44,6 +44,14 @@ import { VM_APPS, VM_BY_ID, VM_DESKTOP, VM_DOCK, VM_BY_KEY, deskIconKey, isVmApp
 import { readVirtualCache, takeVirtualOpen, useVirtualMode } from '../virtual/virtualMode';
 
 // Heavy parts load on demand: the file viewer + office editors only when a file is opened, the phone UI only on phones.
+/** Laptop screens: a window that would cover most of the screen anyway opens maximized (page layout = real width, more room).
+ *  Big monitors keep floating windows. */
+const fitsMaximized = (size) => {
+  const w = window.innerWidth; const h = window.innerHeight;
+  if (w < 720) return true;
+  if (w >= 1500) return false;
+  return (size?.w || 0) >= w * 0.66 || (size?.h || 0) >= (h - 112) * 0.86;
+};
 const ViewerWindow = lazy(() => import('./FileWindows').then((m) => ({ default: m.ViewerWindow })));
 const EditorWindow = lazy(() => import('./FileWindows').then((m) => ({ default: m.EditorWindow })));
 const NewFileDialog = lazy(() => import('../components/NewFileDialog'));
@@ -287,7 +295,7 @@ export default function DesktopOS() {
   // ---- windows -----------------------------------------------------------------------------------------
   const openApp = useCallback((app, props, extra = {}) => {
     const def = APPS[app];
-    dispatch({ type: 'open', app, singleton: def.singleton, size: def.size, props, ...extra, maximized: extra.maximized ?? window.innerWidth < 720, area: { aw: window.innerWidth, ah: window.innerHeight - chromeH() } });
+    dispatch({ type: 'open', app, singleton: def.singleton, size: def.size, props, ...extra, maximized: extra.maximized ?? fitsMaximized(def.size), area: { aw: window.innerWidth, ah: window.innerHeight - chromeH() } });
     setOverlay(null);
   }, [dispatch]);
   const openExplorer = useCallback((params = {}) => { setParams(params); openApp('explorer'); }, [openApp, setParams]);
@@ -1134,6 +1142,7 @@ export default function DesktopOS() {
     };
   });
 
+  const hotT = useRef(0);
   const wmax = wm.list.some((w) => w.id === wm.active && w.max && !w.min && (w.d || 0) === (wm.desk || 0));
   useEffect(() => {
     if (!wmax || !dockPeek) return undefined;
@@ -1241,7 +1250,7 @@ export default function DesktopOS() {
       {!mobile && <NotifToasts toasts={nc.toasts} onOpen={openNotif} onClose={nc.dismissToast} tt={tt} />}
 
       <MenuBar ar={ar} tt={tt} menus={menus} tray={tray} onOpen={closeFloating} closeKey={`${overlay || ''}${menu ? 'm' : ''}${dlg ? 'd' : ''}${locked || asleep ? 'l' : ''}`} />
-      {wmax && !dockPeek && <div className="os-dockhot" onPointerEnter={() => setDockPeek(true)} aria-hidden="true" />}
+      {wmax && !dockPeek && <div className="os-dockhot" onPointerEnter={() => { clearTimeout(hotT.current); hotT.current = setTimeout(() => setDockPeek(true), 280); }} onPointerLeave={() => clearTimeout(hotT.current)} aria-hidden="true" />}
       <Dock
         items={dockItems} tt={tt} mag={prefs.dockMag !== false && !prefs.reduceMotion} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}
         onBin={() => runCommand('bin')} binFull={desk.binFull} binLabel={tt('Recycle Bin', 'سلة المحذوفات')}

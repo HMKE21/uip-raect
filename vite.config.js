@@ -15,6 +15,28 @@ const nativeHtml = (mode) => ({
   },
 });
 
+
+// UIP OS: pages run INSIDE desktop windows, so `100vh` / `100vw` must mean "the window", not the browser.
+// Every page stylesheet's viewport units become calc(N * var(--os-vh, 1vh)); VirtualApp sets --os-vh / --os-vw on the window
+// (ResizeObserver), everywhere else the variables are undefined and the fallback is the real viewport unit - nothing changes.
+// The desktop shell itself (src/desktop, src/virtual) keeps real viewport units.
+const UNIT = /(-?\d*\.?\d+)(dvh|svh|lvh|vh|dvw|svw|lvw|vw)\b/g;
+const windowUnits = () => ({
+  postcssPlugin: "uip-window-units",
+  Declaration(decl) {
+    const file = (decl.source && decl.source.input && decl.source.input.file) || "";
+    if (/[\\/]src[\\/](desktop|virtual)[\\/]/.test(file) || /node_modules/.test(file)) return;
+    if (decl.__uipDone || !UNIT.test(decl.value)) { UNIT.lastIndex = 0; return; }
+    UNIT.lastIndex = 0;
+    decl.value = decl.value.replace(UNIT, (m, n, u) => {
+      const axis = u.endsWith("w") ? "w" : "h";
+      return `calc(${n} * var(--os-v${axis}, 1${u}))`;
+    });
+    decl.__uipDone = true;
+  },
+});
+windowUnits.postcss = true;
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const target = env.VITE_API_TARGET || "https://uip-laravel-production.up.railway.app";
@@ -25,6 +47,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), nativeHtml(mode)], // [ANDROID] nativeHtml is a no-op unless --mode native
+    css: { postcss: { plugins: [windowUnits()] } },
     server: { port: 5173, proxy },
     preview: { port: 4173, proxy },
   };
