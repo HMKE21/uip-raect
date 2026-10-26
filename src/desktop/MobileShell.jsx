@@ -12,6 +12,7 @@ import { winTitle } from './wm';
 import { MobileWidgets } from './Widgets';
 import NavSidebar from './NavSidebar';
 import { useVirtualMode } from '../virtual/virtualMode';
+import { isVmApp } from '../virtual/catalog';
 import PhoneClock from './MobileClock';
 import MobilePrefs, { MOBILE_DEFAULTS } from './MobilePrefs';
 import ContentMatches from '../components/ContentMatches';
@@ -167,6 +168,9 @@ export default function MobileShell(p) {
     if (cur.app === 'viewer' || cur.app === 'editor') dispatch({ type: 'close', id: cur.id }); // a file opened from another app: back = return to it
     else goHome();
   }, [cur, dispatch, goHome]);
+  // Platform pages are whole pages with their own polling / realtime listeners: keeping ALL of them alive behind the one on screen is what made the phone crawl.
+  // Only the two most recently used stay mounted (instant switch back); older ones are released and rebuilt on their last page when opened again.
+  const warm = useMemo(() => new Set(wm.list.filter((w) => isVmApp(w.app)).sort((a, b) => b.z - a.z).slice(0, 2).map((w) => w.id)), [wm.list]);
   useBackLayer(!!cur && !switcher && !sheet, back);
   useBackLayer(selecting && !cur && !sheet, () => { setSelecting(false); setSelIds(new Set()); });
   useEffect(() => { if (cur) { setSelecting(false); setSelIds(new Set()); } }, [cur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -527,6 +531,7 @@ export default function MobileShell(p) {
       {/* ── apps: one full-screen layer per open window; only the active one is visible, the others keep their state ── */}
       {wm.list.map((w) => {
         const on = !!cur && cur.id === w.id;
+        if (!on && isVmApp(w.app) && !warm.has(w.id)) return null;
         const media = w.app === 'viewer' || w.app === 'editor';
         return (
           <section key={w.id} className={`mos-app${on ? ' is-on' : ''}${media ? ' mos-app--media' : ''}`} hidden={!on} aria-hidden={!on}>

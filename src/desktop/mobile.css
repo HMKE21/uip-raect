@@ -130,10 +130,10 @@
 /* ── apps (full-screen, one layer per open window) ── */
 .mos-app {
   position: absolute; z-index: 40; inset: 0; display: flex; flex-direction: column; color: var(--g-fg); background: var(--panel);
-  padding-bottom: calc(var(--mos-gest-h) + var(--mos-bot)); animation: mos-app-in .22s cubic-bezier(.2, .8, .2, 1) both;
+  padding-bottom: calc(var(--mos-gest-h) + var(--mos-bot)); animation: mos-app-in .14s ease-out both;
 }
 .mos-app[hidden] { display: none; }
-@keyframes mos-app-in { from { opacity: 0; transform: translateY(26px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes mos-app-in { from { opacity: 0; } to { opacity: 1; } } /* opacity only: sliding + scaling a whole page made the open feel stuck on phones */
 .mos-app__bar {
   flex: 0 0 auto; display: flex; align-items: center; gap: 4px; min-height: calc(52px + var(--mos-top)); padding: var(--mos-top) 6px 0;
   background: var(--bar); border-bottom: 1px solid var(--g-line);
@@ -452,3 +452,34 @@
 .mps-reset { align-self: center; display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; padding: 10px 18px; border: 0; border-radius: 12px; background: transparent; color: var(--g-mute); font: inherit; font-weight: 700; font-size: 13px; }
 .mps-reset:active { background: var(--g-hover); }
 @media (max-width: 360px) { .mps-clocks { grid-template-columns: repeat(3, 1fr); } }
+
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+   PERFORMANCE (phones). Live blur (backdrop-filter) re-blurs everything behind the element on every frame — dozens of
+   them on the home screen, in the dock, in sheets and inside the embedded pages made scrolling and opening apps stutter.
+   Everything under .os--mobile now uses plain translucent fills instead (same look, a fraction of the GPU cost).
+   ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════ */
+.os--mobile, .os--mobile *, .os--mobile *::before, .os--mobile *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+
+/* glass surfaces get a little more opacity to stay readable without the blur */
+.mos { --mos-glass: color-mix(in srgb, var(--panel) 94%, transparent); }
+.mos-widget, .mclk--digital, .mclk--analog { background: rgba(255, 255, 255, .24); box-shadow: 0 4px 14px rgba(0, 0, 0, .16); }
+.mos-search, .mos-lib__search { background: rgba(255, 255, 255, .28); }
+.mos-dock { background: rgba(255, 255, 255, .3); box-shadow: 0 4px 16px rgba(0, 0, 0, .22); }
+.mos-lib__grid { background: rgba(255, 255, 255, .26); }
+.mos-dots { background: rgba(0, 0, 0, .3); }
+.mos-switch { background: rgba(8, 10, 22, .88); }
+.mos.is-lightwp .mos-widget, .mos.is-lightwp .mos-search, .mos.is-lightwp .mos-dock { background: rgba(255, 255, 255, .72); }
+.mos-actbar { box-shadow: 0 4px 16px rgba(0, 0, 0, .25); }
+.mos-sheet { box-shadow: 0 -4px 20px rgba(0, 0, 0, .3); }
+.mos-card { box-shadow: 0 6px 20px rgba(0, 0, 0, .4); }
+
+/* one drop-shadow filter per icon (dozens of them) is costly to repaint while scrolling; the label already has a text-shadow */
+.mos-ic__g { filter: none; }
+
+/* while an app covers the screen nothing behind it needs to be painted */
+.mos.has-app .os-wall { visibility: hidden; }
+.mos.has-app .mos-pager { visibility: hidden; }
+
+/* long lists inside sheets / the library: skip layout + paint for rows that are off screen */
+.mos-sheet__body > .mos-row { content-visibility: auto; contain-intrinsic-size: auto 56px; }

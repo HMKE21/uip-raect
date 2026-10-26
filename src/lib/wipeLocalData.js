@@ -26,7 +26,7 @@ async function wipeAsync() {
   try {
     if (typeof indexedDB !== 'undefined') {
       const list = typeof indexedDB.databases === 'function' ? await indexedDB.databases().catch(() => []) : [];
-      const names = new Set([...(list || []).map((d) => d && d.name).filter(Boolean), 'uip-drafts']);
+      const names = new Set([...(list || []).map((d) => d && d.name).filter(Boolean), 'uip-drafts', 'uip-thumbs']);
       names.forEach((name) => jobs.push(new Promise((res) => {
         try { const rq = indexedDB.deleteDatabase(name); rq.onsuccess = rq.onerror = rq.onblocked = () => res(); } catch { res(); }
       })));

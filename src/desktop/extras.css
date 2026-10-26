@@ -32,3 +32,9 @@
 .os--hc button:focus-visible, .os--hc input:focus-visible, .os--hc textarea:focus-visible, .os--hc [tabindex]:focus-visible { outline: 3px solid var(--os-accent); outline-offset: 2px; }
 .os--hc .os-seg button.is-on, .os--hc .os-btn--primary, .os--hc .mp-btn--primary { outline: 2px solid var(--g-fg); }
 .os--hc .os-set__hint, .os--hc small { color: var(--g-mute); }
+
+
+/* PERFORMANCE: the boot screen stays in the page after it fades out — its two infinite animations (logo float, loading bar) kept running for the whole session */
+.os-boot.is-done, .os-boot.is-done * { animation: none !important; }
+/* the Explorer's folder pane blurred a big area at 44px; a lighter blur looks the same and costs far less (phones use no blur at all, see mobile.css) */
+.os:not(.os--mobile) .mp-side { -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); }

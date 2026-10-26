@@ -16,21 +16,68 @@ const EXT_COLOR = { pdf: '#e5484d', doc: '#2b6cdf', docx: '#2b6cdf', txt: '#6474
 /* ── real previews for pictures and videos, so they are told apart at a glance (every other file keeps its coloured type icon) ── */
 const THUMB_IMG = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif']);
 const THUMB_VID = new Set(['mp4', 'webm', 'mov', 'm4v', 'ogv']);
-const THUMB_MAX = { image: 12 * 1024 * 1024, video: 60 * 1024 * 1024 }; // bigger files keep the type icon (no huge downloads for an icon)
+/* Phones (and any touch device): no video previews, small images only — a preview must never cost more than the icon is worth. */
+const isPhone = () => {
+  try { const f = localStorage.getItem('uip.os.layout'); if (f === 'mobile') return true; if (f === 'desktop') return false; } catch { /* storage blocked */ }
+  return !!window.matchMedia?.('(max-width: 820px), (pointer: coarse) and (max-height: 520px)').matches;
+};
+const THUMB_MAX_DESK = { image: 12 * 1024 * 1024, video: 24 * 1024 * 1024 }; // bigger files keep the type icon (no huge downloads for an icon)
+const THUMB_MAX_PHONE = { image: 4 * 1024 * 1024, video: 0 };
+const thumbMax = (kind) => (isPhone() ? THUMB_MAX_PHONE : THUMB_MAX_DESK)[kind];
 const THUMBS = new Map(); // key -> data URL ('' = no preview possible)
 const THUMB_JOBS = new Map(); // key -> Promise
 let thumbRunning = 0; const thumbQueue = [];
-const thumbSlot = () => new Promise((res) => { const go = () => { thumbRunning += 1; res(); }; if (thumbRunning < 2) go(); else thumbQueue.push(go); });
+const thumbLimit = () => (isPhone() ? 1 : 2);
+const thumbSlot = () => new Promise((res) => { const go = () => { thumbRunning += 1; res(); }; if (thumbRunning < thumbLimit()) go(); else thumbQueue.push(go); });
 const thumbFree = () => { thumbRunning -= 1; thumbQueue.shift()?.(); };
 const thumbKey = (n) => `${n.id}:${n.size_bytes ?? ''}:${n.updated_at ?? n.version ?? ''}`;
+/** Wait for an idle moment, so generating previews never competes with scrolling / opening an app. */
+const idle = () => new Promise((res) => { if (typeof requestIdleCallback === 'function') requestIdleCallback(() => res(), { timeout: 1500 }); else setTimeout(res, 60); });
+
+/* Previews are remembered on this device (IndexedDB 'uip-thumbs'): the full file is downloaded ONCE, not on every visit.
+   The key holds id + size + modified time, so an edited file gets a new preview. "Sign out and erase" removes the database. */
+let thumbDb = null;
+const openThumbDb = () => {
+  if (!thumbDb) {
+    thumbDb = new Promise((res) => {
+      try {
+        const rq = indexedDB.open('uip-thumbs', 1);
+        rq.onupgradeneeded = () => { try { rq.result.createObjectStore('t'); } catch { /* exists */ } };
+        rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null); rq.onblocked = () => res(null);
+      } catch { res(null); }
+    });
+  }
+  return thumbDb;
+};
+const cacheGet = async (key) => {
+  const db = await openThumbDb(); if (!db) return undefined;
+  return new Promise((res) => { try { const rq = db.transaction('t').objectStore('t').get(key); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(undefined); } catch { res(undefined); } });
+};
+const cachePut = async (key, val) => {
+  const db = await openThumbDb(); if (!db || !val) return;
+  try { db.transaction('t', 'readwrite').objectStore('t').put(val, key); } catch { /* quota / closed: the preview is simply regenerated next time */ }
+};
 
 function drawThumb(src, w, h) {
-  const max = 220; const k = Math.min(1, max / Math.max(w, h));
+  const max = isPhone() ? 150 : 220; const k = Math.min(1, max / Math.max(w, h));
   const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w * k)); c.height = Math.max(1, Math.round(h * k));
   c.getContext('2d').drawImage(src, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', 0.82);
+  return c.toDataURL('image/jpeg', isPhone() ? 0.7 : 0.82);
 }
-function imageThumb(blob) {
+async function imageThumb(blob) {
+  // decode straight to a small bitmap: a 12 MP photo is never fully decoded (that is what froze phones)
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const max = isPhone() ? 150 : 220;
+      const probe = await createImageBitmap(blob);
+      const k = Math.min(1, max / Math.max(probe.width, probe.height));
+      const w = Math.max(1, Math.round(probe.width * k)); const h = Math.max(1, Math.round(probe.height * k));
+      probe.close?.();
+      const bmp = await createImageBitmap(blob, { resizeWidth: w, resizeHeight: h, resizeQuality: 'medium' });
+      const out = drawThumb(bmp, bmp.width, bmp.height); bmp.close?.();
+      return out;
+    } catch { /* fall back to <img> below (e.g. svg / unsupported option) */ }
+  }
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob); const img = new Image();
     img.onload = () => { try { resolve(drawThumb(img, img.naturalWidth, img.naturalHeight)); } catch { resolve(''); } URL.revokeObjectURL(url); };
@@ -41,7 +88,7 @@ function imageThumb(blob) {
 function videoThumb(blob, ext) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(new Blob([blob], { type: blob.type && blob.type.startsWith('video/') ? blob.type : (ext === 'webm' ? 'video/webm' : 'video/mp4') }));
-    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'auto';
+    const v = document.createElement('video'); v.muted = true; v.playsInline = true; v.preload = 'metadata';
     let done = false;
     const end = (out) => { if (done) return; done = true; clearTimeout(t); URL.revokeObjectURL(url); v.removeAttribute('src'); v.load(); resolve(out); };
     const t = setTimeout(() => end(''), 9000);
@@ -55,11 +102,14 @@ function getThumb(node, kind, ext, key) {
   if (THUMBS.has(key)) return Promise.resolve(THUMBS.get(key));
   if (!THUMB_JOBS.has(key)) {
     const job = (async () => {
+      const saved = await cacheGet(key);
+      if (saved) { THUMBS.set(key, saved); THUMB_JOBS.delete(key); return saved; }
       await thumbSlot();
       try {
+        await idle();
         const blob = await fetchDriveBlob(node.id);
         const out = kind === 'video' ? await videoThumb(blob, ext) : await imageThumb(blob);
-        THUMBS.set(key, out); return out;
+        THUMBS.set(key, out); cachePut(key, out); return out;
       } catch { THUMBS.set(key, ''); return ''; } finally { thumbFree(); THUMB_JOBS.delete(key); }
     })();
     THUMB_JOBS.set(key, job);
@@ -73,6 +123,7 @@ function MediaThumb({ node, size, kind, ext, color }) {
   const [src, setSrc] = useState(() => THUMBS.get(key) || '');
   useEffect(() => {
     if (THUMBS.has(key)) { setSrc(THUMBS.get(key)); return undefined; }
+    setSrc('');
     let dead = false; let io = null;
     const run = () => getThumb(node, kind, ext, key).then((u) => { if (!dead) setSrc(u); });
     if (typeof IntersectionObserver === 'undefined' || !ref.current) run();
@@ -104,8 +155,11 @@ export function NodeGlyph({ node, size }) {
   const e = extOf(node.name);
   const color = EXT_COLOR[e] || '#64748b';
   const kind = THUMB_IMG.has(e) ? 'image' : THUMB_VID.has(e) ? 'video' : null;
-  const big = Number(node.size_bytes) > THUMB_MAX[kind || 'image'];
-  if (kind && size >= 30 && !big) return <MediaThumb node={node} size={size} kind={kind} ext={e} color={color} />;
+  const phone = isPhone();
+  // phone: only the big home-screen icons get a real preview (small rows in sheets / search keep the type icon), and never videos
+  const room = size >= (phone ? 44 : 30);
+  const big = kind ? (kind === 'video' && phone) || Number(node.size_bytes) > thumbMax(kind) : false;
+  if (kind && room && !big) return <MediaThumb node={node} size={size} kind={kind} ext={e} color={color} />;
   return <FileGlyph size={size} label={e} color={color} />;
 }
 
