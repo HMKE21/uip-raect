@@ -347,11 +347,18 @@ function Whiteboard({ store, t, isManager, onClose }) {
 
   /* ---------- export ---------- */
   const exportPng = () => {
-    const all = store.list(); const b = contentBounds(all) || { x1: 0, y1: 0, x2: size.current.w, y2: size.current.h };
-    const pad = 40; const scale = 2; const W = Math.min(8000, Math.ceil((b.x2 - b.x1 + pad * 2) * scale)); const H = Math.min(8000, Math.ceil((b.y2 - b.y1 + pad * 2) * scale));
+    const all = store.list();
+    // Export what is on screen (the whole visible board) PLUS any content outside it, instead of cropping to the drawn
+    // objects only — a board holding just a name used to download as a tiny cut-out of that name.
+    const v = view.current; const vp = { x1: -v.x / v.z, y1: -v.y / v.z, x2: (size.current.w - v.x) / v.z, y2: (size.current.h - v.y) / v.z };
+    const cb = contentBounds(all);
+    const pad = cb ? 40 : 0;
+    const b = cb ? { x1: Math.min(vp.x1, cb.x1 - pad), y1: Math.min(vp.y1, cb.y1 - pad), x2: Math.max(vp.x2, cb.x2 + pad), y2: Math.max(vp.y2, cb.y2 + pad) } : vp;
+    const scale = Math.min(2, 8000 / Math.max(1, b.x2 - b.x1), 8000 / Math.max(1, b.y2 - b.y1));
+    const W = Math.max(1, Math.ceil((b.x2 - b.x1) * scale)); const H = Math.max(1, Math.ceil((b.y2 - b.y1) * scale));
     const c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-    ctx.setTransform(scale, 0, 0, scale, (-b.x1 + pad) * scale, (-b.y1 + pad) * scale);
+    ctx.setTransform(scale, 0, 0, scale, -b.x1 * scale, -b.y1 * scale);
     all.forEach((o) => drawObject(ctx, o));
     if (dark) { const d = document.createElement('canvas'); d.width = W; d.height = H; const dc = d.getContext('2d'); dc.filter = 'invert(1) hue-rotate(180deg)'; dc.drawImage(c, 0, 0); dc.filter = 'none'; c.getContext('2d').setTransform(1, 0, 0, 1, 0, 0); c.getContext('2d').drawImage(d, 0, 0); }
     c.toBlob((blob) => {
