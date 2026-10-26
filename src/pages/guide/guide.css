@@ -124,6 +124,8 @@
 .gd-hero__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .gd-hero__intro { position: relative; max-width: 860px; font-size: 15px; line-height: 1.85; opacity: .96; }
 .gd-hero__intro p { margin: 0; }
+/* the global `p { color: var(--text-secondary) }` and `.gd-rich { color: var(--text-primary) }` beat the hero's inherited white, so the subtitle and intro were grey on the purple gradient */
+.gd-hero .gd-hero__sub, .gd-hero .gd-hero__intro, .gd-hero .gd-hero__intro p, .gd-hero .gd-hero__intro li, .gd-hero .gd-hero__intro strong { color: #fff; }
 .gd-hero__meta { position: relative; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .gd-stat { display: inline-flex; align-items: baseline; gap: 7px; padding: 9px 16px; border-radius: 14px; background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.22); }
 .gd-stat strong { font-size: 22px; font-family: var(--font-display); line-height: 1; }
@@ -421,7 +423,7 @@ button.gd-item__toggle:hover .gd-item__title { color: var(--color-primary); }
   .gd-sec__tools, .gd-item__chev, .gd-task__go, .gd-task__tools { display: none !important; }
   .gd-layout { display: block; }
   .gd-hero { color: #000; background: none !important; box-shadow: none; border: 1px solid #999; border-radius: 8px; padding: 16px; }
-  .gd-hero h1, .gd-hero__intro, .gd-hero__sub { color: #000; }
+  .gd-hero h1, .gd-hero__intro, .gd-hero__sub, .gd-hero .gd-hero__sub, .gd-hero .gd-hero__intro, .gd-hero .gd-hero__intro p, .gd-hero .gd-hero__intro li, .gd-hero .gd-hero__intro strong { color: #000; }
   .gd-stat { background: none; border-color: #999; color: #000; }
   .gd-item__panel { grid-template-rows: 1fr !important; }
   .gd-item, .gd-task { break-inside: avoid; box-shadow: none !important; }

@@ -483,3 +483,14 @@
 
 /* long lists inside sheets / the library: skip layout + paint for rows that are off screen */
 .mos-sheet__body > .mos-row { content-visibility: auto; contain-intrinsic-size: auto 56px; }
+
+/* ── platform pages (Guide, Messages, Courses…) inside the phone shell ───────────────────────────────────────────── */
+/* the messages wall animated two full-screen layers forever (a masked dot pattern + moving glows): constant repaint on a phone */
+.os--mobile .msg-app[data-wall-anim] .msg-thread::before, .os--mobile .msg-app[data-wall-anim] .msg-thread::after { animation: none !important; will-change: auto !important; }
+/* chips / badges pop in on mount: dozens at once when a page opens */
+.os--mobile .vm-shell :where(.badge, .st-pill, .pill, .adm-chip, .um-chip, .sa-chip, .fd-chip, .sec-chip, .pol-chip, .sf-chip, .sl-badge, .qb-chip, .dr-chip, .pm-chip, .quick-link-pill, .active-chip, .ru-chip, .uf-pill, .uf-chip, .msg-chip) { animation: none !important; }
+/* big soft shadows + decorative glow on the hero of the guide */
+.os--mobile .gd-hero { box-shadow: 0 4px 14px rgba(var(--color-primary-rgb), .22); }
+.os--mobile .gd-hero__glow { display: none; }
+/* the guide is a very long page: only lay out / paint the sections near the screen */
+.os--mobile .vm-shell .gd-sec { content-visibility: auto; contain-intrinsic-size: auto 480px; }
