@@ -10,6 +10,8 @@ import { Clock, NodeGlyph } from './shell';
 import { APPS } from './apps';
 import { winTitle } from './wm';
 import { MobileWidgets } from './Widgets';
+import NavSidebar from './NavSidebar';
+import { useVirtualMode } from '../virtual/virtualMode';
 import ContentMatches from '../components/ContentMatches';
 import { useContentSearch } from '../lib/useContentSearch';
 import './mobile.css';
@@ -138,6 +140,10 @@ export default function MobileShell(p) {
     vmApps = [], // virtual mode: the platform's pages ([{ id, en, ar, group }]) — they are apps of this phone too
   } = p;
 
+  const vm = useVirtualMode(); // UIP OS: the whole platform as apps of this phone
+  const [vmErr, setVmErr] = useState('');
+  const showPlatform = vm.supported && (vm.available || vm.enabled);
+  const [navCollapsed, setNavCollapsed] = useState([]);
   const [sheet, setSheet] = useState(null); // { type: 'new' | 'item' | 'move' | 'cc' | 'search' | 'desk', node?, nodes? }
   const [switcher, setSwitcher] = useState(false);
   const [selecting, setSelecting] = useState(false);
@@ -177,6 +183,18 @@ export default function MobileShell(p) {
     vmItems.forEach((a) => { const k = a.group?.en || 'Apps'; if (!m.has(k)) m.set(k, { k, title: ar ? (a.group?.ar || k) : k, items: [] }); m.get(k).items.push(a); });
     return [...m.values()];
   }, [vmItems, ar]);
+  const navApps = useMemo(() => [
+    ...vmApps.map((a) => ({ id: a.id, en: a.en, ar: a.ar, glyph: a.id, group: a.group })),
+    ...sysApps.filter((a) => a.key !== 'portal').map((a) => ({ id: a.key, en: a.label, ar: a.label, glyph: a.app, group: { en: 'My PC & tools', ar: 'جهازي والأدوات' } })),
+  ], [vmApps, sysApps]);
+  const navWins = useMemo(() => wm.list.map((w) => ({ id: w.id, app: w.app, label: winTitle(w, APPS, ar), active: wm.active === w.id && !w.min, min: !!w.min })), [wm.list, wm.active, ar]);
+  const runNavApp = useCallback((a) => { const it = [...vmItems, ...sysApps].find((x) => x.key === a.id); if (it) it.run(); }, [vmItems, sysApps]);
+  const toggleNavGroup = useCallback((k) => setNavCollapsed((c) => (c.includes(k) ? c.filter((x) => x !== k) : [...c, k])), []);
+  const switchPlatform = useCallback(async (on) => {
+    setVmErr('');
+    try { await vm.setEnabled(on); setSheet(on ? { type: 'nav' } : null); } catch (e) { setVmErr(e?.message || tt('Could not change the mode. Try again.', 'مقدرناش نغيّر الوضع. جرّب تاني.')); }
+  }, [vm, tt]);
+  const openPlatform = () => { setVmErr(''); setSheet({ type: vm.enabled ? 'nav' : 'uipos' }); };
   const files = useMemo(() => [...deskItems].sort((a, b) => (a.type === b.type ? String(a.name).localeCompare(String(b.name), undefined, { numeric: true }) : a.type === 'folder' ? -1 : 1)), [deskItems]);
   const folders = useMemo(() => files.filter((n) => n.type === 'folder'), [files]);
   const nodesOf = useCallback((ids) => files.filter((n) => ids.has(n.id)), [files]);
@@ -263,9 +281,23 @@ export default function MobileShell(p) {
                 <small dir="auto">{usage ? tt(`${usage.used_human} of ${usage.quota_human} used`, `${usage.used_human} من ${usage.quota_human}`) : tt('Your files', 'ملفاتك')}</small>
               </div>
             </section>
-            <button type="button" className="mos-search" onClick={() => setSheet({ type: 'search' })}>
-              <Icon name="search" size={18} /><span>{tt('Search apps and files', 'ابحث في التطبيقات والملفات')}</span>
-            </button>
+            <div className="mos-searchrow">
+              <button type="button" className="mos-search" onClick={() => setSheet({ type: 'search' })}>
+                <Icon name="search" size={18} /><span>{tt('Search apps and files', 'ابحث في التطبيقات والملفات')}</span>
+              </button>
+              {showPlatform && (
+                <button type="button" className={`mos-platbtn${vm.enabled ? ' is-on' : ''}`} onClick={openPlatform} aria-label={vm.enabled ? tt('Platform pages', 'صفحات المنصة') : tt('Enter UIP OS', 'الدخول إلى UIP OS')}>
+                  <Icon name="grid" size={20} />
+                </button>
+              )}
+            </div>
+            {showPlatform && !vm.enabled && (
+              <button type="button" className="mos-uipos" onClick={openPlatform}>
+                <span className="mos-uipos__ic"><Icon name="grid" size={22} /></span>
+                <span className="mos-uipos__tx"><b>{tt('Enter UIP OS', 'ادخل UIP OS')}</b><small>{tt('Courses, exams, grades and messages as apps on this phone', 'المواد والامتحانات والدرجات والرسائل كتطبيقات جوه الموبايل')}</small></span>
+                <Icon name={ar ? 'chevron-left' : 'chevron-right'} size={18} />
+              </button>
+            )}
             <MobileWidgets items={widgets} ar={ar} focusId={newWidgetId} onChange={onWidgetChange} onRemove={onWidgetRemove} />
           </>
         )}
@@ -437,9 +469,40 @@ export default function MobileShell(p) {
             <Icon name="sun" size={18} />
             <input type="range" min="40" max="100" value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} aria-label={tt('Brightness', 'السطوع')} />
           </label>
+          {showPlatform && <Row icon="grid" label={vm.enabled ? tt('Platform pages', 'صفحات المنصة') : tt('Enter UIP OS', 'ادخل UIP OS')} sub={vm.enabled ? undefined : tt('The whole platform inside My PC', 'المنصة كلها جوه جهازي')} onClick={() => setSheet({ type: vm.enabled ? 'nav' : 'uipos' })} />}
           <Row icon="settings" label={tt('Settings', 'الإعدادات')} onClick={after(() => runCommand('settings'))} />
+          {vm.enabled && <Row icon="logout" label={tt('Leave UIP OS', 'الخروج من UIP OS')} sub={tt('Back to the normal portal', 'الرجوع للمنصة العادية')} onClick={() => switchPlatform(false)} />}
           <Row icon="home" label={tt('Back to the portal', 'الرجوع للبوابة')} onClick={after(() => runCommand('portal'))} />
           <Row icon="logout" label={tt('Sign out', 'تسجيل الخروج')} onClick={after(() => runCommand('logout'))} />
+        </Sheet>
+      )}
+
+      {sheet?.type === 'nav' && (
+        <Sheet tall onClose={closeSheet}>
+          <NavSidebar
+            variant="sheet" ar={ar} tt={tt} apps={navApps} wins={navWins} pinned={false} collapsed={navCollapsed} onToggleGroup={toggleNavGroup}
+            onOpenApp={runNavApp} onFocusWin={(id) => dispatch({ type: 'focus', id })} onCloseWin={(id) => dispatch({ type: 'close', id })}
+            onClose={closeSheet} onDesktop={goHome} onSpotlight={() => setTimeout(() => setSheet({ type: 'search' }), 0)}
+          />
+        </Sheet>
+      )}
+
+      {sheet?.type === 'uipos' && (
+        <Sheet onClose={closeSheet}>
+          <div className="mos-uiposhero">
+            <span className="mos-uiposhero__ic"><Icon name="grid" size={30} /></span>
+            <h3 dir="auto">{tt('UIP OS — the platform inside My PC', 'UIP OS — المنصة جوه جهازي')}</h3>
+            <p dir="auto">{tt('Every page of the platform becomes an app on this phone, next to your files: courses, exams, grades, messages and projects.', 'كل صفحات المنصة بتبقى تطبيقات على الموبايل جنب ملفاتك: المواد والامتحانات والدرجات والرسائل والمشاريع.')}</p>
+            <ul>
+              <li><Icon name="check-circle" size={15} />{tt('One list to reach any page', 'قائمة واحدة توصّلك لأي صفحة')}</li>
+              <li><Icon name="check-circle" size={15} />{tt('Follows you to every device', 'بتتابعك على أي جهاز')}</li>
+              <li><Icon name="check-circle" size={15} />{tt('Switch back any time from Control centre', 'ترجع للعادي في أي وقت من مركز التحكم')}</li>
+            </ul>
+            {vmErr && <p className="mos-uiposhero__err" role="alert">{vmErr}</p>}
+            <button type="button" className="mos-uiposhero__go" disabled={vm.busy || !vm.available} onClick={() => switchPlatform(true)}>
+              {vm.busy ? tt('Please wait…', 'ثانية واحدة…') : tt('Enter UIP OS', 'ادخل UIP OS')}
+            </button>
+          </div>
         </Sheet>
       )}
 

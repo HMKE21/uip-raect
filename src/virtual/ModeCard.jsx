@@ -65,7 +65,7 @@ export default function ModeCard({ onDone, inDesktop = false }) {
           <li><Icon name="check-circle" size={14} /> {tt('Several pages side by side, snap & virtual desktops', 'أكتر من صفحة جنب بعض، وSnap وأسطح مكتب متعددة')}</li>
           <li><Icon name="check-circle" size={14} /> {tt('Follows you to every device — switch back any time', 'بتتابعك على أي جهاز — وترجع للعادي في أي وقت')}</li>
         </ul>
-        {mobile && <p className="vm-card__note">{tt('On phones the normal portal is used — it already has a phone layout.', 'على الموبايل بتتفتح المنصة العادية — لأن ليها واجهة موبايل جاهزة.')}</p>}
+        {mobile && <p className="vm-card__note">{tt('On phones, UIP OS lives inside My PC: open My PC and tap the apps button.', 'على الموبايل، UIP OS بيشتغل جوه «جهازي»: افتح جهازي واضغط زرار التطبيقات.')}</p>}
         {unavailable && <p className="vm-card__note vm-card__note--warn">{tt('Virtual mode is not available for your account right now.', 'الوضع الافتراضي مش متاح لحسابك حاليًا.')}</p>}
         {err && <p className="vm-card__note vm-card__note--err" role="alert">{err}</p>}
         <div className="vm-card__btns">

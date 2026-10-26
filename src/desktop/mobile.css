@@ -285,3 +285,38 @@
 .mos-sec { margin-bottom: 14px; }
 .mos-sec__t { margin: 6px 6px 10px; font-size: 12.5px; font-weight: 700; letter-spacing: .02em; color: var(--mos-text); opacity: .8; text-shadow: 0 1px 4px rgba(0, 0, 0, .35); }
 .mos.is-lightwp .mos-sec__t { text-shadow: none; }
+
+/* ── UIP OS entry (platform button, promo card, intro sheet) ── */
+.mos-searchrow { display: flex; gap: 10px; align-items: stretch; }
+.mos-searchrow .mos-search { flex: 1; min-width: 0; }
+.mos-platbtn {
+  flex: none; width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%; color: var(--mos-text); border: .5px solid rgba(255, 255, 255, .3);
+  background: rgba(255, 255, 255, .16); -webkit-backdrop-filter: blur(24px) saturate(170%); backdrop-filter: blur(24px) saturate(170%); transition: transform .12s;
+}
+.mos-platbtn.is-on { background: var(--os-accent); border-color: transparent; color: #fff; box-shadow: 0 6px 18px color-mix(in srgb, var(--os-accent) 50%, transparent); }
+.mos-platbtn:active { transform: scale(.9); }
+.mos.is-lightwp .mos-platbtn:not(.is-on) { background: rgba(255, 255, 255, .55); border-color: rgba(255, 255, 255, .7); }
+.mos-uipos {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin-top: 10px; padding: 12px 14px; border-radius: 20px; color: #fff; text-align: start; border: 0;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--os-accent) 85%, #fff), var(--os-accent) 55%, color-mix(in srgb, var(--os-accent) 70%, #000));
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--os-accent) 45%, transparent);
+}
+.mos-uipos:active { transform: scale(.985); }
+.mos-uipos__ic { flex: none; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 14px; background: rgba(255, 255, 255, .22); }
+.mos-uipos__tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mos-uipos__tx b { font-size: 15px; font-weight: 800; }
+.mos-uipos__tx small { font-size: 12px; opacity: .88; line-height: 1.4; }
+.mos-uiposhero { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 14px 16px; text-align: center; }
+.mos-uiposhero__ic { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 22px; color: #fff; background: linear-gradient(145deg, color-mix(in srgb, var(--os-accent) 70%, #fff), var(--os-accent)); box-shadow: 0 10px 26px color-mix(in srgb, var(--os-accent) 45%, transparent); }
+.mos-uiposhero h3 { margin: 4px 0 0; font-size: 18px; font-weight: 800; }
+.mos-uiposhero p { margin: 0; color: var(--g-mute); font-size: 14px; line-height: 1.6; }
+.mos-uiposhero ul { list-style: none; margin: 4px 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 8px; text-align: start; }
+.mos-uiposhero li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--panel-2); font-size: 13.5px; }
+.mos-uiposhero li svg { flex: none; color: var(--os-accent); }
+.mos-uiposhero__err { color: #ef4444 !important; }
+.mos-uiposhero__go { width: 100%; height: 52px; margin-top: 4px; border: 0; border-radius: 16px; color: #fff; font-size: 16px; font-weight: 800; background: var(--os-accent); box-shadow: 0 8px 22px color-mix(in srgb, var(--os-accent) 45%, transparent); }
+.mos-uiposhero__go:disabled { opacity: .55; }
+.mos-uiposhero__go:active:not(:disabled) { transform: scale(.98); }
+/* the navigation panel as a sheet fills the tall sheet's body */
+.mos-sheet.is-tall .mos-sheet__body:has(.os-nav--sheet) { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.mos-sheet__body > .os-nav--sheet { flex: 1; min-height: 0; }
