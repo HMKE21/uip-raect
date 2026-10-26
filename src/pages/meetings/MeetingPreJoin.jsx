@@ -92,7 +92,8 @@ export default function MeetingPreJoin() {
     api.get(`/api/v1/meetings/join/${encodeURIComponent(joinToken)}/info`)
       .then((json) => {
         if (cancelled) return;
-        const data = json.data;
+        const data = json?.data;
+        if (!data) throw new Error(t('Could not load the meeting. Please try again.'));
         setInfo(data);
         if (!data.joinable) {
           setPhase('unavailable');
@@ -260,6 +261,7 @@ export default function MeetingPreJoin() {
       streamRef.current?.getTracks().forEach((tr) => tr.stop());
       streamRef.current = null;
 
+      if (!json?.data) throw new Error(t('Could not join right now. Please try again.'));
       if (json.data.status === 'admitted') {
         handleAdmitted(json.data.guest_token);
       } else {
@@ -299,7 +301,7 @@ export default function MeetingPreJoin() {
       const qs = guestToken ? `?guest_token=${encodeURIComponent(guestToken)}` : '';
       api.get(`/api/v1/meetings/join/${encodeURIComponent(joinToken)}/request/${waitingRequestId}/status${qs}`)
         .then((json) => {
-          if (cancelled) return;
+          if (cancelled || !json?.data) return;
           if (json.data.status === 'admitted') handleAdmitted();
           else if (json.data.status === 'rejected') setPhase('rejected');
         })

@@ -303,6 +303,14 @@ async function rawRequest(method, path, { params, body, formData, headers, asRes
   }
 
   const json = await response.json();
+  // Framework-level errors (e.g. Laravel's own throttle 429) come back as JSON WITHOUT `success:false`. They used to be
+  // returned as if they succeeded, so callers crashed with "Cannot read properties of undefined (reading 'status')".
+  if (!response.ok && json && json.success !== true && json.success !== false) {
+    const friendly = response.status === 429
+      ? msg('Too many attempts. Please wait a moment and try again.', 'محاولات كتير. استنى لحظة وحاول تاني.')
+      : (json.message || `Request failed (${response.status})`);
+    throw new ApiError(friendly, response.status, json);
+  }
   if (json && json.success === false) {
     if (response.status === 403 && json.errors?.code === 'device_blocked') notifyDeviceBlocked(json);
     if (response.status === 403 && json.errors?.code === 'mfa_setup_required') notifyMfaRequired(json);
