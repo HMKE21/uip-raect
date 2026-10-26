@@ -135,6 +135,7 @@ export default function MobileShell(p) {
     shortcuts = [], onShortcutOpen, onShortcutRemove,
     widgets = [], newWidgetId = null, onWidgetAdd, onWidgetChange, onWidgetRemove,
     nc = null, onOpenNotif, onAllNotif,
+    vmApps = [], // virtual mode: the platform's pages ([{ id, en, ar, group }]) — they are apps of this phone too
   } = p;
 
   const [sheet, setSheet] = useState(null); // { type: 'new' | 'item' | 'move' | 'cc' | 'search' | 'desk', node?, nodes? }
@@ -169,12 +170,21 @@ export default function MobileShell(p) {
     { key: 'taskmgr', app: 'taskmgr', label: tt('Task Manager', 'مدير المهام'), run: () => runCommand('taskmgr') },
     { key: 'portal', app: 'portal', label: tt('UIP Portal', 'بوابة UIP'), run: () => runCommand('portal') },
   ], [tt, openExplorer, runCommand]);
+  // platform pages as phone apps, grouped like the portal's sidebar; the Dock keeps the four you reach for most
+  const vmItems = useMemo(() => vmApps.map((a) => ({ key: a.id, app: a.id, label: ar ? a.ar : a.en, group: a.group, run: () => runCommand(a.id) })), [vmApps, ar, runCommand]);
+  const vmGroups = useMemo(() => {
+    const m = new Map();
+    vmItems.forEach((a) => { const k = a.group?.en || 'Apps'; if (!m.has(k)) m.set(k, { k, title: ar ? (a.group?.ar || k) : k, items: [] }); m.get(k).items.push(a); });
+    return [...m.values()];
+  }, [vmItems, ar]);
   const files = useMemo(() => [...deskItems].sort((a, b) => (a.type === b.type ? String(a.name).localeCompare(String(b.name), undefined, { numeric: true }) : a.type === 'folder' ? -1 : 1)), [deskItems]);
   const folders = useMemo(() => files.filter((n) => n.type === 'folder'), [files]);
   const nodesOf = useCallback((ids) => files.filter((n) => ids.has(n.id)), [files]);
   const selNodes = useMemo(() => nodesOf(selIds), [nodesOf, selIds]);
   const usage = desk.usage;
-  const dockApps = sysApps.filter((a) => ['explorer', 'bin', 'settings', 'portal'].includes(a.key));
+  const dockApps = vmItems.length
+    ? [...['vm:dashboard', 'vm:courses', 'vm:messages'].map((id) => vmItems.find((a) => a.key === id)).filter(Boolean), sysApps.find((a) => a.key === 'explorer')].filter(Boolean)
+    : sysApps.filter((a) => ['explorer', 'bin', 'settings', 'portal'].includes(a.key));
 
   const toggleSel = (id) => setSelIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); if (!n.size) setSelecting(false); return n; });
   const endSelect = () => { setSelecting(false); setSelIds(new Set()); };
@@ -260,6 +270,15 @@ export default function MobileShell(p) {
           </>
         )}
 
+        {!selecting && vmGroups.map((g) => (
+          <section key={g.k} className="mos-sec" aria-label={g.title}>
+            <h3 className="mos-sec__t" dir="auto">{g.title}</h3>
+            <div className="mos-grid">
+              {g.items.map((a) => <HomeIcon key={a.key} label={a.label} glyph={<AppGlyph app={a.app} size={SYS_GLYPH} />} onTap={a.run} />)}
+            </div>
+          </section>
+        ))}
+        {!selecting && vmGroups.length > 0 && <h3 className="mos-sec__t" dir="auto">{tt('My PC & tools', 'جهازي والأدوات')}</h3>}
         <div className="mos-grid" onPointerDown={() => {}}>
           {!selecting && sysApps.map((a) => (
             <HomeIcon key={a.key} label={a.label} glyph={<AppGlyph app={a.app} size={SYS_GLYPH} full={a.key === 'bin' ? desk.binFull : undefined} />} onTap={a.run} />
@@ -426,7 +445,7 @@ export default function MobileShell(p) {
 
       {sheet?.type === 'search' && (
         <SearchSheet
-          tt={tt} ar={ar} apps={sysApps} files={files} onClose={closeSheet}
+          tt={tt} ar={ar} apps={[...vmItems, ...sysApps]} files={files} onClose={closeSheet}
           onApp={(a) => { setSheet(null); a.run(); }} onNode={(n) => { setSheet(null); openNode(n); }}
         />
       )}
