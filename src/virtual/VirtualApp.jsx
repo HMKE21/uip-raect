@@ -54,7 +54,7 @@ const toPath = (to) => (typeof to === 'string' ? to : `${to.pathname || ''}${to.
 export default function VirtualApp({ appId, start, nonce, cur, ar, onLocation, onOpenPath, onLeave, onTab }) {
   const app = VM_BY_ID[appId];
   const { can } = useAuth();
-  const [hist] = useState(() => createMemoryHistory({ initialEntries: [cur || start || app?.route || '/student/dashboard'] }));
+  const [hist] = useState(() => createMemoryHistory({ initialEntries: [cur || start || app?.route || '/student/dashboard'], v5Compat: true })); // v5Compat: without it the history never calls listen() — links inside a window changed the address but the page stayed the same
   const [state, setState] = useState({ action: hist.action, location: hist.location });
   useLayoutEffect(() => hist.listen(setState), [hist]);
   const [bump, setBump] = useState(0);
