@@ -12,6 +12,8 @@ import { winTitle } from './wm';
 import { MobileWidgets } from './Widgets';
 import NavSidebar from './NavSidebar';
 import { useVirtualMode } from '../virtual/virtualMode';
+import PhoneClock from './MobileClock';
+import MobilePrefs, { MOBILE_DEFAULTS } from './MobilePrefs';
 import ContentMatches from '../components/ContentMatches';
 import { useContentSearch } from '../lib/useContentSearch';
 import './mobile.css';
@@ -25,7 +27,8 @@ export { useIsMobileOS } from './useIsMobileOS';
    long-press + multi-select instead of right-click / drag. All data / actions come from <DesktopOS> (same drive API, same windows).
    ────────────────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-const SYS_GLYPH = 52;
+const GLYPH_SIZES = { s: 46, m: 56, l: 66 };
+const buzz = (on, ms = 8) => { if (on) navigator.vibrate?.(ms); };
 
 /** Tap + long-press (touch friendly; the native context menu is suppressed). */
 function usePress(onTap, onLong) {
@@ -136,11 +139,16 @@ export default function MobileShell(p) {
     brightness, setBrightness, fullscreen, fs, wallpaper, lightWp,
     shortcuts = [], onShortcutOpen, onShortcutRemove,
     widgets = [], newWidgetId = null, onWidgetAdd, onWidgetChange, onWidgetRemove,
-    nc = null, onOpenNotif, onAllNotif,
+    nc = null, onOpenNotif, onAllNotif, prefs = null, setPrefs = () => {},
     vmApps = [], // virtual mode: the platform's pages ([{ id, en, ar, group }]) — they are apps of this phone too
   } = p;
 
   const vm = useVirtualMode(); // UIP OS: the whole platform as apps of this phone
+  const pv = (k) => (prefs && prefs[k] !== undefined ? prefs[k] : MOBILE_DEFAULTS[k]);
+  const pages = pv('mHome') === 'pages';
+  const gs = GLYPH_SIZES[pv('mIcon')] || 56;
+  const haptics = !!pv('mHaptics');
+  const island = !!pv('mIsland');
   const [vmErr, setVmErr] = useState('');
   const showPlatform = vm.supported && (vm.available || vm.enabled);
   const [navCollapsed, setNavCollapsed] = useState([]);
@@ -195,6 +203,13 @@ export default function MobileShell(p) {
     try { await vm.setEnabled(on); setSheet(on ? { type: 'nav' } : null); } catch (e) { setVmErr(e?.message || tt('Could not change the mode. Try again.', 'مقدرناش نغيّر الوضع. جرّب تاني.')); }
   }, [vm, tt]);
   const openPlatform = () => { setVmErr(''); setSheet({ type: vm.enabled ? 'nav' : 'uipos' }); };
+  // ---- Dynamic Island: a pill that grows when a notification arrives (or when tapped) ----------------------------
+  const [islandOpen, setIslandOpen] = useState(false);
+  const lastUnread = useRef(nc?.unread || 0);
+  const islandTimer = useRef(null);
+  const popIsland = useCallback((ms = 3200) => { setIslandOpen(true); clearTimeout(islandTimer.current); islandTimer.current = setTimeout(() => setIslandOpen(false), ms); }, []);
+  useEffect(() => { const u = nc?.unread || 0; if (u > lastUnread.current && island) { popIsland(); buzz(haptics, 14); } lastUnread.current = u; }, [nc?.unread, island, haptics, popIsland]);
+  useEffect(() => () => clearTimeout(islandTimer.current), []);
   const files = useMemo(() => [...deskItems].sort((a, b) => (a.type === b.type ? String(a.name).localeCompare(String(b.name), undefined, { numeric: true }) : a.type === 'folder' ? -1 : 1)), [deskItems]);
   const folders = useMemo(() => files.filter((n) => n.type === 'folder'), [files]);
   const nodesOf = useCallback((ids) => files.filter((n) => ids.has(n.id)), [files]);
@@ -246,13 +261,176 @@ export default function MobileShell(p) {
     { icon: 'moon', label: tt('Sleep', 'سكون'), on: false, run: () => { setSheet(null); runCommand('sleep'); } },
   ];
 
+  // ---- the "Today" block: clock, storage, platform entry, widgets ------------------------------------------------
+  const storageEl = pv('mStorage') && (
+    <div className="mos-widget__st mos-widget__st--solo">
+      <div className="mos-bar"><i style={{ width: `${Math.min(100, usage?.percent || 0)}%` }} /></div>
+      <small dir="auto">{usage ? tt(`${usage.used_human} of ${usage.quota_human} used`, `${usage.used_human} من ${usage.quota_human}`) : tt('Your files', 'ملفاتك')}</small>
+    </div>
+  );
+  const clockKind = pv('mClock');
+  const todayBlock = (clockKind === 'digital' && !pages) ? (
+    <section className="mos-widget">
+      <Clock ar={ar} big />
+      {pv('mStorage') && <div className="mos-widget__st"><div className="mos-bar"><i style={{ width: `${Math.min(100, usage?.percent || 0)}%` }} /></div><small dir="auto">{usage ? tt(`${usage.used_human} of ${usage.quota_human} used`, `${usage.used_human} من ${usage.quota_human}`) : tt('Your files', 'ملفاتك')}</small></div>}
+    </section>
+  ) : (
+    <>
+      <PhoneClock ar={ar} kind={clockKind} />
+      {storageEl && <section className="mos-widget mos-widget--slim">{storageEl}</section>}
+    </>
+  );
+  const searchRow = (
+    <div className="mos-searchrow">
+      <button type="button" className="mos-search" onClick={() => setSheet({ type: 'search' })}>
+        <Icon name="search" size={18} /><span>{tt('Search apps and files', 'ابحث في التطبيقات والملفات')}</span>
+      </button>
+      {showPlatform && (
+        <button type="button" className={`mos-platbtn${vm.enabled ? ' is-on' : ''}`} onClick={openPlatform} aria-label={vm.enabled ? tt('Platform pages', 'صفحات المنصة') : tt('Enter UIP OS', 'الدخول إلى UIP OS')}>
+          <Icon name="grid" size={20} />
+        </button>
+      )}
+    </div>
+  );
+  const uiposCard = showPlatform && !vm.enabled && (
+    <button type="button" className="mos-uipos" onClick={openPlatform}>
+      <span className="mos-uipos__ic"><Icon name="grid" size={22} /></span>
+      <span className="mos-uipos__tx"><b>{tt('Enter UIP OS', 'ادخل UIP OS')}</b><small>{tt('Courses, exams, grades and messages as apps on this phone', 'المواد والامتحانات والدرجات والرسائل كتطبيقات جوه الموبايل')}</small></span>
+      <Icon name={ar ? 'chevron-left' : 'chevron-right'} size={18} />
+    </button>
+  );
+
+  // ---- swipe pages (iPhone style) ---------------------------------------------------------------------------
+  const pagerRef = useRef(null); const todayRef = useRef(null);
+  const [dim, setDim] = useState({ w: 390, h: 560, t: 0 });
+  const [pg, setPg] = useState(0);
+  useEffect(() => {
+    if (!pages) return undefined;
+    const upd = () => setDim({ w: pagerRef.current?.clientWidth || 390, h: pagerRef.current?.clientHeight || 560, t: todayRef.current?.offsetHeight || 0 });
+    upd();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(upd) : null;
+    if (ro) { if (pagerRef.current) ro.observe(pagerRef.current); if (todayRef.current) ro.observe(todayRef.current); }
+    window.addEventListener('resize', upd);
+    return () => { ro?.disconnect(); window.removeEventListener('resize', upd); };
+  }, [pages, selecting, clockKind, widgets.length, showPlatform, vm.enabled, pv('mStorage')]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cols = dim.w < 340 ? 3 : 4;
+  const rowH = gs + (pv('mLabels') ? 40 : 10) + 14;
+  const rowsAll = Math.max(1, Math.floor((dim.h - 8) / rowH));
+  const rowsLeft0 = Math.max(0, rowsAll - Math.ceil((dim.t + 14) / rowH));
+  const pageItems = useMemo(() => {
+    if (!pages) return [];
+    const out = [];
+    vmItems.forEach((a) => out.push({ key: a.key, label: a.label, glyph: <AppGlyph app={a.app} size={gs} />, onTap: a.run }));
+    sysApps.forEach((a) => out.push({ key: a.key, label: a.label, glyph: <AppGlyph app={a.app} size={gs} full={a.key === 'bin' ? desk.binFull : undefined} />, onTap: a.run }));
+    if (!selecting) shortcuts.forEach((n) => out.push({ key: `lnk${n.id}`, label: n.name, glyph: <span className="mos-lnk"><NodeGlyph node={n} size={gs} /><i aria-hidden="true"><Icon name="external-link" size={13} /></i></span>, onTap: () => onShortcutOpen?.(n), onLong: () => setSheet({ type: 'lnk', node: n }) }));
+    files.forEach((n) => out.push({ key: `f${n.id}`, label: n.name, glyph: <NodeGlyph node={n} size={gs} />, node: n }));
+    return out;
+  }, [pages, vmItems, sysApps, shortcuts, files, gs, desk.binFull, selecting, onShortcutOpen]);
+  const pageData = useMemo(() => {
+    const cap0 = rowsLeft0 * cols; const capN = rowsAll * cols; const res = [pageItems.slice(0, cap0)];
+    for (let i = cap0; i < pageItems.length; i += capN) res.push(pageItems.slice(i, i + capN));
+    return res;
+  }, [pageItems, rowsLeft0, rowsAll, cols]);
+  const libOn = pv('mLibrary') && !selecting;
+  const pageCount = pageData.length + (libOn ? 1 : 0);
+  const rtl = !!ar;
+  const goPage = (i) => { const el = pagerRef.current; if (!el) return; el.scrollTo({ left: (rtl ? -1 : 1) * i * el.clientWidth, behavior: 'smooth' }); };
+  const lastPg = useRef(0); const raf = useRef(0);
+  const onPagerScroll = () => {
+    cancelAnimationFrame(raf.current);
+    raf.current = requestAnimationFrame(() => { const el = pagerRef.current; if (!el) return; const i = Math.round(Math.abs(el.scrollLeft) / Math.max(1, el.clientWidth)); if (i !== lastPg.current) { lastPg.current = i; buzz(haptics, 6); setPg(i); } });
+  };
+  const libGroups = useMemo(() => {
+    if (!pages) return [];
+    const g = vmGroups.map((x) => ({ k: x.k, title: x.title, items: x.items.map((a) => ({ key: a.key, label: a.label, glyph: (z) => <AppGlyph app={a.app} size={z} />, onTap: a.run })) }));
+    g.push({ k: 'sys', title: tt('My PC & tools', 'جهازي والأدوات'), items: sysApps.map((a) => ({ key: a.key, label: a.label, glyph: (z) => <AppGlyph app={a.app} size={z} full={a.key === 'bin' ? desk.binFull : undefined} />, onTap: a.run })) });
+    if (files.length) g.push({ k: 'files', title: tt('Files', 'الملفات'), items: files.slice(0, 40).map((n) => ({ key: `f${n.id}`, label: n.name, glyph: (z) => <NodeGlyph node={n} size={z} />, onTap: () => openNode(n) })) });
+    return g;
+  }, [pages, vmGroups, sysApps, files, desk.binFull, tt, openNode]);
+
+  const pagesMain = (
+    <main className="mos-home mos-home--pages" aria-hidden={!!cur} {...(!cur ? { onContextMenu: (e) => e.preventDefault() } : null)} style={{ '--mos-cols': cols, '--mos-gs': `${gs}px` }}>
+      {selecting && (
+        <div className="mos-selbar mos-selbar--top">
+          <button type="button" onClick={endSelect} aria-label={tt('Cancel', 'إلغاء')}><Icon name="x" size={20} /></button>
+          <strong>{tt(`${selIds.size} selected`, `${selIds.size} محدد`)}</strong>
+          <button type="button" onClick={() => setSelIds(new Set(files.map((n) => n.id)))}>{tt('All', 'الكل')}</button>
+        </div>
+      )}
+      <div className="mos-pager" ref={pagerRef} onScroll={onPagerScroll}>
+        {pageData.map((items, pi) => (
+          <section key={pi} className="mos-page" aria-label={tt(`Page ${pi + 1}`, `صفحة ${pi + 1}`)}>
+            {pi === 0 && !selecting && (
+              <div className="mos-today" ref={todayRef}>
+                {todayBlock}
+                {uiposCard}
+                <MobileWidgets items={widgets} ar={ar} focusId={newWidgetId} onChange={onWidgetChange} onRemove={onWidgetRemove} />
+              </div>
+            )}
+            <div className="mos-page__grid">
+              {items.map((it) => it.node ? (
+                <HomeIcon key={it.key} label={it.label} glyph={it.glyph} selecting={selecting} checked={selIds.has(it.node.id)} cut={clip?.mode === 'cut' && clip.ids.includes(it.node.id)} onTap={() => tapNode(it.node)} onLong={() => longNode(it.node)} />
+              ) : <HomeIcon key={it.key} label={it.label} glyph={it.glyph} onTap={it.onTap} onLong={it.onLong} />)}
+            </div>
+            {pi === 0 && desk.ready && !files.length && !selecting && <p className="mos-empty">{tt('Your desktop is empty. Tap + to add a file or folder.', 'سطح المكتب فاضي. اضغط + لإضافة ملف أو مجلد.')}</p>}
+            {pi === 0 && desk.error && <button type="button" className="mos-warn" onClick={reloadDesk}>{tt('Could not load your files — tap to retry.', 'مقدرتش أحمّل ملفاتك — اضغط للمحاولة.')}</button>}
+          </section>
+        ))}
+        {libOn && (
+          <section className="mos-page mos-page--lib" aria-label={tt('App Library', 'مكتبة التطبيقات')}>
+            <button type="button" className="mos-lib__search" onClick={() => setSheet({ type: 'search' })}><Icon name="search" size={17} /><span>{tt('App Library', 'مكتبة التطبيقات')}</span></button>
+            <div className="mos-lib">
+              {libGroups.map((g) => {
+                const big = g.items.length > 4; const shown = big ? g.items.slice(0, 3) : g.items;
+                return (
+                  <div key={g.k} className="mos-lib__card">
+                    <div className="mos-lib__grid">
+                      {shown.map((it) => <button key={it.key} type="button" className="mos-lib__ic" onClick={it.onTap} aria-label={it.label}>{it.glyph(34)}</button>)}
+                      {big && (
+                        <button type="button" className="mos-lib__more" onClick={() => setSheet({ type: 'libgroup', g })} aria-label={tt(`${g.title}: all`, `${g.title}: الكل`)}>
+                          {g.items.slice(3, 7).map((it) => <i key={it.key}>{it.glyph(15)}</i>)}
+                        </button>
+                      )}
+                    </div>
+                    <h5 dir="auto" onClick={() => setSheet({ type: 'libgroup', g })}>{g.title}</h5>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+      </div>
+      {!selecting && (
+        <div className="mos-pagebar">
+          {pageCount > 1 && (
+            <div className="mos-dots" role="tablist" aria-label={tt('Pages', 'الصفحات')}>
+              {Array.from({ length: pageCount }, (_, i) => (
+                <button key={i} type="button" role="tab" aria-selected={pg === i} className={pg === i ? 'is-on' : ''} onClick={() => goPage(i)} aria-label={tt(`Page ${i + 1}`, `صفحة ${i + 1}`)} />
+              ))}
+            </div>
+          )}
+          {searchRow}
+        </div>
+      )}
+      <div className="mos-home__pad mos-home__pad--pages" />
+    </main>
+  );
+
   return (
-    <div className={`mos${cur ? ' has-app' : ''}${lightWp ? ' is-lightwp' : ''}`}>
+    <div className={`mos${cur ? ' has-app' : ''}${lightWp ? ' is-lightwp' : ''}${island ? ' has-island' : ''}${pages ? ' is-pages' : ''}${pv('mLabels') ? '' : ' no-labels'}${pv('mDock') === 'solid' ? ' dock-solid' : ''}`}>
       <div className="os-wall" style={{ background: wallpaper }} />
 
       {/* ── status bar ── */}
       <header className="mos-status" onClick={() => setSheet({ type: 'cc' })} role="button" tabIndex={0} aria-label={tt('Control centre', 'مركز التحكم')}>
         <Clock ar={ar} />
+        {island && (
+          <button type="button" className={`mos-island${islandOpen ? ' is-open' : ''}${nc?.unread ? ' has-unread' : ''}`} aria-label={tt('Notifications', 'الإشعارات')}
+            onClick={(e) => { e.stopPropagation(); if (islandOpen && nc?.unread) { setIslandOpen(false); setSheet({ type: 'notif' }); } else popIsland(); }}>
+            <i className="mos-island__cam" aria-hidden="true" />
+            <span className="mos-island__tx">{nc?.unread ? tt(`${nc.unread} new`, `${nc.unread} إشعار جديد`) : tt('No new notifications', 'مفيش إشعارات جديدة')}</span>
+            <Icon name="bell" size={14} />
+          </button>
+        )}
         <span className="mos-status__sp" />
         {nc && (
           <button type="button" className="mos-status__bell" aria-label={tt('Notifications', 'الإشعارات')} onClick={(e) => { e.stopPropagation(); setSheet({ type: 'notif' }); }}>
@@ -265,6 +443,7 @@ export default function MobileShell(p) {
       </header>
 
       {/* ── home ── */}
+      {pages ? pagesMain : (
       <main className="mos-home" aria-hidden={!!cur} {...(!cur ? { onContextMenu: (e) => e.preventDefault() } : null)}>
         {selecting ? (
           <div className="mos-selbar">
@@ -274,30 +453,9 @@ export default function MobileShell(p) {
           </div>
         ) : (
           <>
-            <section className="mos-widget">
-              <Clock ar={ar} big />
-              <div className="mos-widget__st">
-                <div className="mos-bar"><i style={{ width: `${Math.min(100, usage?.percent || 0)}%` }} /></div>
-                <small dir="auto">{usage ? tt(`${usage.used_human} of ${usage.quota_human} used`, `${usage.used_human} من ${usage.quota_human}`) : tt('Your files', 'ملفاتك')}</small>
-              </div>
-            </section>
-            <div className="mos-searchrow">
-              <button type="button" className="mos-search" onClick={() => setSheet({ type: 'search' })}>
-                <Icon name="search" size={18} /><span>{tt('Search apps and files', 'ابحث في التطبيقات والملفات')}</span>
-              </button>
-              {showPlatform && (
-                <button type="button" className={`mos-platbtn${vm.enabled ? ' is-on' : ''}`} onClick={openPlatform} aria-label={vm.enabled ? tt('Platform pages', 'صفحات المنصة') : tt('Enter UIP OS', 'الدخول إلى UIP OS')}>
-                  <Icon name="grid" size={20} />
-                </button>
-              )}
-            </div>
-            {showPlatform && !vm.enabled && (
-              <button type="button" className="mos-uipos" onClick={openPlatform}>
-                <span className="mos-uipos__ic"><Icon name="grid" size={22} /></span>
-                <span className="mos-uipos__tx"><b>{tt('Enter UIP OS', 'ادخل UIP OS')}</b><small>{tt('Courses, exams, grades and messages as apps on this phone', 'المواد والامتحانات والدرجات والرسائل كتطبيقات جوه الموبايل')}</small></span>
-                <Icon name={ar ? 'chevron-left' : 'chevron-right'} size={18} />
-              </button>
-            )}
+            {todayBlock}
+            {searchRow}
+            {uiposCard}
             <MobileWidgets items={widgets} ar={ar} focusId={newWidgetId} onChange={onWidgetChange} onRemove={onWidgetRemove} />
           </>
         )}
@@ -306,21 +464,21 @@ export default function MobileShell(p) {
           <section key={g.k} className="mos-sec" aria-label={g.title}>
             <h3 className="mos-sec__t" dir="auto">{g.title}</h3>
             <div className="mos-grid">
-              {g.items.map((a) => <HomeIcon key={a.key} label={a.label} glyph={<AppGlyph app={a.app} size={SYS_GLYPH} />} onTap={a.run} />)}
+              {g.items.map((a) => <HomeIcon key={a.key} label={a.label} glyph={<AppGlyph app={a.app} size={gs} />} onTap={a.run} />)}
             </div>
           </section>
         ))}
         {!selecting && vmGroups.length > 0 && <h3 className="mos-sec__t" dir="auto">{tt('My PC & tools', 'جهازي والأدوات')}</h3>}
         <div className="mos-grid" onPointerDown={() => {}}>
           {!selecting && sysApps.map((a) => (
-            <HomeIcon key={a.key} label={a.label} glyph={<AppGlyph app={a.app} size={SYS_GLYPH} full={a.key === 'bin' ? desk.binFull : undefined} />} onTap={a.run} />
+            <HomeIcon key={a.key} label={a.label} glyph={<AppGlyph app={a.app} size={gs} full={a.key === 'bin' ? desk.binFull : undefined} />} onTap={a.run} />
           ))}
           {!selecting && shortcuts.map((n) => (
-            <HomeIcon key={`lnk${n.id}`} label={n.name} glyph={<span className="mos-lnk"><NodeGlyph node={n} size={SYS_GLYPH} /><i aria-hidden="true"><Icon name="external-link" size={13} /></i></span>} onTap={() => onShortcutOpen?.(n)} onLong={() => setSheet({ type: 'lnk', node: n })} />
+            <HomeIcon key={`lnk${n.id}`} label={n.name} glyph={<span className="mos-lnk"><NodeGlyph node={n} size={gs} /><i aria-hidden="true"><Icon name="external-link" size={13} /></i></span>} onTap={() => onShortcutOpen?.(n)} onLong={() => setSheet({ type: 'lnk', node: n })} />
           ))}
           {files.map((n) => (
             <HomeIcon
-              key={n.id} label={n.name} glyph={<NodeGlyph node={n} size={SYS_GLYPH} />} selecting={selecting} checked={selIds.has(n.id)}
+              key={n.id} label={n.name} glyph={<NodeGlyph node={n} size={gs} />} selecting={selecting} checked={selIds.has(n.id)}
               cut={clip?.mode === 'cut' && clip.ids.includes(n.id)} onTap={() => tapNode(n)} onLong={() => longNode(n)}
             />
           ))}
@@ -331,6 +489,7 @@ export default function MobileShell(p) {
         {desk.error && <button type="button" className="mos-warn" onClick={reloadDesk}>{tt('Could not load your files — tap to retry.', 'مقدرتش أحمّل ملفاتك — اضغط للمحاولة.')}</button>}
         <div className="mos-home__pad" />
       </main>
+      )}
 
       {/* ── dock + add button (home only) ── */}
       {!cur && !selecting && (
@@ -469,11 +628,26 @@ export default function MobileShell(p) {
             <Icon name="sun" size={18} />
             <input type="range" min="40" max="100" value={brightness} onChange={(e) => setBrightness(Number(e.target.value))} aria-label={tt('Brightness', 'السطوع')} />
           </label>
+          <Row icon="palette" label={tt('Phone look', 'مظهر الهاتف')} sub={tt('Layout, clock, icons, Dynamic Island', 'الشكل، الساعة، الأيقونات، الجزيرة')} onClick={() => setSheet({ type: 'phoneset' })} />
           {showPlatform && <Row icon="grid" label={vm.enabled ? tt('Platform pages', 'صفحات المنصة') : tt('Enter UIP OS', 'ادخل UIP OS')} sub={vm.enabled ? undefined : tt('The whole platform inside My PC', 'المنصة كلها جوه جهازي')} onClick={() => setSheet({ type: vm.enabled ? 'nav' : 'uipos' })} />}
           <Row icon="settings" label={tt('Settings', 'الإعدادات')} onClick={after(() => runCommand('settings'))} />
           {vm.enabled && <Row icon="logout" label={tt('Leave UIP OS', 'الخروج من UIP OS')} sub={tt('Back to the normal portal', 'الرجوع للمنصة العادية')} onClick={() => switchPlatform(false)} />}
           <Row icon="home" label={tt('Back to the portal', 'الرجوع للبوابة')} onClick={after(() => runCommand('portal'))} />
           <Row icon="logout" label={tt('Sign out', 'تسجيل الخروج')} onClick={after(() => runCommand('logout'))} />
+        </Sheet>
+      )}
+
+      {sheet?.type === 'phoneset' && (
+        <Sheet tall title={tt('Phone look', 'مظهر الهاتف')} onClose={closeSheet}>
+          <MobilePrefs prefs={prefs} setPrefs={setPrefs} tt={tt} ar={ar} />
+        </Sheet>
+      )}
+
+      {sheet?.type === 'libgroup' && (
+        <Sheet tall title={sheet.g.title} onClose={closeSheet}>
+          <div className="mos-grid mos-grid--sheet">
+            {sheet.g.items.map((it) => <HomeIcon key={it.key} label={it.label} glyph={it.glyph(gs)} onTap={() => { setSheet(null); it.onTap(); }} />)}
+          </div>
         </Sheet>
       )}
 

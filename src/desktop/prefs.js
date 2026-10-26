@@ -1,6 +1,6 @@
 import { VM_DESK_ICONS, VM_DOCK_ICONS } from '../virtual/catalog';
 const prefsKey = (uid) => `uip_desktop_prefs_v1_${uid ?? 'anon'}`; // per account: another student on the same browser never inherits it
-export const DEFAULT_PREFS = { wallpaper: 'sequoia', customWallpaper: null, accent: '#0a84ff', iconSize: 'm', dockMag: true, openMax: true, brightness: 100, hiddenIcons: [], hiddenDock: [], shortcuts: [], fontScale: 'm', reduceMotion: false, highContrast: false };
+export const DEFAULT_PREFS = { wallpaper: 'sequoia', customWallpaper: null, accent: '#0a84ff', iconSize: 'm', dockMag: true, openMax: true, brightness: 100, hiddenIcons: [], hiddenDock: [], shortcuts: [], fontScale: 'm', reduceMotion: false, highContrast: false, mHome: 'pages', mClock: 'ios', mIcon: 'm', mLabels: true, mIsland: true, mLibrary: true, mStorage: true, mDock: 'glass', mHaptics: true };
 /** macOS accent palette (blue, purple, pink, red, orange, yellow, green, graphite) + the old UIP indigo. */
 export const ACCENTS = ['#0a84ff', '#bf5af2', '#ff375f', '#ff453a', '#ff9f0a', '#ffd60a', '#30d158', '#8e8e93', '#6366f1'];
 

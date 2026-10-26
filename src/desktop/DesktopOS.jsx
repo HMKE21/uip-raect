@@ -1194,7 +1194,7 @@ export default function DesktopOS() {
           battery={battery} online={online} theme={theme} toggleTheme={toggleTheme} toggleLocale={toggleLocale}
           brightness={brightness} setBrightness={(v) => setPrefs({ brightness: v })} fullscreen={fullscreen} fs={fs}
           wallpaper={wallpaperCss(prefs)} lightWp={wp.dark === false}
-          nc={nc} onOpenNotif={openNotif} onAllNotif={notifAll}
+          nc={nc} onOpenNotif={openNotif} onAllNotif={notifAll} prefs={prefs} setPrefs={setPrefs}
           vmApps={virtual ? startApps.filter((x) => isVmApp(x.id)) : []}
           shortcuts={lnkIcons.map((i) => i.lnk)} onShortcutOpen={openShortcut} onShortcutRemove={(n) => removeShortcuts([n.id])}
           widgets={widgets.items} newWidgetId={newWidgetId} onWidgetChange={(id, patch) => widgets.update(id, patch)} onWidgetRemove={removeWidget}

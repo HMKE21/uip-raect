@@ -13,6 +13,8 @@ import { fetchBackupAll } from '../lib/driveApi';
 import { saveBlob } from '../lib/exporter';
 import { VM_APPS, isVmApp, isVmDeskKey } from '../virtual/catalog';
 import ModeCard from '../virtual/ModeCard';
+import MobilePrefs from './MobilePrefs';
+import { useIsMobileOS } from './useIsMobileOS';
 import { useVirtualMode } from '../virtual/virtualMode';
 
 const StudentMyPC = lazy(() => import('../pages/student/StudentMyPC'));
@@ -231,6 +233,7 @@ function LockSettings({ tt, lockEnabled, onLockChanged }) {
 export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, toggleTheme, toggleLocale, usage, user, lockEnabled, onLockChanged, sec, onSec, onLockNow, onSleepNow, onSelfLogout }) {
   const [tab, setTab] = useState(tabProp || 'personalize');
   const vm = useVirtualMode();
+  const isPhone = useIsMobileOS();
   const showVm = vm.supported && (vm.available || vm.enabled);
   // the platform's icons are only listed (and restorable) while the virtual mode is on
   const deskList = vm.enabled ? DESK_ICONS : DESK_ICONS.filter((d) => !isVmDeskKey(d[0]));
@@ -252,6 +255,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
   };
   const tabs = [
     ['personalize', 'palette', tt('Personalization', 'التخصيص')],
+    ...(isPhone ? [['phone', 'smartphone', tt('Phone look', 'مظهر الهاتف')]] : []),
     ['cloud', 'cloud', tt('Storage & backup', 'التخزين والنسخ')],
     ['links', 'link', tt('Shared links', 'الروابط المشاركة')],
     ['security', 'shield', tt('Security & devices', 'الأمان والأجهزة')],
@@ -337,6 +341,7 @@ export function SettingsApp({ tab: tabProp, prefs, setPrefs, ar, tt, theme, togg
             </Section>
           </>
         )}
+        {tab === 'phone' && isPhone && <Section title={tt('Phone look', 'مظهر الهاتف')}><MobilePrefs prefs={prefs} setPrefs={setPrefs} tt={tt} ar={ar} /></Section>}
         {tab === 'cloud' && <CloudPanel tt={tt} usage={usage} />}
         {tab === 'links' && <SharedLinksPanel ar={ar} locale={ar ? 'ar' : 'en'} embedded />}
         {tab === 'security' && sec && <SecuritySettings tt={tt} ar={ar} sec={sec} onSec={onSec} lockEnabled={lockEnabled} onLockNow={onLockNow} onSleepNow={onSleepNow} onSelfLogout={onSelfLogout} onOpenLockTab={() => setTab('lock')} />}
