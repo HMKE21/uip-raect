@@ -32,7 +32,8 @@ import { Clock, ContextMenu, IdleWarning, NodeGlyph, OsDialog, RunDialog, StartM
 import LockScreen, { SleepScreen } from './LockScreen';
 import { readSec, useDesktopSecurity } from './security';
 import { wallpaperById, wallpaperCss } from './wallpapers';
-import { MAX_DESKS, chromeH, initialWm, winTitle, wmReducer } from './wm';
+import { MAX_DESKS, areaW, chromeH, initialWm, layoutInset, winTitle, wmReducer } from './wm';
+import NavSidebar, { NAV_W } from './NavSidebar';
 import { restoreWm, saveWm } from './wmPersist';
 import WidgetLayer from './Widgets';
 import { clearDropMark, dropOnWindowAt, hasDriveIds, markDropTarget, readDragNodes } from '../lib/driveDnd';
@@ -240,6 +241,15 @@ export default function DesktopOS() {
   const vmode = useVirtualMode();
   const virtual = vmode.enabled; // the student works on the whole platform from inside this desktop (see ../virtual)
   const mobile = useIsMobileOS(); // phone-sized screen -> <MobileShell> (a purpose-built phone UI) instead of the windowed desktop
+  // navigation sidebar: open by default on wide screens, pinned beside the windows (or floating over them); remembered per account
+  const [wide, setWide] = useState(() => window.innerWidth >= 1100);
+  useEffect(() => { const h = () => setWide(window.innerWidth >= 1100); window.addEventListener('resize', h); return () => window.removeEventListener('resize', h); }, []);
+  const navOpen = !mobile && (prefs.navOpen ?? wide);
+  const navPinned = wide && prefs.navPin !== false;
+  layoutInset.w = navOpen && navPinned ? NAV_W : 0; // the window manager sizes / clamps windows to what the sidebar leaves
+  const navRef = useRef({}); navRef.current = { open: navOpen, pinned: navPinned };
+  const toggleNav = useCallback(() => setPrefs({ navOpen: !navRef.current.open }), [setPrefs]);
+  const closeNav = useCallback(() => setPrefs({ navOpen: false }), [setPrefs]);
   const [overlay, setOverlay] = useState(null); // 'start' | 'run' | 'taskview' | 'qs' | 'cal' | 'notif'
   const battery = useBattery();
   const online = useOnline();
@@ -295,7 +305,7 @@ export default function DesktopOS() {
   // ---- windows -----------------------------------------------------------------------------------------
   const openApp = useCallback((app, props, extra = {}) => {
     const def = APPS[app];
-    dispatch({ type: 'open', app, singleton: def.singleton, size: def.size, props, ...extra, maximized: extra.maximized ?? fitsMaximized(def.size), area: { aw: window.innerWidth, ah: window.innerHeight - chromeH() } });
+    dispatch({ type: 'open', app, singleton: def.singleton, size: def.size, props, ...extra, maximized: extra.maximized ?? fitsMaximized(def.size), area: { aw: areaW(), ah: window.innerHeight - chromeH() } });
     setOverlay(null);
   }, [dispatch]);
   const openExplorer = useCallback((params = {}) => { setParams(params); openApp('explorer'); }, [openApp, setParams]);
@@ -927,7 +937,7 @@ export default function DesktopOS() {
 
   // ---- keyboard shortcuts ------------------------------------------------------------------------------
   const S = useRef({});
-  S.current = { wm, overlay, locked, asleep, dlg, taskItems, taskClick, runCommand, refreshAll, deskKey: onDeskKey };
+  S.current = { wm, overlay, locked, asleep, dlg, taskItems, taskClick, runCommand, refreshAll, deskKey: onDeskKey, nav: navRef.current, toggleNav, closeNav };
   useEffect(() => {
     const onKey = (e) => {
       const s = S.current;
@@ -949,15 +959,16 @@ export default function DesktopOS() {
       }
       const id = globalActionFor(e);
       // the code workbench / viewer keep their own keys; only the window-level Alt combos pass through
-      if (e.target?.closest?.('.zb, .st-fv, .mp-editor, .os-wgt, .os-term') && !/^(close|next|prev|desktop|taskview|desk\w+|pin\d)$/.test(id || '')) return;
+      if (e.target?.closest?.('.zb, .st-fv, .mp-editor, .os-wgt, .os-term') && !/^(close|next|prev|desktop|taskview|nav|desk\w+|pin\d)$/.test(id || '')) return;
       if (!id) {
-        if (e.key === 'Escape' && s.overlay) { e.preventDefault(); setOverlay(null); }
+        if (e.key === 'Escape' && s.overlay) { e.preventDefault(); setOverlay(null); } else if (e.key === 'Escape' && s.nav.open && !s.nav.pinned) { e.preventDefault(); s.closeNav(); }
         return;
       }
       e.preventDefault();
       const act = s.wm.list.find((w) => w.id === s.wm.active);
       const onAct = (fn) => { if (act) fn(act); };
       switch (id) {
+        case 'nav': s.toggleNav(); break;
         case 'start': setOverlay((o) => (o === 'start' ? null : 'start')); break;
         case 'run': setOverlay((o) => (o === 'run' ? null : 'run')); break;
         case 'taskview': setOverlay((o) => (o === 'taskview' ? null : 'taskview')); break;
@@ -1009,6 +1020,11 @@ export default function DesktopOS() {
   const startApps = useMemo(() => (virtual
     ? [...VM_APPS.filter((a) => !a.perm || can(a.perm)).map((a) => ({ id: a.id, en: a.en, ar: a.ar, glyph: a.id, group: a.group })), ...sysApps.map((a) => ({ ...a, group: { en: 'My PC & tools', ar: 'جهازي والأدوات' } }))]
     : sysApps), [virtual, sysApps, can]);
+
+  const navApps = useMemo(() => startApps.filter((a) => !['run', 'lock', 'logout', 'portal'].includes(a.id)), [startApps]);
+  const navWins = useMemo(() => wm.list.filter((w) => (w.d || 0) === (wm.desk || 0)).map((w) => ({ id: w.id, app: w.app, label: winTitle(w, APPS, ar), active: wm.active === w.id && !w.min, min: !!w.min })), [wm.list, wm.desk, wm.active, ar]);
+  const navCollapsed = useMemo(() => (Array.isArray(prefs.navCollapsed) ? prefs.navCollapsed : []), [prefs.navCollapsed]);
+  const toggleNavGroup = useCallback((k) => setPrefs({ navCollapsed: navCollapsed.includes(k) ? navCollapsed.filter((x) => x !== k) : [...navCollapsed, k] }), [navCollapsed, setPrefs]);
 
   const wp = prefs.wallpaper === 'custom' ? { dark: true } : wallpaperById(prefs.wallpaper);
   // A window body is rebuilt only when ITS inputs change. Without this every desktop re-render (toast, icon selection, a focus change, the battery…)
@@ -1159,7 +1175,7 @@ export default function DesktopOS() {
 
   return createPortal(
     <div
-      className={`os os--${theme === 'dark' ? 'dark' : 'light'}${wp.dark === false ? ' os--lightwp' : ''}${mobile ? ' os--mobile' : ''}${wmax ? ' os--wmax' : ''}${prefs.fontScale === 'l' ? ' os--fs-l' : prefs.fontScale === 'xl' ? ' os--fs-xl' : ''}${prefs.reduceMotion ? ' os--rm' : ''}${prefs.highContrast ? ' os--hc' : ''}${wmax && dockPeek ? ' os--dockpeek' : ''}`} dir={dir}
+      className={`os os--${theme === 'dark' ? 'dark' : 'light'}${wp.dark === false ? ' os--lightwp' : ''}${mobile ? ' os--mobile' : ''}${navOpen && navPinned ? ' os--nav' : ''}${wmax ? ' os--wmax' : ''}${prefs.fontScale === 'l' ? ' os--fs-l' : prefs.fontScale === 'xl' ? ' os--fs-xl' : ''}${prefs.reduceMotion ? ' os--rm' : ''}${prefs.highContrast ? ' os--hc' : ''}${wmax && dockPeek ? ' os--dockpeek' : ''}`} dir={dir}
       style={{ '--os-accent': prefs.accent, '--cell-w': `${cell.w}px`, '--cell-h': `${cell.h}px`, '--glyph': `${cell.g}px` }}
       onPointerDownCapture={(e) => {
         if (!e.target.closest('.os-ctx')) setMenu(null);
@@ -1249,7 +1265,16 @@ export default function DesktopOS() {
       {overlay === 'notif' && !mobile && <NotifFlyout tt={tt} ar={ar} nc={nc} onOpen={openNotif} onAll={notifAll} />}
       {!mobile && <NotifToasts toasts={nc.toasts} onOpen={openNotif} onClose={nc.dismissToast} tt={tt} />}
 
-      <MenuBar ar={ar} tt={tt} menus={menus} tray={tray} onOpen={closeFloating} closeKey={`${overlay || ''}${menu ? 'm' : ''}${dlg ? 'd' : ''}${locked || asleep ? 'l' : ''}`} />
+      {navOpen && !locked && !asleep && (
+        <NavSidebar
+          ar={ar} tt={tt} apps={navApps} wins={navWins} pinned={navPinned} collapsed={navCollapsed} onToggleGroup={toggleNavGroup}
+          onOpenApp={(a) => runCommand(a.id)} onFocusWin={(id) => dispatch({ type: 'focus', id })} onCloseWin={(id) => dispatch({ type: 'close', id })}
+          onTogglePin={() => setPrefs({ navPin: !navPinned })} onClose={closeNav}
+          onDesktop={() => dispatch({ type: 'showDesktop' })} onSpotlight={() => setOverlay('run')}
+        />
+      )}
+      <MenuBar ar={ar} tt={tt} menus={menus} tray={tray} onOpen={closeFloating}
+        lead={mobile ? null : <button type="button" className="os-mb-nav" aria-pressed={navOpen} onClick={toggleNav} title={`${tt('Navigation sidebar', 'الشريط الجانبي للتنقل')} · Alt+A`} aria-label={tt('Navigation sidebar', 'الشريط الجانبي للتنقل')}><Icon name="panel-left" size={16} /></button>} closeKey={`${overlay || ''}${menu ? 'm' : ''}${dlg ? 'd' : ''}${locked || asleep ? 'l' : ''}`} />
       {wmax && !dockPeek && <div className="os-dockhot" onPointerEnter={() => { clearTimeout(hotT.current); hotT.current = setTimeout(() => setDockPeek(true), 280); }} onPointerLeave={() => clearTimeout(hotT.current)} aria-hidden="true" />}
       <Dock
         items={dockItems} tt={tt} mag={prefs.dockMag !== false && !prefs.reduceMotion} launchOn={overlay === 'start'} onLaunch={() => setOverlay((o) => (o === 'start' ? null : 'start'))}

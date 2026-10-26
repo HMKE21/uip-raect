@@ -1,10 +1,10 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { SNAP_LAYOUTS, SNAP_RECTS, snapStyle } from './snapLayouts';
-import { MENUBAR_H, MIN_H, MIN_W, chromeH } from './wm';
+import { MENUBAR_H, MIN_H, MIN_W, areaW, chromeH } from './wm';
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-const area = () => ({ aw: window.innerWidth, ah: window.innerHeight - chromeH() });
+const area = () => ({ aw: areaW(), ah: window.innerHeight - chromeH() });
 const HANDLES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 
 /** macOS traffic-light glyphs: only visible while the pointer is over the group of three. */

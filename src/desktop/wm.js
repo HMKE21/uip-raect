@@ -2,6 +2,9 @@
 /** Screen furniture: the menu bar on top and the floating Dock at the bottom. Windows live in between. */
 export const MENUBAR_H = 28;
 export const dockH = () => (typeof window !== 'undefined' && window.innerWidth < 560 ? 70 : 84);
+/** Width taken by the pinned navigation sidebar: windows are sized / clamped to the screen WITHOUT it. */
+export const layoutInset = { w: 0 };
+export const areaW = () => Math.max(320, (typeof window !== 'undefined' ? window.innerWidth : 1280) - layoutInset.w);
 export const chromeH = () => MENUBAR_H + dockH();
 export const MIN_W = 380;
 export const MIN_H = 260;

@@ -72,3 +72,18 @@ html body .vm-shell .msg-app[data-msg-app].is-full {
 html body:has(.msg-app[data-msg-app].is-full) .os :is(.topbar, .sidebar, .app-shell__main > .breadcrumb) { visibility: visible; }
 /* wide laptop / monitor: long text pages read better in a column than stretched edge to edge */
 .vm-shell .app-shell__main { margin-inline: auto; }
+
+/* ---- phone layout inside the mobile desktop (MobileShell) ------------------------------------------------------ */
+/* The phone CSS of Messages / the messages centre pins them to the BROWSER (position:fixed, bottom = the portal's 60px bottom bar, or
+   --vvh for an open chat), so inside the OS they covered the app bar + gesture bar and left a dead strip at the bottom.
+   In a window they fill the window instead. (Repeated attribute selectors = higher specificity than the page's own rules.) */
+@media (max-width: 760px) {
+  html body .vm-shell .msg-app[data-msg-app][data-msg-app][data-msg-app],
+  html body .vm-shell .mc.mc.mc {
+    position: absolute !important; inset: 0 !important; top: 0 !important; z-index: 2;
+    width: auto !important; max-width: none !important; height: auto !important; min-height: 0 !important; max-height: none !important;
+    margin: 0 !important; padding-top: 0 !important; border-radius: 0 !important;
+  }
+  .vm-shell:has(.msg-app[data-msg-app], .mc) { overflow: hidden; }
+  html body .vm-shell .msg-app .msg-composer { padding-bottom: 10px; }
+}

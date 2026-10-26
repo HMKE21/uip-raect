@@ -40,6 +40,7 @@ export const GROUPS = [
 /** Global shortcuts — the ones DesktopOS actually listens to. `win` = the native macOS combo it stands in for. */
 export const SHORTCUTS = [
   { id: 'start', keys: ['Alt+S'], win: '⌘Space', group: 'system', en: 'Launchpad & search', ar: 'لوحة التطبيقات والبحث' },
+  { id: 'nav', keys: ['Alt+A'], win: '', group: 'system', en: 'Open / close the navigation sidebar', ar: 'فتح / غلق الشريط الجانبي للتنقل' },
   { id: 'run', keys: ['Alt+R'], win: '⌘Space', group: 'system', en: 'Spotlight…', ar: 'بحث سريع…' },
   { id: 'lock', keys: ['Alt+L'], win: '⌃⌘Q', group: 'system', en: 'Lock screen', ar: 'قفل الشاشة' },
   { id: 'sleep', keys: ['Alt+Shift+S'], win: '⌥⌘⏏', group: 'system', en: 'Sleep (dark screen)', ar: 'وضع السكون (شاشة سودا)' },

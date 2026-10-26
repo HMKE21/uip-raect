@@ -1,0 +1,65 @@
+/* Navigation sidebar of the desktop (NavSidebar.jsx). Pinned: it takes its own column and the windows / desktop / dock use the rest. */
+.os { --nav-w: 264px; }
+.os-nav {
+  position: absolute; z-index: 45; top: var(--mb-h); bottom: 0; inset-inline-start: 0; width: var(--nav-w); max-width: 88vw;
+  display: flex; flex-direction: column; min-height: 0; color: var(--g-fg); font-size: 13.5px;
+  background: var(--panel); border-inline-end: 1px solid var(--g-line); box-shadow: 0 0 28px rgba(0, 0, 0, .16);
+  animation: os-nav-in .2s cubic-bezier(.2, .8, .3, 1) both;
+}
+.os-nav.is-pinned { box-shadow: none; z-index: 30; }
+[dir='rtl'].os-nav { animation-name: os-nav-in-rtl; }
+@keyframes os-nav-in { from { transform: translateX(-22px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes os-nav-in-rtl { from { transform: translateX(22px); opacity: 0; } to { transform: none; opacity: 1; } }
+.os-nav__scrim { position: absolute; z-index: 44; inset: var(--mb-h) 0 0; background: rgba(0, 0, 0, .18); }
+
+.os-nav__head { flex: none; display: flex; align-items: center; gap: 4px; padding: 12px 12px 6px 14px; }
+.os-nav__head strong { flex: 1; font-size: 15px; font-weight: 700; }
+.os-nav__ib { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 9px; background: transparent; color: inherit; cursor: pointer; }
+.os-nav__ib:hover { background: var(--g-hover); }
+.os-nav__ib.is-on { color: var(--os-accent); background: color-mix(in srgb, var(--os-accent) 14%, transparent); }
+
+.os-nav__search { flex: none; display: flex; align-items: center; gap: 8px; margin: 4px 12px 8px; padding: 0 10px; height: 36px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--g-line); color: var(--g-mute); }
+.os-nav__search:focus-within { border-color: var(--os-accent); color: var(--g-fg); }
+.os-nav__search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--g-fg); font: inherit; font-size: 13.5px; }
+.os-nav__search button { border: 0; background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer; padding: 2px; }
+
+.os-nav__scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 10px; scrollbar-width: thin; }
+.os-nav__sec { margin-bottom: 6px; }
+.os-nav__sec h4, .os-nav__gh { display: flex; align-items: center; gap: 6px; width: 100%; margin: 0; padding: 8px 8px 4px; border: 0; background: transparent; color: var(--g-mute); font: inherit; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; text-align: start; }
+.os-nav__gh { cursor: pointer; border-radius: 8px; }
+.os-nav__gh:hover { color: var(--g-fg); }
+.os-nav__gh svg { transition: transform .15s; flex: none; }
+.os-nav__gh[aria-expanded='false'] svg { transform: rotate(-90deg); }
+[dir='rtl'] .os-nav__gh[aria-expanded='false'] svg { transform: rotate(90deg); }
+.os-nav__sec h4 span, .os-nav__gh span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-nav__sec i { font-style: normal; font-weight: 600; font-size: 11px; opacity: .75; }
+
+.os-nav__row { position: relative; display: flex; align-items: center; border-radius: 10px; }
+.os-nav__go { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 5px 8px; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.os-nav__row:hover { background: var(--g-hover); }
+.os-nav__row.is-active { background: color-mix(in srgb, var(--os-accent) 16%, transparent); }
+.os-nav__row.is-active .os-nav__lb { font-weight: 700; }
+.os-nav__row.is-min .os-nav__go { opacity: .6; }
+.os-nav__go:focus-visible, .os-nav__x:focus-visible, .os-nav__foot button:focus-visible, .os-nav__gh:focus-visible { outline: 2px solid var(--os-accent); outline-offset: -2px; }
+.os-nav__ic { flex: none; display: inline-grid; place-items: center; }
+.os-nav__lb { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.os-nav__dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--os-accent); }
+.os-nav__x { flex: none; width: 26px; height: 26px; margin-inline-end: 4px; display: none; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--g-mute); cursor: pointer; }
+.os-nav__row--win:hover .os-nav__x, .os-nav__x:focus-visible { display: grid; }
+.os-nav__x:hover { background: var(--g-hover); color: #e5484d; }
+.os-nav__none { margin: 18px 10px; text-align: center; color: var(--g-mute); }
+
+.os-nav__foot { flex: none; display: flex; gap: 6px; padding: 8px 10px 10px; border-top: 1px solid var(--g-line); }
+.os-nav__foot button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; border: 1px solid var(--g-line); border-radius: 10px; background: var(--panel-2); color: inherit; font: inherit; font-size: 12.5px; cursor: pointer; }
+.os-nav__foot button:hover { background: var(--g-hover); }
+
+/* the menu-bar button */
+.os-mb-nav { flex: none; display: grid; place-items: center; width: 28px; height: calc(var(--mb-h) - 6px); margin-inline: 2px 4px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.os-mb-nav:hover, .os-mb-nav[aria-pressed='true'] { background: rgba(255, 255, 255, .22); }
+.os-mb-nav svg { width: 16px; height: 16px; }
+[dir='rtl'] .os-mb-nav svg { transform: scaleX(-1); }
+
+/* pinned: windows, desktop icons, widgets and the Dock use the space that is left */
+.os--nav .os-wins, .os--nav.os--wmax .os-wins, .os--nav .os-desk, .os--nav .os-widgets { inset-inline-start: var(--nav-w); }
+.os--nav .os-dock { inset-inline-start: var(--nav-w); }
+@media (prefers-reduced-motion: reduce) { .os-nav { animation: none; } }

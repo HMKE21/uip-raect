@@ -8,7 +8,7 @@ import { AppGlyph, UipMark } from './OsIcons';
  */
 
 /** Menu bar. menus: [{ id, label, bold?, logo?, items: ({ label, hint, onClick, disabled, check } | 'sep')[] }]; `tray` is the right-hand status area. */
-export function MenuBar({ ar, tt, menus, tray, onOpen, closeKey }) {
+export function MenuBar({ ar, tt, menus, tray, lead, onOpen, closeKey }) {
   const [open, setOpen] = useState(null); // menu id
   const root = useRef(null);
   const menusRef = useRef(null);
@@ -42,6 +42,7 @@ export function MenuBar({ ar, tt, menus, tray, onOpen, closeKey }) {
 
   return (
     <header ref={root} className="os-menubar" onContextMenu={(e) => e.preventDefault()}>
+      {lead}
       <nav ref={menusRef} className="os-menubar__menus" aria-label={tt('Menu bar', 'شريط القوائم')}>
         {menus.map((m) => (
           <div key={m.id} className={`os-mb${m.logo ? ' os-mb--logo' : ''}${m.bold ? ' os-mb--bold' : ''}${m.hideSmall ? ' os-mb--opt' : ''}`}>
