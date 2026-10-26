@@ -359,6 +359,13 @@ function Whiteboard({ store, t, isManager, onClose }) {
     const c = document.createElement('canvas'); c.width = W; c.height = H; const ctx = c.getContext('2d');
     ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
     ctx.setTransform(scale, 0, 0, scale, -b.x1 * scale, -b.y1 * scale);
+    if (bg !== 'plain') { // same grid / dots as on screen (world space, 40 units apart), so the download keeps the board's layout
+      let step = 40; while ((b.x2 - b.x1) / step > 300 || (b.y2 - b.y1) / step > 300) step *= 2;
+      const gx = Math.floor(b.x1 / step) * step; const gy = Math.floor(b.y1 / step) * step;
+      ctx.strokeStyle = 'rgba(100,110,140,.16)'; ctx.fillStyle = 'rgba(100,110,140,.38)'; ctx.lineWidth = 1 / scale;
+      if (bg === 'grid') { ctx.beginPath(); for (let x = gx; x <= b.x2; x += step) { ctx.moveTo(x, b.y1); ctx.lineTo(x, b.y2); } for (let y = gy; y <= b.y2; y += step) { ctx.moveTo(b.x1, y); ctx.lineTo(b.x2, y); } ctx.stroke(); }
+      else for (let x = gx; x <= b.x2; x += step) for (let y = gy; y <= b.y2; y += step) ctx.fillRect(x - 1, y - 1, 2, 2);
+    }
     all.forEach((o) => drawObject(ctx, o));
     if (dark) { const d = document.createElement('canvas'); d.width = W; d.height = H; const dc = d.getContext('2d'); dc.filter = 'invert(1) hue-rotate(180deg)'; dc.drawImage(c, 0, 0); dc.filter = 'none'; c.getContext('2d').setTransform(1, 0, 0, 1, 0, 0); c.getContext('2d').drawImage(d, 0, 0); }
     c.toBlob((blob) => {
