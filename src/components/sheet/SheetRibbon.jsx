@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
 import { NUM_FORMATS } from '../../lib/sheet/format.js';
+import { THEME_LIST } from '../../lib/sheet/themes.js';
 import { FUNCS } from '../../lib/sheet/funcs.js';
 
 const FONTS = ['Calibri', 'Arial', 'Times New Roman', 'Courier New', 'Tahoma', 'Verdana', 'Segoe UI', 'Georgia', 'Noto Sans Arabic'];
@@ -62,6 +63,7 @@ export default function SheetRibbon({ A, tt, state }) {
       <div className="sx__tabsrow" role="tablist">
         {[['home', 'Home', 'الرئيسية'], ['formulas', 'Formulas', 'الصيغ'], ['data', 'Data', 'البيانات'], ['view', 'View', 'عرض']].map(([id, en, ar]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'is-on' : ''} onClick={() => setTab(id)}>{tt(en, ar)}</button>)}
         <span className="sx__sp" />
+        <Drop label={tt('Theme', 'الثيم')} wide><div className="sx__themes">{['excel', 'code'].map((g) => <div key={g}><div className="sx__thh">{g === 'excel' ? tt('Excel styles', 'ستايلات إكسل') : tt('Code editor themes', 'ثيمات محرر الأكواد')}</div>{THEME_LIST.filter((x) => x.group === g).map((x) => <button key={x.id} type="button" className={`sx__it sx__th${A.theme === x.id ? ' is-on' : ''}`} onClick={() => A.setTheme(x.id)}><span className="sx__sws">{x.swatch.map((c, i) => <i key={i} style={{ background: c }} />)}</span><span>{tt(x.en, x.ar)}</span>{A.theme === x.id && <b>✓</b>}</button>)}</div>)}</div></Drop>
         <RB icon="ed-undo" title={tt('Undo (Ctrl+Z)', 'تراجع (Ctrl+Z)')} onClick={A.undo} disabled={!canUndo} />
         <RB icon="ed-redo" title={tt('Redo (Ctrl+Y)', 'إعادة (Ctrl+Y)')} onClick={A.redo} disabled={!canRedo} />
       </div>
@@ -150,7 +152,7 @@ export default function SheetRibbon({ A, tt, state }) {
             <RB label={tt('Headings', 'العناوين')} on={A.view.head} onClick={() => A.setView({ head: !A.view.head })} />
             <RB label={tt('Formula bar', 'شريط الصيغة')} on={A.view.bar} onClick={() => A.setView({ bar: !A.view.bar })} />
             <Drop label={tt('Freeze panes', 'تجميد')}><Item onClick={() => A.freeze(A.sel.ar, A.sel.ac)}>{tt('Freeze at selection', 'تجميد عند التحديد')}</Item><Item onClick={() => A.freeze(1, 0)}>{tt('Top row', 'الصف العلوي')}</Item><Item onClick={() => A.freeze(0, 1)}>{tt('First column', 'العمود الأول')}</Item><Item onClick={() => A.freeze(0, 0)}>{tt('Unfreeze', 'إلغاء التجميد')}</Item></Drop>
-            <RB label={A.theme === 'dark' ? tt('Light', 'فاتح') : tt('Dark', 'داكن')} onClick={() => A.setTheme(A.theme === 'dark' ? 'light' : 'dark')} />
+            <RB label={tt('Header & banded rows', 'عنوان وصفوف متبادلة')} on={A.view.band} onClick={() => A.setView({ band: !A.view.band })} />
             <RB label="100%" onClick={() => A.setView({ z: 1 })} />
           </div>
         )}

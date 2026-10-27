@@ -1,13 +1,11 @@
 import { key, colName } from './addr.js';
 import { formatValue, general } from './format.js';
 import { isErr, refTokens, parseRefBody } from './formula.js';
+import { THEMES } from './themes.js';
 
 export const DEF_W = 80; export const DEF_H = 24; export const HDR_W = 48; export const HDR_H = 24;
 export const FONT = 'Calibri, "Segoe UI", system-ui, -apple-system, "Noto Sans Arabic", sans-serif';
-export const THEMES = {
-  light: { bg: '#ffffff', fg: '#1f1f1f', grid: '#dcdcdc', head: '#f3f3f3', headFg: '#444444', headOn: '#d3f0e0', headOnFg: '#0e6b3a', accent: '#217346', sel: 'rgba(33,115,70,.12)', corner: '#e6e6e6' },
-  dark: { bg: '#0f1420', fg: '#e8ecf3', grid: '#222a3d', head: '#151b2b', headFg: '#9aa4b6', headOn: '#1d2d52', headOnFg: '#c3d8ff', accent: '#6ea8ff', sel: 'rgba(110,168,255,.14)', corner: '#1a2236' },
-};
+export { THEMES };
 export const REF_COLORS = ['#4472c4', '#ed7d31', '#a5a5a5', '#ffc000', '#5b9bd5', '#70ad47', '#9e480e', '#7030a0'];
 const CSS_COLORS = { red: '#ff0000', blue: '#0000ff', green: '#00a000', yellow: '#e6b800', magenta: '#ff00ff', cyan: '#00b0b0', black: '#000000', white: '#ffffff' };
 const RTL = /[\u0590-\u08ff]/;
@@ -48,7 +46,7 @@ export function displayOf(wb, sheet, r, c, showF) {
 
 /** Draws everything. s = { wb, sheet, geom, W, H, sx, sy, z, dpr, theme, sel, edit, showGrid, showHead, showF, marching, fillDrag, cutRect } */
 export function drawGrid(cv, s) {
-  const { wb, sheet, geom, W, H, sx, sy, z, dpr } = s; const T = THEMES[s.theme] || THEMES.light;
+  const { wb, sheet, geom, W, H, sx, sy, z, dpr } = s; const T = THEMES[s.theme] || THEMES.excel;
   const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.fillStyle = T.bg; g.fillRect(0, 0, W, H);
   const hw = s.showHead ? HDR_W : 0; const hh = s.showHead ? HDR_H : 0;
@@ -76,7 +74,7 @@ export function drawGrid(cv, s) {
       g.lineWidth = 1;
     }
     if (d.text === '' || (s.edit && s.edit.r === r && s.edit.c === c)) return;
-    g.font = fontOf(st, z); g.fillStyle = d.color || st.color || T.fg;
+    const hdr = s.band && T.hdBg && r === 0; g.font = fontOf(hdr && !st.b ? { ...st, b: 1 } : st, z); g.fillStyle = d.color || st.color || (hdr ? T.hdFg : T.fg);
     let text = d.text; const pad = 4 * z;
     let tw = g.measureText(text).width;
     if (d.num && st.nf === undefined && tw > w - pad * 2 && typeof d.v === 'number') { // General numbers shrink their decimals before turning into ####
@@ -122,6 +120,7 @@ export function drawGrid(cv, s) {
   const region = (ra, rb, ca, cb, cl) => {
     if (ra > rb || ca > cb) return;
     g.save(); g.beginPath(); g.rect(cl[0], cl[1], cl[2], cl[3]); g.clip();
+    if (s.band && T.hdBg) { const lc = Math.min(sheet.maxCol, geom.cols - 1); for (let r = ra; r <= Math.min(rb, sheet.maxRow); r += 1) { const col = r === 0 ? T.hdBg : (r % 2 === 0 ? T.band : null); if (!col) continue; g.fillStyle = col; g.fillRect(X(0), Y(r), X(lc + 1) - X(0), Y(r + 1) - Y(r)); } }
     if (s.showGrid) {
       g.strokeStyle = T.grid; g.lineWidth = 1; g.beginPath();
       for (let c = ca; c <= cb + 1; c += 1) { const x = Math.round(X(Math.min(c, geom.cols))) - 0.5; g.moveTo(x, hh); g.lineTo(x, H); }

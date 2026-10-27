@@ -6,14 +6,12 @@ import { eachCell, Rng, toStr } from '../../lib/sheet/core.js';
 import { FUNCS } from '../../lib/sheet/funcs.js';
 import { DEF_H, DEF_W, HDR_H, HDR_W, FONT, THEMES, drawGrid, geometry, locate, displayOf, fontOf, mergeIndex } from '../../lib/sheet/draw.js';
 import { fitColumn } from '../../lib/sheet/autofit.js';
+import { loadThemeId, saveThemeId, themeOf } from '../../lib/sheet/themes.js';
 import SheetRibbon from './SheetRibbon';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const mkSel = (ar, ac, r2 = ar, c2 = ac) => ({ ar, ac, r1: Math.min(ar, r2), c1: Math.min(ac, c2), r2: Math.max(ar, r2), c2: Math.max(ac, c2) });
 const FN_NAMES = Object.keys(FUNCS).sort();
-const THEME_KEY = 'uip.sheet.theme3';
-// The editor frame is the platform's dark navy, so the grid defaults to dark; the read-only preview follows the site theme.
-const loadTheme = (readOnly) => { try { const t = localStorage.getItem(THEME_KEY); if (t === 'dark' || t === 'light') return t; return readOnly ? (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light') : 'dark'; } catch { return 'dark'; } };
 
 /** Next / previous editing position that follows Excel: jump to the edge of a data block with Ctrl+Arrow. */
 function jump(wb, sheet, r, c, dr, dc) {
@@ -43,7 +41,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
       if (inside && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
       const g = grid(); if (!g) return;
       if (idle && NATIVE.has(k)) { g.focus({ preventScroll: true }); return; }
-      if (idle && FWD.has(k)) { e.preventDefault(); e.stopPropagation(); g.focus({ preventScroll: true }); g.dispatchEvent(new KeyboardEvent('keydown', { key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, bubbles: true, cancelable: true })); return; }
+      if (idle && FWD.has(k)) { e.preventDefault(); e.stopPropagation(); g.focus({ preventScroll: true }); g.dispatchEvent(new window.KeyboardEvent('keydown', { key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, bubbles: true, cancelable: true })); return; }
       if (inside && (FWD.has(k) || NATIVE.has(k)) && !e.defaultPrevented) { /* grid handler runs next; make sure the browser default never wins */ if (!NATIVE.has(k)) e.preventDefault(); }
     };
     window.addEventListener('keydown', h, true);
@@ -55,9 +53,9 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   useEffect(() => ctl.on(force), [ctl]);
   const [six, setSix] = useState(0);
   const sheet = wb.sheets[Math.min(six, wb.sheets.length - 1)];
-  const [theme, setThemeS] = useState(() => loadTheme(readOnly));
-  const setTheme = (t) => { setThemeS(t); try { localStorage.setItem(THEME_KEY, t); } catch { /* storage unavailable */ } };
-  const [view, setView] = useState({ grid: true, head: true, showF: false, bar: true, z: 1 });
+  const [theme, setThemeS] = useState(() => loadThemeId(readOnly));
+  const setTheme = (t) => { setThemeS(t); saveThemeId(t); };
+  const [view, setView] = useState({ grid: true, head: true, showF: false, bar: true, band: true, z: 1 });
   const [sel, setSelS] = useState(() => mkSel(0, 0));
   const selRef = useRef(sel); selRef.current = sel;
   const setSel = useCallback((s) => { selRef.current = s; setSelS(s); }, []);
@@ -95,7 +93,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
     const cv = cvRef.current; if (!cv) return;
     const dpr = window.devicePixelRatio || 1; const W = size.w; const H = size.h;
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = `${W}px`; cv.style.height = `${H}px`; }
-    const st = { wb, sheet, geom, W, H, sx: scroll.x, sy: scroll.y, z, dpr, theme, sel, edit, showGrid: view.grid, showHead: view.head, showF: view.showF, readOnly, fillDrag: dragUi && dragUi.fill, cutRect, marching: 0 };
+    const st = { wb, sheet, geom, W, H, sx: scroll.x, sy: scroll.y, z, dpr, theme, sel, edit, showGrid: view.grid, showHead: view.head, band: view.band, showF: view.showF, readOnly, fillDrag: dragUi && dragUi.fill, cutRect, marching: 0 };
     drawRef.current = (extra) => drawGrid(cv, { ...st, ...extra });
     drawGrid(cv, st);
   });
@@ -392,7 +390,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   };
 
   /* ---------- layout bits ---------- */
-  const T = THEMES[theme];
+  const T = themeOf(theme);
   const ab = { x: X(sel.ac), y: Y(sel.ar) };
   const merged = mergeIndex(sheet).get(key(edit ? edit.r : sel.ar, edit ? edit.c : sel.ac));
   const eb = edit ? (() => { const m = mergeIndex(sheet).get(key(edit.r, edit.c)); const x = X(m ? m.c1 : edit.c); const y = Y(m ? m.r1 : edit.r); return { x, y, w: X((m ? m.c2 : edit.c) + 1) - x, h: Y((m ? m.r2 : edit.r) + 1) - y }; })() : null;
@@ -405,7 +403,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   void tokenize; void shiftFormula; void toStr; void FONT; void E; void isErr; void parseCell; void refText; void T; void setSix;
 
   return (
-    <div ref={rootRef} className={`sx sx--${theme}`} dir="ltr" onClick={(e) => { if (!e.target.closest?.('input,select,textarea,.sx__grid,.sx__find,.sx__menu') && !editRef.current) requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }} data-rtl={rtl ? '1' : undefined}>
+    <div ref={rootRef} className="sx" style={T.vars} dir="ltr" onClick={(e) => { if (!e.target.closest?.('input,select,textarea,.sx__grid,.sx__find,.sx__menu') && !editRef.current) requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }} data-rtl={rtl ? '1' : undefined}>
       {!readOnly && <SheetRibbon A={A} tt={tt} rtl={rtl} state={{ ast, sel, canUndo: ctl.canUndo, canRedo: ctl.canRedo, clip: !!ctl.clip }} />}
       {view.bar && (
         <div className="sx__fx">

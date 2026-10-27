@@ -64,3 +64,10 @@
 .sx-preview { display: flex; flex-direction: column; flex: 1; min-height: 0; border: 1px solid var(--ed-line, #ccc); border-radius: 12px; overflow: hidden; }
 @media (max-width: 720px) { .sx__tools { overflow-x: auto; flex-wrap: nowrap; } .sx__grp { flex: none; } .sx__zoom input { display: none; } .sx__find { inset-inline-end: 8px; width: calc(100% - 16px); } .sx__tabs { max-width: 48%; } }
 @media (prefers-reduced-motion: no-preference) { .sx__pop, .sx__menu, .sx__find { animation: sx-pop .1s ease-out; } @keyframes sx-pop { from { opacity: 0; transform: translateY(-3px); } } }
+/* theme picker */
+.sx__themes { max-height: 360px; overflow: auto; min-width: 220px; }
+.sx__thh { padding: 6px 10px 2px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--sx-muted); }
+.sx__th { display: flex; align-items: center; gap: 10px; width: 100%; }
+.sx__th.is-on { background: var(--sx-accent-soft); }
+.sx__th b { margin-inline-start: auto; color: var(--sx-accent); }
+.sx__sws { display: inline-flex; } .sx__sws i { width: 12px; height: 18px; border: 1px solid var(--sx-line); } .sx__sws i:first-child { border-radius: 4px 0 0 4px; } .sx__sws i:last-child { border-radius: 0 4px 4px 0; }
