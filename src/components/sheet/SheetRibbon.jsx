@@ -18,6 +18,34 @@ const CATS = {
   Financial: 'PMT IPMT PPMT FV PV NPER NPV IRR RATE SLN',
 };
 
+/** Themed dropdown (replaces the OS-styled <select>): same colours as the rest of the editor, keyboard friendly, fonts previewed in their own face. */
+function Pick({ value, label, options, onPick, aria, cls = '', preview }) {
+  const [open, setOpen] = useState(false); const [hi, setHi] = useState(0); const ref = useRef(null); const listRef = useRef(null);
+  useOutside(ref, () => setOpen(false));
+  const idx = options.findIndex((o) => o.value === value);
+  useEffect(() => { if (open) { setHi(Math.max(0, idx)); requestAnimationFrame(() => listRef.current?.querySelector('.is-on')?.scrollIntoView?.({ block: 'nearest' })); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (open) listRef.current?.children[hi]?.scrollIntoView?.({ block: 'nearest' }); }, [hi, open]);
+  const choose = (o) => { setOpen(false); onPick(o.value); };
+  const onKey = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!open) setOpen(true); else setHi((h) => Math.min(options.length - 1, h + 1)); } else if (e.key === 'ArrowUp') { e.preventDefault(); if (!open) setOpen(true); else setHi((h) => Math.max(0, h - 1)); } else if (e.key === 'Enter' && open) { e.preventDefault(); choose(options[hi]); } else if (e.key === 'Escape' && open) { e.preventDefault(); e.stopPropagation(); setOpen(false); }
+  };
+  return (
+    <div className={`sx__pick ${cls}`} ref={ref} onKeyDown={onKey}>
+      <button type="button" className="sx__pickb" aria-label={aria} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span style={preview ? { fontFamily: `"${label}", Calibri, sans-serif` } : undefined}>{label}</span><Icon name="chevron-down" size={12} />
+      </button>
+      {open && (
+        <div className="sx__pickl" role="listbox" ref={listRef}>
+          {options.map((o, i) => (
+            <button key={String(o.value)} type="button" role="option" aria-selected={i === idx} className={`sx__pico${i === idx ? ' is-on' : ''}${i === hi ? ' is-hi' : ''}`} style={preview ? { fontFamily: `"${o.label}", Calibri, sans-serif` } : undefined} onMouseEnter={() => setHi(i)} onClick={() => choose(o)}>
+              <span>{o.label}</span>{i === idx && <b aria-hidden="true">✓</b>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 function useOutside(ref, close) {
   useEffect(() => { const h = (e) => { if (ref.current && !ref.current.contains(e.target)) close(); }; window.addEventListener('pointerdown', h, true); return () => window.removeEventListener('pointerdown', h, true); }, [ref, close]);
 }
@@ -78,8 +106,8 @@ export default function SheetRibbon({ A, tt, state }) {
               <RB icon="ed-cut" title={tt('Cut (Ctrl+X)', 'قص (Ctrl+X)')} onClick={() => A.copy(true)} /><RB icon="copy" title={tt('Copy (Ctrl+C)', 'نسخ (Ctrl+C)')} onClick={() => A.copy(false)} />
             </div>
             <div className="sx__grp">
-              <select className="sx__sel" aria-label={tt('Font', 'الخط')} value={ast.font || 'Calibri'} onChange={(e) => A.style({ font: e.target.value === 'Calibri' ? null : e.target.value })}>{FONTS.map((f) => <option key={f}>{f}</option>)}</select>
-              <select className="sx__sel sx__sel--s" aria-label={tt('Font size', 'حجم الخط')} value={sz} onChange={(e) => A.style({ fs: +e.target.value === 10.5 ? null : +e.target.value })}>{SIZES.map((s) => <option key={s}>{s}</option>)}</select>
+              <Pick cls="sx__pick--f" aria={tt('Font', 'الخط')} preview value={ast.font || 'Calibri'} label={ast.font || 'Calibri'} options={FONTS.map((f) => ({ value: f, label: f }))} onPick={(v) => A.style({ font: v === 'Calibri' ? null : v })} />
+              <Pick cls="sx__pick--s" aria={tt('Font size', 'حجم الخط')} value={sz} label={String(sz)} options={SIZES.map((x) => ({ value: x, label: String(x) }))} onPick={(v) => A.style({ fs: +v === 10.5 ? null : +v })} />
               <RB icon="ed-bold" title={tt('Bold (Ctrl+B)', 'غامق (Ctrl+B)')} on={!!ast.b} onClick={() => A.toggle('b')} /><RB icon="ed-italic" title={tt('Italic (Ctrl+I)', 'مائل (Ctrl+I)')} on={!!ast.i} onClick={() => A.toggle('i')} />
               <RB icon="ed-underline" title={tt('Underline (Ctrl+U)', 'تسطير (Ctrl+U)')} on={!!ast.u} onClick={() => A.toggle('u')} /><RB icon="ed-strike" title={tt('Strikethrough (Ctrl+5)', 'يتوسطه خط')} on={!!ast.st} onClick={() => A.toggle('st')} />
               <Drop icon="ed-outline" title={tt('Borders', 'الحدود')}>
@@ -97,9 +125,7 @@ export default function SheetRibbon({ A, tt, state }) {
               <RB icon="ed-merge" label={tt('Merge', 'دمج')} title={tt('Merge & center', 'دمج وتوسيط')} onClick={() => { A.merge(true); A.style({ al: 'center' }); }} /><RB icon="ed-split" title={tt('Unmerge', 'إلغاء الدمج')} onClick={() => A.merge(false)} />
             </div>
             <div className="sx__grp">
-              <select className="sx__sel sx__sel--n" aria-label={tt('Number format', 'تنسيق الرقم')} value={cur ? cur.id : 'custom'} onChange={(e) => { const f = NUM_FORMATS.find((x) => x.id === e.target.value); if (f) A.style({ nf: f.code === 'General' ? null : f.code }); }}>
-                {!cur && <option value="custom">{nf}</option>}{NUM_FORMATS.map((f) => <option key={f.id} value={f.id}>{tt(f.en, f.ar)}</option>)}
-              </select>
+              <Pick cls="sx__pick--n" aria={tt('Number format', 'تنسيق الرقم')} value={cur ? cur.id : 'custom'} label={cur ? tt(cur.en, cur.ar) : nf} options={[...(cur ? [] : [{ value: 'custom', label: nf }]), ...NUM_FORMATS.map((f) => ({ value: f.id, label: tt(f.en, f.ar) }))]} onPick={(v) => { const f = NUM_FORMATS.find((x) => x.id === v); if (f) A.style({ nf: f.code === 'General' ? null : f.code }); }} />
               <RB label="$" title={tt('Currency', 'عملة')} onClick={() => A.style({ nf: '"$"#,##0.00' })} /><RB label="%" title={tt('Percent', 'نسبة')} onClick={() => A.style({ nf: '0%' })} /><RB label="," title={tt('Comma style', 'فواصل')} onClick={() => A.style({ nf: '#,##0.00' })} />
               <RB label=".0→" title={tt('Increase decimals', 'زيادة الكسور')} onClick={() => A.style({ nf: decimals(ast.nf, 1) })} /><RB label="←.0" title={tt('Decrease decimals', 'تقليل الكسور')} onClick={() => A.style({ nf: decimals(ast.nf, -1) })} />
             </div>
