@@ -1,6 +1,7 @@
 import { key, keyR, keyC, MAXR, MAXC, colName } from './addr.js';
 import { rewrite, shiftFormula, isErr } from './formula.js';
 import { cmp, parseNum } from './core.js';
+import { autoGrow } from './autofit.js';
 
 const HIST = 100;
 const cloneCell = (c) => (c ? { ...c } : null);
@@ -26,7 +27,7 @@ export class Ctl {
   /** keys: array of cell keys that fn may touch, or 'all' for structural edits. */
   run(sheet, keys, fn) {
     const ks = keys === 'all' ? 'all' : [...new Set(keys)];
-    const before = this.cap(sheet, ks); fn(); const after = this.cap(sheet, ks);
+    const before = this.cap(sheet, ks); fn(); autoGrow(this.wb, sheet, ks); const after = this.cap(sheet, ks);
     this.undoS.push({ sheet, before, after }); if (this.undoS.length > HIST) this.undoS.shift(); this.redoS = [];
     this.wb.touch(); this.emit();
   }
@@ -71,7 +72,7 @@ export class Ctl {
       if (on && (g.r1 !== g.r2 || g.c1 !== g.c2)) { sheet.merges.push({ ...g }); for (let r = g.r1; r <= g.r2; r += 1) for (let c = g.c1; c <= g.c2; c += 1) if ((r !== g.r1 || c !== g.c1) && sheet.cells.has(key(r, c))) { const cell = sheet.cells.get(key(r, c)); cell.v = null; cell.f = null; } }
     });
   }
-  setColW(sheet, cols, w) { this.run(sheet, 'all', () => { cols.forEach((c) => (w === null ? sheet.colW.delete(c) : sheet.colW.set(c, w))); }); }
+  setColW(sheet, cols, w, auto = false) { this.run(sheet, 'all', () => { cols.forEach((c) => { if (w === null) { sheet.colW.delete(c); sheet.manualW.delete(c); } else { sheet.colW.set(c, w); if (auto) sheet.manualW.delete(c); else sheet.manualW.add(c); } }); }); }
   setRowH(sheet, rows, h) { this.run(sheet, 'all', () => { rows.forEach((r) => (h === null ? sheet.rowH.delete(r) : sheet.rowH.set(r, h))); }); }
   hide(sheet, axis, idx, on) { this.run(sheet, 'all', () => { const set = axis === 'r' ? sheet.hiddenRows : sheet.hiddenCols; idx.forEach((i) => (on ? set.add(i) : set.delete(i))); }); }
   freeze(sheet, r, c) { this.run(sheet, 'all', () => { sheet.freeze = { r, c }; }); }

@@ -1,7 +1,8 @@
 /* Spreadsheet editor (components/sheet/*) — Excel-style ribbon + canvas grid. Light / dark follow .sx--light / .sx--dark. */
 .sx { --sx-bg: #fff; --sx-panel: #f3f3f3; --sx-line: #d6d6d6; --sx-text: #1f1f1f; --sx-muted: #5f6368; --sx-accent: #217346; --sx-accent-soft: #d3f0e0; --sx-hover: rgba(0,0,0,.07); --sx-pop: #fff;
   flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; background: var(--sx-bg); color: var(--sx-text); font-size: 12.5px; font-family: Calibri, "Segoe UI", system-ui, "Noto Sans Arabic", sans-serif; position: relative; overflow: hidden; }
-.sx--dark { --sx-bg: #17181c; --sx-panel: #22242a; --sx-line: #383a42; --sx-text: #e8e8ec; --sx-muted: #a5a8b3; --sx-accent: #4fc38a; --sx-accent-soft: #1f4535; --sx-hover: rgba(255,255,255,.09); --sx-pop: #2a2c33; }
+.sx--dark { --sx-bg: #0f1420; --sx-panel: #151b2b; --sx-line: rgba(255,255,255,.1); --sx-text: #e8ecf3; --sx-muted: #9aa4b6; --sx-accent: #6ea8ff; --sx-accent-soft: rgba(110,168,255,.18); --sx-hover: rgba(255,255,255,.08); --sx-pop: #1b2236; }
+.sx--dark .sx__ta, .sx--dark .sx__fxin, .sx--dark .sx__name { color-scheme: dark; }
 .sx * { box-sizing: border-box; }
 .sx button, .sx select, .sx input, .sx textarea { font: inherit; color: inherit; }
 .sx button:focus-visible, .sx select:focus-visible, .sx input:focus-visible { outline: 2px solid var(--sx-accent); outline-offset: 1px; }
@@ -14,11 +15,11 @@
 .sx__tools { display: flex; flex-wrap: wrap; gap: 0; padding: 4px 6px 6px; min-height: 46px; align-items: stretch; }
 .sx__grp { display: flex; align-items: center; flex-wrap: wrap; gap: 1px; padding: 0 8px; border-inline-end: 1px solid var(--sx-line); }
 .sx__grp:last-child { border-inline-end: 0; }
-.sx__rb { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 28px; height: 28px; padding: 0 6px; background: none; border: 1px solid transparent; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.sx__rb { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 30px; height: 30px; padding: 0 7px; background: none; border: 1px solid transparent; border-radius: 8px; cursor: pointer; white-space: nowrap; }
 .sx__rb:hover:not(:disabled) { background: var(--sx-hover); }
 .sx__rb.is-on { background: var(--sx-accent-soft); border-color: var(--sx-accent); }
 .sx__rb:disabled { opacity: .4; cursor: default; }
-.sx__sel { height: 26px; background: var(--sx-bg); border: 1px solid var(--sx-line); border-radius: 4px; padding: 0 4px; max-width: 130px; }
+.sx__sel { height: 28px; background: var(--sx-bg); border: 1px solid var(--sx-line); border-radius: 8px; padding: 0 4px; max-width: 130px; }
 .sx__sel--s { width: 58px; } .sx__sel--n { width: 118px; }
 .sx__drop { position: relative; }
 .sx__pop { position: absolute; z-index: 30; top: 100%; inset-inline-start: 0; min-width: 170px; background: var(--sx-pop); border: 1px solid var(--sx-line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.25); padding: 4px; display: flex; flex-direction: column; }
@@ -31,9 +32,9 @@
 .sx__swn { display: block; width: 100%; text-align: start; background: none; border: 0; padding: 5px 4px; cursor: pointer; border-radius: 4px; }
 .sx__swn:hover { background: var(--sx-hover); } .sx__swn input { margin-inline-start: 6px; width: 28px; height: 18px; padding: 0; border: 0; vertical-align: middle; }
 .sx__fx { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-bottom: 1px solid var(--sx-line); background: var(--sx-bg); flex: none; }
-.sx__name { width: 92px; text-align: center; background: var(--sx-bg); border: 1px solid var(--sx-line); border-radius: 4px; padding: 4px 6px; font-weight: 600; }
+.sx__name { width: 92px; text-align: center; background: var(--sx-bg); border: 1px solid var(--sx-line); border-radius: 8px; padding: 4px 6px; font-weight: 600; }
 .sx__fxl { font-style: italic; font-weight: 700; color: var(--sx-muted); padding: 0 4px; font-family: Georgia, serif; }
-.sx__fxin { flex: 1; min-width: 0; background: var(--sx-bg); border: 1px solid var(--sx-line); border-radius: 4px; padding: 4px 8px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
+.sx__fxin { flex: 1; min-width: 0; background: var(--sx-bg); border: 1px solid var(--sx-line); border-radius: 8px; padding: 5px 10px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
 .sx__body { flex: 1; min-height: 0; position: relative; display: flex; }
 .sx__grid { flex: 1; min-width: 0; min-height: 0; overflow: auto; position: relative; outline: none; background: var(--sx-bg); cursor: cell; touch-action: pan-x pan-y; overscroll-behavior: contain; }
 .sx__cv { position: absolute; display: block; pointer-events: none; will-change: transform; }
@@ -50,7 +51,7 @@
 .sx__menu { z-index: 60; margin: 0; padding: 4px; list-style: none; min-width: 200px; background: var(--sx-pop); border: 1px solid var(--sx-line); border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.35); color: var(--sx-text); font-size: 12.5px; }
 .sx__menu button { display: block; width: 100%; text-align: start; background: none; border: 0; padding: 6px 12px; border-radius: 4px; cursor: pointer; } .sx__menu button:hover:not(:disabled) { background: var(--sx-hover); } .sx__menu button:disabled { opacity: .4; }
 .sx__msep { height: 1px; background: var(--sx-line); margin: 4px 2px; }
-.sx__status { display: flex; align-items: center; gap: 14px; padding: 0 8px; border-top: 1px solid var(--sx-line); background: var(--sx-panel); flex: none; min-height: 30px; overflow: hidden; }
+.sx__status { display: flex; align-items: center; gap: 14px; padding: 0 8px; border-top: 1px solid var(--sx-line); background: var(--sx-panel); flex: none; min-height: 34px; overflow: hidden; }
 .sx__tabs { display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; max-width: 62%; padding-top: 3px; scrollbar-width: thin; }
 .sx__tab { padding: 5px 14px; border: 1px solid transparent; border-bottom: 0; border-radius: 4px 4px 0 0; cursor: pointer; white-space: nowrap; color: var(--sx-muted); user-select: none; }
 .sx__tab:hover { background: var(--sx-hover); } .sx__tab.is-on { background: var(--sx-bg); color: var(--sx-accent); font-weight: 600; border-color: var(--sx-line); box-shadow: inset 0 -2px 0 var(--sx-accent); }

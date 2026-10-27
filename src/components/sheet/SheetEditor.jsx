@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import OfficeShell from '../editor/OfficeShell';
 import SheetApp from './SheetApp';
+import { autoFitAll } from '../../lib/sheet/autofit.js';
 import { Ctl } from '../../lib/sheet/ctl.js';
 import { csvToWorkbook, deserializeWb, readXlsx, serializeWb, workbookToCsv, writeXlsx } from '../../lib/sheet/xlsxio.js';
 
@@ -8,11 +9,16 @@ const DRAFT_MIME = 'application/x-uip-sheets2+json';
 export const MAX_BYTES = 40 * 1024 * 1024;
 
 /** Blob (.xlsx / .csv / .tsv / local draft) -> Workbook. */
-export async function openWorkbook(blob, ext) {
+async function readAny(blob, ext) {
   if (blob?.type === DRAFT_MIME) return deserializeWb(await blob.text());
   if (ext === 'csv' || ext === 'tsv') return csvToWorkbook(await blob.text(), ext === 'tsv' ? '\t' : ',');
   if (blob.size > MAX_BYTES) throw new Error('too large');
   return readXlsx(new Uint8Array(await blob.arrayBuffer()));
+}
+export async function openWorkbook(blob, ext) {
+  const wb = await readAny(blob, ext);
+  wb.sheets.forEach((s) => autoFitAll(wb, s)); // columns without their own width fit their content, like double-clicking the header edge
+  return wb;
 }
 export function workbookBlob(wb, ext) {
   if (ext === 'csv' || ext === 'tsv') return new Blob(['\uFEFF', workbookToCsv(wb, ext === 'tsv' ? '\t' : ',')], { type: ext === 'tsv' ? 'text/tab-separated-values' : 'text/csv' });

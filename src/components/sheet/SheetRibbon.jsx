@@ -107,6 +107,8 @@ export default function SheetRibbon({ A, tt, state }) {
               <Drop label={tt('Format', 'تنسيق')}>
                 <Item onClick={() => { const v = window.prompt(tt('Row height (px)', 'ارتفاع الصف (بكسل)'), '24'); if (v && +v > 0) { const s = A.sel; A.ctl.setRowH(A.sheet, Array.from({ length: s.r2 - s.r1 + 1 }, (_, i) => s.r1 + i), +v); } }}>{tt('Row height…', 'ارتفاع الصف…')}</Item>
                 <Item onClick={() => { const v = window.prompt(tt('Column width (px)', 'عرض العمود (بكسل)'), '80'); if (v && +v > 0) { const s = A.sel; A.ctl.setColW(A.sheet, Array.from({ length: s.c2 - s.c1 + 1 }, (_, i) => s.c1 + i), +v); } }}>{tt('Column width…', 'عرض العمود…')}</Item>
+                <Item onClick={() => A.autofit('c', A.sel.c1)}>{tt('AutoFit column width', 'ضبط عرض العمود تلقائيًا')}</Item>
+                <Item onClick={() => A.autofit('r', A.sel.r1)}>{tt('AutoFit row height', 'ضبط ارتفاع الصف تلقائيًا')}</Item>
                 <Item onClick={() => A.hide('r', true)}>{tt('Hide rows', 'إخفاء الصفوف')}</Item><Item onClick={() => A.hide('c', true)}>{tt('Hide columns', 'إخفاء الأعمدة')}</Item><Item onClick={A.unhideAll}>{tt('Unhide all', 'إظهار الكل')}</Item>
               </Drop>
             </div>

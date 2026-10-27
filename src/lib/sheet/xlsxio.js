@@ -85,7 +85,7 @@ export async function readXlsx(data) {
       // resolve shared formulas lazily with the same shifting rules as fill
       if (sheet._sh) { const { shiftFormula } = await import('./formula.js'); for (const cell of sheet.cells.values()) if (cell.f && typeof cell.f === 'object') { const { shared, r, c } = cell.f; cell.f = shiftFormula(shared.f, r - shared.r, c - shared.c); } delete sheet._sh; }
       // formulas keep their last value only as a cache-less hint: the engine recomputes
-      const cols = kid(ws, 'cols'); kids(cols, 'col').forEach((c) => { for (let i = +c.a.min - 1; i <= Math.min(+c.a.max - 1, 300); i += 1) { if (c.a.width) sheet.colW.set(i, Math.round(+c.a.width * 7 + 5)); if (c.a.hidden === '1') sheet.hiddenCols.add(i); } });
+      const cols = kid(ws, 'cols'); kids(cols, 'col').forEach((c) => { for (let i = +c.a.min - 1; i <= Math.min(+c.a.max - 1, 300); i += 1) { if (c.a.width) { sheet.colW.set(i, Math.round(+c.a.width * 7 + 5)); if (c.a.customWidth === '1') sheet.manualW.add(i); } if (c.a.hidden === '1') sheet.hiddenCols.add(i); } });
       kids(kid(ws, 'mergeCells'), 'mergeCell').forEach((m) => { const g = parseRange(m.a.ref); if (g) sheet.merges.push(g); });
       const pane = kid(kid(kid(ws, 'sheetViews'), 'sheetView'), 'pane'); if (pane && pane.a.state && /frozen/.test(pane.a.state)) sheet.freeze = { r: +(pane.a.ySplit || 0), c: +(pane.a.xSplit || 0) };
     }
@@ -188,7 +188,7 @@ export function deserializeWb(text) {
   for (const sj of j.sheets) {
     const s = wb.addSheet(sj.name);
     for (const [k, v, f, st] of sj.cells) { s.cells.set(k, { v: v && typeof v === 'object' && v.e ? ERR_BY_CODE[v.e] : v, f, s: st }); s.bump(keyR(k), keyC(k)); }
-    s.colW = new Map(sj.colW); s.rowH = new Map(sj.rowH); s.hiddenRows = new Set(sj.hr); s.hiddenCols = new Set(sj.hc); s.merges = sj.merges || []; s.freeze = sj.freeze || { r: 0, c: 0 };
+    s.colW = new Map(sj.colW); s.manualW = new Set(sj.colW.map((x) => x[0])); s.rowH = new Map(sj.rowH); s.hiddenRows = new Set(sj.hr); s.hiddenCols = new Set(sj.hc); s.merges = sj.merges || []; s.freeze = sj.freeze || { r: 0, c: 0 };
   }
   wb.touch(); return wb;
 }

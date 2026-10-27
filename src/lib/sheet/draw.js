@@ -6,7 +6,7 @@ export const DEF_W = 80; export const DEF_H = 24; export const HDR_W = 48; expor
 export const FONT = 'Calibri, "Segoe UI", system-ui, -apple-system, "Noto Sans Arabic", sans-serif';
 export const THEMES = {
   light: { bg: '#ffffff', fg: '#1f1f1f', grid: '#dcdcdc', head: '#f3f3f3', headFg: '#444444', headOn: '#d3f0e0', headOnFg: '#0e6b3a', accent: '#217346', sel: 'rgba(33,115,70,.12)', corner: '#e6e6e6' },
-  dark: { bg: '#17181c', fg: '#e8e8ec', grid: '#33353c', head: '#22242a', headFg: '#a5a8b3', headOn: '#1f4535', headOnFg: '#9be3bd', accent: '#4fc38a', sel: 'rgba(79,195,138,.16)', corner: '#2a2c33' },
+  dark: { bg: '#0f1420', fg: '#e8ecf3', grid: '#222a3d', head: '#151b2b', headFg: '#9aa4b6', headOn: '#1d2d52', headOnFg: '#c3d8ff', accent: '#6ea8ff', sel: 'rgba(110,168,255,.14)', corner: '#1a2236' },
 };
 export const REF_COLORS = ['#4472c4', '#ed7d31', '#a5a5a5', '#ffc000', '#5b9bd5', '#70ad47', '#9e480e', '#7030a0'];
 const CSS_COLORS = { red: '#ff0000', blue: '#0000ff', green: '#00a000', yellow: '#e6b800', magenta: '#ff00ff', cyan: '#00b0b0', black: '#000000', white: '#ffffff' };

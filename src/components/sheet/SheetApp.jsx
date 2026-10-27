@@ -5,13 +5,15 @@ import { E, isErr, tokenize, shiftFormula } from '../../lib/sheet/formula.js';
 import { eachCell, Rng, toStr } from '../../lib/sheet/core.js';
 import { FUNCS } from '../../lib/sheet/funcs.js';
 import { DEF_H, DEF_W, HDR_H, HDR_W, FONT, THEMES, drawGrid, geometry, locate, displayOf, fontOf, mergeIndex } from '../../lib/sheet/draw.js';
+import { fitColumn } from '../../lib/sheet/autofit.js';
 import SheetRibbon from './SheetRibbon';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const mkSel = (ar, ac, r2 = ar, c2 = ac) => ({ ar, ac, r1: Math.min(ar, r2), c1: Math.min(ac, c2), r2: Math.max(ar, r2), c2: Math.max(ac, c2) });
 const FN_NAMES = Object.keys(FUNCS).sort();
-const THEME_KEY = 'uip.sheet.theme2';
-const loadTheme = () => { try { return localStorage.getItem(THEME_KEY) === 'dark' ? 'dark' : 'light'; } catch { return 'light'; } };
+const THEME_KEY = 'uip.sheet.theme3';
+// The editor frame is the platform's dark navy, so the grid defaults to dark; the read-only preview follows the site theme.
+const loadTheme = (readOnly) => { try { const t = localStorage.getItem(THEME_KEY); if (t === 'dark' || t === 'light') return t; return readOnly ? (document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light') : 'dark'; } catch { return 'dark'; } };
 
 /** Next / previous editing position that follows Excel: jump to the edge of a data block with Ctrl+Arrow. */
 function jump(wb, sheet, r, c, dr, dc) {
@@ -31,7 +33,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast }) {
   useEffect(() => ctl.on(force), [ctl]);
   const [six, setSix] = useState(0);
   const sheet = wb.sheets[Math.min(six, wb.sheets.length - 1)];
-  const [theme, setThemeS] = useState(loadTheme);
+  const [theme, setThemeS] = useState(() => loadTheme(readOnly));
   const setTheme = (t) => { setThemeS(t); try { localStorage.setItem(THEME_KEY, t); } catch { /* storage unavailable */ } };
   const [view, setView] = useState({ grid: true, head: true, showF: false, bar: true, z: 1 });
   const [sel, setSelS] = useState(() => mkSel(0, 0));
@@ -180,7 +182,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast }) {
       const g = { r1: Math.min(md.r, r), c1: Math.min(md.c, c), r2: Math.max(md.r, r), c2: Math.max(md.c, c) }; insertRef(rangeStr(g));
     } else if (md.t === 'resize') {
       const d = ((md.edge.axis === 'c' ? e.clientX - b.left : e.clientY - b.top) - md.start) / z; const nv = Math.max(md.edge.axis === 'c' ? 12 : 8, Math.round(md.orig + d));
-      md.group.forEach((i) => (md.edge.axis === 'c' ? sheet.colW.set(i, nv) : sheet.rowH.set(i, nv))); md.val = nv; wb.version += 1; force();
+      md.group.forEach((i) => { if (md.edge.axis === 'c') { sheet.colW.set(i, nv); sheet.manualW.add(i); } else sheet.rowH.set(i, nv); }); md.val = nv; wb.version += 1; force();
     } else if (md.t === 'fill') {
       const s0 = md.src; let dst = null;
       if (r > s0.r2 && Math.abs(r - s0.r2) >= Math.abs(c - s0.c2) * 0.6 || (r > s0.r2 && c >= s0.c1 && c <= s0.c2)) dst = { r1: s0.r2 + 1, r2: r, c1: s0.c1, c2: s0.c2 };
@@ -198,8 +200,9 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast }) {
     if (md.t === 'point') requestAnimationFrame(() => taRef.current?.focus());
   };
   const autofit = (axis, idx) => {
-    const cv = document.createElement('canvas').getContext('2d'); let max = 0;
-    if (axis === 'c') { for (let r = 0; r <= Math.min(sheet.maxRow, 3000); r += 1) { const d = displayOf(wb, sheet, r, idx, false); if (!d.text) continue; cv.font = fontOf(d.st, 1); max = Math.max(max, cv.measureText(d.text).width + 12); } ctl.setColW(sheet, [idx], max ? Math.ceil(Math.max(30, max)) : null); } else { let mh = DEF_H; for (let c = 0; c <= Math.min(sheet.maxCol, 200); c += 1) { const d = displayOf(wb, sheet, idx, c, false); if (d.st.wrap && d.text) { cv.font = fontOf(d.st, 1); const w = sheet.colW.get(c) ?? DEF_W; const lines = Math.ceil(cv.measureText(d.text).width / Math.max(10, w - 8)); mh = Math.max(mh, lines * 19 + 5); } else if (d.st.fs) mh = Math.max(mh, d.st.fs * 1.333 * 1.3 + 6); } ctl.setRowH(sheet, [idx], mh > DEF_H ? Math.ceil(mh) : null); }
+    if (axis === 'c') { const s = cur(); const cols = idx >= s.c1 && idx <= s.c2 && s.c2 > s.c1 ? Array.from({ length: s.c2 - s.c1 + 1 }, (_, i) => s.c1 + i) : [idx]; cols.forEach((c) => { const w = fitColumn(wb, sheet, c); ctl.setColW(sheet, [c], w, true); }); return; }
+    const cv = document.createElement('canvas').getContext('2d');
+    { let mh = DEF_H; for (let c = 0; c <= Math.min(sheet.maxCol, 200); c += 1) { const d = displayOf(wb, sheet, idx, c, false); if (d.st.wrap && d.text) { cv.font = fontOf(d.st, 1); const w = sheet.colW.get(c) ?? DEF_W; const lines = Math.ceil(cv.measureText(d.text).width / Math.max(10, w - 8)); mh = Math.max(mh, lines * 19 + 5); } else if (d.st.fs) mh = Math.max(mh, d.st.fs * 1.333 * 1.3 + 6); } ctl.setRowH(sheet, [idx], mh > DEF_H ? Math.ceil(mh) : null); }
   };
   const onDbl = (e) => {
     const h = hit(e); if (!h) return; const edge = nearEdge(h); if (edge && !readOnly) { autofit(edge.axis, edge.idx); return; }
@@ -216,7 +219,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast }) {
 
   /* ---------- actions (used by ribbon, menu and keyboard) ---------- */
   const A = {
-    sheet, sel, edit, view, theme, wb, ctl, readOnly,
+    sheet, sel, edit, view, theme, wb, ctl, readOnly, autofit,
     setView: (p) => setView((v) => ({ ...v, ...p })), setTheme,
     range: rangeOf,
     style: (patch) => { if (editRef.current) commit(0, 0, true); ctl.style(sheet, rangeOf(), patch); },
