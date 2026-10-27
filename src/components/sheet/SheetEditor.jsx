@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import OfficeShell from '../editor/OfficeShell';
 import SheetApp from './SheetApp';
 import { autoFitAll } from '../../lib/sheet/autofit.js';
@@ -38,6 +38,7 @@ export function SheetPreview({ blob, ext, tt, rtl }) {
 export default function SheetEditor({ blob, fileName, ext, tt, rtl, guardRef, onSave, onClose, draftKey, startDirty = false }) {
   const [state, setState] = useState({ status: 'loading' });
   const [, tick] = useState(0);
+  const saveKeyRef = useRef(null);
   useEffect(() => {
     let dead = false;
     openWorkbook(blob, ext).then((wb) => { if (dead) return; const ctl = new Ctl(wb); if (startDirty) ctl.rev = 1; setState({ status: 'ready', ctl }); }).catch((e) => !dead && setState({ status: 'error', msg: e?.message || String(e) }));
@@ -51,9 +52,9 @@ export default function SheetEditor({ blob, fileName, ext, tt, rtl, guardRef, on
   if (state.status === 'loading') return <div className="ed ed--center"><span className="st-fv-spinner" /><p className="ed__hint">{tt('Opening the sheet…', 'جارٍ فتح الجدول…')}</p></div>;
   if (state.status === 'error') return <div className="ed ed--center"><p className="ed__err">{state.msg}</p><button type="button" className="ed__btn" onClick={onClose}>{tt('Close', 'إغلاق')}</button></div>;
   return (
-    <OfficeShell fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={ctl.dirty} build={build} onSaved={() => ctl.markSaved()} draftKey={draftKey} draftToken={ctl.rev} draftBuild={draftBuild}
+    <OfficeShell saveKeyRef={saveKeyRef} fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={ctl.dirty} build={build} onSaved={() => ctl.markSaved()} draftKey={draftKey} draftToken={ctl.rev} draftBuild={draftBuild}
       status={note ? <p className="ed__hint ed__hint--note xg__note">{note}</p> : null}>
-      <SheetApp ctl={ctl} tt={tt} rtl={rtl} />
+      <SheetApp ctl={ctl} tt={tt} rtl={rtl} saveKeyRef={saveKeyRef} />
     </OfficeShell>
   );
 }

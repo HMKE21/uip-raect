@@ -27,7 +27,29 @@ function jump(wb, sheet, r, c, dr, dc) {
   return inb(nr, nc) ? [nr, nc] : [clamp(nr, 0, MAXR - 1), clamp(nc, 0, MAXC - 1)];
 }
 
-export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast }) {
+export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, saveKeyRef }) {
+  const rootRef = useRef(null);
+  /* Keyboard shortcuts belong to the sheet, not to the browser: Ctrl+S / Ctrl+A / Ctrl+F / Ctrl+H ... are caught here even when focus is on the page body (e.g. right after a ribbon click). */
+  useEffect(() => {
+    const root = rootRef.current; if (!root) return undefined;
+    const FWD = new Set(['a', 'b', 'i', 'u', 'z', 'y', 'f', 'h', 'd', 'r', 'k', 'g', 'e', 'l', '5', ';', ':']); const NATIVE = new Set(['c', 'v', 'x']);
+    const grid = () => root.querySelector('.sx__grid');
+    const h = (e) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const k = e.key.toLowerCase(); const t = e.target;
+      const inside = root.contains(t); const idle = t === document.body || t === document.documentElement;
+      if (!inside && !idle) return; // dialogs and inputs elsewhere on the site keep their own keys
+      if (k === 's') { e.preventDefault(); e.stopPropagation(); if (!readOnly && saveKeyRef?.current) saveKeyRef.current(); return; }
+      if (inside && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+      const g = grid(); if (!g) return;
+      if (idle && NATIVE.has(k)) { g.focus({ preventScroll: true }); return; }
+      if (idle && FWD.has(k)) { e.preventDefault(); e.stopPropagation(); g.focus({ preventScroll: true }); g.dispatchEvent(new KeyboardEvent('keydown', { key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, bubbles: true, cancelable: true })); return; }
+      if (inside && (FWD.has(k) || NATIVE.has(k)) && !e.defaultPrevented) { /* grid handler runs next; make sure the browser default never wins */ if (!NATIVE.has(k)) e.preventDefault(); }
+    };
+    window.addEventListener('keydown', h, true);
+    if (!readOnly) requestAnimationFrame(() => grid()?.focus({ preventScroll: true }));
+    return () => window.removeEventListener('keydown', h, true);
+  }, [readOnly, saveKeyRef]);
   const wb = ctl.wb;
   const [, force] = useReducer((x) => x + 1, 0);
   useEffect(() => ctl.on(force), [ctl]);
@@ -383,7 +405,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast }) {
   void tokenize; void shiftFormula; void toStr; void FONT; void E; void isErr; void parseCell; void refText; void T; void setSix;
 
   return (
-    <div className={`sx sx--${theme}`} dir="ltr" data-rtl={rtl ? '1' : undefined}>
+    <div ref={rootRef} className={`sx sx--${theme}`} dir="ltr" onClick={(e) => { if (!e.target.closest?.('input,select,textarea,.sx__grid,.sx__find,.sx__menu') && !editRef.current) requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }} data-rtl={rtl ? '1' : undefined}>
       {!readOnly && <SheetRibbon A={A} tt={tt} rtl={rtl} state={{ ast, sel, canUndo: ctl.canUndo, canRedo: ctl.canRedo, clip: !!ctl.clip }} />}
       {view.bar && (
         <div className="sx__fx">

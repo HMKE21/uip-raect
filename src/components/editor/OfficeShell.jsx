@@ -10,7 +10,7 @@ import '../../styles/css/office.css';
  * Shared frame for the Office editors: title, save / download / cancel, unsaved-changes guard and 409 conflict handling.
  *   build() -> Promise<Blob>   (called for both Save and Download)
  */
-export default function OfficeShell({ fileName, tt, guardRef, onSave, onClose, dirty, build, onSaved, tools, children, status, draftKey, draftToken, draftBuild, draftDelay }) {
+export default function OfficeShell({ saveKeyRef, fileName, tt, guardRef, onSave, onClose, dirty, build, onSaved, tools, children, status, draftKey, draftToken, draftBuild, draftDelay }) {
   const saveRef = useRef(null);
   // draftBuild: a cheap snapshot for the local autosave (the full file is only built on Save / Download, never every few seconds)
   const draft = useAutoDraft({ draftKey, dirty, token: draftToken, build: draftBuild || build, delay: draftDelay, meta: { name: fileName }, saver: () => saveRef.current?.() });
@@ -44,6 +44,7 @@ export default function OfficeShell({ fileName, tt, guardRef, onSave, onClose, d
     } catch (e) { if (e?.status === 409) setConflict(true); else setErr(e?.message || String(e)); return false; } finally { setSaving(false); }
   };
   saveRef.current = () => doSave(false);
+  if (saveKeyRef) saveKeyRef.current = () => doSave(false); // lets the editor inside bind Ctrl+S to Save
   const download = async () => {
     try {
       const out = await build();
