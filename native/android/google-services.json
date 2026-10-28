@@ -1,13 +1,13 @@
 {
   "project_info": {
-    "project_number": "137558689205",
-    "project_id": "uip-v1",
-    "storage_bucket": "uip-v1.firebasestorage.app"
+    "project_number": "214866379282",
+    "project_id": "uip-nub",
+    "storage_bucket": "uip-nub.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:137558689205:android:23294183928519a41a05fc",
+        "mobilesdk_app_id": "1:214866379282:android:18b0b8a674f85e54a18ecb",
         "android_client_info": {
           "package_name": "com.uip.platform"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAvCJLBxkf9E0MFLiJK2urgNtW8PicBDv4"
+          "current_key": "AIzaSyBeOgyuLH07pER62BAzywfkRw6A9VyjX1s"
         }
       ],
       "services": {
