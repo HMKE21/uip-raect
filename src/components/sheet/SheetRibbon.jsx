@@ -1,24 +1,78 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
+import SxIcon from './SheetIcons';
 import { NUM_FORMATS } from '../../lib/sheet/format.js';
 import { THEME_LIST } from '../../lib/sheet/themes.js';
 import { FUNCS } from '../../lib/sheet/funcs.js';
+import { CELL_STYLES, TABLE_STYLES, SWATCH_THEME, SWATCH_STD, FN_CATS } from '../../lib/sheet/presets.js';
 
-const FONTS = ['Calibri', 'Arial', 'Times New Roman', 'Courier New', 'Tahoma', 'Verdana', 'Segoe UI', 'Georgia', 'Noto Sans Arabic'];
+export const FONTS = ['Calibri', 'Arial', 'Times New Roman', 'Courier New', 'Tahoma', 'Verdana', 'Segoe UI', 'Georgia', 'Cairo', 'Noto Sans Arabic'];
 const SIZES = [8, 9, 10, 10.5, 11, 12, 14, 16, 18, 20, 24, 28, 36, 48, 72];
-const SWATCHES = ['#000000', '#7f7f7f', '#c00000', '#ff0000', '#ffc000', '#ffff00', '#92d050', '#00b050', '#00b0f0', '#0070c0', '#002060', '#7030a0', '#ffffff', '#eeece1', '#fce4d6', '#fff2cc', '#e2efda', '#ddebf7', '#d9d2e9', '#f8cbad'];
-const CATS = {
-  Math: 'SUM PRODUCT ABS ROUND ROUNDUP ROUNDDOWN INT MOD POWER SQRT SUMIF SUMIFS SUMPRODUCT CEILING FLOOR MROUND RAND RANDBETWEEN PI EXP LN LOG LOG10 FACT SIGN TRUNC SUBTOTAL',
-  Statistical: 'AVERAGE AVERAGEIF AVERAGEIFS COUNT COUNTA COUNTBLANK COUNTIF COUNTIFS MAX MIN MAXIFS MINIFS MEDIAN MODE LARGE SMALL RANK STDEV VAR PERCENTILE QUARTILE CORREL SLOPE INTERCEPT FORECAST',
-  Logical: 'IF IFS IFERROR IFNA AND OR NOT XOR SWITCH TRUE FALSE ISBLANK ISNUMBER ISTEXT ISERROR ISNA',
-  Text: 'LEN LEFT RIGHT MID UPPER LOWER PROPER TRIM CONCAT CONCATENATE TEXTJOIN FIND SEARCH SUBSTITUTE REPLACE REPT TEXT VALUE EXACT CHAR CODE TEXTBEFORE TEXTAFTER TEXTSPLIT',
-  'Lookup & Reference': 'VLOOKUP HLOOKUP XLOOKUP LOOKUP MATCH XMATCH INDEX OFFSET INDIRECT ROW COLUMN ROWS COLUMNS CHOOSE TRANSPOSE ADDRESS',
-  'Dynamic arrays': 'SORT SORTBY FILTER UNIQUE SEQUENCE TAKE DROP HSTACK VSTACK TOCOL TOROW CHOOSECOLS CHOOSEROWS',
-  'Date & Time': 'TODAY NOW DATE YEAR MONTH DAY HOUR MINUTE SECOND WEEKDAY WEEKNUM EDATE EOMONTH DATEDIF DAYS NETWORKDAYS WORKDAY DATEVALUE TIME',
-  Financial: 'PMT IPMT PPMT FV PV NPER NPV IRR RATE SLN',
-};
 
-/** Themed dropdown (replaces the OS-styled <select>): same colours as the rest of the editor, keyboard friendly, fonts previewed in their own face. */
+/* ---------------------------------------------------------------- primitives */
+function useOutside(ref, close) {
+  useEffect(() => { const h = (e) => { if (ref.current && !ref.current.contains(e.target)) close(); }; window.addEventListener('pointerdown', h, true); return () => window.removeEventListener('pointerdown', h, true); }, [ref, close]);
+}
+const Glyph = ({ icon, sicon, size = 18 }) => (sicon ? <SxIcon name={sicon} size={size} /> : icon ? <Icon name={icon} size={size} /> : null);
+
+/** Small button: icon and/or label. */
+const SB = ({ icon, sicon, label, title, on, onClick, disabled, size = 17, className = '', children }) => (
+  <button type="button" className={`sx__rb${on ? ' is-on' : ''}${label ? ' has-l' : ''} ${className}`} title={title || label} aria-label={title || label} aria-pressed={on === undefined ? undefined : !!on} disabled={disabled} onClick={onClick}>
+    <Glyph icon={icon} sicon={sicon} size={size} />{label && <span>{label}</span>}{children}
+  </button>
+);
+/** Large button: icon on top, label below (Excel's big commands). */
+const LB = ({ icon, sicon, label, title, on, onClick, disabled, caret, className = '' }) => (
+  <button type="button" className={`sx__lb${on ? ' is-on' : ''} ${className}`} title={title || label} aria-label={title || label} aria-pressed={on === undefined ? undefined : !!on} disabled={disabled} onClick={onClick}>
+    <Glyph icon={icon} sicon={sicon} size={26} /><span>{label}{caret ? <SxIcon name="chevron" size={10} className="sx__car" /> : null}</span>
+  </button>
+);
+
+/** Dropdown: `trigger` is rendered by the caller (so it can be a large or a small button). */
+function Drop({ trigger, children, wide, cls = '', align }) {
+  const [open, setOpen] = useState(false); const ref = useRef(null); const popRef = useRef(null); const [flip, setFlip] = useState(false);
+  useOutside(ref, () => setOpen(false));
+  useLayoutEffect(() => {
+    if (!open) { setFlip(false); return; }
+    const p = popRef.current; const root = ref.current?.closest('.sx'); if (!p || !root) return;
+    const pr = p.getBoundingClientRect(); const rr = root.getBoundingClientRect();
+    if (pr.right > rr.right - 4) setFlip(true);
+  }, [open]);
+  useEffect(() => { if (!open) return undefined; const k = (e) => { if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); } }; window.addEventListener('keydown', k, true); return () => window.removeEventListener('keydown', k, true); }, [open]);
+  return (
+    <div className={`sx__drop ${cls}`} ref={ref}>
+      {trigger({ open, toggle: () => setOpen((o) => !o) })}
+      {open && <div ref={popRef} className={`sx__pop${wide ? ' sx__pop--wide' : ''}${flip || align === 'end' ? ' is-end' : ''}`} role="menu" onClick={(e) => { if (!e.target.closest('input,label.sx__swn')) setOpen(false); }}>{children}</div>}
+    </div>
+  );
+}
+const DropL = ({ icon, sicon, label, title, disabled, wide, children, large }) => (
+  <Drop wide={wide} trigger={({ open, toggle }) => (large
+    ? <LB icon={icon} sicon={sicon} label={label} title={title} caret on={open} onClick={toggle} disabled={disabled} />
+    : <SB icon={icon} sicon={sicon} label={label} title={title} on={open || undefined} onClick={toggle} disabled={disabled}><SxIcon name="chevron" size={10} className="sx__car" /></SB>)}>{children}</Drop>
+);
+const Item = ({ children, onClick, disabled, icon, sicon, hint, on }) => (
+  <button type="button" role="menuitem" className={`sx__it${on ? ' is-on' : ''}`} disabled={disabled} onClick={onClick}>
+    <span className="sx__iti">{(icon || sicon) && <Glyph icon={icon} sicon={sicon} size={16} />}</span><span className="sx__itl">{children}</span>{hint && <kbd>{hint}</kbd>}{on && <b>✓</b>}
+  </button>
+);
+const Sep = () => <div className="sx__msep" role="separator" />;
+const Head = ({ children }) => <div className="sx__thh">{children}</div>;
+
+function Colors({ value, onPick, tt, none }) {
+  return (
+    <div className="sx__sw">
+      {none && <button type="button" className="sx__swn" onClick={() => onPick(null)}>{none}</button>}
+      <div className="sx__thh">{tt('Theme colors', 'ألوان السمة')}</div>
+      <div className="sx__swg">{SWATCH_THEME.flat().map((c, i) => <button key={`${c}${i}`} type="button" className={`sx__swc${value === c ? ' is-on' : ''}`} style={{ background: c }} title={c} aria-label={c} onClick={() => onPick(c)} />)}</div>
+      <div className="sx__thh">{tt('Standard colors', 'ألوان قياسية')}</div>
+      <div className="sx__swg">{SWATCH_STD.map((c) => <button key={c} type="button" className={`sx__swc${value === c ? ' is-on' : ''}`} style={{ background: c }} title={c} aria-label={c} onClick={() => onPick(c)} />)}</div>
+      <label className="sx__swn">{tt('More colors…', 'ألوان أخرى…')}<input type="color" value={value || '#000000'} onChange={(e) => onPick(e.target.value)} /></label>
+    </div>
+  );
+}
+
+/** Themed dropdown (font / size / number format): keyboard friendly, fonts previewed in their own face. */
 function Pick({ value, label, options, onPick, aria, cls = '', preview }) {
   const [open, setOpen] = useState(false); const [hi, setHi] = useState(0); const ref = useRef(null); const listRef = useRef(null);
   useOutside(ref, () => setOpen(false));
@@ -32,7 +86,7 @@ function Pick({ value, label, options, onPick, aria, cls = '', preview }) {
   return (
     <div className={`sx__pick ${cls}`} ref={ref} onKeyDown={onKey}>
       <button type="button" className="sx__pickb" aria-label={aria} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen(!open)}>
-        <span style={preview ? { fontFamily: `"${label}", Calibri, sans-serif` } : undefined}>{label}</span><Icon name="chevron-down" size={12} />
+        <span style={preview ? { fontFamily: `"${label}", Calibri, sans-serif` } : undefined}>{label}</span><SxIcon name="chevron" size={11} />
       </button>
       {open && (
         <div className="sx__pickl" role="listbox" ref={listRef}>
@@ -46,143 +100,309 @@ function Pick({ value, label, options, onPick, aria, cls = '', preview }) {
     </div>
   );
 }
-function useOutside(ref, close) {
-  useEffect(() => { const h = (e) => { if (ref.current && !ref.current.contains(e.target)) close(); }; window.addEventListener('pointerdown', h, true); return () => window.removeEventListener('pointerdown', h, true); }, [ref, close]);
-}
-function Drop({ label, icon, title, children, wide, disabled }) {
-  const [open, setOpen] = useState(false); const ref = useRef(null); useOutside(ref, () => setOpen(false));
-  return (
-    <div className="sx__drop" ref={ref}>
-      <button type="button" className="sx__rb" title={title || label} aria-label={title || label} aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}>
-        {icon && <Icon name={icon} size={17} />}{label && <span>{label}</span>}<Icon name="chevron-down" size={11} />
-      </button>
-      {open && <div className={`sx__pop${wide ? ' sx__pop--wide' : ''}`} onClick={() => setOpen(false)}>{children}</div>}
-    </div>
-  );
-}
-const RB = ({ icon, label, title, on, onClick, disabled, children }) => (
-  <button type="button" className={`sx__rb${on ? ' is-on' : ''}`} title={title || label} aria-label={title || label} aria-pressed={on === undefined ? undefined : !!on} disabled={disabled} onClick={onClick}>
-    {icon && <Icon name={icon} size={17} />}{label && <span>{label}</span>}{children}
-  </button>
+
+/** One ribbon group: content + caption underneath (like Excel). */
+const Grp = ({ label, children, cls = '' }) => (
+  <div className={`sx__grp ${cls}`} role="group" aria-label={label}><div className="sx__gb">{children}</div><div className="sx__gl">{label}</div></div>
 );
-const Item = ({ children, onClick, disabled }) => <button type="button" className="sx__it" disabled={disabled} onClick={onClick}>{children}</button>;
-function Colors({ value, onPick, tt, none }) {
-  return (
-    <div className="sx__sw">
-      {none && <button type="button" className="sx__swn" onClick={() => onPick(null)}>{none}</button>}
-      <div className="sx__swg">{SWATCHES.map((c) => <button key={c} type="button" className="sx__swc" style={{ background: c }} aria-label={c} onClick={() => onPick(c)} />)}</div>
-      <label className="sx__swn">{tt('More colors…', 'ألوان أخرى…')}<input type="color" value={value || '#000000'} onChange={(e) => onPick(e.target.value)} /></label>
-    </div>
-  );
-}
+const Col = ({ children }) => <div className="sx__col">{children}</div>;
+const Row = ({ children }) => <div className="sx__row">{children}</div>;
+
 const decimals = (nf, d) => {
   const code = !nf || nf === 'General' ? '0' : nf; const m = /^(.*?)(0)(\.(0*))?(.*)$/.exec(code.split(';')[0]); if (!m) return nf;
   const cur = m[4] ? m[4].length : 0; const next = Math.max(0, Math.min(15, cur + d)); if (!nf || nf === 'General') { if (d < 0) return nf; }
   return `${m[1]}0${next ? `.${'0'.repeat(next)}` : ''}${m[5]}`;
 };
 
-export default function SheetRibbon({ A, tt, state }) {
-  const [tab, setTab] = useState('home'); const { ast, canUndo, canRedo } = state;
+/* ---------------------------------------------------------------- galleries */
+function StyleGallery({ A, tt }) {
+  return (
+    <div className="sx__gal">
+      <Head>{tt('Good, Bad and Neutral', 'جيد وسيئ ومحايد')}</Head>
+      <div className="sx__galg">{CELL_STYLES.slice(0, 4).map((s) => <Tile key={s.id} s={s} A={A} tt={tt} />)}</div>
+      <Head>{tt('Data and Model', 'البيانات والنموذج')}</Head>
+      <div className="sx__galg">{CELL_STYLES.slice(4, 10).map((s) => <Tile key={s.id} s={s} A={A} tt={tt} />)}</div>
+      <Head>{tt('Titles and Headings', 'العناوين')}</Head>
+      <div className="sx__galg">{CELL_STYLES.slice(10, 15).map((s) => <Tile key={s.id} s={s} A={A} tt={tt} />)}</div>
+      <Head>{tt('Number Format', 'تنسيق الأرقام')}</Head>
+      <div className="sx__galg">{CELL_STYLES.slice(15).map((s) => <Tile key={s.id} s={s} A={A} tt={tt} />)}</div>
+    </div>
+  );
+}
+const Tile = ({ s, A, tt }) => {
+  const p = s.patch;
+  return <button type="button" className="sx__tile" onClick={() => A.cellStyle(s)} style={{ background: p.bg || undefined, color: p.color || undefined, fontWeight: p.b ? 700 : undefined, fontStyle: p.i ? 'italic' : undefined, fontSize: p.fs ? Math.min(15, p.fs) : undefined, borderBottom: p.bd?.b ? `2px solid ${p.bd.b[1]}` : undefined }}>{tt(s.en, s.ar)}</button>;
+};
+function TableGallery({ A, tt }) {
+  return (
+    <div className="sx__gal">
+      <Head>{tt('Table styles', 'أنماط الجدول')}</Head>
+      <div className="sx__galt">
+        {TABLE_STYLES.map((t) => (
+          <button type="button" key={t.id} className="sx__tbl" title={tt(t.en, t.ar)} aria-label={tt(t.en, t.ar)} onClick={() => A.tableStyle(t)}>
+            <i style={{ background: t.head || '#ffffff', borderBottom: `2px solid ${t.line}` }} /><i style={{ background: '#fff' }} /><i style={{ background: t.band || '#fff' }} /><i style={{ background: '#fff' }} />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------------- the ribbon */
+export default function SheetRibbon({ A, tt, state, collapsed, setCollapsed, tab, setTab }) {
+  const { ast, canUndo, canRedo } = state;
+  const [lastFill, setLastFill] = useState('#ffff00'); const [lastFont, setLastFont] = useState('#ff0000');
   const nf = ast.nf || 'General';
   const cur = NUM_FORMATS.find((f) => f.code === nf);
   const sz = ast.fs || 10.5;
+  const TABS = [['home', 'Home', 'الرئيسية'], ['insert', 'Insert', 'إدراج'], ['layout', 'Page Layout', 'تخطيط الصفحة'], ['formulas', 'Formulas', 'الصيغ'], ['data', 'Data', 'البيانات'], ['view', 'View', 'عرض'], ['help', 'Help', 'مساعدة']];
+  const hasSel = A.sel.r1 !== A.sel.r2 || A.sel.c1 !== A.sel.c2;
+
+  const home = (
+    <>
+      <Grp label={tt('Clipboard', 'الحافظة')}>
+        <div className="sx__split">
+          <LB sicon="paste" label={tt('Paste', 'لصق')} title={`${tt('Paste', 'لصق')} (Ctrl+V)`} onClick={() => A.paste('all')} />
+          <DropL title={tt('Paste options', 'خيارات اللصق')} sicon={null}>
+            <Item onClick={() => A.paste('all')}>{tt('Paste', 'لصق')}</Item><Item onClick={() => A.paste('values')}>{tt('Values', 'القيم')}</Item><Item onClick={() => A.paste('formulas')}>{tt('Formulas', 'الصيغ')}</Item><Item onClick={() => A.paste('formats')}>{tt('Formatting', 'التنسيق')}</Item>
+          </DropL>
+        </div>
+        <Col>
+          <SB sicon="cut" label={tt('Cut', 'قص')} title={`${tt('Cut', 'قص')} (Ctrl+X)`} onClick={() => A.copy(true)} />
+          <SB sicon="copy" label={tt('Copy', 'نسخ')} title={`${tt('Copy', 'نسخ')} (Ctrl+C)`} onClick={() => A.copy(false)} />
+          <SB sicon="painter" label={tt('Format Painter', 'ناسخ التنسيق')} on={A.painter} onClick={A.togglePainter} />
+        </Col>
+      </Grp>
+      <Grp label={tt('Font', 'الخط')}>
+        <Col>
+          <Row>
+            <Pick cls="sx__pick--f" aria={tt('Font', 'الخط')} preview value={ast.font || 'Calibri'} label={ast.font || 'Calibri'} options={FONTS.map((f) => ({ value: f, label: f }))} onPick={(v) => A.style({ font: v === 'Calibri' ? null : v })} />
+            <Pick cls="sx__pick--s" aria={tt('Font size', 'حجم الخط')} value={sz} label={String(sz)} options={SIZES.map((x) => ({ value: x, label: String(x) }))} onPick={(v) => A.style({ fs: +v === 10.5 ? null : +v })} />
+            <SB sicon="growfont" title={tt('Increase font size', 'تكبير الخط')} onClick={() => A.style({ fs: Math.min(72, (ast.fs || 10.5) + 1) })} />
+            <SB sicon="shrinkfont" title={tt('Decrease font size', 'تصغير الخط')} onClick={() => A.style({ fs: Math.max(6, (ast.fs || 10.5) - 1) })} />
+          </Row>
+          <Row>
+            <SB icon="ed-bold" title={tt('Bold (Ctrl+B)', 'غامق (Ctrl+B)')} on={!!ast.b} onClick={() => A.toggle('b')} />
+            <SB icon="ed-italic" title={tt('Italic (Ctrl+I)', 'مائل (Ctrl+I)')} on={!!ast.i} onClick={() => A.toggle('i')} />
+            <SB icon="ed-underline" title={tt('Underline (Ctrl+U)', 'تسطير (Ctrl+U)')} on={!!ast.u} onClick={() => A.toggle('u')} />
+            <SB icon="ed-strike" title={tt('Strikethrough (Ctrl+5)', 'يتوسطه خط (Ctrl+5)')} on={!!ast.st} onClick={() => A.toggle('st')} />
+            <span className="sx__vsep" />
+            <Drop trigger={({ open, toggle }) => <SB icon="ed-outline" title={tt('Borders', 'الحدود')} on={open || undefined} onClick={toggle}><SxIcon name="chevron" size={10} className="sx__car" /></SB>}>
+              <Item onClick={() => A.borders('bottom')}>{tt('Bottom Border', 'حد سفلي')}</Item><Item onClick={() => A.borders('top')}>{tt('Top Border', 'حد علوي')}</Item><Item onClick={() => A.borders('left')}>{tt('Left Border', 'حد أيسر')}</Item><Item onClick={() => A.borders('right')}>{tt('Right Border', 'حد أيمن')}</Item><Sep />
+              <Item onClick={() => A.borders('none')}>{tt('No Border', 'بدون حدود')}</Item><Item onClick={() => A.borders('all')}>{tt('All Borders', 'كل الحدود')}</Item><Item onClick={() => A.borders('outer')} hint="Ctrl+Shift+7">{tt('Outside Borders', 'حدود خارجية')}</Item><Item onClick={() => A.borders('thickBox')}>{tt('Thick Outside Borders', 'حدود خارجية سميكة')}</Item><Item onClick={() => A.borders('inner')}>{tt('Inside Borders', 'حدود داخلية')}</Item><Sep />
+              <Item onClick={() => A.openDialog('format', { tab: 'border' })}>{tt('More Borders…', 'المزيد من الحدود…')}</Item>
+            </Drop>
+            <div className="sx__split sx__split--c">
+              <SB icon="ed-fill" title={tt('Fill color', 'لون التعبئة')} onClick={() => A.style({ bg: lastFill })}><i className="sx__cbar" style={{ background: lastFill }} /></SB>
+              <DropL title={tt('Fill color options', 'خيارات لون التعبئة')}><Colors value={ast.bg} tt={tt} none={tt('No Fill', 'بدون تعبئة')} onPick={(c) => { if (c) setLastFill(c); A.style({ bg: c }); }} /></DropL>
+            </div>
+            <div className="sx__split sx__split--c">
+              <SB icon="ed-font-color" title={tt('Font color', 'لون الخط')} onClick={() => A.style({ color: lastFont })}><i className="sx__cbar" style={{ background: lastFont }} /></SB>
+              <DropL title={tt('Font color options', 'خيارات لون الخط')}><Colors value={ast.color} tt={tt} none={tt('Automatic', 'تلقائي')} onPick={(c) => { if (c) setLastFont(c); A.style({ color: c }); }} /></DropL>
+            </div>
+          </Row>
+        </Col>
+        <button type="button" className="sx__dlg" title={tt('Format Cells (Ctrl+1)', 'تنسيق الخلايا (Ctrl+1)')} aria-label={tt('Format Cells', 'تنسيق الخلايا')} onClick={() => A.openDialog('format', { tab: 'font' })} />
+      </Grp>
+      <Grp label={tt('Alignment', 'المحاذاة')}>
+        <Col>
+          <Row>
+            <SB icon="ed-valign-top" title={tt('Top align', 'محاذاة علوية')} on={ast.va === 'top'} onClick={() => A.style({ va: ast.va === 'top' ? null : 'top' })} />
+            <SB icon="ed-valign-mid" title={tt('Middle align', 'محاذاة وسطية')} on={ast.va === 'center'} onClick={() => A.style({ va: ast.va === 'center' ? null : 'center' })} />
+            <SB icon="ed-valign-bottom" title={tt('Bottom align', 'محاذاة سفلية')} on={!ast.va || ast.va === 'bottom'} onClick={() => A.style({ va: null })} />
+            <span className="sx__vsep" />
+            <SB sicon="wrap" label={tt('Wrap Text', 'التفاف النص')} on={!!ast.wrap} onClick={() => A.toggle('wrap')} />
+          </Row>
+          <Row>
+            <SB icon="ed-align-left" title={tt('Align left', 'محاذاة لليسار')} on={ast.al === 'left'} onClick={() => A.style({ al: ast.al === 'left' ? null : 'left' })} />
+            <SB icon="ed-align-center" title={tt('Center', 'توسيط')} on={ast.al === 'center'} onClick={() => A.style({ al: ast.al === 'center' ? null : 'center' })} />
+            <SB icon="ed-align-right" title={tt('Align right', 'محاذاة لليمين')} on={ast.al === 'right'} onClick={() => A.style({ al: ast.al === 'right' ? null : 'right' })} />
+            <span className="sx__vsep" />
+            <SB icon="ed-outdent" title={tt('Decrease indent', 'تقليل المسافة البادئة')} onClick={() => A.style({ ind: Math.max(0, (ast.ind || 0) - 1) || null })} />
+            <SB icon="ed-indent" title={tt('Increase indent', 'زيادة المسافة البادئة')} onClick={() => A.style({ ind: (ast.ind || 0) + 1, al: ast.al || 'left' })} />
+            <DropL icon="ed-merge" label={tt('Merge & Center', 'دمج وتوسيط')}>
+              <Item onClick={() => { A.merge(true); A.style({ al: 'center' }); }} icon="ed-merge">{tt('Merge & Center', 'دمج وتوسيط')}</Item><Item onClick={() => A.merge(true)}>{tt('Merge Cells', 'دمج الخلايا')}</Item><Item onClick={() => A.merge(false)} icon="ed-split">{tt('Unmerge Cells', 'إلغاء دمج الخلايا')}</Item>
+            </DropL>
+          </Row>
+        </Col>
+        <button type="button" className="sx__dlg" title={tt('Format Cells (Ctrl+1)', 'تنسيق الخلايا (Ctrl+1)')} aria-label={tt('Format Cells', 'تنسيق الخلايا')} onClick={() => A.openDialog('format', { tab: 'align' })} />
+      </Grp>
+      <Grp label={tt('Number', 'الرقم')}>
+        <Col>
+          <Row>
+            <Pick cls="sx__pick--n" aria={tt('Number format', 'تنسيق الرقم')} value={cur ? cur.id : 'custom'} label={cur ? tt(cur.en, cur.ar) : nf} options={[...(cur ? [] : [{ value: 'custom', label: nf }]), ...NUM_FORMATS.map((f) => ({ value: f.id, label: tt(f.en, f.ar) }))]} onPick={(v) => { const f = NUM_FORMATS.find((x) => x.id === v); if (f) A.style({ nf: f.code === 'General' ? null : f.code }); }} />
+          </Row>
+          <Row>
+            <SB label="$" title={`${tt('Currency', 'عملة')} (Ctrl+Shift+4)`} onClick={() => A.style({ nf: '"$"#,##0.00' })} />
+            <SB label="%" title={`${tt('Percent', 'نسبة مئوية')} (Ctrl+Shift+5)`} onClick={() => A.style({ nf: '0%' })} />
+            <SB label="," title={tt('Comma style', 'نمط الفاصلة')} onClick={() => A.style({ nf: '#,##0.00' })} />
+            <SB label=".0→" title={tt('Increase decimals', 'زيادة الكسور العشرية')} onClick={() => A.style({ nf: decimals(ast.nf, 1) })} />
+            <SB label="←.0" title={tt('Decrease decimals', 'تقليل الكسور العشرية')} onClick={() => A.style({ nf: decimals(ast.nf, -1) })} />
+          </Row>
+        </Col>
+        <button type="button" className="sx__dlg" title={tt('Format Cells (Ctrl+1)', 'تنسيق الخلايا (Ctrl+1)')} aria-label={tt('Format Cells', 'تنسيق الخلايا')} onClick={() => A.openDialog('format', { tab: 'number' })} />
+      </Grp>
+      <Grp label={tt('Styles', 'الأنماط')}>
+        <DropL large sicon="table" label={tt('Format as Table', 'تنسيق كجدول')} wide><TableGallery A={A} tt={tt} /></DropL>
+        <DropL large sicon="styles" label={tt('Cell Styles', 'أنماط الخلايا')} wide><StyleGallery A={A} tt={tt} /></DropL>
+      </Grp>
+      <Grp label={tt('Cells', 'الخلايا')}>
+        <Col>
+          <DropL icon="ed-row-plus" label={tt('Insert', 'إدراج')}><Item icon="ed-row-plus" onClick={A.insertRows}>{tt('Insert Sheet Rows', 'إدراج صفوف')}</Item><Item icon="ed-col-plus" onClick={A.insertCols}>{tt('Insert Sheet Columns', 'إدراج أعمدة')}</Item><Item sicon="sheetplus" onClick={A.newSheet}>{tt('Insert Sheet', 'إدراج ورقة')}</Item></DropL>
+          <DropL icon="ed-row-minus" label={tt('Delete', 'حذف')}><Item icon="ed-row-minus" onClick={A.deleteRows}>{tt('Delete Sheet Rows', 'حذف صفوف')}</Item><Item icon="ed-col-minus" onClick={A.deleteCols}>{tt('Delete Sheet Columns', 'حذف أعمدة')}</Item><Item onClick={A.deleteSheet} disabled={A.wb.sheets.length < 2}>{tt('Delete Sheet', 'حذف الورقة')}</Item></DropL>
+          <DropL icon="ed-sliders" label={tt('Format', 'تنسيق')}>
+            <Head>{tt('Cell Size', 'حجم الخلية')}</Head>
+            <Item onClick={A.askRowH}>{tt('Row Height…', 'ارتفاع الصف…')}</Item><Item onClick={() => A.autofit('r', A.sel.r1)}>{tt('AutoFit Row Height', 'ضبط ارتفاع الصف تلقائيًا')}</Item>
+            <Item onClick={A.askColW}>{tt('Column Width…', 'عرض العمود…')}</Item><Item onClick={() => A.autofit('c', A.sel.c1)}>{tt('AutoFit Column Width', 'ضبط عرض العمود تلقائيًا')}</Item><Sep />
+            <Item onClick={() => A.hide('r', true)} hint="Ctrl+9">{tt('Hide Rows', 'إخفاء الصفوف')}</Item><Item onClick={() => A.hide('c', true)} hint="Ctrl+0">{tt('Hide Columns', 'إخفاء الأعمدة')}</Item><Item onClick={A.unhideAll}>{tt('Unhide All', 'إظهار الكل')}</Item><Sep />
+            <Item onClick={A.renameSheet}>{tt('Rename Sheet…', 'إعادة تسمية الورقة…')}</Item><Item onClick={() => A.openDialog('format')} hint="Ctrl+1">{tt('Format Cells…', 'تنسيق الخلايا…')}</Item>
+          </DropL>
+        </Col>
+      </Grp>
+      <Grp label={tt('Editing', 'التحرير')}>
+        <Col>
+          <Drop trigger={({ open, toggle }) => <div className="sx__split sx__split--h"><SB sicon="sum" label={tt('AutoSum', 'جمع تلقائي')} title="AutoSum (Alt+=)" onClick={() => A.autoFn('SUM')} /><SB title={tt('AutoSum options', 'خيارات الجمع')} on={open || undefined} onClick={toggle}><SxIcon name="chevron" size={10} className="sx__car" /></SB></div>}>
+            <Item onClick={() => A.autoFn('SUM')} hint="Alt+=">{tt('Sum', 'المجموع')}</Item><Item onClick={() => A.autoFn('AVERAGE')}>{tt('Average', 'المتوسط')}</Item><Item onClick={() => A.autoFn('COUNT')}>{tt('Count Numbers', 'عدّ الأرقام')}</Item><Item onClick={() => A.autoFn('MAX')}>{tt('Max', 'الأكبر')}</Item><Item onClick={() => A.autoFn('MIN')}>{tt('Min', 'الأصغر')}</Item><Sep />
+            <Item onClick={() => A.openDialog('insertfn')}>{tt('More Functions…', 'دوال أخرى…')}</Item>
+          </Drop>
+          <DropL sicon="filldown" label={tt('Fill', 'تعبئة')}><Item sicon="filldown" onClick={A.fillDown} hint="Ctrl+D">{tt('Down', 'لأسفل')}</Item><Item sicon="fillright" onClick={A.fillRight} hint="Ctrl+R">{tt('Right', 'لليمين')}</Item></DropL>
+          <DropL icon="ed-clear" label={tt('Clear', 'مسح')}><Item onClick={() => A.clear('all')}>{tt('Clear All', 'مسح الكل')}</Item><Item onClick={() => A.clear('formats')}>{tt('Clear Formats', 'مسح التنسيقات')}</Item><Item onClick={() => A.clear('contents')} hint="Del">{tt('Clear Contents', 'مسح المحتويات')}</Item></DropL>
+        </Col>
+        <DropL large sicon="sortaz" label={tt('Sort & Filter', 'ترتيب وتصفية')}><Item sicon="sortaz" onClick={() => A.sort(true)}>{tt('Sort A to Z', 'ترتيب تصاعدي')}</Item><Item sicon="sortza" onClick={() => A.sort(false)}>{tt('Sort Z to A', 'ترتيب تنازلي')}</Item></DropL>
+        <DropL large icon="ed-find" label={tt('Find & Select', 'بحث وتحديد')}><Item icon="ed-find" onClick={() => A.openFind(false)} hint="Ctrl+F">{tt('Find…', 'بحث…')}</Item><Item onClick={() => A.openFind(true)} hint="Ctrl+H">{tt('Replace…', 'استبدال…')}</Item><Item sicon="goto" onClick={() => A.openDialog('goto')} hint="Ctrl+G">{tt('Go To…', 'اذهب إلى…')}</Item><Sep /><Item onClick={A.selectAll} hint="Ctrl+A">{tt('Select All', 'تحديد الكل')}</Item></DropL>
+      </Grp>
+    </>
+  );
+
+  const insert = (
+    <>
+      <Grp label={tt('Tables', 'الجداول')}><DropL large sicon="table" label={tt('Table', 'جدول')} wide><TableGallery A={A} tt={tt} /></DropL></Grp>
+      <Grp label={tt('Sheet', 'الورقة')}>
+        <LB sicon="sheetplus" label={tt('New Sheet', 'ورقة جديدة')} title="Shift+F11" onClick={A.newSheet} />
+        <LB icon="ed-row-plus" label={tt('Rows', 'صفوف')} onClick={A.insertRows} />
+        <LB icon="ed-col-plus" label={tt('Columns', 'أعمدة')} onClick={A.insertCols} />
+      </Grp>
+      <Grp label={tt('Functions', 'الدوال')}>
+        <LB sicon="fx" label={tt('Insert Function', 'إدراج دالة')} title="Shift+F3" onClick={() => A.openDialog('insertfn')} />
+        <LB sicon="sum" label={tt('AutoSum', 'جمع تلقائي')} title="Alt+=" onClick={() => A.autoFn('SUM')} />
+      </Grp>
+      <Grp label={tt('Date & Time', 'التاريخ والوقت')}>
+        <LB sicon="calendar" label={tt('Today', 'تاريخ اليوم')} title="Ctrl+;" onClick={() => A.stamp(false)} />
+        <LB sicon="clock" label={tt('Time', 'الوقت')} title="Ctrl+Shift+;" onClick={() => A.stamp(true)} />
+      </Grp>
+      <Grp label={tt('Names', 'الأسماء')}><LB sicon="names" label={tt('Define Name', 'تعريف اسم')} onClick={A.askName} /></Grp>
+    </>
+  );
+
+  const layout = (
+    <>
+      <Grp label={tt('Themes', 'السمات')}>
+        <Drop wide trigger={({ open, toggle }) => <LB icon="palette" label={tt('Theme', 'السمة')} caret on={open} onClick={toggle} />}>
+          <div className="sx__themes">{['excel', 'code'].map((g) => <div key={g}><Head>{g === 'excel' ? tt('Excel styles', 'ستايلات إكسل') : tt('Code editor themes', 'ثيمات محرر الأكواد')}</Head>{THEME_LIST.filter((t) => t.group === g).map((t) => <button key={t.id} type="button" className={`sx__it sx__th${A.theme === t.id ? ' is-on' : ''}`} onClick={() => A.setTheme(t.id)}><span className="sx__sws">{t.swatch.map((c, i) => <i key={i} style={{ background: c }} />)}</span>{tt(t.en, t.ar)}{A.theme === t.id && <b>✓</b>}</button>)}</div>)}</div>
+        </Drop>
+      </Grp>
+      <Grp label={tt('Page Setup', 'إعداد الصفحة')}>
+        <DropL large sicon={A.view.land ? 'landscape' : 'portrait'} label={tt('Orientation', 'الاتجاه')}><Item sicon="portrait" on={!A.view.land} onClick={() => A.setView({ land: false })}>{tt('Portrait', 'طولي')}</Item><Item sicon="landscape" on={!!A.view.land} onClick={() => A.setView({ land: true })}>{tt('Landscape', 'عرضي')}</Item></DropL>
+        <LB sicon="print" label={tt('Print', 'طباعة')} title="Ctrl+P" onClick={A.print} />
+      </Grp>
+      <Grp label={tt('Sheet Options', 'خيارات الورقة')}>
+        <Col>
+          <label className="sx__chk"><input type="checkbox" checked={A.view.grid} onChange={() => A.setView({ grid: !A.view.grid })} />{tt('View gridlines', 'عرض خطوط الشبكة')}</label>
+          <label className="sx__chk"><input type="checkbox" checked={A.view.head} onChange={() => A.setView({ head: !A.view.head })} />{tt('View headings', 'عرض العناوين')}</label>
+          <label className="sx__chk"><input type="checkbox" checked={!!A.view.pgrid} onChange={() => A.setView({ pgrid: !A.view.pgrid })} />{tt('Print gridlines', 'طباعة خطوط الشبكة')}</label>
+        </Col>
+      </Grp>
+    </>
+  );
+
+  const formulas = (
+    <>
+      <Grp label={tt('Function Library', 'مكتبة الدوال')}>
+        <LB sicon="fx" label={tt('Insert Function', 'إدراج دالة')} title="Shift+F3" onClick={() => A.openDialog('insertfn')} />
+        <DropL large sicon="sum" label={tt('AutoSum', 'جمع تلقائي')}><Item onClick={() => A.autoFn('SUM')} hint="Alt+=">{tt('Sum', 'المجموع')}</Item><Item onClick={() => A.autoFn('AVERAGE')}>{tt('Average', 'المتوسط')}</Item><Item onClick={() => A.autoFn('COUNT')}>{tt('Count Numbers', 'عدّ الأرقام')}</Item><Item onClick={() => A.autoFn('MAX')}>{tt('Max', 'الأكبر')}</Item><Item onClick={() => A.autoFn('MIN')}>{tt('Min', 'الأصغر')}</Item></DropL>
+        <div className="sx__cats2">
+          {FN_CATS.map((c) => (
+            <DropL key={c.id} label={tt(c.en, c.ar)}>
+              <div className="sx__fnl">{c.list.split(' ').filter((n) => FUNCS[n]).map((n) => <Item key={n} onClick={() => A.insertFn(n)}>{n}</Item>)}</div>
+            </DropL>
+          ))}
+        </div>
+      </Grp>
+      <Grp label={tt('Defined Names', 'الأسماء المعرّفة')}>
+        <LB sicon="names" label={tt('Define Name', 'تعريف اسم')} onClick={A.askName} />
+        <LB sicon="goto" label={tt('Go To', 'اذهب إلى')} title="Ctrl+G" onClick={() => A.openDialog('goto')} />
+      </Grp>
+      <Grp label={tt('Formula Auditing', 'تدقيق الصيغ')}><LB sicon="eye" label={tt('Show Formulas', 'إظهار الصيغ')} title="Ctrl+`" on={A.view.showF} onClick={() => A.setView({ showF: !A.view.showF })} /></Grp>
+      <Grp label={tt('Calculation', 'الحساب')}><LB sicon="recalc" label={tt('Calculate Now', 'احسب الآن')} title="F9" onClick={A.recalc} /></Grp>
+    </>
+  );
+
+  const data = (
+    <>
+      <Grp label={tt('Sort', 'ترتيب')}>
+        <LB sicon="sortaz" label={tt('Sort A to Z', 'تصاعدي')} onClick={() => A.sort(true)} />
+        <LB sicon="sortza" label={tt('Sort Z to A', 'تنازلي')} onClick={() => A.sort(false)} />
+      </Grp>
+      <Grp label={tt('Data Tools', 'أدوات البيانات')}>
+        <LB sicon="filldown" label={tt('Fill Down', 'تعبئة لأسفل')} title="Ctrl+D" onClick={A.fillDown} disabled={!hasSel} />
+        <LB sicon="fillright" label={tt('Fill Right', 'تعبئة لليمين')} title="Ctrl+R" onClick={A.fillRight} disabled={!hasSel} />
+        <LB icon="ed-find" label={tt('Find & Replace', 'بحث واستبدال')} title="Ctrl+H" onClick={() => A.openFind(true)} />
+      </Grp>
+      <Grp label={tt('Outline', 'المخطط التفصيلي')}>
+        <LB sicon="hide" label={tt('Hide', 'إخفاء')} onClick={A.hideSmart} />
+        <LB sicon="eye" label={tt('Unhide All', 'إظهار الكل')} onClick={A.unhideAll} />
+      </Grp>
+    </>
+  );
+
+  const view = (
+    <>
+      <Grp label={tt('Workbook Views', 'طرق عرض المصنف')}><LB sicon="grid" label={tt('Normal', 'عادي')} on onClick={() => {}} /></Grp>
+      <Grp label={tt('Show', 'إظهار')}>
+        <Col>
+          <label className="sx__chk"><input type="checkbox" checked={A.view.bar} onChange={() => A.setView({ bar: !A.view.bar })} />{tt('Formula Bar', 'شريط الصيغة')}</label>
+          <label className="sx__chk"><input type="checkbox" checked={A.view.grid} onChange={() => A.setView({ grid: !A.view.grid })} />{tt('Gridlines', 'خطوط الشبكة')}</label>
+          <label className="sx__chk"><input type="checkbox" checked={A.view.head} onChange={() => A.setView({ head: !A.view.head })} />{tt('Headings', 'العناوين')}</label>
+        </Col>
+        <Col><label className="sx__chk"><input type="checkbox" checked={A.view.band} onChange={() => A.setView({ band: !A.view.band })} />{tt('Banded rows', 'صفوف متبادلة')}</label></Col>
+      </Grp>
+      <Grp label={tt('Zoom', 'التكبير')}>
+        <LB sicon="zoom" label="100%" onClick={() => A.zoomTo(1)} />
+        <LB sicon="zoomin" label={tt('Zoom In', 'تكبير')} onClick={() => A.zoomBy(0.1)} />
+        <LB sicon="zoomout" label={tt('Zoom Out', 'تصغير')} onClick={() => A.zoomBy(-0.1)} />
+        <LB sicon="grid" label={tt('Zoom to Selection', 'ملاءمة التحديد')} onClick={A.zoomSel} disabled={!hasSel} />
+      </Grp>
+      <Grp label={tt('Window', 'النافذة')}>
+        <DropL large sicon="freeze" label={tt('Freeze Panes', 'تجميد الأجزاء')}>
+          <Item onClick={() => A.freeze(A.sel.ar, A.sel.ac)}>{tt('Freeze Panes', 'تجميد الأجزاء')}</Item><Item onClick={() => A.freeze(1, 0)}>{tt('Freeze Top Row', 'تجميد الصف العلوي')}</Item><Item onClick={() => A.freeze(0, 1)}>{tt('Freeze First Column', 'تجميد العمود الأول')}</Item><Item onClick={() => A.freeze(0, 0)}>{tt('Unfreeze Panes', 'إلغاء التجميد')}</Item>
+        </DropL>
+      </Grp>
+    </>
+  );
+
+  const help = (
+    <Grp label={tt('Help', 'مساعدة')}>
+      <LB sicon="keyboard" label={tt('Keyboard Shortcuts', 'اختصارات الكيبورد')} title="F1" onClick={() => A.openDialog('shortcuts')} />
+    </Grp>
+  );
+
+  const body = { home, insert, layout, formulas, data, view, help }[tab] || home;
+
   return (
-    <div className="sx__rib">
-      <div className="sx__tabsrow" role="tablist">
-        {[['home', 'Home', 'الرئيسية'], ['formulas', 'Formulas', 'الصيغ'], ['data', 'Data', 'البيانات'], ['view', 'View', 'عرض']].map(([id, en, ar]) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'is-on' : ''} onClick={() => setTab(id)}>{tt(en, ar)}</button>)}
+    <div className={`sx__rib${collapsed ? ' is-collapsed' : ''}`}>
+      <div className="sx__tabsrow" role="tablist" aria-label={tt('Ribbon', 'الشريط')}>
+        <button type="button" className="sx__filetab" onClick={() => A.openFileMenu()} aria-haspopup="dialog">{tt('File', 'ملف')}</button>
+        {TABS.map(([id, en, ar]) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id && !collapsed} className={tab === id && !collapsed ? 'is-on' : ''}
+            onClick={() => { if (collapsed) { setTab(id); setCollapsed(false); } else setTab(id); }} onDoubleClick={() => setCollapsed(!collapsed)}>{tt(en, ar)}</button>
+        ))}
         <span className="sx__sp" />
-        <Drop label={tt('Theme', 'الثيم')} wide><div className="sx__themes">{['excel', 'code'].map((g) => <div key={g}><div className="sx__thh">{g === 'excel' ? tt('Excel styles', 'ستايلات إكسل') : tt('Code editor themes', 'ثيمات محرر الأكواد')}</div>{THEME_LIST.filter((x) => x.group === g).map((x) => <button key={x.id} type="button" className={`sx__it sx__th${A.theme === x.id ? ' is-on' : ''}`} onClick={() => A.setTheme(x.id)}><span className="sx__sws">{x.swatch.map((c, i) => <i key={i} style={{ background: c }} />)}</span><span>{tt(x.en, x.ar)}</span>{A.theme === x.id && <b>✓</b>}</button>)}</div>)}</div></Drop>
-        <RB icon="ed-undo" title={tt('Undo (Ctrl+Z)', 'تراجع (Ctrl+Z)')} onClick={A.undo} disabled={!canUndo} />
-        <RB icon="ed-redo" title={tt('Redo (Ctrl+Y)', 'إعادة (Ctrl+Y)')} onClick={A.redo} disabled={!canRedo} />
+        <SB sicon="save" title={`${tt('Save', 'حفظ')} (Ctrl+S)`} onClick={A.file.save} />
+        <SB icon="ed-undo" title={tt('Undo (Ctrl+Z)', 'تراجع (Ctrl+Z)')} onClick={A.undo} disabled={!canUndo} />
+        <SB icon="ed-redo" title={tt('Redo (Ctrl+Y)', 'إعادة (Ctrl+Y)')} onClick={A.redo} disabled={!canRedo} />
+        <SB sicon="chevron" title={collapsed ? tt('Expand the ribbon (Ctrl+F1)', 'فرد الشريط (Ctrl+F1)') : tt('Collapse the ribbon (Ctrl+F1)', 'طيّ الشريط (Ctrl+F1)')} onClick={() => setCollapsed(!collapsed)} className={collapsed ? '' : 'sx__flip'} />
       </div>
-      <div className="sx__tools" role="tabpanel">
-        {tab === 'home' && (
-          <>
-            <div className="sx__grp">
-              <RB icon="ed-paste" label={tt('Paste', 'لصق')} onClick={() => A.paste('all')} />
-              <Drop title={tt('Paste special', 'لصق خاص')}>
-                <Item onClick={() => A.paste('values')}>{tt('Values', 'القيم')}</Item><Item onClick={() => A.paste('formulas')}>{tt('Formulas', 'الصيغ')}</Item><Item onClick={() => A.paste('formats')}>{tt('Formatting', 'التنسيق')}</Item>
-              </Drop>
-              <RB icon="ed-cut" title={tt('Cut (Ctrl+X)', 'قص (Ctrl+X)')} onClick={() => A.copy(true)} /><RB icon="copy" title={tt('Copy (Ctrl+C)', 'نسخ (Ctrl+C)')} onClick={() => A.copy(false)} />
-            </div>
-            <div className="sx__grp">
-              <Pick cls="sx__pick--f" aria={tt('Font', 'الخط')} preview value={ast.font || 'Calibri'} label={ast.font || 'Calibri'} options={FONTS.map((f) => ({ value: f, label: f }))} onPick={(v) => A.style({ font: v === 'Calibri' ? null : v })} />
-              <Pick cls="sx__pick--s" aria={tt('Font size', 'حجم الخط')} value={sz} label={String(sz)} options={SIZES.map((x) => ({ value: x, label: String(x) }))} onPick={(v) => A.style({ fs: +v === 10.5 ? null : +v })} />
-              <RB icon="ed-bold" title={tt('Bold (Ctrl+B)', 'غامق (Ctrl+B)')} on={!!ast.b} onClick={() => A.toggle('b')} /><RB icon="ed-italic" title={tt('Italic (Ctrl+I)', 'مائل (Ctrl+I)')} on={!!ast.i} onClick={() => A.toggle('i')} />
-              <RB icon="ed-underline" title={tt('Underline (Ctrl+U)', 'تسطير (Ctrl+U)')} on={!!ast.u} onClick={() => A.toggle('u')} /><RB icon="ed-strike" title={tt('Strikethrough (Ctrl+5)', 'يتوسطه خط')} on={!!ast.st} onClick={() => A.toggle('st')} />
-              <Drop icon="ed-outline" title={tt('Borders', 'الحدود')}>
-                <Item onClick={() => A.borders('all')}>{tt('All borders', 'كل الحدود')}</Item><Item onClick={() => A.borders('outer')}>{tt('Outside borders', 'حدود خارجية')}</Item><Item onClick={() => A.borders('inner')}>{tt('Inside borders', 'حدود داخلية')}</Item>
-                <Item onClick={() => A.borders('thickBox')}>{tt('Thick box', 'إطار سميك')}</Item><Item onClick={() => A.borders('bottom')}>{tt('Bottom', 'سفلي')}</Item><Item onClick={() => A.borders('top')}>{tt('Top', 'علوي')}</Item><Item onClick={() => A.borders('left')}>{tt('Left', 'أيسر')}</Item><Item onClick={() => A.borders('right')}>{tt('Right', 'أيمن')}</Item><Item onClick={() => A.borders('none')}>{tt('No border', 'بدون حدود')}</Item>
-              </Drop>
-              <Drop icon="ed-fill" title={tt('Fill color', 'لون التعبئة')}><Colors value={ast.bg} tt={tt} none={tt('No fill', 'بدون تعبئة')} onPick={(c) => A.style({ bg: c })} /></Drop>
-              <Drop icon="ed-font-color" title={tt('Font color', 'لون الخط')}><Colors value={ast.color} tt={tt} none={tt('Automatic', 'تلقائي')} onPick={(c) => A.style({ color: c })} /></Drop>
-            </div>
-            <div className="sx__grp">
-              <RB icon="ed-valign-top" title={tt('Top align', 'محاذاة علوية')} on={ast.va === 'top'} onClick={() => A.style({ va: ast.va === 'top' ? null : 'top' })} /><RB icon="ed-valign-mid" title={tt('Middle align', 'محاذاة وسطية')} on={ast.va === 'center'} onClick={() => A.style({ va: ast.va === 'center' ? null : 'center' })} /><RB icon="ed-valign-bottom" title={tt('Bottom align', 'محاذاة سفلية')} on={!ast.va || ast.va === 'bottom'} onClick={() => A.style({ va: null })} />
-              <RB icon="ed-align-left" title={tt('Align left', 'يسار')} on={ast.al === 'left'} onClick={() => A.style({ al: ast.al === 'left' ? null : 'left' })} /><RB icon="ed-align-center" title={tt('Center', 'توسيط')} on={ast.al === 'center'} onClick={() => A.style({ al: ast.al === 'center' ? null : 'center' })} /><RB icon="ed-align-right" title={tt('Align right', 'يمين')} on={ast.al === 'right'} onClick={() => A.style({ al: ast.al === 'right' ? null : 'right' })} />
-              <RB icon="ed-indent" title={tt('Increase indent', 'زيادة المسافة')} onClick={() => A.style({ ind: (ast.ind || 0) + 1, al: ast.al || 'left' })} /><RB icon="ed-outdent" title={tt('Decrease indent', 'تقليل المسافة')} onClick={() => A.style({ ind: Math.max(0, (ast.ind || 0) - 1) || null })} />
-              <RB label={tt('Wrap', 'التفاف')} on={!!ast.wrap} onClick={() => A.toggle('wrap')} />
-              <RB icon="ed-merge" label={tt('Merge', 'دمج')} title={tt('Merge & center', 'دمج وتوسيط')} onClick={() => { A.merge(true); A.style({ al: 'center' }); }} /><RB icon="ed-split" title={tt('Unmerge', 'إلغاء الدمج')} onClick={() => A.merge(false)} />
-            </div>
-            <div className="sx__grp">
-              <Pick cls="sx__pick--n" aria={tt('Number format', 'تنسيق الرقم')} value={cur ? cur.id : 'custom'} label={cur ? tt(cur.en, cur.ar) : nf} options={[...(cur ? [] : [{ value: 'custom', label: nf }]), ...NUM_FORMATS.map((f) => ({ value: f.id, label: tt(f.en, f.ar) }))]} onPick={(v) => { const f = NUM_FORMATS.find((x) => x.id === v); if (f) A.style({ nf: f.code === 'General' ? null : f.code }); }} />
-              <RB label="$" title={tt('Currency', 'عملة')} onClick={() => A.style({ nf: '"$"#,##0.00' })} /><RB label="%" title={tt('Percent', 'نسبة')} onClick={() => A.style({ nf: '0%' })} /><RB label="," title={tt('Comma style', 'فواصل')} onClick={() => A.style({ nf: '#,##0.00' })} />
-              <RB label=".0→" title={tt('Increase decimals', 'زيادة الكسور')} onClick={() => A.style({ nf: decimals(ast.nf, 1) })} /><RB label="←.0" title={tt('Decrease decimals', 'تقليل الكسور')} onClick={() => A.style({ nf: decimals(ast.nf, -1) })} />
-            </div>
-            <div className="sx__grp">
-              <Drop icon="ed-row-plus" label={tt('Insert', 'إدراج')}><Item onClick={A.insertRows}>{tt('Insert rows', 'إدراج صفوف')}</Item><Item onClick={A.insertCols}>{tt('Insert columns', 'إدراج أعمدة')}</Item></Drop>
-              <Drop icon="ed-row-minus" label={tt('Delete', 'حذف')}><Item onClick={A.deleteRows}>{tt('Delete rows', 'حذف صفوف')}</Item><Item onClick={A.deleteCols}>{tt('Delete columns', 'حذف أعمدة')}</Item></Drop>
-              <Drop label={tt('Format', 'تنسيق')}>
-                <Item onClick={() => { const v = window.prompt(tt('Row height (px)', 'ارتفاع الصف (بكسل)'), '24'); if (v && +v > 0) { const s = A.sel; A.ctl.setRowH(A.sheet, Array.from({ length: s.r2 - s.r1 + 1 }, (_, i) => s.r1 + i), +v); } }}>{tt('Row height…', 'ارتفاع الصف…')}</Item>
-                <Item onClick={() => { const v = window.prompt(tt('Column width (px)', 'عرض العمود (بكسل)'), '80'); if (v && +v > 0) { const s = A.sel; A.ctl.setColW(A.sheet, Array.from({ length: s.c2 - s.c1 + 1 }, (_, i) => s.c1 + i), +v); } }}>{tt('Column width…', 'عرض العمود…')}</Item>
-                <Item onClick={() => A.autofit('c', A.sel.c1)}>{tt('AutoFit column width', 'ضبط عرض العمود تلقائيًا')}</Item>
-                <Item onClick={() => A.autofit('r', A.sel.r1)}>{tt('AutoFit row height', 'ضبط ارتفاع الصف تلقائيًا')}</Item>
-                <Item onClick={() => A.hide('r', true)}>{tt('Hide rows', 'إخفاء الصفوف')}</Item><Item onClick={() => A.hide('c', true)}>{tt('Hide columns', 'إخفاء الأعمدة')}</Item><Item onClick={A.unhideAll}>{tt('Unhide all', 'إظهار الكل')}</Item>
-              </Drop>
-            </div>
-            <div className="sx__grp">
-              <RB label="Σ" title={tt('AutoSum (Alt+=)', 'جمع تلقائي (Alt+=)')} onClick={A.autoSum} />
-              <Drop icon="ed-fill" label={tt('Fill', 'تعبئة')}><Item onClick={A.fillDown}>{tt('Down (Ctrl+D)', 'لأسفل (Ctrl+D)')}</Item><Item onClick={A.fillRight}>{tt('Right (Ctrl+R)', 'لليمين (Ctrl+R)')}</Item></Drop>
-              <Drop icon="ed-clear" label={tt('Clear', 'مسح')}><Item onClick={() => A.clear('all')}>{tt('Clear all', 'مسح الكل')}</Item><Item onClick={() => A.clear('formats')}>{tt('Clear formats', 'مسح التنسيق')}</Item><Item onClick={() => A.clear('contents')}>{tt('Clear contents', 'مسح المحتوى')}</Item></Drop>
-              <Drop label={tt('Sort', 'ترتيب')}><Item onClick={() => A.sort(true)}>{tt('Sort A → Z', 'تصاعدي')}</Item><Item onClick={() => A.sort(false)}>{tt('Sort Z → A', 'تنازلي')}</Item></Drop>
-              <RB icon="ed-find" label={tt('Find', 'بحث')} title={tt('Find & replace (Ctrl+F / Ctrl+H)', 'بحث واستبدال')} onClick={() => A.openFind(false)} />
-            </div>
-          </>
-        )}
-        {tab === 'formulas' && (
-          <>
-            <div className="sx__grp"><RB label="fx" title={tt('Insert function', 'إدراج دالة')} onClick={() => A.startEdit('=', 'edit')} /><RB label="Σ" title="AutoSum" onClick={A.autoSum} /></div>
-            <div className="sx__grp">
-              {Object.entries(CATS).map(([cat, list]) => (
-                <Drop key={cat} label={tt(cat, { Math: 'رياضيات', Statistical: 'إحصاء', Logical: 'منطقية', Text: 'نص', 'Lookup & Reference': 'بحث ومراجع', 'Dynamic arrays': 'مصفوفات ديناميكية', 'Date & Time': 'تاريخ ووقت', Financial: 'مالية' }[cat])} wide>
-                  <div className="sx__fnl">{list.split(' ').filter((n) => FUNCS[n]).map((n) => <Item key={n} onClick={() => A.insertFn(n)}>{n}</Item>)}</div>
-                </Drop>
-              ))}
-            </div>
-            <div className="sx__grp">
-              <RB label={tt('Show formulas', 'إظهار الصيغ')} title="Ctrl+`" on={A.view.showF} onClick={() => A.setView({ showF: !A.view.showF })} />
-              <RB label={tt('Define name', 'تعريف اسم')} onClick={() => { const n = window.prompt(tt('Name for the selection:', 'اسم للتحديد:')); if (n && /^[A-Za-z_][\w.]*$/.test(n)) A.defineName(n); }} />
-            </div>
-          </>
-        )}
-        {tab === 'data' && (
-          <div className="sx__grp">
-            <RB label={tt('Sort A→Z', 'تصاعدي')} onClick={() => A.sort(true)} /><RB label={tt('Sort Z→A', 'تنازلي')} onClick={() => A.sort(false)} />
-            <RB icon="ed-find" label={tt('Find & replace', 'بحث واستبدال')} onClick={() => A.openFind(true)} />
-            <RB label={tt('Fill down', 'تعبئة لأسفل')} onClick={A.fillDown} /><RB label={tt('Fill right', 'تعبئة لليمين')} onClick={A.fillRight} />
-          </div>
-        )}
-        {tab === 'view' && (
-          <div className="sx__grp">
-            <RB label={tt('Gridlines', 'خطوط الشبكة')} on={A.view.grid} onClick={() => A.setView({ grid: !A.view.grid })} />
-            <RB label={tt('Headings', 'العناوين')} on={A.view.head} onClick={() => A.setView({ head: !A.view.head })} />
-            <RB label={tt('Formula bar', 'شريط الصيغة')} on={A.view.bar} onClick={() => A.setView({ bar: !A.view.bar })} />
-            <Drop label={tt('Freeze panes', 'تجميد')}><Item onClick={() => A.freeze(A.sel.ar, A.sel.ac)}>{tt('Freeze at selection', 'تجميد عند التحديد')}</Item><Item onClick={() => A.freeze(1, 0)}>{tt('Top row', 'الصف العلوي')}</Item><Item onClick={() => A.freeze(0, 1)}>{tt('First column', 'العمود الأول')}</Item><Item onClick={() => A.freeze(0, 0)}>{tt('Unfreeze', 'إلغاء التجميد')}</Item></Drop>
-            <RB label={tt('Header & banded rows', 'عنوان وصفوف متبادلة')} on={A.view.band} onClick={() => A.setView({ band: !A.view.band })} />
-            <RB label="100%" onClick={() => A.setView({ z: 1 })} />
-          </div>
-        )}
-      </div>
+      {!collapsed && <div className="sx__tools" role="tabpanel">{body}</div>}
     </div>
   );
 }

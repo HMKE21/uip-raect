@@ -7,7 +7,13 @@ import { FUNCS } from '../../lib/sheet/funcs.js';
 import { DEF_H, DEF_W, HDR_H, HDR_W, FONT, THEMES, drawGrid, geometry, locate, displayOf, fontOf, mergeIndex } from '../../lib/sheet/draw.js';
 import { fitColumn } from '../../lib/sheet/autofit.js';
 import { loadThemeId, saveThemeId, themeOf } from '../../lib/sheet/themes.js';
-import SheetRibbon from './SheetRibbon';
+import SheetRibbon, { FONTS } from './SheetRibbon';
+import SheetFileMenu from './SheetFileMenu';
+import SxIcon from './SheetIcons';
+import { PromptDialog, ConfirmDialog, ShortcutsDialog, InsertFnDialog, FormatCellsDialog } from './SheetDialogs';
+import { chord, browserOwned, isTextField } from '../../lib/sheet/keys.js';
+import { CELL_STYLES, TABLE_STYLES, QUICK_NF, tableStylePatch } from '../../lib/sheet/presets.js';
+import { sheetHtml, printHtml } from '../../lib/sheet/print.js';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const mkSel = (ar, ac, r2 = ar, c2 = ac) => ({ ar, ac, r1: Math.min(ar, r2), c1: Math.min(ac, c2), r2: Math.max(ar, r2), c2: Math.max(ac, c2) });
@@ -25,29 +31,42 @@ function jump(wb, sheet, r, c, dr, dc) {
   return inb(nr, nc) ? [nr, nc] : [clamp(nr, 0, MAXR - 1), clamp(nc, 0, MAXC - 1)];
 }
 
-export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, saveKeyRef }) {
+export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, saveKeyRef, actionsRef, fileName = '' }) {
   const rootRef = useRef(null);
-  /* Keyboard shortcuts belong to the sheet, not to the browser: Ctrl+S / Ctrl+A / Ctrl+F / Ctrl+H ... are caught here even when focus is on the page body (e.g. right after a ribbon click). */
+  const shortcutRef = useRef(null); const overlayRef = useRef(false); const findOpenRef = useRef(false);
+  /* Keyboard shortcuts belong to the sheet, not to the browser.
+     • They are matched on the LOGICAL key (keys.js), so Ctrl+S works on an Arabic layout (where the key types "س") too.
+     • While this editor is the active surface (its desktop window is focused) the combos are caught on the window in the capture phase, wherever the
+       focus is — the grid, a ribbon button, the title bar, the page body — so Ctrl+S / P / F / G / H / D / U … never reach the browser. */
   useEffect(() => {
     const root = rootRef.current; if (!root) return undefined;
-    const FWD = new Set(['a', 'b', 'i', 'u', 'z', 'y', 'f', 'h', 'd', 'r', 'k', 'g', 'e', 'l', '5', ';', ':']); const NATIVE = new Set(['c', 'v', 'x']);
-    const grid = () => root.querySelector('.sx__grid');
+    const NATIVE_TEXT = new Set(['a', 'c', 'v', 'x', 'z', 'y']);
+    const active = () => {
+      if (!root.isConnected || root.getClientRects().length === 0) return false;
+      const win = root.closest('.os-win'); if (win && (!win.classList.contains('is-active') || win.classList.contains('is-min'))) return false;
+      for (const m of document.querySelectorAll('[aria-modal="true"]')) { if (!root.contains(m) && m.getClientRects().length) return false; } // another modal (e.g. "Save changes?") is on top
+      return true;
+    };
     const h = (e) => {
-      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
-      const k = e.key.toLowerCase(); const t = e.target;
-      const inside = root.contains(t); const idle = t === document.body || t === document.documentElement;
-      if (!inside && !idle) return; // dialogs and inputs elsewhere on the site keep their own keys
-      if (k === 's') { e.preventDefault(); e.stopPropagation(); if (!readOnly && saveKeyRef?.current) saveKeyRef.current(); return; }
-      if (inside && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
-      const g = grid(); if (!g) return;
-      if (idle && NATIVE.has(k)) { g.focus({ preventScroll: true }); return; }
-      if (idle && FWD.has(k)) { e.preventDefault(); e.stopPropagation(); g.focus({ preventScroll: true }); g.dispatchEvent(new window.KeyboardEvent('keydown', { key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey, bubbles: true, cancelable: true })); return; }
-      if (inside && (FWD.has(k) || NATIVE.has(k)) && !e.defaultPrevented) { /* grid handler runs next; make sure the browser default never wins */ if (!NATIVE.has(k)) e.preventDefault(); }
+      if (e.isComposing || e.key === 'Process') return;
+      const c = chord(e); const t = e.target; const inside = root.contains(t); const field = isTextField(t);
+      if (readOnly) { if (inside && browserOwned(c) && !NATIVE_TEXT.has(c.k)) e.preventDefault(); return; } // read-only previews only guard their own keys
+      if (!active()) return;
+      if (!inside && field) return; // typing somewhere else on the site keeps its own keys
+      if (overlayRef.current) { if (browserOwned(c) && !(field && c.ctrl && NATIVE_TEXT.has(c.k))) e.preventDefault(); return; } // a dialog / the File menu is open: it handles its own keys
+      if (field) {
+        // cell editor / formula bar / name box / find box: text editing stays native, but the browser's own UI never opens
+        if (c.ctrl && !c.alt && (c.k === 's' || c.k === 'p')) { e.preventDefault(); e.stopPropagation(); shortcutRef.current?.(c, e); return; }
+        if (browserOwned(c) && !(c.ctrl && NATIVE_TEXT.has(c.k))) e.preventDefault();
+        return;
+      }
+      if (shortcutRef.current?.(c, e)) { e.preventDefault(); e.stopPropagation(); return; }
+      if (browserOwned(c)) e.preventDefault();
     };
     window.addEventListener('keydown', h, true);
-    if (!readOnly) requestAnimationFrame(() => grid()?.focus({ preventScroll: true }));
+    if (!readOnly) requestAnimationFrame(() => root.querySelector('.sx__grid')?.focus({ preventScroll: true }));
     return () => window.removeEventListener('keydown', h, true);
-  }, [readOnly, saveKeyRef]);
+  }, [readOnly]);
   const wb = ctl.wb;
   const [, force] = useReducer((x) => x + 1, 0);
   useEffect(() => ctl.on(force), [ctl]);
@@ -55,7 +74,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   const sheet = wb.sheets[Math.min(six, wb.sheets.length - 1)];
   const [theme, setThemeS] = useState(() => loadThemeId(readOnly));
   const setTheme = (t) => { setThemeS(t); saveThemeId(t); };
-  const [view, setView] = useState({ grid: true, head: true, showF: false, bar: true, band: true, z: 1 });
+  const [view, setView] = useState({ grid: true, head: true, showF: false, bar: true, band: true, z: 1, land: false, pgrid: false, psel: false });
   const [sel, setSelS] = useState(() => mkSel(0, 0));
   const selRef = useRef(sel); selRef.current = sel;
   const setSel = useCallback((s) => { selRef.current = s; setSelS(s); }, []);
@@ -69,6 +88,10 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   const [dragUi, setDragUi] = useState(null);
   const [tabEdit, setTabEdit] = useState(null);
   const [hint, setHint] = useState('');
+  const [tab, setTab] = useState('home'); const [collapsed, setCollapsed] = useState(false);
+  const [dlg, setDlg] = useState(null); const [fileOpen, setFileOpen] = useState(false);
+  const [painter, setPainter] = useState(null); const painterRef = useRef(null); painterRef.current = painter;
+  overlayRef.current = !!dlg || fileOpen; findOpenRef.current = !!find;
   const scrollRef = useRef(null); const cvRef = useRef(null); const taRef = useRef(null); const mode = useRef(null); const drawRef = useRef(null);
   const sheetSel = useRef(new Map());
   const z = view.z;
@@ -215,6 +238,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   const onUp = (e) => {
     const md = mode.current; mode.current = null; try { scrollRef.current.releasePointerCapture(e.pointerId); } catch { /* not captured */ }
     if (!md) return;
+    if (md.t === 'cells' && painterRef.current) { const pst = painterRef.current.style; setPainter(null); ctl.style(sheet, rangeOf(), { b: null, i: null, u: null, st: null, font: null, fs: null, color: null, bg: null, al: null, va: null, wrap: null, ind: null, nf: null, bd: null, ...pst }); }
     if (md.t === 'resize') { md.group.forEach((i, k) => { if (md.edge.axis === 'c') { if (md.olds[k] === undefined) sheet.colW.delete(i); else sheet.colW.set(i, md.olds[k]); } else if (md.olds[k] === undefined) sheet.rowH.delete(i); else sheet.rowH.set(i, md.olds[k]); }); if (md.val) { if (md.edge.axis === 'c') ctl.setColW(sheet, md.group, md.val); else ctl.setRowH(sheet, md.group, md.val); } }
     if (md.t === 'fill') { setDragUi(null); if (md.dst) { ctl.fill(sheet, md.src, md.dst); setSel(mkSel(Math.min(md.src.r1, md.dst.r1), Math.min(md.src.c1, md.dst.c1), Math.max(md.src.r2, md.dst.r2), Math.max(md.src.c2, md.dst.c2))); } }
     if (md.t === 'point') requestAnimationFrame(() => taRef.current?.focus());
@@ -236,6 +260,18 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
     }
     setMenu({ x: e.clientX, y: e.clientY, kind: h.colHead ? 'col' : h.rowHead ? 'row' : 'cell' });
   };
+
+  /** The block of data around the active cell (Excel's "current region"), or the selection when it already spans several cells. */
+  const regionOf = () => {
+    const s = cur(); if (s.r1 !== s.r2 || s.c1 !== s.c2) return rangeOf();
+    const has = (rr, cc) => rr >= 0 && cc >= 0 && wb.getValue(sheet, rr, cc) !== null;
+    let r1 = s.ar; let r2 = s.ar; let c1 = s.ac; let c2 = s.ac; let grew = true; let guard = 0;
+    const rowHas = (rr) => { for (let cc = Math.max(0, c1 - 1); cc <= c2 + 1; cc += 1) if (has(rr, cc)) return true; return false; };
+    const colHas = (cc) => { for (let rr = Math.max(0, r1 - 1); rr <= r2 + 1; rr += 1) if (has(rr, cc)) return true; return false; };
+    while (grew && guard < 400) { grew = false; guard += 1; if (r1 > 0 && rowHas(r1 - 1)) { r1 -= 1; grew = true; } if (r2 < sheet.maxRow && rowHas(r2 + 1)) { r2 += 1; grew = true; } if (c1 > 0 && colHas(c1 - 1)) { c1 -= 1; grew = true; } if (c2 < sheet.maxCol && colHas(c2 + 1)) { c2 += 1; grew = true; } }
+    return { r1, c1, r2, c2 };
+  };
+  const gotoSheet = (i) => { sheetSel.current.set(six, sel); setSix(i); setSel(sheetSel.current.get(i) || mkSel(0, 0)); setEdit(null); };
 
   /* ---------- actions (used by ribbon, menu and keyboard) ---------- */
   const A = {
@@ -265,12 +301,67 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
       const hdr = typeof wb.getValue(sheet, g.r1, s.ac) === 'string' && g.r2 > g.r1 && typeof wb.getValue(sheet, g.r1 + 1, s.ac) === 'number';
       ctl.sort(sheet, g, s.ac, asc, hdr);
     },
-    autoSum: () => {
+    autoSum: () => A.autoFn('SUM'),
+    autoFn: (fn = 'SUM') => {
       const s = cur(); if (editRef.current) return;
-      if (s.r1 === s.r2 && s.c1 === s.c2) { let r = s.ar - 1; while (r >= 0 && typeof wb.getValue(sheet, r, s.ac) === 'number') r -= 1; if (r === s.ar - 1) { let c = s.ac - 1; while (c >= 0 && typeof wb.getValue(sheet, s.ar, c) === 'number') c -= 1; if (c === s.ac - 1) { startEdit('=SUM()', 'edit', 5); return; } ctl.input(sheet, s.ar, s.ac, `=SUM(${rangeStr({ r1: s.ar, c1: c + 1, r2: s.ar, c2: s.ac - 1 })})`); return; } ctl.input(sheet, s.ar, s.ac, `=SUM(${rangeStr({ r1: r + 1, c1: s.ac, r2: s.ar - 1, c2: s.ac })})`); return; }
+      if (s.r1 === s.r2 && s.c1 === s.c2) { let r = s.ar - 1; while (r >= 0 && typeof wb.getValue(sheet, r, s.ac) === 'number') r -= 1; if (r === s.ar - 1) { let c = s.ac - 1; while (c >= 0 && typeof wb.getValue(sheet, s.ar, c) === 'number') c -= 1; if (c === s.ac - 1) { startEdit(`=${fn}()`, 'edit', fn.length + 2); return; } ctl.input(sheet, s.ar, s.ac, `=${fn}(${rangeStr({ r1: s.ar, c1: c + 1, r2: s.ar, c2: s.ac - 1 })})`); return; } ctl.input(sheet, s.ar, s.ac, `=${fn}(${rangeStr({ r1: r + 1, c1: s.ac, r2: s.ar - 1, c2: s.ac })})`); return; }
       const ks = []; const w = s.c2 - s.c1 + 1; const h = s.r2 - s.r1 + 1; void ks;
-      ctl.run(sheet, Array.from({ length: w }, (_, i) => key(s.r2 + 1, s.c1 + i)), () => { for (let i = 0; i < w; i += 1) wb.setFormula(sheet, s.r2 + 1, s.c1 + i, `SUM(${rangeStr({ r1: s.r1, c1: s.c1 + i, r2: s.r2, c2: s.c1 + i })})`); }); void h;
+      ctl.run(sheet, Array.from({ length: w }, (_, i) => key(s.r2 + 1, s.c1 + i)), () => { for (let i = 0; i < w; i += 1) wb.setFormula(sheet, s.r2 + 1, s.c1 + i, `${fn}(${rangeStr({ r1: s.r1, c1: s.c1 + i, r2: s.r2, c2: s.c1 + i })})`); }); void h;
     },
+    /* ---- added: ribbon / dialog / file actions ---- */
+    fonts: FONTS, painter: !!painter,
+    togglePainter: () => {
+      if (painterRef.current) { setPainter(null); return; }
+      const s = cur(); setPainter({ style: { ...(wb.styleOf(sheet, s.ar, s.ac) || {}) } }); toast(tt('Format Painter: select the cells to format (Esc to cancel)', 'ناسخ التنسيق: حدّد الخلايا المراد تنسيقها (Esc للإلغاء)'));
+    },
+    cellStyle: (cs) => { ctl.style(sheet, rangeOf(), cs.patch); },
+    tableStyle: (ts) => { const g = regionOf(); ctl.style(sheet, g, tableStylePatch(ts, g)); setSel(mkSel(g.r1, g.c1, g.r2, g.c2)); },
+    openDialog: (type, payload = {}) => {
+      if (editRef.current) commit(0, 0, true);
+      if (type === 'goto') {
+        const names = [...wb.names.values()].filter((n) => n.ref).map((n) => ({ name: n.name, ref: `${n.ref.sheet}!${rangeStr(n.ref)}` }));
+        setDlg({ type: 'prompt', title: tt('Go To', 'اذهب إلى'), label: tt('Reference (e.g. B12, A1:C9 or a name)', 'المرجع (مثال B12 أو A1:C9 أو اسم)'), value: '', names, okLabel: tt('Go', 'اذهب'), onOk: (v) => (A.goto(v) ? true : tt('The reference is not valid.', 'المرجع غير صالح.')) });
+      } else setDlg({ type, ...payload });
+    },
+    openFileMenu: () => { if (editRef.current) commit(0, 0, true); setFileOpen(true); },
+    toggleRibbon: () => setCollapsed((c) => !c),
+    file: {
+      save: async () => {
+        if (readOnly) return;
+        if (editRef.current) commit(0, 0, true);
+        if (!ctl.dirty) { toast(tt('No changes to save.', 'مفيش تعديلات للحفظ.')); return; }
+        const ok = saveKeyRef?.current ? await saveKeyRef.current() : false; if (ok) toast(tt('Saved.', 'تم الحفظ.'));
+      },
+      download: () => { if (editRef.current) commit(0, 0, true); actionsRef?.current?.download?.(); },
+      exportAs: (ext) => { if (editRef.current) commit(0, 0, true); actionsRef?.current?.exportAs?.(ext, six); },
+      close: () => actionsRef?.current?.close?.(),
+    },
+    print: () => {
+      if (editRef.current) commit(0, 0, true);
+      const s = cur(); const part = view.psel && (s.r1 !== s.r2 || s.c1 !== s.c2);
+      const range = part ? { r1: s.r1, c1: s.c1, r2: Math.min(s.r2, Math.max(sheet.maxRow, s.r1)), c2: Math.min(s.c2, Math.max(sheet.maxCol, s.c1)) } : null;
+      if (!part && sheet.maxRow < 0) { toast(tt('The sheet is empty — nothing to print.', 'الورقة فاضية — مفيش حاجة للطباعة.')); return; }
+      printHtml(sheetHtml(wb, sheet, { range, grid: !!view.pgrid, landscape: !!view.land, title: `${fileName} — ${sheet.name}`, rtl }));
+    },
+    newSheet: () => { let n = wb.sheets.length + 1; while (wb.sheetByName(`Sheet${n}`)) n += 1; ctl.addSheet(`Sheet${n}`); setSix(wb.sheets.length - 1); setSel(mkSel(0, 0)); setEdit(null); },
+    deleteSheet: () => { if (wb.sheets.length < 2) return; setDlg({ type: 'confirm', title: tt('Delete sheet', 'حذف الورقة'), label: tt(`Delete “${sheet.name}”? This can be undone with Ctrl+Z only until you save.`, `حذف «${sheet.name}»؟`), okLabel: tt('Delete', 'حذف'), onOk: () => { ctl.deleteSheet(sheet); setSix(0); setSel(mkSel(0, 0)); } }); },
+    renameSheet: () => setDlg({ type: 'prompt', title: tt('Rename sheet', 'إعادة تسمية الورقة'), label: tt('Sheet name', 'اسم الورقة'), value: sheet.name, onOk: (v) => { const n = v.trim(); if (!n) return tt('Enter a name.', 'اكتب اسم.'); if (n !== sheet.name && wb.sheetByName(n)) return tt('A sheet with this name already exists.', 'فيه ورقة بنفس الاسم.'); ctl.renameSheet(sheet, n); return true; } }),
+    askRowH: () => { const s = cur(); setDlg({ type: 'prompt', title: tt('Row Height', 'ارتفاع الصف'), label: tt('Row height (pixels)', 'ارتفاع الصف (بكسل)'), value: String(sheet.rowH.get(s.r1) ?? DEF_H), onOk: (v) => { const n = +v; if (!(n > 0 && n < 1000)) return tt('Enter a number between 1 and 999.', 'اكتب رقم من 1 لـ 999.'); ctl.setRowH(sheet, Array.from({ length: s.r2 - s.r1 + 1 }, (_, i) => s.r1 + i), n); return true; } }); },
+    askColW: () => { const s = cur(); setDlg({ type: 'prompt', title: tt('Column Width', 'عرض العمود'), label: tt('Column width (pixels)', 'عرض العمود (بكسل)'), value: String(sheet.colW.get(s.c1) ?? DEF_W), onOk: (v) => { const n = +v; if (!(n > 0 && n < 2000)) return tt('Enter a number between 1 and 1999.', 'اكتب رقم من 1 لـ 1999.'); ctl.setColW(sheet, Array.from({ length: s.c2 - s.c1 + 1 }, (_, i) => s.c1 + i), n); return true; } }); },
+    askName: () => setDlg({ type: 'prompt', title: tt('Define Name', 'تعريف اسم'), label: tt('Name for the selection', 'اسم للتحديد'), value: '', hint: tt('Letters, digits, _ and . — it must start with a letter or _.', 'حروف وأرقام و _ و . — لازم يبدأ بحرف أو _.'), onOk: (v) => { if (!/^[A-Za-z_][\w.]*$/.test(v) || parseCell(v)) return tt('This is not a valid name.', 'الاسم ده غير صالح.'); A.defineName(v); return true; } }),
+    stamp: (withTime) => { if (readOnly) return; const s = cur(); const d = new Date(); ctl.input(sheet, s.ar, s.ac, withTime ? `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}` : `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`); },
+    zoomTo: (v) => setView((o) => ({ ...o, z: clamp(Math.round(v * 100) / 100, 0.4, 3) })),
+    zoomBy: (d) => setView((o) => ({ ...o, z: clamp(Math.round((o.z + d) * 10) / 10, 0.4, 3) })),
+    zoomSel: () => {
+      const s = cur(); const sw = geom.cx[Math.min(s.c2 + 1, cols)] - geom.cx[s.c1]; const sh = geom.ry[Math.min(s.r2 + 1, rows)] - geom.ry[s.r1]; if (!(sw > 0 && sh > 0)) return;
+      const nz = clamp(Math.floor(Math.min((size.w - hw - 20) / sw, (size.h - hh - 20) / sh) * 100) / 100, 0.4, 3); setView((o) => ({ ...o, z: nz }));
+      requestAnimationFrame(() => { const el = scrollRef.current; if (el) { el.scrollLeft = geom.cx[s.c1] * nz; el.scrollTop = geom.ry[s.r1] * nz; } });
+    },
+    recalc: () => { wb.touch(); force(); toast(tt('Recalculated.', 'تمت إعادة الحساب.')); },
+    selectAll: () => { const s = cur(); if (s.r1 === 0 && s.c1 === 0 && s.r2 >= sheet.maxRow && s.c2 >= sheet.maxCol) return setSel({ ar: 0, ac: 0, r1: 0, c1: 0, r2: MAXR - 1, c2: MAXC - 1 }); return setSel({ ar: s.ar, ac: s.ac, r1: 0, c1: 0, r2: Math.max(sheet.maxRow, 0), c2: Math.max(sheet.maxCol, 0) }); },
+    hideSmart: () => { const s = cur(); A.hide(s.r1 === 0 && s.r2 >= MAXR - 1 ? 'c' : 'r', true); },
+    gotoSheetByObj: (sh) => { const i = wb.sheets.indexOf(sh); if (i >= 0 && i !== six) gotoSheet(i); },
+    stepSheet: (d) => { const n = clamp(six + d, 0, wb.sheets.length - 1); if (n !== six) gotoSheet(n); },
     insertFn: (name) => { if (editRef.current) { const ed = editRef.current; const t = ed.text[0] === '=' ? ed.text + name + '(' : `=${name}(`; setEdit({ ...ed, text: t, caret: t.length }); requestAnimationFrame(() => taRef.current?.focus()); } else startEdit(`=${name}()`, 'edit', name.length + 2); },
     goto: (txt) => {
       const t = txt.trim(); const nm = wb.names.get(t.toUpperCase());
@@ -288,8 +379,69 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   };
 
   /* ---------- keyboard (grid focus) ---------- */
+  /** Every non-typing shortcut (Ctrl / F-keys / Alt+…). Returns true when it handled the key. Matches the logical key, so it works on any keyboard layout. */
+  const shortcut = (c) => {
+    const { k, ctrl, shift, alt } = c; const s = cur();
+    if (readOnly) {
+      if (ctrl && !alt && !shift) { if (k === 'a') { A.selectAll(); return true; } if (k === 'c') { A.copy(false); return true; } if (k === 'f') { A.openFind(false); return true; } if (k === 'g') { A.openDialog('goto'); return true; } }
+      return false;
+    }
+    if (!ctrl && !alt) {
+      if (k === 'F1') { A.openDialog('shortcuts'); return true; }
+      if (shift && k === 'F3') { A.openDialog('insertfn'); return true; }
+      if (shift && k === 'F11') { A.newSheet(); return true; }
+      if (shift) return false;
+      if (k === 'F2') { startEdit(activeText(), 'edit'); return true; }
+      if (k === 'F5') { A.openDialog('goto'); return true; }
+      if (k === 'F9') { A.recalc(); return true; }
+      if (k === 'F3') return true; // the browser's "find next" must not open
+      return false;
+    }
+    if (alt && !ctrl) {
+      if (k === '=') { A.autoFn('SUM'); return true; }
+      if (k === 'PageDown') { moveTo(s.ar, s.ac + 8, shift); return true; }
+      if (k === 'PageUp') { moveTo(s.ar, s.ac - 8, shift); return true; }
+      return false; // Alt+letters belong to the desktop (Alt+S, Alt+E …)
+    }
+    if (!ctrl || alt) return false;
+    // ---- Ctrl combos ----
+    if (k === 's') { if (shift) A.file.download(); else A.file.save(); return true; }
+    if (k === 'p') { A.print(); return true; }
+    if (k === 'F1') { A.toggleRibbon(); return true; }
+    if (k === 'PageDown' || k === 'PageUp') { if (shift) return false; A.stepSheet(k === 'PageDown' ? 1 : -1); return true; }
+    if (k === 'v') { scrollRef.current?.focus({ preventScroll: true }); return false; } // let the native paste event land on the grid
+    if (k === 'a' && !shift) { A.selectAll(); return true; }
+    if (k === 'c' && !shift) { A.copy(false); return true; }
+    if (k === 'x' && !shift) { A.copy(true); return true; }
+    if (k === 'f' && !shift) { A.openFind(false); return true; }
+    if (k === 'h' && !shift) { A.openFind(true); return true; }
+    if (k === 'g' && !shift) { A.openDialog('goto'); return true; }
+    if (k === 'z') { if (shift) A.redo(); else A.undo(); return true; }
+    if (k === 'y') { A.redo(); return true; }
+    if (k === 'b' && !shift) { A.toggle('b'); return true; }
+    if (k === 'i' && !shift) { A.toggle('i'); return true; }
+    if (k === 'u' && !shift) { A.toggle('u'); return true; }
+    if (k === '5' && !shift) { A.toggle('st'); return true; }
+    if (k === 'd' && !shift) { A.fillDown(); return true; }
+    if (k === 'r' && !shift) { A.fillRight(); return true; }
+    if (k === 'l' && !shift) { A.tableStyle(TABLE_STYLES[0]); return true; }
+    if (k === ';') { A.stamp(shift); return true; }
+    if (k === '1' && !shift) { A.openDialog('format'); return true; }
+    if (k === '`' && !shift) { A.setView({ showF: !view.showF }); return true; }
+    if (shift && QUICK_NF[k]) { A.style({ nf: QUICK_NF[k] === 'General' ? null : QUICK_NF[k] }); return true; }
+    if (shift && k === '7') { A.borders('outer'); return true; }
+    if (shift && k === '-') { A.borders('none'); return true; }
+    if (k === '9' || k === '0') { const axis = k === '9' ? 'r' : 'c'; if (shift) { const g = rangeOf(); const lo = axis === 'r' ? g.r1 - 1 : g.c1 - 1; const hi = axis === 'r' ? g.r2 + 1 : g.c2 + 1; ctl.hide(sheet, axis, Array.from({ length: hi - lo + 1 }, (_, i) => lo + i).filter((i) => i >= 0), false); } else A.hide(axis, true); return true; }
+    if (k === ' ' && !shift) { setSel({ ...s, c1: s.c1, c2: s.c2, r1: 0, r2: MAXR - 1, ar: 0 }); return true; }
+    if (k === '-' && !shift) { if (s.r1 === 0 && s.r2 >= MAXR - 1) A.deleteCols(); else if (s.c1 === 0 && s.c2 >= MAXC - 1) A.deleteRows(); else setMenu({ x: 200, y: 200, kind: 'cell' }); return true; }
+    if (k === '=' || k === '+') { if (s.r1 === 0 && s.r2 >= MAXR - 1) A.insertCols(); else if (s.c1 === 0 && s.c2 >= MAXC - 1) A.insertRows(); else setMenu({ x: 200, y: 200, kind: 'cell' }); return true; }
+    return false;
+  };
+  shortcutRef.current = shortcut;
+
   const onKey = (e) => {
     if (editRef.current) return;
+    if (shortcut(chord(e))) { e.preventDefault(); return; }
     const s = cur(); const k = e.key; const ctrl = e.ctrlKey || e.metaKey; const shift = e.shiftKey;
     const nav = (dr, dc) => {
       e.preventDefault(); const ext = shift;
@@ -310,31 +462,14 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
       if (s.r1 !== s.r2 || s.c1 !== s.c2) { const nr = s.ar + (shift ? -1 : 1); return setSel({ ...s, ar: nr > s.r2 ? s.r1 : nr < s.r1 ? s.r2 : nr, ac: nr > s.r2 ? (s.ac + 1 > s.c2 ? s.c1 : s.ac + 1) : s.ac }); }
       return moveTo(s.ar + (shift ? -1 : 1), s.ac);
     }
-    if (ctrl) {
-      const lk = k.toLowerCase();
-      if (lk === 'a') { e.preventDefault(); if (s.r1 === 0 && s.c1 === 0 && s.r2 >= sheet.maxRow && s.c2 >= sheet.maxCol) return setSel({ ar: 0, ac: 0, r1: 0, c1: 0, r2: MAXR - 1, c2: MAXC - 1 }); return setSel({ ar: s.ar, ac: s.ac, r1: 0, c1: 0, r2: Math.max(sheet.maxRow, 0), c2: Math.max(sheet.maxCol, 0) }); }
-      if (lk === 'c') { e.preventDefault(); return A.copy(false); } if (lk === 'x' && !readOnly) { e.preventDefault(); return A.copy(true); }
-      if (lk === 'f') { e.preventDefault(); return A.openFind(false); } if (lk === 'h' && !readOnly) { e.preventDefault(); return A.openFind(true); }
-      if (lk === 'g') { e.preventDefault(); const t = window.prompt(tt('Go to (e.g. B12 or A1:C9):', 'اذهب إلى (مثال B12 أو A1:C9):')); if (t) A.goto(t); return null; }
-      if (readOnly) return null;
-      if (lk === 'z') { e.preventDefault(); return shift ? A.redo() : A.undo(); } if (lk === 'y') { e.preventDefault(); return A.redo(); }
-      if (lk === 'b') { e.preventDefault(); return A.toggle('b'); } if (lk === 'i') { e.preventDefault(); return A.toggle('i'); } if (lk === 'u') { e.preventDefault(); return A.toggle('u'); } if (k === '5') { e.preventDefault(); return A.toggle('st'); }
-      if (lk === 'd') { e.preventDefault(); return A.fillDown(); } if (lk === 'r') { e.preventDefault(); return A.fillRight(); }
-      if (k === ';') { e.preventDefault(); const d = new Date(); const t = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; return ctl.input(sheet, s.ar, s.ac, shift ? `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}` : t); }
-      if (k === '`') { e.preventDefault(); return A.setView({ showF: !view.showF }); }
-      if (k === '1') { e.preventDefault(); return A.setView({ dialog: 'format' }); }
-      if (k === ' ') { e.preventDefault(); return shift ? setSel({ ...s, r1: 0, c1: s.c1, r2: MAXR - 1, c2: s.c2, ar: 0 }) : setSel({ ...s, c1: s.c1, c2: s.c2, r1: 0, r2: MAXR - 1, ar: 0 }); }
-      if (k === '-') { e.preventDefault(); return (s.r1 === 0 && s.r2 >= MAXR - 1) ? A.deleteCols() : (s.c1 === 0 && s.c2 >= MAXC - 1) ? A.deleteRows() : setMenu({ x: 200, y: 200, kind: 'cell' }); }
-      if (k === '+' || k === '=') { e.preventDefault(); return (s.r1 === 0 && s.r2 >= MAXR - 1) ? A.insertCols() : (s.c1 === 0 && s.c2 >= MAXC - 1) ? A.insertRows() : setMenu({ x: 200, y: 200, kind: 'cell' }); }
-      return null;
-    }
+    if (ctrl) return null; // unknown Ctrl combos never type a character
     if (k === ' ' && shift) { e.preventDefault(); return setSel({ ar: s.ar, ac: 0, r1: s.r1, r2: s.r2, c1: 0, c2: MAXC - 1 }); }
     if (readOnly) return null;
     if (k === 'F2') { e.preventDefault(); return startEdit(activeText(), 'edit'); }
     if (k === 'F4') { e.preventDefault(); return null; }
     if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); return A.clear('contents'); }
     if (e.altKey && k === '=') { e.preventDefault(); return A.autoSum(); }
-    if (k === 'Escape') { if (ctl.clip) { ctl.clip = null; force(); } return null; }
+    if (k === 'Escape') { if (painterRef.current) setPainter(null); if (ctl.clip) { ctl.clip = null; force(); } return null; }
     if (k.length === 1 && !e.altKey) { e.preventDefault(); return startEdit(k, 'enter'); }
     return null;
   };
@@ -400,15 +535,19 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   const nameBox = sel.r1 === sel.r2 && sel.c1 === sel.c2 ? addr(sel.ar, sel.ac) : (sel.r2 - sel.r1 + 1 >= MAXR ? `${addr(0, sel.c1).replace(/\d+/, '')}:${addr(0, sel.c2).replace(/\d+/, '')}` : sel.c2 - sel.c1 + 1 >= MAXC ? `${sel.r1 + 1}:${sel.r2 + 1}` : `${sel.r2 - sel.r1 + 1}R x ${sel.c2 - sel.c1 + 1}C`);
   const fxText = edit ? edit.text : activeText();
   const cell = sheet.cells.get(key(sel.ar, sel.ac)); const ast = cell ? wb.styles[cell.s] || {} : {};
-  void tokenize; void shiftFormula; void toStr; void FONT; void E; void isErr; void parseCell; void refText; void T; void setSix;
+  A.activeStyle = ast; void tokenize; void shiftFormula; void toStr; void FONT; void E; void isErr; void parseCell; void refText; void T; void setSix;
 
   return (
-    <div ref={rootRef} className="sx" style={T.vars} dir="ltr" onClick={(e) => { if (!e.target.closest?.('input,select,textarea,.sx__grid,.sx__find,.sx__menu') && !editRef.current) requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }} data-rtl={rtl ? '1' : undefined}>
-      {!readOnly && <SheetRibbon A={A} tt={tt} rtl={rtl} state={{ ast, sel, canUndo: ctl.canUndo, canRedo: ctl.canRedo, clip: !!ctl.clip }} />}
+    <div ref={rootRef} className="sx" style={T.vars} dir="ltr" onClick={(e) => { if (!e.target.closest?.('input,select,textarea,.sx__grid,.sx__find,.sx__menu,.sxd__back,.sxf') && !editRef.current && !findOpenRef.current && !overlayRef.current) requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }} data-rtl={rtl ? '1' : undefined}>
+      {!readOnly && <SheetRibbon A={A} tt={tt} rtl={rtl} tab={tab} setTab={setTab} collapsed={collapsed} setCollapsed={setCollapsed} state={{ ast, sel, canUndo: ctl.canUndo, canRedo: ctl.canRedo, clip: !!ctl.clip }} />}
       {view.bar && (
         <div className="sx__fx">
           <input className="sx__name" aria-label={tt('Name box', 'مربع الاسم')} defaultValue={nameBox} key={nameBox} onKeyDown={(e) => { if (e.key === 'Enter') { const ok = A.goto(e.target.value); if (!ok && /^[A-Za-z_][\w.]*$/.test(e.target.value) && !readOnly) { A.defineName(e.target.value); } scrollRef.current?.focus(); } if (e.key === 'Escape') scrollRef.current?.focus(); }} onFocus={(e) => e.target.select()} />
-          <span className="sx__fxl" title={tt('Insert function', 'إدراج دالة')}>fx</span>
+          {!readOnly && <span className="sx__fxb">
+            <button type="button" aria-label={tt('Cancel', 'إلغاء')} title="Esc" disabled={!edit} onMouseDown={(e) => e.preventDefault()} onClick={cancel}><SxIcon name="close" size={14} /></button>
+            <button type="button" aria-label={tt('Enter', 'إدخال')} title="Enter" disabled={!edit} onMouseDown={(e) => e.preventDefault()} onClick={() => commit(1, 0)}>✓</button>
+          </span>}
+          <button type="button" className="sx__fxl" title={tt('Insert function (Shift+F3)', 'إدراج دالة (Shift+F3)')} aria-label={tt('Insert function', 'إدراج دالة')} disabled={readOnly} onMouseDown={(e) => e.preventDefault()} onClick={() => A.openDialog('insertfn')}>fx</button>
           <input className="sx__fxin" dir="auto" spellCheck={false} value={fxText} readOnly={readOnly}
             onFocus={() => { if (!editRef.current && !readOnly) setEdit({ r: sel.ar, c: sel.ac, text: activeText(), how: 'bar', caret: activeText().length }); }}
             onChange={(e) => setEdit({ ...(editRef.current || { r: sel.ar, c: sel.ac, how: 'bar' }), text: e.target.value, caret: e.target.selectionStart })}
@@ -448,24 +587,46 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
         )}
         {menu && <CtxMenu menu={menu} A={A} tt={tt} readOnly={readOnly} close={() => setMenu(null)} />}
       </div>
-      <div className="sx__status">
+      <div className="sx__tabsbar">
+        <button type="button" className="sx__tnav" aria-label={tt('Previous sheet', 'الورقة السابقة')} disabled={six === 0} onClick={() => A.stepSheet(-1)}>◀</button>
+        <button type="button" className="sx__tnav" aria-label={tt('Next sheet', 'الورقة التالية')} disabled={six >= wb.sheets.length - 1} onClick={() => A.stepSheet(1)}>▶</button>
         <div className="sx__tabs" role="tablist">
           {wb.sheets.map((s, i) => (
             <span key={s.name + i} className={`sx__tab${i === six ? ' is-on' : ''}`} role="tab" aria-selected={i === six}
-              onClick={() => { sheetSel.current.set(six, sel); setSix(i); setSel(sheetSel.current.get(i) || mkSel(0, 0)); setEdit(null); }}
+              onClick={() => gotoSheet(i)}
               onDoubleClick={() => !readOnly && setTabEdit({ i, text: s.name })}
               onContextMenu={(e) => { e.preventDefault(); if (readOnly) return; setMenu({ x: e.clientX, y: e.clientY - 120, kind: 'tab', i }); }}>
               {tabEdit && tabEdit.i === i ? <input autoFocus value={tabEdit.text} onChange={(e) => setTabEdit({ ...tabEdit, text: e.target.value })} onBlur={() => { ctl.renameSheet(s, tabEdit.text); setTabEdit(null); }} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setTabEdit(null); }} /> : s.name}
             </span>
           ))}
-          {!readOnly && <button type="button" className="sx__addtab" aria-label={tt('New sheet', 'ورقة جديدة')} onClick={() => { let n = wb.sheets.length + 1; while (wb.sheetByName(`Sheet${n}`)) n += 1; ctl.addSheet(`Sheet${n}`); setSix(wb.sheets.length - 1); setSel(mkSel(0, 0)); }}>+</button>}
+          {!readOnly && <button type="button" className="sx__addtab" aria-label={tt('New sheet (Shift+F11)', 'ورقة جديدة (Shift+F11)')} title={tt('New sheet (Shift+F11)', 'ورقة جديدة (Shift+F11)')} onClick={A.newSheet}>+</button>}
         </div>
-        <span className="sx__sp" />
-        {hint && <span className="sx__hint">{hint}</span>}
-        {wb.circular && <span className="sx__warn">{tt('Circular reference', 'مرجع دائري')}</span>}
-        {stats && <span className="sx__stats">{stats.n > 0 ? `${tt('Average', 'المتوسط')}: ${+stats.avg.toFixed(6)}   ${tt('Count', 'العدد')}: ${stats.cnt}   ${tt('Sum', 'المجموع')}: ${+stats.sum.toFixed(6)}` : `${tt('Count', 'العدد')}: ${stats.cnt}`}</span>}
-        <span className="sx__zoom"><button type="button" aria-label="−" onClick={() => setView((v) => ({ ...v, z: clamp(Math.round((v.z - 0.1) * 10) / 10, 0.4, 3) }))}>−</button><input type="range" min="40" max="300" step="10" value={Math.round(z * 100)} aria-label={tt('Zoom', 'تكبير')} onChange={(e) => setView((v) => ({ ...v, z: +e.target.value / 100 }))} /><button type="button" aria-label="+" onClick={() => setView((v) => ({ ...v, z: clamp(Math.round((v.z + 0.1) * 10) / 10, 0.4, 3) }))}>+</button><span>{Math.round(z * 100)}%</span></span>
       </div>
+      <div className="sx__status">
+        <span className="sx__mode">{edit ? (edit.how === 'enter' ? tt('Enter', 'إدخال') : tt('Edit', 'تحرير')) : painter ? tt('Format Painter', 'ناسخ التنسيق') : tt('Ready', 'جاهز')}</span>
+        {hint && <span className="sx__hint" role="status">{hint}</span>}
+        {wb.circular && <span className="sx__warn">{tt('Circular reference', 'مرجع دائري')}</span>}
+        <span className="sx__sp" />
+        {stats && <span className="sx__stats">{stats.n > 0
+          ? [[tt('Average', 'المتوسط'), +stats.avg.toFixed(6)], [tt('Count', 'العدد'), stats.cnt], [tt('Min', 'الأصغر'), +stats.mn.toFixed(6)], [tt('Max', 'الأكبر'), +stats.mx.toFixed(6)], [tt('Sum', 'المجموع'), +stats.sum.toFixed(6)]].map(([l, v]) => <span key={l}>{l}: <b>{v}</b></span>)
+          : <span>{tt('Count', 'العدد')}: <b>{stats.cnt}</b></span>}</span>}
+        <span className="sx__zoom">
+          <button type="button" aria-label={tt('Zoom out', 'تصغير')} onClick={() => A.zoomBy(-0.1)}>−</button>
+          <input type="range" min="40" max="300" step="10" value={Math.round(z * 100)} aria-label={tt('Zoom', 'تكبير')} onChange={(e) => A.zoomTo(+e.target.value / 100)} />
+          <button type="button" aria-label={tt('Zoom in', 'تكبير')} onClick={() => A.zoomBy(0.1)}>+</button>
+          <button type="button" className="sx__zpct" title={tt('Reset to 100%', 'رجوع لـ 100%')} onClick={() => A.zoomTo(1)}>{Math.round(z * 100)}%</button>
+        </span>
+      </div>
+      {fileOpen && <SheetFileMenu A={A} tt={tt} fileName={fileName} dirty={ctl.dirty} onClose={() => { setFileOpen(false); requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }} />}
+      {dlg && (() => {
+        const close = () => { setDlg(null); requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); };
+        if (dlg.type === 'prompt') return <PromptDialog d={dlg} tt={tt} onClose={close} />;
+        if (dlg.type === 'confirm') return <ConfirmDialog d={dlg} tt={tt} onClose={close} />;
+        if (dlg.type === 'shortcuts') return <ShortcutsDialog tt={tt} rtl={rtl} onClose={close} />;
+        if (dlg.type === 'insertfn') return <InsertFnDialog tt={tt} onClose={close} onPick={(n) => { setDlg(null); requestAnimationFrame(() => A.insertFn(n)); }} />;
+        if (dlg.type === 'format') return <FormatCellsDialog A={A} tt={tt} tab={dlg.tab} onClose={close} />;
+        return null;
+      })()}
     </div>
   );
 }
@@ -479,7 +640,7 @@ function CtxMenu({ menu, A, tt, readOnly, close }) {
   let items;
   if (menu.kind === 'tab') {
     const s = A.wb.sheets[menu.i];
-    items = [item(tt('Rename', 'إعادة تسمية'), () => A.ctl.renameSheet(s, window.prompt(tt('Sheet name', 'اسم الورقة'), s.name) || s.name)), item(tt('Delete', 'حذف'), () => { if (window.confirm(tt('Delete this sheet?', 'حذف الورقة؟'))) A.ctl.deleteSheet(s); }, A.wb.sheets.length < 2)];
+    items = [item(tt('Rename', 'إعادة تسمية'), () => { A.gotoSheetByObj(s); setTimeout(A.renameSheet, 0); }), item(tt('Insert sheet', 'إدراج ورقة'), A.newSheet), item(tt('Delete', 'حذف'), () => { A.gotoSheetByObj(s); setTimeout(A.deleteSheet, 0); }, A.wb.sheets.length < 2)];
   } else {
     const rowsSel = sel.c1 === 0 && sel.c2 >= MAXC - 1; const colsSel = sel.r1 === 0 && sel.r2 >= MAXR - 1;
     items = [

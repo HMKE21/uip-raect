@@ -10,7 +10,7 @@ import '../../styles/css/office.css';
  * Shared frame for the Office editors: title, save / download / cancel, unsaved-changes guard and 409 conflict handling.
  *   build() -> Promise<Blob>   (called for both Save and Download)
  */
-export default function OfficeShell({ saveKeyRef, fileName, tt, guardRef, onSave, onClose, dirty, build, onSaved, tools, children, status, draftKey, draftToken, draftBuild, draftDelay }) {
+export default function OfficeShell({ className = '', actionsRef, saveKeyRef, fileName, tt, guardRef, onSave, onClose, dirty, build, onSaved, tools, children, status, draftKey, draftToken, draftBuild, draftDelay }) {
   const saveRef = useRef(null);
   // draftBuild: a cheap snapshot for the local autosave (the full file is only built on Save / Download, never every few seconds)
   const draft = useAutoDraft({ draftKey, dirty, token: draftToken, build: draftBuild || build, delay: draftDelay, meta: { name: fileName }, saver: () => saveRef.current?.() });
@@ -53,8 +53,9 @@ export default function OfficeShell({ saveKeyRef, fileName, tt, guardRef, onSave
     } catch (e) { setErr(e?.message || String(e)); }
   };
 
+  if (actionsRef) actionsRef.current = { download, close: () => afterGuard(dirty ? ask() : true, onClose), exportAs: null, ...(actionsRef.current || {}), download, close: () => afterGuard(dirty ? ask() : true, onClose) };
   return (
-    <div className="ed ed--office">
+    <div className={`ed ed--office ${className}`}>
       <div className="ed__top">
         <Btn icon="x" label={tt('Cancel', 'إلغاء')} onClick={() => afterGuard(dirty ? ask() : true, onClose)} />
         <strong className="ed__title" dir="auto">{fileName}</strong>

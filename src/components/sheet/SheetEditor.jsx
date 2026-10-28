@@ -39,6 +39,7 @@ export default function SheetEditor({ blob, fileName, ext, tt, rtl, guardRef, on
   const [state, setState] = useState({ status: 'loading' });
   const [, tick] = useState(0);
   const saveKeyRef = useRef(null);
+  const actionsRef = useRef({});
   useEffect(() => {
     let dead = false;
     openWorkbook(blob, ext).then((wb) => { if (dead) return; const ctl = new Ctl(wb); if (startDirty) ctl.rev = 1; setState({ status: 'ready', ctl }); }).catch((e) => !dead && setState({ status: 'error', msg: e?.message || String(e) }));
@@ -47,14 +48,22 @@ export default function SheetEditor({ blob, fileName, ext, tt, rtl, guardRef, on
   const ctl = state.ctl;
   useEffect(() => (ctl ? ctl.on(() => tick((n) => n + 1)) : undefined), [ctl]);
   const build = useCallback(async () => workbookBlob(ctl.wb, ext), [ctl, ext]);
+  useEffect(() => {
+    if (!ctl) return;
+    actionsRef.current.exportAs = (x, six = 0) => {
+      const base = String(fileName).replace(/\.[^.]+$/, '');
+      const blob = x === 'csv' ? new Blob(['\uFEFF', workbookToCsv(ctl.wb, ',', six)], { type: 'text/csv' }) : workbookBlob(ctl.wb, 'xlsx');
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${base}.${x}`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    };
+  }, [ctl, fileName]);
   const draftBuild = useCallback(() => new Blob([serializeWb(ctl.wb)], { type: DRAFT_MIME }), [ctl]);
   const note = useMemo(() => (ext === 'xlsx' ? null : tt('CSV / TSV files keep values only — formulas are saved as their results and formatting is not stored. Use Save as .xlsx to keep them.', 'ملفات CSV / TSV بتحفظ القيم بس — الصيغ بتتحفظ كنتائج والتنسيق مش بيتخزن.')), [ext, tt]);
   if (state.status === 'loading') return <div className="ed ed--center"><span className="st-fv-spinner" /><p className="ed__hint">{tt('Opening the sheet…', 'جارٍ فتح الجدول…')}</p></div>;
   if (state.status === 'error') return <div className="ed ed--center"><p className="ed__err">{state.msg}</p><button type="button" className="ed__btn" onClick={onClose}>{tt('Close', 'إغلاق')}</button></div>;
   return (
-    <OfficeShell saveKeyRef={saveKeyRef} fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={ctl.dirty} build={build} onSaved={() => ctl.markSaved()} draftKey={draftKey} draftToken={ctl.rev} draftBuild={draftBuild}
+    <OfficeShell className="ed--sheet" actionsRef={actionsRef} saveKeyRef={saveKeyRef} fileName={fileName} tt={tt} guardRef={guardRef} onSave={onSave} onClose={onClose} dirty={ctl.dirty} build={build} onSaved={() => ctl.markSaved()} draftKey={draftKey} draftToken={ctl.rev} draftBuild={draftBuild}
       status={note ? <p className="ed__hint ed__hint--note xg__note">{note}</p> : null}>
-      <SheetApp ctl={ctl} tt={tt} rtl={rtl} saveKeyRef={saveKeyRef} />
+      <SheetApp ctl={ctl} tt={tt} rtl={rtl} saveKeyRef={saveKeyRef} actionsRef={actionsRef} fileName={fileName} />
     </OfficeShell>
   );
 }
