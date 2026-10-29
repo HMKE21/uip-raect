@@ -66,6 +66,25 @@
     border-radius: 0 0 var(--radius-sm) var(--radius-sm);
     background: var(--color-primary);
   }
+  .bottom-nav__icon { position: relative; display: inline-flex; font-style: normal; }
+  .bottom-nav__badge {
+    position: absolute;
+    top: -7px;
+    inset-inline-start: calc(100% - 10px);
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    box-sizing: border-box;
+    border-radius: 999px;
+    background: #e5484d;
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 800;
+    line-height: 18px;
+    text-align: center;
+    box-shadow: 0 0 0 2px var(--bg-surface);
+    pointer-events: none;
+  }
   .bottom-nav__item .bottom-nav__dot {
     position: absolute;
     top: 4px;

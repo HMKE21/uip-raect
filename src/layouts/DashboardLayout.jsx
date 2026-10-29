@@ -90,16 +90,26 @@ function DashboardShell() {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const eyebrow = useEyebrow(user?.role, insight);
 
-  // Student sidebar shows an unread-messages badge; the count comes from the
-  // same dashboard-stats payload the dashboard uses (best-effort, no badge on failure).
+  // Unread-messages badge (sidebar + bottom bar) for every role: total unread messages across the person's conversations,
+  // from the same inbox the Messages page uses (best-effort, no badge on failure). Refreshes on any messaging activity,
+  // on realtime pings, when the app comes back to the foreground, and every 30 s as a safety net.
   const loadUnreadMessages = useCallback(() => {
-    if (!isStudentShell) return;
-    api.get('/api/v1/students/dashboard-stats')
-      .then((json) => setUnreadMessages(Number(json?.data?.unread_messages) || 0))
+    if (!user) return;
+    api.get('/api/v1/messaging/inbox')
+      .then((json) => {
+        const rows = Array.isArray(json?.data) ? json.data : null;
+        if (!rows) return;
+        setUnreadMessages(rows.reduce((sum, c) => sum + (c.is_muted ? 0 : Number(c.unread_count || (c.is_unread ? 1 : 0))), 0));
+      })
       .catch(() => {});
-  }, [isStudentShell]);
+  }, [user]);
   useEffect(() => { loadUnreadMessages(); }, [loadUnreadMessages]);
-  useLive(loadUnreadMessages, { watch: /\/(messaging|messages)(\/|$|\?)/, interval: 30000, enabled: isStudentShell, topics: ['messaging'] });
+  useLive(loadUnreadMessages, { watch: /\/(messaging|messages)(\/|$|\?)/, interval: 30000, enabled: !!user, topics: ['messaging'] });
+  useEffect(() => {
+    const on = () => loadUnreadMessages();
+    window.addEventListener('uip:push-received', on);
+    return () => window.removeEventListener('uip:push-received', on);
+  }, [loadUnreadMessages]);
 
   // Desktop: collapse the sidebar to icons. Mobile (<=768px, where the
   // sidebar is an off-canvas drawer): open/close the drawer instead.
@@ -161,7 +171,7 @@ function DashboardShell() {
         </main>
       </div>
 
-      <BottomNav role={user?.role} onMoreClick={() => setSidebarOpen(true)} />
+      <BottomNav role={user?.role} unreadMessages={unreadMessages} unread={unread} onMoreClick={() => setSidebarOpen(true)} />
 
       {/* Mounted once per authenticated layout — same rule as
           layouts/footer.php's <?php if (Session::userId()): ?>

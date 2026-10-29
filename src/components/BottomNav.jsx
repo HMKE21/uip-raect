@@ -16,7 +16,7 @@ const PRIORITY = {
   supervisor: ['dashboard', 'projects', 'exams', 'messages'],
 };
 
-export default function BottomNav({ role, onMoreClick }) {
+export default function BottomNav({ role, unreadMessages = 0, unread = 0, onMoreClick }) {
   const { locale } = useLanguage();
   const { can } = useAuth();
 
@@ -42,7 +42,13 @@ export default function BottomNav({ role, onMoreClick }) {
           to={item.route}
           className={({ isActive }) => `bottom-nav__item${isActive ? ' is-active' : ''}`}
         >
-          <Icon name={item.icon} size={21} />
+          <i className="bottom-nav__icon">
+            <Icon name={item.icon} size={21} />
+            {(() => {
+              const n = item.key === 'messages' ? unreadMessages : item.key === 'notifications' ? unread : 0;
+              return n > 0 ? <b className="bottom-nav__badge" aria-label={`${n}`}>{n > 99 ? '99+' : n}</b> : null;
+            })()}
+          </i>
           <span>{item[locale] || item.en}</span>
         </NavLink>
       ))}
