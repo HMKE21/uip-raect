@@ -331,43 +331,96 @@ export function PinnedMessagesModal({ pinned, onClose, onGoToMessage }) {
 }
 
 /** Ported from openForwardModal() in messaging.js — pick a conversation to forward a message into. */
-export function ForwardModal({ conversations, onClose, onForward }) {
+export function ForwardModal({ conversations, onClose, onForward, count = 1 }) {
   const t = useT();
-  const [busyId, setBusyId] = useState(null);
+  const [picked, setPicked] = useState([]);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [q, setQ] = useState('');
 
-  const pick = async (c) => {
-    setBusyId(c.id);
+  const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const list = q.trim()
+    ? conversations.filter((c) => peerLabel(c).toLowerCase().includes(q.trim().toLowerCase()))
+    : conversations;
+
+  const send = async () => {
+    if (!picked.length || busy) return;
+    setBusy(true);
     setError('');
     try {
-      await onForward(c.id);
+      await onForward(picked);
     } catch (err) {
       setError(err?.message || t('Something went wrong.', 'حدث خطأ ما.'));
-    } finally {
-      setBusyId(null);
+      setBusy(false);
     }
   };
 
   return (
-    <Modal title={t('Forward message', 'إعادة توجيه الرسالة')} onClose={onClose}>
+    <Modal
+      title={count > 1 ? t(`Forward ${count} messages`, `إعادة توجيه ${count} رسائل`) : t('Forward message', 'إعادة توجيه الرسالة')}
+      onClose={busy ? () => {} : onClose}
+      footer={(
+        <button type="button" className="btn btn-primary btn-sm" onClick={send} disabled={!picked.length || busy}>
+          {busy ? t('Sending…', 'جارٍ الإرسال…') : t(`Send (${picked.length})`, `إرسال (${picked.length})`)}
+        </button>
+      )}
+    >
+      <input
+        type="search"
+        className="msg-forward-search"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder={t('Search', 'بحث')}
+        style={{ width: '100%', marginBottom: 8, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--glass-border, rgba(128,128,128,.3))', background: 'transparent', color: 'inherit', font: 'inherit' }}
+      />
       <div className="msg-picker-list">
-        {conversations.length === 0 ? (
+        {list.length === 0 ? (
           <p className="text-small text-muted">{t('No conversations yet.', 'لا توجد محادثات بعد.')}</p>
         ) : (
-          conversations.map((c) => (
-            <div
-              className="msg-picker-item"
-              key={c.id}
-              onClick={() => busyId === null && pick(c)}
-              style={{ opacity: busyId && busyId !== c.id ? 0.5 : 1 }}
-            >
-              <Avatar name={peerLabel(c)} isGroup={c.is_group} size="sm" />
-              <span>{peerLabel(c)}</span>
-            </div>
-          ))
+          list.map((c) => {
+            const on = picked.includes(c.id);
+            return (
+              <div className={`msg-picker-item${on ? ' is-picked' : ''}`} key={c.id} onClick={() => !busy && toggle(c.id)} role="checkbox" aria-checked={on}>
+                <Avatar name={peerLabel(c)} isGroup={c.is_group} size="sm" />
+                <span style={{ flex: 1 }}>{peerLabel(c)}</span>
+                <span className={`msg-sel-dot${on ? ' is-on' : ''}`} aria-hidden="true">{on ? <Icon name="check" size={13} /> : null}</span>
+              </div>
+            );
+          })
         )}
       </div>
       {error && <p className="text-small" style={{ color: 'var(--danger, #e5484d)' }}>{error}</p>}
+    </Modal>
+  );
+}
+
+/** Bulk delete: "for me" always, "for everyone" only when every selected message is mine. */
+export function BulkDeleteModal({ count, canAll, onClose, onDelete }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const run = async (mode) => {
+    setBusy(true);
+    try { await onDelete(mode); } finally { setBusy(false); }
+  };
+  return (
+    <Modal
+      title={t(`Delete ${count} messages?`, `حذف ${count} رسائل؟`)}
+      onClose={busy ? () => {} : onClose}
+      footer={(
+        <>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={onClose} disabled={busy}>{t('Cancel', 'إلغاء')}</button>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => run('for-me')} disabled={busy}>{t('Delete for me', 'حذف عندي')}</button>
+          {canAll && (
+            <button type="button" className="btn btn-danger btn-sm" onClick={() => run('for-everyone')} disabled={busy}>{t('Delete for everyone', 'حذف للجميع')}</button>
+          )}
+        </>
+      )}
+    >
+      <p className="text-small" style={{ margin: 0, lineHeight: 1.7 }}>
+        {canAll
+          ? t('Choose how to delete the selected messages.', 'اختر طريقة حذف الرسائل المحددة.')
+          : t('These will be removed from your chat only.', 'سيتم حذفها من عندك فقط.')}
+      </p>
     </Modal>
   );
 }

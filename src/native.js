@@ -98,6 +98,11 @@ async function guard(promise) {
   return res;
 }
 
+/** In the app the page origin is https://localhost, so root-relative /uploads and /api paths must point at the API server. */
+export function absolutizeForNative(url) {
+  return isNative ? absolutize(url) : url;
+}
+
 function absolutize(url) {
   return typeof url === 'string' && API_BASE && /^\/(api|uploads)(\/|\?|$)/.test(url) ? API_BASE + url : url;
 }

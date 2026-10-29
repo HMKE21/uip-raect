@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { attachmentUrl } from '../components/messaging/format';
+import { absolutizeForNative } from '../native';
 
 /**
  * Personal chat backgrounds (the person's own photos) — shared by the people-to-people messenger and the AI assistant.
@@ -71,7 +72,8 @@ const API_PATH = '/api/v1/account/chat-wallpapers';
 const fullUrl = (path) => {
   if (!path) return '';
   if (/^(https?:|blob:|data:)/i.test(path)) return path;
-  return attachmentUrl('/' + String(path).replace(/^\/+/, '')) || '';
+  // in the Android app the page origin is https://localhost: point the photo at the API server instead
+  return absolutizeForNative(attachmentUrl('/' + String(path).replace(/^\/+/, ''))) || '';
 };
 const serverItems = (json) => ((json && json.data && json.data.wallpapers) || []).map((w) => ({ id: w.id, url: fullUrl(w.url) }));
 

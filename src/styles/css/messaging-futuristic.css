@@ -320,3 +320,15 @@ html body .msg-wall-swatch--dots { background: radial-gradient(rgba(60, 60, 130,
 .msg-wall-swatch--graphite::before, .msg-wall-swatch--midnight::before { background: rgba(255, 255, 255, .16); }
 .msg-wall-opt:hover .msg-wall-swatch { transform: translateY(-2px); }
 .msg-wall-opt[aria-pressed="true"] .msg-wall-swatch { outline: 2.5px solid var(--color-primary); outline-offset: 2px; box-shadow: 0 10px 22px -8px rgba(var(--color-primary-rgb), .6); }
+
+/* ---- multi-select messages ---- */
+.msg-select-bar { position: absolute; inset-block-start: 0; inset-inline: 0; z-index: 30; display: flex; align-items: center; gap: 4px; min-height: var(--msg-header-h, 56px); padding: 0 12px; background: var(--color-surface, var(--glass-bg, #fff)); border-block-end: 1px solid var(--glass-border, rgba(128,128,128,.25)); box-shadow: 0 2px 10px rgba(0,0,0,.08); }
+.msg-select-bar__danger { color: var(--danger, #e5484d); }
+.msg-sel-dot { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--color-primary, #4f6bff); display: inline-flex; align-items: center; justify-content: center; color: #fff; background: transparent; transition: background .12s; }
+.msg-sel-dot.is-on { background: var(--color-primary, #4f6bff); }
+.msg-sel-dot--row { align-self: center; margin-inline-end: 8px; }
+.msg-row.is-selecting { cursor: pointer; -webkit-user-select: none; user-select: none; }
+.msg-row.is-selecting * { pointer-events: none; }
+.msg-row.is-selected { background: color-mix(in srgb, var(--color-primary, #4f6bff) 14%, transparent); }
+.msg-picker-item { display: flex; align-items: center; gap: 10px; }
+.msg-picker-item.is-picked { background: color-mix(in srgb, var(--color-primary, #4f6bff) 12%, transparent); }

@@ -204,7 +204,7 @@ function FloatingPanel({ anchorRef, onClose, className, children }) {
   );
 }
 
-function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit }) {
+function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit, selectMode, selected, onToggleSelect, onStartSelect }) {
   const t = useT();
   const navigate = useNavigate();
   const [showReactPicker, setShowReactPicker] = useState(false);
@@ -231,7 +231,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
   // After a long press the finger is lifted over the photo: that must not count as a tap (enlarge / play).
   const swallowClickRef = useRef(0);
   const onPressStart = (e) => {
-    if (!touchMode() || m.pending || m.failed || e.touches?.length > 1) return;
+    if (selectMode || !touchMode() || m.pending || m.failed || e.touches?.length > 1) return;
     if (pressBlocked(e.target)) return;
     cancelPress();
     pressRef.current.x = e.touches[0].clientX; pressRef.current.y = e.touches[0].clientY;
@@ -247,6 +247,12 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
     if (swallowClickRef.current && Date.now() - swallowClickRef.current < 1500 && e.cancelable) e.preventDefault();
   };
   const onClickCapture = (e) => {
+    if (selectMode) {
+      e.preventDefault();
+      e.stopPropagation();
+      onToggleSelect?.(m);
+      return;
+    }
     if (swallowClickRef.current && Date.now() - swallowClickRef.current < 1500) {
       swallowClickRef.current = 0;
       e.preventDefault();
@@ -385,7 +391,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
   return (
     <div
       ref={rowRef}
-      className={`msg-row${m.is_mine ? ' is-mine' : ''}${showAvatar ? ' show-avatar' : ''}`}
+      className={`msg-row${m.is_mine ? ' is-mine' : ''}${showAvatar ? ' show-avatar' : ''}${selectMode ? ' is-selecting' : ''}${selected ? ' is-selected' : ''}`}
       data-msg-id={m.id}
       onTouchStart={onPressStart}
       onTouchMove={onPressMove}
@@ -394,13 +400,16 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
       onClickCapture={onClickCapture}
       onContextMenu={(e) => { if (touchMode() && !m.pending && !m.failed && !pressBlocked(e.target)) { e.preventDefault(); setTouchOpen(true); } }}
     >
+      {selectMode ? (
+        <span className={`msg-sel-dot msg-sel-dot--row${selected ? ' is-on' : ''}`} aria-hidden="true">{selected ? <Icon name="check" size={13} /> : null}</span>
+      ) : null}
       {!m.is_mine ? <Avatar name={m.sender_name} size="sm" src={m.sender_avatar} /> : null}
       <div className="msg-bubble-col">
         {showAvatar && !m.is_mine ? <span className="msg-sender-name">{m.sender_name}</span> : null}
         <div className={`msg-bubble${isMedia ? ' msg-bubble--media' : ''}${attachOnly ? ' msg-bubble--attach' : ''}${visualOnly ? ' msg-bubble--visual' : ''}${captioned ? ' msg-bubble--captioned' : ''}`} style={{ position: 'relative' }}>
           <div
             className={`msg-hover-actions${showReactPicker || showMoreMenu || touchOpen ? ' is-open' : ''}`}
-            hidden={!!(m.pending || m.failed)}
+            hidden={!!(m.pending || m.failed || selectMode)}
             onClick={(e) => { if (e.target.closest('button') && !e.target.closest('[aria-label="تفاعل"],[aria-label="React"],[aria-label="المزيد"],[aria-label="More"]')) setTouchOpen(false); }}
           >
             <button type="button" aria-label={t('React', 'تفاعل')} ref={reactBtnRef} onClick={() => { setShowMoreMenu(false); setShowReactPicker((s) => !s); }}>
@@ -412,6 +421,11 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
             <button type="button" aria-label={t('Forward', 'إعادة توجيه')} onClick={() => onForward(m.id)}>
               <MsgIcon name="forward" size={14} />
             </button>
+            {onStartSelect && (
+              <button type="button" aria-label={t('Select', 'تحديد')} title={t('Select', 'تحديد')} onClick={() => onStartSelect(m)}>
+                <Icon name="check" size={14} />
+              </button>
+            )}
             {textToCopy && (
               <button type="button" aria-label={copied ? t('Copied', 'تم النسخ') : t('Copy', 'نسخ')} title={copied ? t('Copied', 'تم النسخ') : t('Copy', 'نسخ')} onClick={doCopy}>
                 <Icon name={copied ? 'check' : 'copy'} size={14} />
@@ -897,6 +911,13 @@ export default function ThreadPanel({
   onOpenVideo,
   onNotifyTyping,
   onForwardMessage,
+  selectMode = false,
+  selectedIds = [],
+  onStartSelect,
+  onToggleSelect,
+  onExitSelect,
+  onForwardSelected,
+  onDeleteSelected,
   onReportMessage,
   onUnblockUser,
   onOpenPollModal,
@@ -1283,6 +1304,28 @@ export default function ThreadPanel({
             <div>{ar ? 'أفلت الملفات هنا لإرسالها' : 'Drop files here to send them'}</div>
           </div>
         )}
+        {selectMode && (
+          <div className="msg-select-bar" role="toolbar">
+            <button type="button" className="msg-icon-btn" onClick={onExitSelect} aria-label={t('Cancel selection', 'إلغاء التحديد')}>
+              <Icon name="x" size={20} />
+            </button>
+            <strong className="msg-select-bar__count">{t(`${selectedIds.length} selected`, `${selectedIds.length} محدد`)}</strong>
+            <span style={{ flex: 1 }} />
+            <button type="button" className="msg-icon-btn" onClick={() => {
+              const txt = messages.filter((x) => selectedIds.includes(x.id)).map(copyableText).filter(Boolean).join('\n');
+              if (txt) copyToClipboard(txt);
+              onExitSelect();
+            }} aria-label={t('Copy', 'نسخ')} title={t('Copy', 'نسخ')}>
+              <Icon name="copy" size={19} />
+            </button>
+            <button type="button" className="msg-icon-btn" onClick={onForwardSelected} aria-label={t('Forward', 'إعادة توجيه')} title={t('Forward', 'إعادة توجيه')}>
+              <MsgIcon name="forward" size={19} />
+            </button>
+            <button type="button" className="msg-icon-btn msg-select-bar__danger" onClick={onDeleteSelected} aria-label={t('Delete', 'حذف')} title={t('Delete', 'حذف')}>
+              <Icon name="trash" size={19} />
+            </button>
+          </div>
+        )}
         <header className="msg-thread__header">
           <button type="button" className="msg-icon-btn msg-thread__back" onClick={onBack} aria-label={t('Back to conversations', 'العودة إلى المحادثات')}>
             <Icon name="arrow-left" size={20} />
@@ -1419,6 +1462,10 @@ export default function ThreadPanel({
                     onOpenVideo={onOpenVideo}
                     onForward={onForwardMessage}
                     onReport={onReportMessage}
+                    selectMode={selectMode}
+                    selected={selectedIds.includes(m.id)}
+                    onToggleSelect={onToggleSelect}
+                    onStartSelect={onStartSelect}
                     editingId={editingId}
                     onStartEdit={setEditingId}
                     onCancelEdit={() => setEditingId(null)}

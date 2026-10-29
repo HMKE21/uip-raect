@@ -17,6 +17,7 @@ import {
   AddMemberModal,
   PinnedMessagesModal,
   ForwardModal,
+  BulkDeleteModal,
   PollModal,
   ChatPrivacyModal,
   VideoViewer,
@@ -24,6 +25,7 @@ import {
 } from '../components/messaging/modals';
 import { ReportModal } from '../components/messaging/SafetyModals';
 import { fmtTime } from '../components/messaging/format';
+import { parseServerDate } from '../utils/serverDate';
 import { useLanguage } from '../context/LanguageContext';
 import { getPortalBrand, pick } from '../config/portalBrand';
 import { usePageMeta } from '../context/PageMetaContext';
@@ -244,7 +246,9 @@ export default function Messages() {
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [lightboxSrc, setLightboxSrc] = useState(null);
   const [videoView, setVideoView] = useState(null); // { src, poster, name }
-  const [forwardMessageId, setForwardMessageId] = useState(null);
+  const [forwardMessageId, setForwardMessageId] = useState(null); // array of message ids
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   const lastPollIdRef = useRef(0);
   // id of the conversation whose first page has finished loading. Polling waits for it: before that lastPollIdRef still holds
@@ -257,6 +261,8 @@ export default function Messages() {
 
   useEffect(() => {
     activeIdRef.current = activeId;
+    setSelectMode(false);
+    setSelectedIds([]);
   }, [activeId]);
 
   useEffect(() => {
@@ -967,20 +973,81 @@ export default function Messages() {
   // ------------------------------------------------------------- forward
   // Ported from openForwardModal() in messaging.js.
   const onForwardMessage = (messageId) => {
-    setForwardMessageId(messageId);
+    setForwardMessageId(Array.isArray(messageId) ? messageId : [messageId]);
     setModal('forward');
   };
 
-  const submitForward = async (targetConversationId) => {
-    const fd = new FormData();
-    fd.append('body', '');
-    fd.append('forwarded_from_id', forwardMessageId);
-    await api.postForm(BASE + '/conversations/' + targetConversationId + '/messages', fd);
+  // Forward every chosen message (oldest first) to every chosen conversation.
+  const submitForward = async (targetIds) => {
+    const ids = [...(forwardMessageId || [])].sort((a, b) => Number(a) - Number(b));
+    const targets = Array.isArray(targetIds) ? targetIds : [targetIds];
+    for (const target of targets) {
+      for (const mid of ids) {
+        const fd = new FormData();
+        fd.append('body', '');
+        fd.append('forwarded_from_id', mid);
+        // eslint-disable-next-line no-await-in-loop
+        await api.postForm(BASE + '/conversations/' + target + '/messages', fd);
+      }
+    }
     setModal(null);
     setForwardMessageId(null);
+    setSelectMode(false);
+    setSelectedIds([]);
     loadInbox();
-    if (String(targetConversationId) === String(activeId)) {
+    if (targets.some((x) => String(x) === String(activeId))) {
       loadThread(activeId, null, false);
+    }
+  };
+
+  // ------------------------------------------------------------- multi-select
+  const selectable = (m) => m && m.message_type !== 'system' && !m.is_deleted && !m.pending && !m.failed && !isTmp(m.id);
+  const onStartSelect = (m) => {
+    if (!selectable(m)) return;
+    setSelectMode(true);
+    setSelectedIds([m.id]);
+  };
+  const onToggleSelect = (m) => {
+    if (!selectable(m)) return;
+    setSelectedIds((prev) => {
+      const next = prev.includes(m.id) ? prev.filter((x) => x !== m.id) : [...prev, m.id];
+      if (next.length === 0) setSelectMode(false);
+      return next;
+    });
+  };
+  const onExitSelect = () => { setSelectMode(false); setSelectedIds([]); };
+  const selectedMessages = () => messages.filter((m) => selectedIds.includes(m.id));
+  const onForwardSelected = () => { if (selectedIds.length) onForwardMessage(selectedIds); };
+  const onDeleteSelected = () => { if (selectedIds.length) setModal('bulkDelete'); };
+  const bulkCanAll = () => {
+    const sel = selectedMessages();
+    return sel.length > 0 && sel.every((m) => m.is_mine && (!m.created_at || Date.now() - parseServerDate(m.created_at).getTime() < 15 * 60000));
+  };
+  const submitBulkDelete = async (mode) => {
+    const ids = [...selectedIds];
+    const failed = [];
+    for (const id of ids) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await api.del(BASE + '/messages/' + id + '/' + mode);
+      } catch (err) {
+        failed.push(id);
+      }
+    }
+    const done = ids.filter((id) => !failed.includes(id));
+    if (mode === 'for-everyone') {
+      setMessages((prev) => prev.map((m) => (done.includes(m.id) ? { ...m, is_deleted: true, deleted_reason: null, body: null, attachments: [], metadata: null } : m)));
+    } else {
+      setMessages((prev) => prev.filter((m) => !done.includes(m.id)));
+    }
+    setModal(null);
+    setSelectMode(false);
+    setSelectedIds([]);
+    loadInbox();
+    if (failed.length) {
+      setLastError(ar
+        ? `تعذّر حذف ${failed.length} من ${ids.length} رسالة (ربما انتهت مهلة الحذف للجميع).`
+        : `Could not delete ${failed.length} of ${ids.length} messages.`);
     }
   };
 
@@ -1444,6 +1511,13 @@ export default function Messages() {
         onOpenVideo={setVideoView}
         onNotifyTyping={onNotifyTyping}
         onForwardMessage={onForwardMessage}
+        selectMode={selectMode}
+        selectedIds={selectedIds}
+        onStartSelect={onStartSelect}
+        onToggleSelect={onToggleSelect}
+        onExitSelect={onExitSelect}
+        onForwardSelected={onForwardSelected}
+        onDeleteSelected={onDeleteSelected}
         onReportMessage={onReportMessage}
         onUnblockUser={onUnblockUser}
         onOpenPollModal={() => setModal('poll')}
@@ -1515,7 +1589,11 @@ export default function Messages() {
           conversations={conversations}
           onClose={() => { setModal(null); setForwardMessageId(null); }}
           onForward={submitForward}
+          count={(forwardMessageId || []).length || 1}
         />
+      )}
+      {modal === 'bulkDelete' && (
+        <BulkDeleteModal count={selectedIds.length} canAll={bulkCanAll()} onClose={() => setModal(null)} onDelete={submitBulkDelete} />
       )}
       {modal === 'privacy' && (
         <ChatPrivacyModal onClose={() => setModal(null)} loadPrivacy={loadPrivacy} savePrivacy={savePrivacy} />
