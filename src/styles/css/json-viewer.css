@@ -67,7 +67,7 @@
 .jv-more { margin-inline-start: 6px; padding: 0 6px; border: 1px solid var(--jv-border); border-radius: 6px; background: none; color: var(--jv-accent); font: inherit; font-size: .78em; cursor: pointer; }
 
 /* graph: node-link diagram */
-.jv-body--graph { direction: ltr; overscroll-behavior: contain; -webkit-overflow-scrolling: auto; padding: 0; background-color: var(--jv-bg); background-image: radial-gradient(color-mix(in srgb, var(--jv-dim) 38%, transparent) 1px, transparent 1.2px); background-size: 20px 20px; line-height: 1.2; }
+.jv-body--graph { scrollbar-gutter: stable; flex: none; height: clamp(280px, 60vh, 560px); direction: ltr; overscroll-behavior: contain; -webkit-overflow-scrolling: auto; padding: 0; background-color: var(--jv-bg); background-image: radial-gradient(color-mix(in srgb, var(--jv-dim) 38%, transparent) 1px, transparent 1.2px); background-size: 20px 20px; line-height: 1.2; }
 .jv-graph { position: relative; cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; overflow: hidden; direction: ltr; }
 .jv-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .jv-graph.is-drag { cursor: grabbing; }
@@ -168,3 +168,10 @@
 .zb-json .jv-editbar button { border-color: var(--jv-border); background: var(--jv-hover); }
 .zb-json .jv-editbar button:hover:not(:disabled) { background: var(--jv-sel); }
 .zb-json .jv-edithint { color: var(--jv-dim); opacity: 1; }
+
+/* Graph body: a definite height (the graph's min-height:100% used to depend on its own content -> layout flip-flop), and it fills
+   the space when the viewer is full-screen / inside a flex host (workbench, file viewer, share sheet). */
+.jv.is-full .jv-body--graph, .zb-json .jv-body--graph, .st-fv__sheet--json .jv-body--graph, .shp-sheet--json .jv-body--graph { flex: 1; height: auto; min-height: 0; }
+/* paint/layout of the viewer never leaks into (or re-flows) the page around it */
+.jv { isolation: isolate; }
+.jv-gcard { contain: layout paint; }

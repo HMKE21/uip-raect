@@ -367,10 +367,14 @@ function GraphView({ value, q, search, cmd, selected, onSelect, fontSize, L }) {
     if (card) raise(card.path);
     if (kind === 'pan') rootRef.current.classList.add('is-drag');
   };
-  const move = (e) => {
-    const a = act.current;
-    if (!a) return;
-    const dx = e.clientX - a.sx; const dy = e.clientY - a.sy;
+  // Pointer events can fire far faster than the screen refreshes (touch screens / precision touchpads). Applying every one of them
+  // (scrollLeft writes + a React re-render per card move) made the whole page judder, so the gesture is applied once per frame.
+  const raf = useRef(0);
+  const last = useRef(null);
+  const apply = () => {
+    const a = act.current; const pt = last.current;
+    if (!a || !pt) return;
+    const dx = pt.x - a.sx; const dy = pt.y - a.sy;
     if (Math.abs(dx) + Math.abs(dy) > 3) a.moved = true;
     if (a.kind === 'pan') {
       a.sc.scrollLeft = a.l - dx; a.sc.scrollTop = a.t - dy;
@@ -382,12 +386,25 @@ function GraphView({ value, q, search, cmd, selected, onSelect, fontSize, L }) {
       setDims((d) => ({ ...d, [a.card.path]: { w, h } }));
     }
   };
+  const move = (e) => {
+    if (!act.current) return;
+    last.current = { x: e.clientX, y: e.clientY };
+    if (act.current.kind === 'pan' && !act.current.moved) {
+      if (Math.abs(e.clientX - act.current.sx) + Math.abs(e.clientY - act.current.sy) > 3) act.current.moved = true;
+    }
+    if (raf.current) return;
+    raf.current = requestAnimationFrame(() => { raf.current = 0; apply(); });
+  };
   const end = () => {
+    if (raf.current) { cancelAnimationFrame(raf.current); raf.current = 0; }
+    apply();
     const a = act.current;
     act.current = null;
+    last.current = null;
     rootRef.current?.classList.remove('is-drag');
     if (a && a.kind === 'drag' && !a.moved) onSelect(a.card.path, {});
   };
+  useEffect(() => () => { if (raf.current) cancelAnimationFrame(raf.current); }, []);
 
   // ---- zoom (buttons, Ctrl/⌘ + wheel) keeping the point under the cursor still
   const zoomTo = useCallback((next, cx, cy) => {
