@@ -11,7 +11,7 @@
   background: var(--jv-bg); color: var(--jv-fg); font-family: ui-monospace, 'JetBrains Mono', 'Cascadia Code', Menlo, Consolas, monospace; text-align: left;
 }
 
-.jv.is-full { position: fixed; inset: 0; z-index: 3000; margin: 0; border-radius: 0; border: 0; }
+.jv.is-full { position: fixed; inset: 0; z-index: 3000; margin: 0; border-radius: 0; border: 0; width: 100vw; height: 100vh; height: 100dvh; max-width: none; }
 
 /* toolbar */
 .jv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 8px 10px; background: var(--jv-bar); border-bottom: 1px solid var(--jv-border); font-family: system-ui, 'Cairo', sans-serif; }

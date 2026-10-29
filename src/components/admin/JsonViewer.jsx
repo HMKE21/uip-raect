@@ -734,7 +734,7 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
   const matchCount = shownView === 'code' ? codeMatches : search.count;
   const structured = shownView === 'tree' || shownView === 'outline';
 
-  return (
+  const node = (
     <div ref={rootRef} className={`jv${full ? ' is-full' : ''}`} style={vars} dir="ltr">
       <div className="jv-bar">
         <div className="jv-tabs" role="tablist">
@@ -802,4 +802,7 @@ export default function JsonViewer({ value, text, filename = 'response.json', me
       </div>
     </div>
   );
+  // Full screen is drawn straight into <body>: inside the page an ancestor with a transform / animation / overflow turns
+  // `position: fixed` into "fixed relative to that ancestor", which made the whole page judder when the button was pressed.
+  return full && typeof document !== 'undefined' ? createPortal(node, document.body) : node;
 }
