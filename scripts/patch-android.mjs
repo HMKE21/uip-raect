@@ -149,3 +149,28 @@ if (existsSync(appGradle)) {
     console.log('[patch-android] firebase-messaging dependency added to android/app/build.gradle');
   }
 }
+
+// ---- Smaller APK: R8 code shrinking + unused resource removal + only the UI languages we ship (release builds) ---------------
+// Marker-guarded so it is applied once. The keep rules protect the Capacitor plugins and our own native classes from being stripped.
+if (existsSync(appGradle)) {
+  let g = readFileSync(appGradle, 'utf8');
+  if (!g.includes('uip-shrink')) {
+    g = g.replace(/minifyEnabled\s+false/, 'minifyEnabled true\n            shrinkResources true // uip-shrink');
+    g = g.replace(/defaultConfig\s*\{/, "defaultConfig {\n        resourceConfigurations += ['en', 'ar'] // uip-shrink: drop the other languages bundled by libraries");
+    writeFileSync(appGradle, g);
+    console.log('[patch-android] release shrinking enabled (minify + shrinkResources + en/ar resources)');
+  }
+  const pro = join(androidDir, 'app', 'proguard-rules.pro');
+  const rules = `
+# uip-shrink: keep Capacitor plugins + our native code (they are reached by reflection from the WebView bridge)
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod,SourceFile,LineNumberTable
+-keep @com.getcapacitor.annotation.CapacitorPlugin public class * { @com.getcapacitor.annotation.PluginMethod public <methods>; }
+-keep class * extends com.getcapacitor.Plugin { *; }
+-keep class com.getcapacitor.** { *; }
+-keep class ${appId()}.** { *; }
+-keepclassmembers class * { @android.webkit.JavascriptInterface <methods>; }
+-dontwarn com.google.errorprone.annotations.**
+`;
+  const cur = existsSync(pro) ? readFileSync(pro, 'utf8') : '';
+  if (!cur.includes('uip-shrink')) { writeFileSync(pro, cur + rules); console.log('[patch-android] proguard keep rules added'); }
+}

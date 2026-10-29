@@ -4,6 +4,7 @@
  * same position, size and colour, which then opens for typing.
  */
 import { LINE_H, clampN, textLayout, uid } from './annot';
+import { heavyAssetOrigin } from '../../lib/heavyAssets';
 
 const hex = (r, g, b) => `#${[r, g, b].map((v) => Math.round(clampN(v, 0, 255)).toString(16).padStart(2, '0')).join('')}`;
 
@@ -118,7 +119,7 @@ export async function pdfTextBoxes(page, rotation) {
 /* ───────── OCR (tesseract.js, self-hosted under /ocr — see scripts/copy-ocr-assets.mjs) ───────── */
 let ocrWorker = null;
 let ocrLangs = '';
-const ocrBase = () => new URL(`${import.meta.env.BASE_URL || '/'}ocr/`, window.location.href).href.replace(/\/$/, '');
+const ocrBase = () => (heavyAssetOrigin() ? `${heavyAssetOrigin()}/ocr` : new URL(`${import.meta.env.BASE_URL || '/'}ocr/`, window.location.href).href.replace(/\/$/, ''));
 let progressCb = null;
 
 export async function ocrDispose() {

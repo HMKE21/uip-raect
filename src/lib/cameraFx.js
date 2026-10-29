@@ -129,7 +129,9 @@ export function scenePreview(sceneId) {
 export const cameraFxSupported = () => typeof document !== 'undefined'
   && typeof HTMLCanvasElement !== 'undefined' && typeof HTMLCanvasElement.prototype.captureStream === 'function';
 
-const SEG_BASE = '/mediapipe/';
+import { heavyAssetOrigin } from './heavyAssets';
+
+const SEG_BASE = `${heavyAssetOrigin()}/mediapipe/`; // APK: loaded from the website (see lib/heavyAssets.js)
 const MASK_W = 256;
 const MASK_H = 144;
 let segLoad = null;

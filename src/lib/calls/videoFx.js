@@ -64,7 +64,9 @@ const MAX_W = IS_MOBILE ? 640 : 960;
 const FPS = IS_MOBILE ? 24 : 30;
 const MASK_W = 256;
 const MASK_H = 144;
-const SEG_BASE = '/mediapipe/';
+import { heavyAssetOrigin } from '../heavyAssets';
+
+const SEG_BASE = `${heavyAssetOrigin()}/mediapipe/`; // APK: loaded from the website (see lib/heavyAssets.js)
 
 const VERT = `#version 300 es
 out vec2 vUv;
