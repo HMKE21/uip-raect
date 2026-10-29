@@ -20,6 +20,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeLinksPlugin.class);
         registerPlugin(NativeFilesPlugin.class);
         super.onCreate(savedInstanceState);
+        try {
+            android.util.Log.i("UIP-PUSH", "FirebaseApp initialised: " + !com.google.firebase.FirebaseApp.getApps(this).isEmpty());
+        } catch (Throwable t) { android.util.Log.e("UIP-PUSH", "firebase check failed", t); }
         UipMessagingService.ensureChannels(this); // channels exist before the first push, even if the web layer never ran
         handleLaunch(getIntent());
     }

@@ -27,6 +27,11 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 
+import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.FirebaseMessaging;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Opens an otpauth:// link straight in the phone's authenticator app (Google Authenticator, Microsoft
  * Authenticator, Authy...). Capacitor's App.openUrl does not do this reliably (package-visibility rules on
@@ -120,7 +125,10 @@ public class NativeLinksPlugin extends Plugin {
             {"com.coloros.oppoguardelf", "com.coloros.powermanager.fuelgauge.PowerUsageModelActivity"},
             {"com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity"},
             {"com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity"},
+            {"com.hihonor.systemmanager", "com.hihonor.systemmanager.startupmgr.ui.StartupNormalAppListActivity"},
+            {"com.hihonor.systemmanager", "com.hihonor.systemmanager.optimize.process.ProtectActivity"},
             {"com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity"},
+            {"com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity"},
             {"com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity"},
             {"com.transsion.phonemaster", "com.cyin.himgr.autostart.AutoStartActivity"},
         };
@@ -258,5 +266,34 @@ public class NativeLinksPlugin extends Plugin {
         MainActivity.pendingLink = null;
         MainActivity.pendingCallId = 0;
         call.resolve(r);
+    }
+
+    /**
+     * FCM token straight from Firebase (does not depend on the Capacitor push plugin's events) + the exact reason when it fails.
+     * Resolves { token } or rejects with a readable reason, e.g. "firebase_not_initialized" (google-services.json not applied to
+     * this build), "SERVICE_NOT_AVAILABLE" (no Google Play services / no network), "INVALID_SENDER"... Also logged under tag UIP-PUSH.
+     */
+    @PluginMethod
+    public void getPushToken(final PluginCall call) {
+        final Context ctx = getContext();
+        new Thread(() -> {
+            try {
+                if (FirebaseApp.getApps(ctx).isEmpty()) {
+                    android.util.Log.e("UIP-PUSH", "FirebaseApp is NOT initialised: google-services.json was not applied to this build");
+                    call.reject("firebase_not_initialized", "firebase_not_initialized");
+                    return;
+                }
+                String t = Tasks.await(FirebaseMessaging.getInstance().getToken(), 20, TimeUnit.SECONDS);
+                android.util.Log.i("UIP-PUSH", "FCM token OK (" + (t == null ? 0 : t.length()) + " chars)");
+                JSObject r = new JSObject();
+                r.put("token", t == null ? "" : t);
+                call.resolve(r);
+            } catch (Throwable e) {
+                Throwable c = e.getCause() != null ? e.getCause() : e;
+                String m = c.getClass().getSimpleName() + ": " + c.getMessage();
+                android.util.Log.e("UIP-PUSH", "FCM token FAILED: " + m, e);
+                call.reject(m, m);
+            }
+        }, "uip-fcm-token").start();
     }
 }

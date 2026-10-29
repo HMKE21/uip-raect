@@ -41,7 +41,14 @@ public class UipMessagingService extends MessagingService {
     static final String ACTION_DISMISS = "__PACKAGE__.CALL_DISMISS";
 
     @Override
+    public void onNewToken(@NonNull String token) {
+        android.util.Log.i("UIP-PUSH", "onNewToken (" + token.length() + " chars)");
+        super.onNewToken(token); // Capacitor forwards it to the web layer's 'registration' listener when the app is running
+    }
+
+    @Override
     public void onMessageReceived(@NonNull RemoteMessage message) {
+        android.util.Log.i("UIP-PUSH", "message received type=" + (message.getData() == null ? null : message.getData().get("type")));
         Map<String, String> d = message.getData();
         String type = d == null ? null : d.get("type");
         try {

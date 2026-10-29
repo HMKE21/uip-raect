@@ -1075,6 +1075,25 @@ function openFromPush(data) {
   window.dispatchEvent(new PopStateEvent('popstate')); // react-router follows the new URL
 }
 
+
+/** If the plugin's 'registration' event never delivers a token (seen on some builds/phones), ask Firebase directly through our own
+ *  native method and report the exact failure reason. Needs the APK built with the updated NativeLinksPlugin; older APKs skip it. */
+let nativeTokenTries = 0;
+async function nativeTokenFallback() {
+  if (!NativeLinksPerm?.getPushToken || nativeTokenTries >= 4) return;
+  nativeTokenTries += 1;
+  setTimeout(async () => {
+    try { if (localStorage.getItem(PUSH_TOKEN_KEY)) return; } catch { /* storage blocked */ }
+    try {
+      const r = await NativeLinksPerm.getPushToken();
+      if (r?.token) {
+        try { localStorage.setItem(PUSH_TOKEN_KEY, String(r.token)); } catch { /* storage blocked */ }
+        sendPushToken();
+      }
+    } catch (e) { pushDebug(`FCM token failed: ${String(e?.message || e?.code || e).slice(0, 140)}`); }
+  }, 5000);
+}
+
 /** Registers this phone for push when the permission is granted (never asks: requestStartupPermissions owns the prompts). */
 async function ensurePushRegistered() {
   if (!pushWanted) return;
@@ -1086,6 +1105,7 @@ async function ensurePushRegistered() {
     await Push.createChannel({ id: 'uip', name: 'UIP', description: 'UIP notifications', importance: 4, visibility: 1, vibration: true, lights: true });
     await Push.createChannel(ALERT_CHANNEL);
     await Push.register();
+    nativeTokenFallback();
   } catch (e) { pushDebug(`register failed: ${String(e?.message || e).slice(0, 100)}`); /* plugin unavailable / Firebase not configured in this build */ }
 }
 
