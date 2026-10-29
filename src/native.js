@@ -115,17 +115,28 @@ function absolutize(url) {
  * middleware already echoes the Origin and allows Authorization / X-App-Token / X-UIP-Client / X-Enc-Kid.
  */
 export function openUploadXhr(method, url) {
-  const Orig = isNative && window.CapacitorWebXMLHttpRequest && window.CapacitorWebXMLHttpRequest.fullObject;
-  if (!Orig) return null;
-  const xhr = new Orig();
-  const target = absolutize(String(url));
-  xhr.open(method, target);
-  if (isApiUrl(target)) {
-    xhr.setRequestHeader('X-UIP-Client', 'android');
-    xhr.setRequestHeader('X-Device-Id', getDeviceId());
-    if (APP_TOKEN) xhr.setRequestHeader('X-App-Token', APP_TOKEN);
+  try {
+    const W = isNative && window.CapacitorWebXMLHttpRequest;
+    const Orig = W && W.fullObject;
+    if (!Orig) return null;
+    const xhr = new Orig();
+    // Capacitor patches the PROTOTYPE of this same class (open / send / setRequestHeader keep a private `_headers` store that does
+    // not exist on this instance), which is what threw "Cannot set properties of undefined (setting 'X-UIP-Client')". Put the
+    // browser's ORIGINAL methods (saved by Capacitor in window.CapacitorWebXMLHttpRequest) on the instance so they win.
+    ['open', 'send', 'setRequestHeader', 'abort', 'getAllResponseHeaders', 'getResponseHeader', 'overrideMimeType'].forEach((k) => {
+      if (typeof W[k] === 'function') { try { xhr[k] = W[k].bind(xhr); } catch { /* keep prototype method */ } }
+    });
+    const target = absolutize(String(url));
+    xhr.open(method, target);
+    if (isApiUrl(target)) {
+      xhr.setRequestHeader('X-UIP-Client', 'android');
+      xhr.setRequestHeader('X-Device-Id', getDeviceId());
+      if (APP_TOKEN) xhr.setRequestHeader('X-App-Token', APP_TOKEN);
+    }
+    return xhr;
+  } catch {
+    return null; // caller falls back to fetch (streams the file, no progress) instead of crashing
   }
-  return xhr;
 }
 
 export function initNative() {
@@ -962,6 +973,37 @@ const PUSH_TOKEN_KEY = 'uip_push_token';
 let PushPlugin = null;
 let pushListening = false;
 let pushWanted = false; // true while someone is signed in
+// Push problems used to fail silently. Show the reason once per launch (and keep it in localStorage as uip_push_debug).
+let pushDebugShown = false;
+function pushBanner(text, ms = 15000) {
+  try {
+    const el = document.createElement('div');
+    el.textContent = text;
+    el.style.cssText = 'position:fixed;left:12px;right:12px;top:60px;z-index:2147483000;background:#1b2559;color:#fff;padding:12px 14px;border-radius:12px;font:600 13px/1.5 system-ui,sans-serif;direction:ltr;text-align:left;box-shadow:0 6px 24px rgba(0,0,0,.35)';
+    el.onclick = () => el.remove();
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), ms);
+  } catch { /* ignore */ }
+}
+function pushDebug(msg) {
+  try { localStorage.setItem('uip_push_debug', `${new Date().toISOString()} ${msg}`); } catch { /* storage blocked */ }
+  if (pushDebugShown) return;
+  pushDebugShown = true;
+  pushBanner(`Push problem: ${msg} (tap to close)`);
+}
+/** Shown once, ~10 s after sign-in in the app: what the phone knows about push right now. */
+async function pushStatusBanner() {
+  try {
+    const Push = await loadPush();
+    let perm = 'plugin-missing';
+    if (Push) { try { perm = (await Push.checkPermissions()).receive; } catch (e) { perm = `error:${e?.message || e}`; } }
+    let token = '';
+    try { token = localStorage.getItem(PUSH_TOKEN_KEY) || ''; } catch { /* storage blocked */ }
+    let last = '';
+    try { last = localStorage.getItem('uip_push_debug') || ''; } catch { /* storage blocked */ }
+    pushBanner(`Push status — permission: ${perm} | token: ${token ? 'yes (' + token.length + ' chars)' : 'NO'}${last ? ' | last problem: ' + last.slice(24) : ''} (tap to close)`, 20000);
+  } catch { /* ignore */ }
+}
 
 async function loadPush() {
   if (!isNative) return null;
@@ -977,7 +1019,7 @@ async function sendPushToken() {
   try {
     const { api } = await import('./api/client'); // dynamic: client.js imports this file
     await api.post('/api/v1/push/devices', { token, platform: 'android', locale: localStorage.getItem('uip_locale') === 'ar' ? 'ar' : 'en' });
-  } catch { /* retried at the next launch / token refresh */ }
+  } catch (e) { pushDebug(`server refused the token (${e?.status || ''} ${String(e?.message || e).slice(0, 80)})`); /* retried at the next launch / token refresh */ }
 }
 
 /** Opens the screen a tapped notification points to (internal paths only). */
@@ -996,11 +1038,11 @@ async function ensurePushRegistered() {
   if (!Push) return;
   try {
     const p = await Push.checkPermissions();
-    if (p.receive !== 'granted') return;
+    if (p.receive !== 'granted') { pushDebug('notification permission is not granted'); return; }
     await Push.createChannel({ id: 'uip', name: 'UIP', description: 'UIP notifications', importance: 4, visibility: 1, vibration: true, lights: true });
     await Push.createChannel(ALERT_CHANNEL);
     await Push.register();
-  } catch { /* plugin unavailable / Firebase not configured in this build */ }
+  } catch (e) { pushDebug(`register failed: ${String(e?.message || e).slice(0, 100)}`); /* plugin unavailable / Firebase not configured in this build */ }
 }
 
 /** App came to the foreground: re-send the FCM token (also refreshes last_seen_at / recovers a failed first send) and open what a notification pointed to. */
@@ -1035,7 +1077,7 @@ export async function registerPush() {
         try { localStorage.setItem(PUSH_TOKEN_KEY, String(value || '')); } catch { /* storage blocked */ }
         sendPushToken();
       });
-      await Push.addListener('registrationError', () => { /* Firebase not set up in this build: in-app polling still works */ });
+      await Push.addListener('registrationError', (e) => { pushDebug(`Firebase registration error: ${String(e?.error || e?.message || JSON.stringify(e)).slice(0, 100)}`); });
       // App open: FCM does not draw its own copy, so tell the bell to sync right now (it then shows the phone notification
       // and plays the sound) instead of waiting for the next 30 s poll. Pages that mirror server data listen too.
       await Push.addListener('pushNotificationReceived', (n) => {
@@ -1048,6 +1090,7 @@ export async function registerPush() {
   handleNativeLaunch();
   // token is only sent when the plugin reports it; if that send failed earlier, try again shortly
   setTimeout(sendPushToken, 8000);
+  if (!window.__uipPushStatusShown) { window.__uipPushStatusShown = true; setTimeout(pushStatusBanner, 10000); }
 }
 
 export async function unregisterPush() {

@@ -535,17 +535,24 @@ function xhrUpload(method, path, formData, onProgress, signal, channel = null, v
     const target = directUploadUrl(path, formData);   // big files skip the Vercel proxy (4.5MB body limit)
     const direct = target !== path;
     const nativeXhr = viaBridge ? null : openUploadXhr(method, target);
+    // Inside the app never use the (Capacitor-patched) global XHR: its setRequestHeader crashes. Use real fetch instead.
+    if (isNative && !nativeXhr) { fetchUpload(method, path, formData, signal, channel).then(resolve, reject); return; }
     const xhr = nativeXhr || new XMLHttpRequest();
     if (signal) signal.addEventListener('abort', () => xhr.abort(), { once: true });
     if (!nativeXhr) xhr.open(method, target);
     // The app authenticates uploads with the Bearer token only; cross-origin credentials are not needed (and the API
     // only allows them for explicitly listed origins).
-    xhr.withCredentials = !nativeXhr && !direct;
-    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-    xhr.setRequestHeader('Accept', 'application/json');
-    if (accessToken) xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
-    // Encrypted channel: XHR bypasses the fetch wrapper, so announce the session key here (response comes back encrypted).
-    if (channel) xhr.setRequestHeader('X-Enc-Kid', channel.kid);
+    try {
+      xhr.withCredentials = !nativeXhr && !direct;
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.setRequestHeader('Accept', 'application/json');
+      if (accessToken) xhr.setRequestHeader('Authorization', `Bearer ${accessToken}`);
+      // Encrypted channel: XHR bypasses the fetch wrapper, so announce the session key here (response comes back encrypted).
+      if (channel) xhr.setRequestHeader('X-Enc-Kid', channel.kid);
+    } catch (e) {
+      if (isNative) { try { xhr.abort(); } catch { /* ignore */ } fetchUpload(method, path, formData, signal, channel).then(resolve, reject); return; }
+      reject(e); return;
+    }
     if (xhr.upload && onProgress) {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable && e.total > 0) onProgress(Math.min(100, Math.round((e.loaded / e.total) * 100)));
