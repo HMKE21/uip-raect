@@ -381,7 +381,7 @@ export function ForwardModal({ conversations, onClose, onForward, count = 1 }) {
             const on = picked.includes(c.id);
             return (
               <div className={`msg-picker-item${on ? ' is-picked' : ''}`} key={c.id} onClick={() => !busy && toggle(c.id)} role="checkbox" aria-checked={on}>
-                <Avatar name={peerLabel(c)} isGroup={c.is_group} size="sm" />
+                <Avatar name={peerLabel(c)} isGroup={c.is_group} saved={c.is_saved} size="sm" />
                 <span style={{ flex: 1 }}>{peerLabel(c)}</span>
                 <span className={`msg-sel-dot${on ? ' is-on' : ''}`} aria-hidden="true">{on ? <Icon name="check" size={13} /> : null}</span>
               </div>

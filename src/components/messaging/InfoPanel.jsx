@@ -39,6 +39,7 @@ export default function InfoPanel({
   onBlockUser,
   onUnblockUser,
   onReportUser,
+  onRenameSaved,
   onClose,
   wall = 'dots',
   onWall,
@@ -54,6 +55,13 @@ export default function InfoPanel({
   const t = (en, ar) => (locale === 'ar' ? ar : en);
   const [category, setCategory] = useState(convMeta?.category || '');
   const wallFileRef = useRef(null);
+  const [savedName, setSavedName] = useState(conversation?.saved_default_name === false ? (conversation.subject || '') : '');
+  const [savedBusy, setSavedBusy] = useState(false);
+  const saveName = async () => {
+    if (!onRenameSaved || savedBusy) return;
+    setSavedBusy(true);
+    try { await onRenameSaved(savedName.trim()); } finally { setSavedBusy(false); }
+  };
   const [wallBusy, setWallBusy] = useState(false);
   const [wallError, setWallError] = useState(null);
 
@@ -105,6 +113,27 @@ export default function InfoPanel({
       <div className="msg-info__body" data-info-body>
         {conversation.is_group ? (
           <GroupTop conversation={conversation} others={others} onOpenSettings={onOpenGroupSettings} onAddMember={onAddMember} />
+        ) : conversation.is_saved ? (
+          <div className="msg-info__hero">
+            <Avatar name="" saved />
+            <strong>{conversation.saved_default_name === false ? conversation.subject : t('Saved Messages', 'الرسائل المحفوظة')}</strong>
+            <span className="msg-info__org">{t('Your private space. Only you can see what you save here.', 'مساحتك الخاصة. أنت فقط تشوف اللي بتحفظه هنا.')}</span>
+            {onRenameSaved && (
+              <input
+                type="text"
+                className="msg-input"
+                style={{ width: '100%', marginTop: 8, textAlign: 'center' }}
+                maxLength={60}
+                value={savedName}
+                disabled={savedBusy}
+                placeholder={t('Saved Messages', 'الرسائل المحفوظة')}
+                aria-label={t('Chat name', 'اسم المحادثة')}
+                onChange={(e) => setSavedName(e.target.value)}
+                onBlur={saveName}
+                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
+              />
+            )}
+          </div>
         ) : (
           <div className="msg-info__hero">
             <Avatar name={others[0]?.full_name || ''} src={others[0]?.avatar_path} />
@@ -225,7 +254,7 @@ export default function InfoPanel({
         </div>
         {conversation.is_group && <GroupDanger conversation={conversation} onLeave={onLeaveGroup} onDelete={onDeleteGroup} />}
 
-        {!conversation.is_group && others[0] && !others[0].is_deleted && (onBlockUser || onReportUser) && (
+        {!conversation.is_group && !conversation.is_saved && others[0] && !others[0].is_deleted && (onBlockUser || onReportUser) && (
           <div>
             <div className="msg-info__section-title">{t('Safety', 'الأمان')}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

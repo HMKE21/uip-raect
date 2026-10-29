@@ -27,8 +27,15 @@ function toneOf(name) {
  * (no photo, or the person hid it in chat privacy) or fails to load, the
  * initials tile is shown instead.
  */
-function Avatar({ name, isGroup, size, src }) {
+function Avatar({ name, isGroup, size, src, saved }) {
   const [failed, setFailed] = useState(false);
+  if (saved) {
+    return (
+      <span className={`msg-avatar msg-avatar--saved${size === 'sm' ? ' msg-avatar--sm' : ''}`}>
+        <Icon name="bookmark" size={size === 'sm' ? 16 : 22} />
+      </span>
+    );
+  }
   const url = !failed ? avatarUrl(src) : null;
   return (
     <span className={`msg-avatar msg-avatar--tone-${toneOf(name)}${isGroup ? ' msg-avatar--group' : ''}${size === 'sm' ? ' msg-avatar--sm' : ''}`}>
@@ -359,7 +366,7 @@ export default function ConversationRail({
                   }}
                 >
                   {selecting && <span className="msg-check msg-check--box"><input type="checkbox" tabIndex={-1} readOnly checked={isSel} /></span>}
-                  <Avatar name={peerLabel(c)} isGroup={c.is_group} src={c.is_group ? c.group_avatar : (c.peer_deleted ? null : c.peer_avatar)} />
+                  <Avatar name={peerLabel(c)} isGroup={c.is_group} saved={c.is_saved} src={c.is_group ? c.group_avatar : (c.peer_deleted ? null : c.peer_avatar)} />
                   <span className="msg-conv__meta">
                     <span className="msg-conv__row1">
                       <span className="msg-conv__name">{peerLabel(c)}{c.peer_deleted && <em className="msg-conv__deleted">{t('Deleted account', 'حساب محذوف')}</em>}</span>

@@ -131,6 +131,7 @@ export function roleLabel(slug) {
 
 export function peerLabel(conv) {
   if (!conv) return "";
+  if (conv.is_saved && conv.saved_default_name !== false) return bi("Saved Messages", "الرسائل المحفوظة");
   return conv.subject || (conv.is_group ? bi("Group", "مجموعة") : bi("Conversation", "محادثة"));
 }
 

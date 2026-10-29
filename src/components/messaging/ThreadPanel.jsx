@@ -204,7 +204,7 @@ function FloatingPanel({ anchorRef, onClose, className, children }) {
   );
 }
 
-function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit, selectMode, selected, onToggleSelect, onStartSelect }) {
+function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit, selectMode, selected, onToggleSelect, onStartSelect, savedChat }) {
   const t = useT();
   const navigate = useNavigate();
   const [showReactPicker, setShowReactPicker] = useState(false);
@@ -577,7 +577,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
               {m.is_edited ? <span className="msg-edited-tag">{t('(edited)', '(معدّلة)')}</span> : null}
             </span>
           )}
-          {m.is_mine && !m.pending && !m.failed && !isEditing && !m.is_tmp && <Ticks status={m.receipt_status || 'sent'} />}
+          {m.is_mine && !m.pending && !m.failed && !isEditing && !m.is_tmp && !savedChat && <Ticks status={m.receipt_status || 'sent'} />}
           {m.is_mine && !m.pending && !m.failed && !isEditing && <SentActions m={m} onUndo={onUndoSend} onDelete={onDelete} />}
         </div>
       </div>
@@ -1087,7 +1087,7 @@ export default function ThreadPanel({
   const dmBlock = conversation && !conversation.is_group && (conversation.send_block === 'blocked_by_me' || conversation.send_block === 'blocked_by_peer') ? conversation.send_block : null;
   const canSend = peerDeleted || dmBlock ? false : (!grp || grp.can_send !== false);
   // Voice calls: direct chats only, and not with a deleted account or when either side blocked the other.
-  const canCall = !!conversation && !conversation.is_group && !peerDeleted && !dmBlock && call.available;
+  const canCall = !!conversation && !conversation.is_group && !conversation.is_saved && !peerDeleted && !dmBlock && call.available;
   const callBusy = call.phase !== 'idle';
   const startCall = (video) => {
     if (!canCall || callBusy) return;
@@ -1343,16 +1343,16 @@ export default function ThreadPanel({
             </button>
           )}
           <div className="msg-thread__peer" data-action="open-info" onClick={onOpenInfo} style={{ cursor: 'pointer' }}>
-            <Avatar name={peerLabel(conversation)} isGroup={conversation.is_group} src={conversation.is_group ? conversation.avatar_path : (peerDeleted ? null : others[0]?.avatar_path)} />
+            <Avatar name={peerLabel(conversation)} isGroup={conversation.is_group} saved={conversation.is_saved} src={conversation.is_group ? conversation.avatar_path : (peerDeleted ? null : others[0]?.avatar_path)} />
             <div className="msg-thread__peer-meta">
               <strong>
                 <span className="msg-thread__name">{peerLabel(conversation)}</span>
                 {peerDeleted
                   ? <span className="msg-thread__deleted">{t('Deleted account', 'حساب محذوف')}</span>
-                  : (!conversation.is_group && others[0]?.account_role && <span className="msg-thread__role">{roleLabel(others[0].account_role)}</span>)}
+                  : (!conversation.is_group && !conversation.is_saved && others[0]?.account_role && <span className="msg-thread__role">{roleLabel(others[0].account_role)}</span>)}
               </strong>
               <span className="msg-thread__status">
-                {conversation.is_group ? `${others.length + 1} ${t('members', 'أعضاء')}` : (peerDeleted ? t('This account no longer exists', 'هذا الحساب لم يعد موجودًا') : presenceText)}
+                {conversation.is_saved ? t('Only you can see this chat', 'أنت فقط تشاهد هذه المحادثة') : conversation.is_group ? `${others.length + 1} ${t('members', 'أعضاء')}` : (peerDeleted ? t('This account no longer exists', 'هذا الحساب لم يعد موجودًا') : presenceText)}
               </span>
             </div>
           </div>
@@ -1462,6 +1462,7 @@ export default function ThreadPanel({
                     onOpenVideo={onOpenVideo}
                     onForward={onForwardMessage}
                     onReport={onReportMessage}
+                    savedChat={!!conversation?.is_saved}
                     selectMode={selectMode}
                     selected={selectedIds.includes(m.id)}
                     onToggleSelect={onToggleSelect}

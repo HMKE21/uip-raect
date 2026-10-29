@@ -332,3 +332,6 @@ html body .msg-wall-swatch--dots { background: radial-gradient(rgba(60, 60, 130,
 .msg-row.is-selected { background: color-mix(in srgb, var(--color-primary, #4f6bff) 14%, transparent); }
 .msg-picker-item { display: flex; align-items: center; gap: 10px; }
 .msg-picker-item.is-picked { background: color-mix(in srgb, var(--color-primary, #4f6bff) 12%, transparent); }
+
+.msg-avatar--saved { display: inline-flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(135deg, #4f6bff, #7c5cff); }
+.msg-avatar--saved svg { fill: currentColor; stroke: none; }

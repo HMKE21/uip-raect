@@ -893,6 +893,19 @@ export default function Messages() {
     }
   };
 
+  const onRenameSaved = async (name) => {
+    if (!activeId) return;
+    try {
+      const res = await api.post(BASE + '/conversations/' + activeId + '/saved-name', { name });
+      const subject = res.data?.subject || null;
+      const patch = { subject: subject || 'Saved Messages', saved_default_name: !subject };
+      setConversations((prev) => prev.map((c) => (String(c.id) === String(activeId) ? { ...c, ...patch } : c)));
+      setActiveConversation((c) => (c ? { ...c, ...patch } : c));
+    } catch (err) {
+      showError(err);
+    }
+  };
+
   const onDeleteMessage = async (id, mode) => {
     try {
       if (mode === 'for-everyone') await api.del(BASE + '/messages/' + id + '/for-everyone');
@@ -1546,6 +1559,7 @@ export default function Messages() {
           onMemberAction={onMemberAction}
           onLeaveGroup={onLeaveGroup}
           onDeleteGroup={onDeleteGroup}
+          onRenameSaved={onRenameSaved}
           onBlockUser={onBlockUser}
           onUnblockUser={onUnblockUser}
           onReportUser={onReportUser}
