@@ -454,6 +454,13 @@ function handleLink(href) {
     goTo(u.pathname + u.search + u.hash);
     return true;
   }
+  // Our own uploaded files open in the in-app viewer (no browser sheet, no address bar).
+  const ownFile = /^\/(uploads|api)(\/|$)/.test(u.pathname) && (u.origin === window.location.origin || (API_BASE && u.origin === new URL(API_BASE).origin));
+  if (ownFile) {
+    let name = ''; try { name = decodeURIComponent(u.pathname.split('/').pop() || ''); } catch { name = u.pathname.split('/').pop() || ''; }
+    window.dispatchEvent(new CustomEvent('uip:open-file', { detail: { url: u.href, name } }));
+    return true;
+  }
   import('@capacitor/browser').then(({ Browser }) => Browser.open({ url: u.href, presentationStyle: 'popover' })).catch(() => {});
   return true;
 }

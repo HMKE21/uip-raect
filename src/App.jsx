@@ -29,6 +29,7 @@ import usePlatformInspectGuard from './hooks/usePlatformInspectGuard';
 // way — lazy() here would just add a pointless Suspense round-trip and
 // (harmlessly) an INEFFECTIVE_DYNAMIC_IMPORT build warning.
 import ServerError from './pages/errors/ServerError';
+const NativeFileOpener = lazy(() => import('./components/NativeFileOpener'));
 const NotFound = lazy(() => import('./pages/errors/NotFound'));
 const Forbidden = lazy(() => import('./pages/errors/Forbidden'));
 const Landing = lazy(() => import('./pages/Landing'));
@@ -312,6 +313,7 @@ export default function App() {
           <VirtualModeProvider>
           <RealtimeBridge />
           <SaveCenterHost />
+          <Suspense fallback={null}><NativeFileOpener /></Suspense>
           {/* MFA requirements policy: a role that must have 2FA (grace period over) sees the setup page instead of the app. */}
           <MfaGate>
           {/* University-link gate: a student with no university (and no grant) sees the "waiting for approval" screen. */}

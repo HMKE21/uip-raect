@@ -201,7 +201,8 @@ export default function InfoPanel({
             <p className="text-small text-muted">{t('No files shared yet.', 'لا توجد ملفات مشتركة بعد.')}</p>
           ) : (
             recentFiles.map((a, i) => (
-              <a className="msg-info__file" key={i} href={attachmentUrl(a.url)} target="_blank" rel="noopener noreferrer">
+              <a className="msg-info__file" key={i} href={attachmentUrl(a.url)} target="_blank" rel="noopener noreferrer"
+                onClick={(e) => { if (e.ctrlKey || e.metaKey || e.shiftKey || e.button > 0) return; e.preventDefault(); e.stopPropagation(); window.dispatchEvent(new CustomEvent('uip:open-file', { detail: { files: recentFiles.map((f) => ({ url: attachmentUrl(f.url), name: f.original_name })), index: i } })); }}>
                 {a.kind === 'image' ? (
                   <img src={attachmentUrl(a.url)} alt={a.original_name} />
                 ) : (
