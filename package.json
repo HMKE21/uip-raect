@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "build:native": "vite build --mode native",
+    "build:native": "vite build --mode native && node scripts/slim-native.mjs",
     "android:sync": "npm run build:native && cap sync android && node scripts/patch-android.mjs",
     "android:open": "cap open android",
     "android:icons": "capacitor-assets generate --android --assetPath resources --iconBackgroundColor \"#F4F6FF\" --splashBackgroundColor \"#F4F6FF\"",

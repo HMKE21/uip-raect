@@ -11,7 +11,14 @@ import react from "@vitejs/plugin-react";
 const nativeHtml = (mode) => ({
   name: "uip-native-html",
   transformIndexHtml(html) {
-    return mode === "native" ? html.replace(", viewport-fit=cover", "") : html;
+    if (mode !== "native") return html;
+    // [ANDROID-PERF] The Google Fonts <link> (+ preconnects) blocks the first paint inside the WebView until 4 font families are
+    // downloaded. In the app it is removed from <head> and native.js adds it back after the first paint (system font until then).
+    let fonts = "";
+    const out = html
+      .replace(/<link[^>]+fonts\.googleapis\.com\/css2[^>]*>/i, (m) => { fonts = (/href="([^"]+)"/.exec(m) || [])[1] || ""; return fonts ? `<meta name="uip-fonts" content="${fonts}" />` : m; })
+      .replace(/<link[^>]+rel="preconnect"[^>]*fonts\.g[^>]*>\s*/gi, "");
+    return out.replace(", viewport-fit=cover", "");
   },
 });
 

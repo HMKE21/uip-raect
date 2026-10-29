@@ -11,3 +11,8 @@ html.is-native input, html.is-native textarea, html.is-native [contenteditable],
 /* Performance: backdrop-filter blur is very expensive on the Android WebView (every scroll frame re-blurs what is behind). */
 html.is-native *, html.is-native *::before, html.is-native *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 html.is-native .msg-list, html.is-native .msg-thread { contain: content; -webkit-overflow-scrolling: touch; }
+
+/* [ANDROID-PERF] Less work for the WebView while scrolling: no smooth-scroll JS-like easing, cheaper text, cheaper shadows on long lists. */
+html.is-native { scroll-behavior: auto !important; text-rendering: optimizeSpeed; }
+html.is-native .ambient-bg, html.is-native [class*="backdrop-glow"], html.is-native [class*="aurora"] { display: none !important; }
+html.is-native * { text-shadow: none !important; }

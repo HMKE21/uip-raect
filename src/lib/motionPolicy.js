@@ -1,4 +1,5 @@
 import { api } from '../api/client';
+import { isNative } from '../native.js';
 
 // Platform-wide "animations" switch (Admin -> Platform Policy -> "Platform animations").
 // The server value is public (GET /api/v1/platform/status) and applied as <html data-motion="on|off">;
@@ -9,6 +10,7 @@ const RECHECK_MS = 5 * 60 * 1000;
 let lastCheck = 0;
 
 export function applyMotion(on) {
+  if (isNative) { document.documentElement.dataset.motion = 'off'; return; } // [ANDROID-PERF] animations stay off in the app
   document.documentElement.dataset.motion = on ? 'on' : 'off';
   try { localStorage.setItem(KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
 }
@@ -23,6 +25,7 @@ async function refresh() {
 }
 
 export function initMotionPolicy() {
+  if (isNative) document.documentElement.dataset.motion = 'off';
   try { if (localStorage.getItem(KEY) === '0') document.documentElement.dataset.motion = 'off'; } catch { /* ignore */ }
   refresh();
   document.addEventListener('visibilitychange', () => {

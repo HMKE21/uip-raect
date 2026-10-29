@@ -131,6 +131,9 @@ export function openUploadXhr(method, url) {
 export function initNative() {
   if (!isNative) return;
   document.documentElement.classList.add('is-native');
+  // [ANDROID-PERF] No decorative animations inside the app (114 infinite CSS animations keep the WebView repainting). Spinners / loaders
+  // are kept by the data-motion="off" rule itself. motionPolicy.js never switches it back on in the app.
+  document.documentElement.dataset.motion = 'off';
 
   const nativeFetch = window.fetch.bind(window);
   // Capacitor keeps the browser's own fetch in window.CapacitorWebFetch. Uploads (FormData bodies) must use it:
@@ -346,8 +349,17 @@ function setupPullToRefresh() {
 }
 
 /** Called after the first React render. */
+/** [ANDROID-PERF] Web fonts are requested only after the first paint (the <link> is removed from the native index.html). */
+function loadFontsLater() {
+  const href = document.querySelector('meta[name="uip-fonts"]')?.getAttribute('content');
+  if (!href || document.getElementById('uip-fonts')) return;
+  const add = () => { const l = document.createElement('link'); l.id = 'uip-fonts'; l.rel = 'stylesheet'; l.href = href; document.head.appendChild(l); };
+  (window.requestIdleCallback || ((f) => setTimeout(f, 600)))(add, { timeout: 2500 });
+}
+
 export function hideSplash() {
   if (!isNative) return;
+  loadFontsLater();
   import('@capacitor/splash-screen').then(({ SplashScreen }) => SplashScreen.hide({ fadeOutDuration: 250 })).catch(() => {});
 }
 
