@@ -14,6 +14,10 @@ import { PromptDialog, ConfirmDialog, ShortcutsDialog, InsertFnDialog, FormatCel
 import { chord, browserOwned, isTextField } from '../../lib/sheet/keys.js';
 import { CELL_STYLES, TABLE_STYLES, QUICK_NF, tableStylePatch } from '../../lib/sheet/presets.js';
 import { sheetHtml, printHtml } from '../../lib/sheet/print.js';
+import { newId as newCfId } from '../../lib/sheet/cf.js';
+import { applyFilter, clearFilter } from '../../lib/sheet/filter.js';
+import { newChartId, handles, HANDLE_NAMES } from '../../lib/sheet/chart.js';
+import { CfRuleDialog, ManageRulesDialog, ChartDialog, FilterMenu } from './SheetCfCharts';
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const mkSel = (ar, ac, r2 = ar, c2 = ac) => ({ ar, ac, r1: Math.min(ar, r2), c1: Math.min(ac, c2), r2: Math.max(ar, r2), c2: Math.max(ac, c2) });
@@ -90,8 +94,9 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   const [hint, setHint] = useState('');
   const [tab, setTab] = useState('home'); const [collapsed, setCollapsed] = useState(false);
   const [dlg, setDlg] = useState(null); const [fileOpen, setFileOpen] = useState(false);
+  const [fmenu, setFmenu] = useState(null); const [selChart, setSelChart] = useState(null); const selChartRef = useRef(null); selChartRef.current = selChart;
   const [painter, setPainter] = useState(null); const painterRef = useRef(null); painterRef.current = painter;
-  overlayRef.current = !!dlg || fileOpen; findOpenRef.current = !!find;
+  overlayRef.current = !!dlg || fileOpen || !!fmenu; findOpenRef.current = !!find;
   const scrollRef = useRef(null); const cvRef = useRef(null); const taRef = useRef(null); const mode = useRef(null); const drawRef = useRef(null);
   const sheetSel = useRef(new Map());
   const z = view.z;
@@ -116,7 +121,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
     const cv = cvRef.current; if (!cv) return;
     const dpr = window.devicePixelRatio || 1; const W = size.w; const H = size.h;
     if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); cv.style.width = `${W}px`; cv.style.height = `${H}px`; }
-    const st = { wb, sheet, geom, W, H, sx: scroll.x, sy: scroll.y, z, dpr, theme, sel, edit, showGrid: view.grid, showHead: view.head, band: view.band, showF: view.showF, readOnly, fillDrag: dragUi && dragUi.fill, cutRect, marching: 0 };
+    const st = { wb, sheet, geom, W, H, sx: scroll.x, sy: scroll.y, z, dpr, theme, sel, edit, showGrid: view.grid, showHead: view.head, band: view.band, showF: view.showF, readOnly, fillDrag: dragUi && dragUi.fill, cutRect, marching: 0, selChart };
     drawRef.current = (extra) => drawGrid(cv, { ...st, ...extra });
     drawGrid(cv, st);
   });
@@ -157,6 +162,23 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
     if (h.rowHead) { const y = Y(h.r + 1); if (Math.abs(h.py - y) <= 4) return { axis: 'r', idx: h.r }; const y0 = Y(h.r); if (h.r > 0 && Math.abs(h.py - y0) <= 4) return { axis: 'r', idx: h.r - 1 }; }
     return null;
   };
+  /** AutoFilter button under the pointer → column index. */
+  const filterBtnAt = (h) => {
+    const f = sheet.filter; if (!f || h.colHead || h.rowHead || h.corner || h.r !== f.rng.r1 || h.c < f.rng.c1 || h.c > f.rng.c2) return null;
+    const x = X(h.c); const w = (geom.cx[h.c + 1] - geom.cx[h.c]) * z; const y = Y(h.r); const hgt = (geom.ry[h.r + 1] - geom.ry[h.r]) * z;
+    if (w < 22 * z) return null; const bs = Math.min(16 * z, hgt - 4); const bx = x + w - bs - 2; const by = y + hgt - bs - 2;
+    return h.px >= bx && h.px <= bx + bs && h.py >= by && h.py <= by + bs ? { c: h.c, bx, by: by + bs } : null;
+  };
+  /** Chart under the pointer (topmost first) → { ch, grip } where grip is a handle name, 'move' or null. */
+  const chartAt = (h) => {
+    if (!sheet.charts.length || h.colHead || h.rowHead || h.corner) return null;
+    const bo = (ch) => ({ x: hw + ch.x * z - scroll.x, y: hh + ch.y * z - scroll.y, w: ch.w * z, h: ch.h * z });
+    const sel = sheet.charts.find((c) => c.id === selChartRef.current);
+    if (sel && !readOnly) { const hs = handles(bo(sel)); for (let i = 0; i < hs.length; i += 1) if (Math.abs(h.px - hs[i][0]) <= 6 && Math.abs(h.py - hs[i][1]) <= 6) return { ch: sel, grip: HANDLE_NAMES[i] }; }
+    for (let i = sheet.charts.length - 1; i >= 0; i -= 1) { const ch = sheet.charts[i]; const b = bo(ch); if (h.px >= b.x && h.px <= b.x + b.w && h.py >= b.y && h.py <= b.y + b.h) return { ch, grip: 'move' }; }
+    return null;
+  };
+  const GRIP_CUR = { nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize', n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize', move: 'move' };
   const onHandle = (h) => { const s = cur(); if (readOnly || editRef.current) return false; const x = X(s.c2 + 1); const y = Y(s.r2 + 1); return Math.abs(h.px - x) <= 6 && Math.abs(h.py - y) <= 6 && s.r2 - s.r1 < 5000; };
 
   /* ---------- editing ---------- */
@@ -201,6 +223,11 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
       commit(0, 0, true);
     }
     scrollRef.current.setPointerCapture(e.pointerId);
+    const fb = !readOnly && filterBtnAt(h);
+    if (fb) { const r0 = scrollRef.current.getBoundingClientRect(); setFmenu({ c: fb.c, x: r0.left + fb.bx - 200, y: r0.top + fb.by + 2, vw: window.innerWidth }); try { scrollRef.current.releasePointerCapture(e.pointerId); } catch { /* */ } return; }
+    const cg = chartAt(h);
+    if (cg) { setSelChart(cg.ch.id); selChartRef.current = cg.ch.id; if (!readOnly) mode.current = { t: 'chart', ch: cg.ch, grip: cg.grip, cx: e.clientX, cy: e.clientY, o: { x: cg.ch.x, y: cg.ch.y, w: cg.ch.w, h: cg.ch.h }, moved: false }; return; }
+    if (selChartRef.current) setSelChart(null);
     if (h.corner) { setSel({ ar: 0, ac: 0, r1: 0, c1: 0, r2: MAXR - 1, c2: MAXC - 1 }); return; }
     const edge = nearEdge(h);
     if (edge && !readOnly) { const orig = edge.axis === 'c' ? (sheet.colW.get(edge.idx) ?? DEF_W) : (sheet.rowH.get(edge.idx) ?? DEF_H); const s = cur(); const group = edge.axis === 'c' ? (edge.idx >= s.c1 && edge.idx <= s.c2 ? Array.from({ length: s.c2 - s.c1 + 1 }, (_, i) => s.c1 + i) : [edge.idx]) : (edge.idx >= s.r1 && edge.idx <= s.r2 ? Array.from({ length: s.r2 - s.r1 + 1 }, (_, i) => s.r1 + i) : [edge.idx]); mode.current = { t: 'resize', edge, orig, start: edge.axis === 'c' ? h.px : h.py, group, olds: group.map((i) => (edge.axis === 'c' ? sheet.colW.get(i) : sheet.rowH.get(i))) }; return; }
@@ -213,7 +240,16 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   };
   const onMove = (e) => {
     const md = mode.current; const el = scrollRef.current;
-    if (!md) { const h = hit(e); if (h) { const edge = nearEdge(h); el.style.cursor = edge ? (edge.axis === 'c' ? 'col-resize' : 'row-resize') : onHandle(h) ? 'crosshair' : h.colHead || h.rowHead ? 'pointer' : 'cell'; } return; }
+    if (!md) { const h = hit(e); if (h) { const cg = chartAt(h); if (cg) { el.style.cursor = readOnly ? 'default' : (GRIP_CUR[cg.grip] || 'move'); return; } if (!readOnly && filterBtnAt(h)) { el.style.cursor = 'pointer'; return; } const edge = nearEdge(h); el.style.cursor = edge ? (edge.axis === 'c' ? 'col-resize' : 'row-resize') : onHandle(h) ? 'crosshair' : h.colHead || h.rowHead ? 'pointer' : 'cell'; } return; }
+    if (md.t === 'chart') {
+      const dx = (e.clientX - md.cx) / z; const dy = (e.clientY - md.cy) / z; const ch = md.ch; const o = md.o; const g = md.grip; const MINW = 120; const MINH = 90;
+      let { x, y, w, h: hh2 } = o;
+      if (g === 'move') { x = o.x + dx; y = o.y + dy; } else {
+        if (g.includes('e')) w = Math.max(MINW, o.w + dx); if (g.includes('s')) hh2 = Math.max(MINH, o.h + dy);
+        if (g.includes('w')) { w = Math.max(MINW, o.w - dx); x = o.x + o.w - w; } if (g.includes('n')) { hh2 = Math.max(MINH, o.h - dy); y = o.y + o.h - hh2; }
+      }
+      ch.x = Math.max(0, Math.round(x)); ch.y = Math.max(0, Math.round(y)); ch.w = Math.round(w); ch.h = Math.round(hh2); md.moved = true; wb.version += 1; force(); return;
+    }
     const h = hit({ clientX: e.clientX, clientY: e.clientY }) || null; const b = el.getBoundingClientRect();
     // auto-scroll while dragging beyond the edges
     const dx = e.clientX < b.left + hw ? -20 : e.clientX > b.right - 20 ? 20 : 0; const dy = e.clientY < b.top + hh ? -20 : e.clientY > b.bottom - 20 ? 20 : 0;
@@ -241,6 +277,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
     if (md.t === 'cells' && painterRef.current) { const pst = painterRef.current.style; setPainter(null); ctl.style(sheet, rangeOf(), { b: null, i: null, u: null, st: null, font: null, fs: null, color: null, bg: null, al: null, va: null, wrap: null, ind: null, nf: null, bd: null, ...pst }); }
     if (md.t === 'resize') { md.group.forEach((i, k) => { if (md.edge.axis === 'c') { if (md.olds[k] === undefined) sheet.colW.delete(i); else sheet.colW.set(i, md.olds[k]); } else if (md.olds[k] === undefined) sheet.rowH.delete(i); else sheet.rowH.set(i, md.olds[k]); }); if (md.val) { if (md.edge.axis === 'c') ctl.setColW(sheet, md.group, md.val); else ctl.setRowH(sheet, md.group, md.val); } }
     if (md.t === 'fill') { setDragUi(null); if (md.dst) { ctl.fill(sheet, md.src, md.dst); setSel(mkSel(Math.min(md.src.r1, md.dst.r1), Math.min(md.src.c1, md.dst.c1), Math.max(md.src.r2, md.dst.r2), Math.max(md.src.c2, md.dst.c2))); } }
+    if (md.t === 'chart' && md.moved) { const ch = md.ch; const nv = { x: ch.x, y: ch.y, w: ch.w, h: ch.h }; Object.assign(ch, md.o); ctl.run(sheet, 'all', () => { Object.assign(ch, nv); }); }
     if (md.t === 'point') requestAnimationFrame(() => taRef.current?.focus());
   };
   const autofit = (axis, idx) => {
@@ -251,10 +288,13 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
   const onDbl = (e) => {
     const h = hit(e); if (!h) return; const edge = nearEdge(h); if (edge && !readOnly) { autofit(edge.axis, edge.idx); return; }
     if (h.colHead || h.rowHead || h.corner) return;
+    const cg = chartAt(h); if (cg) { if (!readOnly) A.openDialog('chart', { chart: cg.ch }); return; }
+    if (filterBtnAt(h)) return;
     if (!readOnly) { const m = mergeIndex(sheet).get(key(h.r, h.c)); if (m) setSel({ ar: m.r1, ac: m.c1, r1: m.r1, c1: m.c1, r2: m.r2, c2: m.c2 }); else setSel(mkSel(h.r, h.c)); const t = wb.inputText(sheet, h.r, h.c); setEdit({ r: m ? m.r1 : h.r, c: m ? m.c1 : h.c, text: t, how: 'edit', caret: t.length }); requestAnimationFrame(() => { const ta = taRef.current; if (ta) { ta.focus(); ta.setSelectionRange(t.length, t.length); } }); }
   };
   const onCtx = (e) => {
     e.preventDefault(); const h = hit(e); if (!h) return; const s = cur();
+    const cg = chartAt(h); if (cg) { setSelChart(cg.ch.id); selChartRef.current = cg.ch.id; setMenu({ x: e.clientX, y: e.clientY, kind: 'chart', id: cg.ch.id }); return; }
     if (!(h.r >= s.r1 && h.r <= s.r2 && h.c >= s.c1 && h.c <= s.c2) || h.colHead || h.rowHead) {
       if (h.colHead) setSel({ ar: 0, ac: h.c, r1: 0, r2: MAXR - 1, c1: h.c, c2: h.c }); else if (h.rowHead) setSel({ ar: h.r, ac: 0, c1: 0, c2: MAXC - 1, r1: h.r, r2: h.r }); else if (!h.corner) setSel(mkSel(h.r, h.c));
     }
@@ -271,7 +311,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
     while (grew && guard < 400) { grew = false; guard += 1; if (r1 > 0 && rowHas(r1 - 1)) { r1 -= 1; grew = true; } if (r2 < sheet.maxRow && rowHas(r2 + 1)) { r2 += 1; grew = true; } if (c1 > 0 && colHas(c1 - 1)) { c1 -= 1; grew = true; } if (c2 < sheet.maxCol && colHas(c2 + 1)) { c2 += 1; grew = true; } }
     return { r1, c1, r2, c2 };
   };
-  const gotoSheet = (i) => { sheetSel.current.set(six, sel); setSix(i); setSel(sheetSel.current.get(i) || mkSel(0, 0)); setEdit(null); };
+  const gotoSheet = (i) => { setFmenu(null); setSelChart(null); sheetSel.current.set(six, sel); setSix(i); setSel(sheetSel.current.get(i) || mkSel(0, 0)); setEdit(null); };
 
   /* ---------- actions (used by ribbon, menu and keyboard) ---------- */
   const A = {
@@ -323,6 +363,46 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
         setDlg({ type: 'prompt', title: tt('Go To', 'اذهب إلى'), label: tt('Reference (e.g. B12, A1:C9 or a name)', 'المرجع (مثال B12 أو A1:C9 أو اسم)'), value: '', names, okLabel: tt('Go', 'اذهب'), onOk: (v) => (A.goto(v) ? true : tt('The reference is not valid.', 'المرجع غير صالح.')) });
       } else setDlg({ type, ...payload });
     },
+    /* ---- conditional formatting / filter / charts ---- */
+    cfSave: (r, id) => {
+      ctl.run(sheet, 'all', () => {
+        if (id) { const i = sheet.cf.findIndex((x) => x.id === id); if (i >= 0) { sheet.cf[i] = { ...r, id }; return; } }
+        sheet.cf.unshift({ ...r, id: newCfId() });
+      });
+    },
+    cfPreset: (kind, params = {}, fmt) => { if (editRef.current) commit(0, 0, true); A.cfSave({ kind, rng: rangeOf(), ...params, ...(fmt ? { fmt: { ...fmt } } : {}) }); },
+    cfClear: (what) => {
+      const g = rangeOf();
+      ctl.run(sheet, 'all', () => { sheet.cf = what === 'sheet' ? [] : sheet.cf.filter((r) => !(r.rng.r1 <= g.r2 && r.rng.r2 >= g.r1 && r.rng.c1 <= g.c2 && r.rng.c2 >= g.c1)); });
+    },
+    cfDelete: (id) => ctl.run(sheet, 'all', () => { sheet.cf = sheet.cf.filter((r) => r.id !== id); }),
+    cfMove: (id, d) => ctl.run(sheet, 'all', () => { const i = sheet.cf.findIndex((r) => r.id === id); const j = i + d; if (i < 0 || j < 0 || j >= sheet.cf.length) return; [sheet.cf[i], sheet.cf[j]] = [sheet.cf[j], sheet.cf[i]]; }),
+    filterToggle: () => {
+      if (editRef.current) commit(0, 0, true);
+      if (sheet.filter) { ctl.run(sheet, 'all', () => clearFilter(wb, sheet)); return; }
+      const g = regionOf(); if (g.r1 === g.r2 && wb.getValue(sheet, g.r1, g.c1) === null) { toast(tt('Select a cell inside your data first.', 'حدّد خلية جوه البيانات الأول.')); return; }
+      ctl.run(sheet, 'all', () => { sheet.filter = { rng: g, cols: {}, hidden: new Set() }; });
+    },
+    filterSet: (c, allow) => ctl.run(sheet, 'all', () => { const f = sheet.filter; if (!f) return; if (allow === null) delete f.cols[c]; else f.cols[c] = { allow }; applyFilter(wb, sheet); }),
+    filterClearAll: () => ctl.run(sheet, 'all', () => { const f = sheet.filter; if (!f) return; f.cols = {}; applyFilter(wb, sheet); }),
+    filterReapply: () => ctl.run(sheet, 'all', () => applyFilter(wb, sheet)),
+    filterSort: (c, asc) => { const f = sheet.filter; if (f) ctl.sort(sheet, f.rng, c, asc, true, () => applyFilter(wb, sheet)); },
+    chartSave: (p, id) => {
+      let newSel = id;
+      ctl.run(sheet, 'all', () => {
+        if (id) { const ch = sheet.charts.find((x) => x.id === id); if (ch) { Object.assign(ch, p); delete ch._d; } return; }
+        const W = 480; const Hh = 288; const gx = Math.min(p.rng.c2 + 1, cols); const x = geom.cx[gx] + 24; const y = geom.ry[Math.min(p.rng.r1, rows)];
+        const ch = { id: newChartId(), x: Math.round(x), y: Math.round(y), w: W, h: Hh, ...p }; sheet.charts.push(ch); newSel = ch.id;
+      });
+      setSelChart(newSel);
+    },
+    chartInsert: (ctype) => {
+      if (editRef.current) commit(0, 0, true);
+      const g = regionOf(); if (g.r1 === g.r2 && g.c1 === g.c2 && wb.getValue(sheet, g.r1, g.c1) === null) { toast(tt('Select the data to chart first.', 'حدّد البيانات الأول.')); return; }
+      A.openDialog('chart', { ctype, rng: g });
+    },
+    chartDelete: () => { const id = selChartRef.current; if (!id) return; setSelChart(null); ctl.run(sheet, 'all', () => { sheet.charts = sheet.charts.filter((c) => c.id !== id); }); },
+    chart: () => sheet.charts.find((c) => c.id === selChartRef.current) || null,
     openFileMenu: () => { if (editRef.current) commit(0, 0, true); setFileOpen(true); },
     toggleRibbon: () => setCollapsed((c) => !c),
     file: {
@@ -425,6 +505,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
     if (k === 'd' && !shift) { A.fillDown(); return true; }
     if (k === 'r' && !shift) { A.fillRight(); return true; }
     if (k === 'l' && !shift) { A.tableStyle(TABLE_STYLES[0]); return true; }
+    if (k === 'l' && shift) { A.filterToggle(); return true; }
     if (k === ';') { A.stamp(shift); return true; }
     if (k === '1' && !shift) { A.openDialog('format'); return true; }
     if (k === '`' && !shift) { A.setView({ showF: !view.showF }); return true; }
@@ -467,9 +548,10 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
     if (readOnly) return null;
     if (k === 'F2') { e.preventDefault(); return startEdit(activeText(), 'edit'); }
     if (k === 'F4') { e.preventDefault(); return null; }
+    if ((k === 'Delete' || k === 'Backspace') && selChartRef.current) { e.preventDefault(); return A.chartDelete(); }
     if (k === 'Delete' || k === 'Backspace') { e.preventDefault(); return A.clear('contents'); }
     if (e.altKey && k === '=') { e.preventDefault(); return A.autoSum(); }
-    if (k === 'Escape') { if (painterRef.current) setPainter(null); if (ctl.clip) { ctl.clip = null; force(); } return null; }
+    if (k === 'Escape') { if (selChartRef.current) setSelChart(null); if (painterRef.current) setPainter(null); if (ctl.clip) { ctl.clip = null; force(); } return null; }
     if (k.length === 1 && !e.altKey) { e.preventDefault(); return startEdit(k, 'enter'); }
     return null;
   };
@@ -617,6 +699,7 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
           <button type="button" className="sx__zpct" title={tt('Reset to 100%', 'رجوع لـ 100%')} onClick={() => A.zoomTo(1)}>{Math.round(z * 100)}%</button>
         </span>
       </div>
+      {fmenu && sheet.filter && <FilterMenu A={A} tt={tt} c={fmenu.c} pos={fmenu} onClose={() => { setFmenu(null); requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }} />}
       {fileOpen && <SheetFileMenu A={A} tt={tt} fileName={fileName} dirty={ctl.dirty} onClose={() => { setFileOpen(false); requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); }} />}
       {dlg && (() => {
         const close = () => { setDlg(null); requestAnimationFrame(() => scrollRef.current?.focus({ preventScroll: true })); };
@@ -625,6 +708,9 @@ export default function SheetApp({ ctl, readOnly = false, tt, rtl, onToast, save
         if (dlg.type === 'shortcuts') return <ShortcutsDialog tt={tt} rtl={rtl} onClose={close} />;
         if (dlg.type === 'insertfn') return <InsertFnDialog tt={tt} onClose={close} onPick={(n) => { setDlg(null); requestAnimationFrame(() => A.insertFn(n)); }} />;
         if (dlg.type === 'format') return <FormatCellsDialog A={A} tt={tt} tab={dlg.tab} onClose={close} />;
+        if (dlg.type === 'cfrule') return <CfRuleDialog d={dlg} A={A} tt={tt} onClose={close} />;
+        if (dlg.type === 'cfmanage') return <ManageRulesDialog A={A} tt={tt} onClose={close} />;
+        if (dlg.type === 'chart') return <ChartDialog d={dlg} A={A} tt={tt} onClose={close} />;
         return null;
       })()}
     </div>
@@ -638,7 +724,9 @@ function CtxMenu({ menu, A, tt, readOnly, close }) {
   const sep = <li className="sx__msep" role="separator" />;
   const item = (label, fn, dis) => <li><button type="button" disabled={dis} onClick={go(fn)}>{label}</button></li>;
   let items;
-  if (menu.kind === 'tab') {
+  if (menu.kind === 'chart') {
+    items = [item(tt('Chart settings…', 'إعدادات الرسم…'), () => A.openDialog('chart', { chart: A.chart() }), readOnly), item(tt('Delete chart', 'حذف الرسم'), A.chartDelete, readOnly)];
+  } else if (menu.kind === 'tab') {
     const s = A.wb.sheets[menu.i];
     items = [item(tt('Rename', 'إعادة تسمية'), () => { A.gotoSheetByObj(s); setTimeout(A.renameSheet, 0); }), item(tt('Insert sheet', 'إدراج ورقة'), A.newSheet), item(tt('Delete', 'حذف'), () => { A.gotoSheetByObj(s); setTimeout(A.deleteSheet, 0); }, A.wb.sheets.length < 2)];
   } else {

@@ -14,6 +14,7 @@ export class Sheet {
     this.cells = new Map(); this.cache = new Map(); this.spill = new Map(); this.spillOf = new Map();
     this.colW = new Map(); this.manualW = new Set(); this.rowH = new Map(); this.hiddenCols = new Set(); this.hiddenRows = new Set();
     this.merges = []; this.freeze = { r: 0, c: 0 };
+    this.cf = []; this.filter = null; this.charts = [];
     this.maxRow = 0; this.maxCol = 0;
   }
   bump(r, c) { if (r > this.maxRow) this.maxRow = r; if (c > this.maxCol) this.maxCol = c; }

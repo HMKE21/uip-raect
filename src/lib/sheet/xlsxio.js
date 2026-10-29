@@ -3,6 +3,7 @@ import { Workbook } from './workbook.js';
 import { ERR_BY_CODE, isErr } from './formula.js';
 import { key, keyR, keyC, colName, parseRange, rangeStr } from './addr.js';
 import { parseCell } from './addr.js';
+import { dxfXml, cfXml, readCf, readDxfs, filterXml, readFilter, chartParts, readCharts } from './xlsxext.js';
 
 /* ---------- tiny XML parser (works in browser and node) ---------- */
 const unesc = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (m, d) => String.fromCodePoint(+d)).replace(/&#x([0-9a-f]+);/gi, (m, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&amp;/g, '&');
@@ -61,6 +62,7 @@ export async function readXlsx(data) {
       styleCache.set(xi, id); return id;
     };
     void defaultFont;
+    const H = { kids, kid, textOf, parseXml, strFromU8 }; const dxfs = readDxfs(H, stX);
     for (const sh of kids(kid(wbN, 'sheets'), 'sheet')) {
       const rid = sh.a['r:id'] || Object.entries(sh.a).find(([k]) => /:id$/.test(k))?.[1];
       let target = rels[rid] || ''; target = target.startsWith('/') ? target.slice(1) : `xl/${target}`;
@@ -87,6 +89,7 @@ export async function readXlsx(data) {
       // formulas keep their last value only as a cache-less hint: the engine recomputes
       const cols = kid(ws, 'cols'); kids(cols, 'col').forEach((c) => { for (let i = +c.a.min - 1; i <= Math.min(+c.a.max - 1, 300); i += 1) { if (c.a.width) { sheet.colW.set(i, Math.round(+c.a.width * 7 + 5)); if (c.a.customWidth === '1') sheet.manualW.add(i); } if (c.a.hidden === '1') sheet.hiddenCols.add(i); } });
       kids(kid(ws, 'mergeCells'), 'mergeCell').forEach((m) => { const g = parseRange(m.a.ref); if (g) sheet.merges.push(g); });
+      sheet.cf = readCf(H, ws, dxfs); sheet.filter = readFilter(H, ws, sheet); sheet.charts = readCharts(H, files, target, ws, sheet);
       const pane = kid(kid(kid(ws, 'sheetViews'), 'sheetView'), 'pane'); if (pane && pane.a.state && /frozen/.test(pane.a.state)) sheet.freeze = { r: +(pane.a.ySplit || 0), c: +(pane.a.xSplit || 0) };
     }
     kids(kid(wbN, 'definedNames'), 'definedName').forEach((d) => { const f = textOf(d); const m = /^(?:'([^']+)'|([\w.]+))!\$?([A-Z]+)\$?(\d+)(?::\$?([A-Z]+)\$?(\d+))?$/.exec(f); const g = m ? parseRange(`${m[3]}${m[4]}${m[5] ? `:${m[5]}${m[6]}` : ''}`) : null; wb.names.set(d.a.name.toUpperCase(), g ? { ref: { sheet: m[1] || m[2], ...g }, name: d.a.name } : { f, name: d.a.name }); });
@@ -114,8 +117,10 @@ export function writeXlsx(wb) {
     const xf = `<xf numFmtId="${nfId}" fontId="${pool(fontsL, font)}" fillId="${fill ? pool(fillsL, fill) : 0}" borderId="${bd ? pool(bordL, bd) : 0}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"${al ? ' applyAlignment="1">' + al + '</xf>' : '/>'}`;
     xfOf.set(i, xfL.length); xfL.push(xf);
   });
-  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${nfL.length ? `<numFmts count="${nfL.length}">${nfL.map((f, i) => `<numFmt numFmtId="${164 + i}" formatCode="${esc(f)}"/>`).join('')}</numFmts>` : ''}<fonts count="${fontsL.length}">${fontsL.join('')}</fonts><fills count="${fillsL.length}">${fillsL.join('')}</fills><borders count="${bordL.length}">${bordL.join('')}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfL.length}">${xfL.join('')}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
-  const sheetsXml = wb.sheets.map((s) => {
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${nfL.length ? `<numFmts count="${nfL.length}">${nfL.map((f, i) => `<numFmt numFmtId="${164 + i}" formatCode="${esc(f)}"/>`).join('')}</numFmts>` : ''}<fonts count="${fontsL.length}">${fontsL.join('')}</fonts><fills count="${fillsL.length}">${fillsL.join('')}</fills><borders count="${bordL.length}">${bordL.join('')}</borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfL.length}">${xfL.join('')}</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>@@DXFS@@</styleSheet>`;
+  const dxfL = []; const dxfIx = new Map(); const dxf = (f) => { const k = JSON.stringify(f); if (!dxfIx.has(k)) { dxfIx.set(k, dxfL.length); dxfL.push(dxfXml(f)); } return dxfIx.get(k); };
+  const extra = {}; let chartNo = 1;
+  const sheetsXml = wb.sheets.map((s, si) => {
     const rows = new Map();
     for (const [k, cell] of s.cells) { const r = keyR(k); if (!rows.has(r)) rows.set(r, []); rows.get(r).push([keyC(k), cell]); }
     for (const r of s.rowH.keys()) if (!rows.has(r)) rows.set(r, []);
@@ -135,11 +140,12 @@ export function writeXlsx(wb) {
     }).join('');
     const cols = [...new Set([...s.colW.keys(), ...s.hiddenCols])].sort((a, b) => a - b).map((c) => `<col min="${c + 1}" max="${c + 1}" width="${s.colW.has(c) ? ((s.colW.get(c) - 5) / 7).toFixed(2) : 8.43}" customWidth="1"${s.hiddenCols.has(c) ? ' hidden="1"' : ''}/>`).join('');
     const pane = s.freeze.r || s.freeze.c ? `<sheetViews><sheetView workbookViewId="0"><pane${s.freeze.c ? ` xSplit="${s.freeze.c}"` : ''}${s.freeze.r ? ` ySplit="${s.freeze.r}"` : ''} topLeftCell="${colName(s.freeze.c)}${s.freeze.r + 1}" state="frozen"/></sheetView></sheetViews>` : '';
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${pane}${cols ? `<cols>${cols}</cols>` : ''}<sheetData>${body}</sheetData>${s.merges.length ? `<mergeCells count="${s.merges.length}">${s.merges.map((g) => `<mergeCell ref="${rangeStr(g)}"/>`).join('')}</mergeCells>` : ''}</worksheet>`;
+    const cp = chartParts(wb, s, si + 1, chartNo); if (cp) { chartNo += cp.charts.length; extra[si + 1] = cp; }
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"${cp ? ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"' : ''}>${pane}${cols ? `<cols>${cols}</cols>` : ''}<sheetData>${body}</sheetData>${filterXml(s)}${s.merges.length ? `<mergeCells count="${s.merges.length}">${s.merges.map((g) => `<mergeCell ref="${rangeStr(g)}"/>`).join('')}</mergeCells>` : ''}${cfXml(s, dxf)}${cp ? '<drawing r:id="rId1"/>' : ''}</worksheet>`;
   });
   const names = [...wb.names.values()].filter((n) => n.ref).map((n) => `<definedName name="${esc(n.name)}">'${esc(n.ref.sheet)}'!${rangeStr(n.ref).replace(/([A-Z]+)(\d+)/g, '$$$1$$$2')}</definedName>`).join('');
   const files = {
-    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${wb.sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/></Types>`,
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>${wb.sheets.map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>@@CT@@</Types>`,
     '_rels/.rels': '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
     'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${wb.sheets.map((s, i) => `<sheet name="${esc(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>${names ? `<definedNames>${names}</definedNames>` : ''}<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`,
     'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${wb.sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('')}<Relationship Id="rId${wb.sheets.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/><Relationship Id="rId${wb.sheets.length + 2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>`,
@@ -147,6 +153,14 @@ export function writeXlsx(wb) {
   };
   sheetsXml.forEach((x, i) => { files[`xl/worksheets/sheet${i + 1}.xml`] = x; });
   files['xl/sharedStrings.xml'] = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${sst.length}" uniqueCount="${sst.length}">${sst.map((s) => `<si><t xml:space="preserve">${esc(s)}</t></si>`).join('')}</sst>`;
+  let ct = '';
+  for (const [no, cp] of Object.entries(extra)) {
+    files[`xl/worksheets/_rels/sheet${no}.xml.rels`] = cp.sheetRels; files[`xl/drawings/drawing${no}.xml`] = cp.drawing; files[`xl/drawings/_rels/drawing${no}.xml.rels`] = cp.drawingRels;
+    ct += `<Override PartName="/xl/drawings/drawing${no}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`;
+    for (const c of cp.charts) { files[`xl/charts/chart${c.n}.xml`] = c.xml; ct += `<Override PartName="/xl/charts/chart${c.n}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`; }
+  }
+  files['[Content_Types].xml'] = files['[Content_Types].xml'].replace('@@CT@@', ct);
+  files['xl/styles.xml'] = files['xl/styles.xml'].replace('@@DXFS@@', dxfL.length ? `<dxfs count="${dxfL.length}">${dxfL.join('')}</dxfs>` : '');
   const out = {}; for (const [k, v] of Object.entries(files)) out[k] = strToU8(v);
   return zipSync(out, { level: 6 });
 }
@@ -180,7 +194,7 @@ export function workbookToCsv(wb, d = ',', sheetIx = 0) {
 /* ---------- JSON snapshot for local drafts (cheap, no zip) ---------- */
 export function serializeWb(wb) {
   const enc = (v) => (isErr(v) ? { e: v.code } : v);
-  return JSON.stringify({ v: 1, styles: wb.styles, names: [...wb.names.values()], sheets: wb.sheets.map((s) => ({ name: s.name, cells: [...s.cells].map(([k, c]) => [k, enc(c.v), c.f, c.s]), colW: [...s.colW], rowH: [...s.rowH], hr: [...s.hiddenRows], hc: [...s.hiddenCols], merges: s.merges, freeze: s.freeze })) });
+  return JSON.stringify({ v: 1, styles: wb.styles, names: [...wb.names.values()], sheets: wb.sheets.map((s) => ({ name: s.name, cells: [...s.cells].map(([k, c]) => [k, enc(c.v), c.f, c.s]), colW: [...s.colW], rowH: [...s.rowH], hr: [...s.hiddenRows], hc: [...s.hiddenCols], merges: s.merges, freeze: s.freeze, cf: s.cf.map(({ _c, ...r }) => r), filter: s.filter ? { rng: s.filter.rng, cols: s.filter.cols, hidden: [...(s.filter.hidden || [])] } : null, charts: s.charts.map(({ _d, ...c }) => c) })) });
 }
 export function deserializeWb(text) {
   const j = JSON.parse(text); const wb = new Workbook(); wb.styles = j.styles || [{}];
@@ -189,6 +203,7 @@ export function deserializeWb(text) {
     const s = wb.addSheet(sj.name);
     for (const [k, v, f, st] of sj.cells) { s.cells.set(k, { v: v && typeof v === 'object' && v.e ? ERR_BY_CODE[v.e] : v, f, s: st }); s.bump(keyR(k), keyC(k)); }
     s.colW = new Map(sj.colW); s.manualW = new Set(sj.colW.map((x) => x[0])); s.rowH = new Map(sj.rowH); s.hiddenRows = new Set(sj.hr); s.hiddenCols = new Set(sj.hc); s.merges = sj.merges || []; s.freeze = sj.freeze || { r: 0, c: 0 };
+    s.cf = sj.cf || []; s.charts = sj.charts || []; s.filter = sj.filter ? { rng: sj.filter.rng, cols: sj.filter.cols || {}, hidden: new Set(sj.filter.hidden || []) } : null;
   }
   wb.touch(); return wb;
 }

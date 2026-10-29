@@ -4,6 +4,9 @@ import SxIcon from './SheetIcons';
 import { NUM_FORMATS } from '../../lib/sheet/format.js';
 import { THEME_LIST } from '../../lib/sheet/themes.js';
 import { FUNCS } from '../../lib/sheet/funcs.js';
+import { HILITE, SCALES, BARS } from '../../lib/sheet/cf.js';
+import { CHART_TYPES } from '../../lib/sheet/chart.js';
+import { ChartGlyph } from './SheetCfCharts';
 import { CELL_STYLES, TABLE_STYLES, SWATCH_THEME, SWATCH_STD, FN_CATS } from '../../lib/sheet/presets.js';
 
 export const FONTS = ['Calibri', 'Arial', 'Times New Roman', 'Courier New', 'Tahoma', 'Verdana', 'Segoe UI', 'Georgia', 'Cairo', 'Noto Sans Arabic'];
@@ -115,6 +118,47 @@ const decimals = (nf, d) => {
 };
 
 /* ---------------------------------------------------------------- galleries */
+function CfMenu({ A, tt }) {
+  const dlg = (kind, preset) => () => A.openDialog('cfrule', { kind, preset });
+  const hl = HILITE[0].fmt;
+  return (
+    <div className="sx__cfm">
+      <Head>{tt('Highlight Cells Rules', 'قواعد تمييز الخلايا')}</Head>
+      <Item onClick={dlg('cell', { op: 'gt' })}>{tt('Greater Than…', 'أكبر من…')}</Item>
+      <Item onClick={dlg('cell', { op: 'lt' })}>{tt('Less Than…', 'أصغر من…')}</Item>
+      <Item onClick={dlg('cell', { op: 'btw' })}>{tt('Between…', 'بين…')}</Item>
+      <Item onClick={dlg('cell', { op: 'eq' })}>{tt('Equal To…', 'يساوي…')}</Item>
+      <Item onClick={dlg('text', { tmode: 'contains' })}>{tt('Text that Contains…', 'نص يحتوي على…')}</Item>
+      <Item onClick={() => A.cfPreset('dup', {}, hl)}>{tt('Duplicate Values', 'القيم المكررة')}</Item>
+      <Sep />
+      <Head>{tt('Top / Bottom Rules', 'قواعد الأعلى / الأدنى')}</Head>
+      <Item onClick={dlg('top', { bottom: false, n: 10 })}>{tt('Top 10 Items…', 'أعلى 10 عناصر…')}</Item>
+      <Item onClick={dlg('top', { bottom: true, n: 10 })}>{tt('Bottom 10 Items…', 'أدنى 10 عناصر…')}</Item>
+      <Item onClick={() => A.cfPreset('avg', { below: false }, HILITE[2].fmt)}>{tt('Above Average', 'أعلى من المتوسط')}</Item>
+      <Item onClick={() => A.cfPreset('avg', { below: true }, hl)}>{tt('Below Average', 'أقل من المتوسط')}</Item>
+      <Sep />
+      <Head>{tt('Data Bars', 'أشرطة البيانات')}</Head>
+      <div className="sx__galg">{BARS.map((b) => <button type="button" key={b.id} className="sx__tile sx__tile--cf" title={tt(b.en, b.ar)} onClick={() => A.cfPreset('bar', { color: b.color })} style={{ background: `linear-gradient(90deg,${b.color} 65%,#fff 65%)` }} />)}</div>
+      <Head>{tt('Color Scales', 'التدرجات اللونية')}</Head>
+      <div className="sx__galg">{SCALES.map((c) => <button type="button" key={c.id} className="sx__tile sx__tile--cf" title={tt(c.en, c.ar)} onClick={() => A.cfPreset('scale', { colors: c.colors })} style={{ background: `linear-gradient(180deg,${c.colors.join(',')})` }} />)}</div>
+      <Sep />
+      <Item onClick={dlg('cell', {})}>{tt('New Rule…', 'قاعدة جديدة…')}</Item>
+      <Item onClick={() => A.cfClear('sel')}>{tt('Clear Rules from Selected Cells', 'مسح القواعد من الخلايا المحددة')}</Item>
+      <Item onClick={() => A.cfClear('sheet')}>{tt('Clear Rules from Entire Sheet', 'مسح القواعد من الورقة كلها')}</Item>
+      <Item onClick={() => A.openDialog('cfmanage')}>{tt('Manage Rules…', 'إدارة القواعد…')}</Item>
+    </div>
+  );
+}
+function ChartMenu({ A, tt }) {
+  return <div>{CHART_TYPES.map((t) => <button type="button" role="menuitem" key={t.id} className="sx__it" onClick={() => A.chartInsert(t.id)}><span className="sx__iti"><ChartGlyph type={t.id} size={20} /></span><span className="sx__itl">{tt(t.en, t.ar)}</span></button>)}</div>;
+}
+const FilterItems = ({ A, tt }) => (
+  <>
+    <Item sicon="filter" on={!!A.sheet.filter} onClick={A.filterToggle} hint="Ctrl+Shift+L">{tt('Filter', 'تصفية')}</Item>
+    <Item onClick={A.filterClearAll} disabled={!A.sheet.filter}>{tt('Clear', 'مسح')}</Item>
+    <Item onClick={A.filterReapply} disabled={!A.sheet.filter}>{tt('Reapply', 'إعادة تطبيق')}</Item>
+  </>
+);
 function StyleGallery({ A, tt }) {
   return (
     <div className="sx__gal">
@@ -243,6 +287,7 @@ export default function SheetRibbon({ A, tt, state, collapsed, setCollapsed, tab
         <button type="button" className="sx__dlg" title={tt('Format Cells (Ctrl+1)', 'تنسيق الخلايا (Ctrl+1)')} aria-label={tt('Format Cells', 'تنسيق الخلايا')} onClick={() => A.openDialog('format', { tab: 'number' })} />
       </Grp>
       <Grp label={tt('Styles', 'الأنماط')}>
+        <DropL large sicon="cf" label={tt('Conditional Formatting', 'تنسيق شرطي')} wide><CfMenu A={A} tt={tt} /></DropL>
         <DropL large sicon="table" label={tt('Format as Table', 'تنسيق كجدول')} wide><TableGallery A={A} tt={tt} /></DropL>
         <DropL large sicon="styles" label={tt('Cell Styles', 'أنماط الخلايا')} wide><StyleGallery A={A} tt={tt} /></DropL>
       </Grp>
@@ -268,7 +313,7 @@ export default function SheetRibbon({ A, tt, state, collapsed, setCollapsed, tab
           <DropL sicon="filldown" label={tt('Fill', 'تعبئة')}><Item sicon="filldown" onClick={A.fillDown} hint="Ctrl+D">{tt('Down', 'لأسفل')}</Item><Item sicon="fillright" onClick={A.fillRight} hint="Ctrl+R">{tt('Right', 'لليمين')}</Item></DropL>
           <DropL icon="ed-clear" label={tt('Clear', 'مسح')}><Item onClick={() => A.clear('all')}>{tt('Clear All', 'مسح الكل')}</Item><Item onClick={() => A.clear('formats')}>{tt('Clear Formats', 'مسح التنسيقات')}</Item><Item onClick={() => A.clear('contents')} hint="Del">{tt('Clear Contents', 'مسح المحتويات')}</Item></DropL>
         </Col>
-        <DropL large sicon="sortaz" label={tt('Sort & Filter', 'ترتيب وتصفية')}><Item sicon="sortaz" onClick={() => A.sort(true)}>{tt('Sort A to Z', 'ترتيب تصاعدي')}</Item><Item sicon="sortza" onClick={() => A.sort(false)}>{tt('Sort Z to A', 'ترتيب تنازلي')}</Item></DropL>
+        <DropL large sicon="sortaz" label={tt('Sort & Filter', 'ترتيب وتصفية')}><Item sicon="sortaz" onClick={() => A.sort(true)}>{tt('Sort A to Z', 'ترتيب تصاعدي')}</Item><Item sicon="sortza" onClick={() => A.sort(false)}>{tt('Sort Z to A', 'ترتيب تنازلي')}</Item><Sep /><FilterItems A={A} tt={tt} /></DropL>
         <DropL large icon="ed-find" label={tt('Find & Select', 'بحث وتحديد')}><Item icon="ed-find" onClick={() => A.openFind(false)} hint="Ctrl+F">{tt('Find…', 'بحث…')}</Item><Item onClick={() => A.openFind(true)} hint="Ctrl+H">{tt('Replace…', 'استبدال…')}</Item><Item sicon="goto" onClick={() => A.openDialog('goto')} hint="Ctrl+G">{tt('Go To…', 'اذهب إلى…')}</Item><Sep /><Item onClick={A.selectAll} hint="Ctrl+A">{tt('Select All', 'تحديد الكل')}</Item></DropL>
       </Grp>
     </>
@@ -277,6 +322,7 @@ export default function SheetRibbon({ A, tt, state, collapsed, setCollapsed, tab
   const insert = (
     <>
       <Grp label={tt('Tables', 'الجداول')}><DropL large sicon="table" label={tt('Table', 'جدول')} wide><TableGallery A={A} tt={tt} /></DropL></Grp>
+      <Grp label={tt('Charts', 'الرسوم البيانية')}><DropL large sicon="chart" label={tt('Chart', 'رسم بياني')}><ChartMenu A={A} tt={tt} /></DropL></Grp>
       <Grp label={tt('Sheet', 'الورقة')}>
         <LB sicon="sheetplus" label={tt('New Sheet', 'ورقة جديدة')} title="Shift+F11" onClick={A.newSheet} />
         <LB icon="ed-row-plus" label={tt('Rows', 'صفوف')} onClick={A.insertRows} />
@@ -342,6 +388,11 @@ export default function SheetRibbon({ A, tt, state, collapsed, setCollapsed, tab
       <Grp label={tt('Sort', 'ترتيب')}>
         <LB sicon="sortaz" label={tt('Sort A to Z', 'تصاعدي')} onClick={() => A.sort(true)} />
         <LB sicon="sortza" label={tt('Sort Z to A', 'تنازلي')} onClick={() => A.sort(false)} />
+      </Grp>
+      <Grp label={tt('Filter', 'التصفية')}>
+        <LB sicon="filter" label={tt('Filter', 'تصفية')} title="Ctrl+Shift+L" on={!!A.sheet.filter} onClick={A.filterToggle} />
+        <LB label={tt('Clear', 'مسح')} onClick={A.filterClearAll} disabled={!A.sheet.filter} sicon="close" />
+        <LB label={tt('Reapply', 'إعادة تطبيق')} onClick={A.filterReapply} disabled={!A.sheet.filter} sicon="recalc" />
       </Grp>
       <Grp label={tt('Data Tools', 'أدوات البيانات')}>
         <LB sicon="filldown" label={tt('Fill Down', 'تعبئة لأسفل')} title="Ctrl+D" onClick={A.fillDown} disabled={!hasSel} />

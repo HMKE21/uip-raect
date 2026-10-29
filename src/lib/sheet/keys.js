@@ -106,6 +106,7 @@ export const SHORTCUTS = [
   { g: 'format', keys: 'Ctrl+Shift+7', en: 'Outline border', ar: 'حدود خارجية' },
   { g: 'format', keys: 'Ctrl+Shift+-', en: 'Remove borders', ar: 'إزالة الحدود' },
   { g: 'format', keys: 'Ctrl+L', en: 'Format as table', ar: 'تنسيق كجدول' },
+  { g: 'format', keys: 'Ctrl+Shift+L', en: 'Turn filter on / off', ar: 'تشغيل / إيقاف التصفية' },
 
   { g: 'rows', keys: 'Ctrl++ / Ctrl+-', en: 'Insert / delete', ar: 'إدراج / حذف' },
   { g: 'rows', keys: 'Ctrl+9 / Ctrl+0', en: 'Hide rows / columns', ar: 'إخفاء الصفوف / الأعمدة' },

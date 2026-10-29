@@ -67,8 +67,8 @@
 .jv-more { margin-inline-start: 6px; padding: 0 6px; border: 1px solid var(--jv-border); border-radius: 6px; background: none; color: var(--jv-accent); font: inherit; font-size: .78em; cursor: pointer; }
 
 /* graph: node-link diagram */
-.jv-body--graph { padding: 0; background-color: var(--jv-bg); background-image: radial-gradient(color-mix(in srgb, var(--jv-dim) 38%, transparent) 1px, transparent 1.2px); background-size: 20px 20px; line-height: 1.2; }
-.jv-graph { position: relative; cursor: grab; user-select: none; touch-action: none; overflow: hidden; }
+.jv-body--graph { direction: ltr; overscroll-behavior: contain; -webkit-overflow-scrolling: auto; padding: 0; background-color: var(--jv-bg); background-image: radial-gradient(color-mix(in srgb, var(--jv-dim) 38%, transparent) 1px, transparent 1.2px); background-size: 20px 20px; line-height: 1.2; }
+.jv-graph { position: relative; cursor: grab; user-select: none; -webkit-user-select: none; touch-action: none; overflow: hidden; direction: ltr; }
 .jv-stage { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .jv-graph.is-drag { cursor: grabbing; }
 .jv-edges { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
@@ -137,7 +137,7 @@
 .jv-gtools button:hover:not(:disabled) { background: var(--jv-hover); color: var(--jv-accent); }
 .jv-gtools button:disabled { opacity: .35; cursor: default; }
 .jv-zoom { min-width: 42px; text-align: center; font: 600 11px ui-monospace, monospace; color: var(--jv-dim); }
-.jv-grows { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; }
+.jv-grows { flex: 1; min-height: 0; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; overscroll-behavior: contain; direction: ltr; }
 .jv-rs { position: absolute; z-index: 3; touch-action: none; }
 .jv-rs--x { top: 30px; right: -4px; bottom: 14px; width: 9px; cursor: ew-resize; }
 .jv-rs--y { left: 14px; right: 14px; bottom: -4px; height: 9px; cursor: ns-resize; }

@@ -2,6 +2,8 @@ import { key, colName } from './addr.js';
 import { formatValue, general } from './format.js';
 import { isErr, refTokens, parseRefBody } from './formula.js';
 import { THEMES } from './themes.js';
+import { cfAt } from './cf.js';
+import { chartData, drawChart } from './chart.js';
 
 export const DEF_W = 80; export const DEF_H = 24; export const HDR_W = 48; export const HDR_H = 24;
 export const FONT = 'Calibri, "Segoe UI", system-ui, -apple-system, "Noto Sans Arabic", sans-serif';
@@ -62,8 +64,9 @@ export function drawGrid(cv, s) {
 
   const cellBox = (r, c) => { const m = cover.get(key(r, c)); if (m) return { x: X(m.c1), y: Y(m.r1), w: X(m.c2 + 1) - X(m.c1), h: Y(m.r2 + 1) - Y(m.r1), m }; return { x: X(c), y: Y(r), w: X(c + 1) - X(c), h: Y(r + 1) - Y(r), m: null }; };
   const paint = (r, c, x, y, w, h, merged) => {
-    const d = displayOf(wb, sheet, r, c, s.showF); const st = d.st;
-    if (st.bg) { g.fillStyle = st.bg; g.fillRect(x, y, w, h); if (s.showGrid && !merged) { /* keep gridline look */ } }
+    const d = displayOf(wb, sheet, r, c, s.showF); const ov = cfAt(wb, sheet, r, c); const st = ov && ov.b && !d.st.b ? { ...d.st, b: 1 } : d.st;
+    if (ov && ov.bg || st.bg) { g.fillStyle = (ov && ov.bg) || st.bg; g.fillRect(x, y, w, h); if (s.showGrid && !merged) { /* keep gridline look */ } }
+    if (ov && ov.bar) { const b = ov.bar; const x0 = x + 2 + (w - 4) * Math.min(b.from, b.to); const bw = Math.max(1, (w - 4) * Math.abs(b.to - b.from)); const gr = g.createLinearGradient(x0, 0, x0 + bw, 0); gr.addColorStop(0, b.color); gr.addColorStop(1, `${b.color}55`); g.fillStyle = gr; g.fillRect(x0, y + 3, bw, h - 6); g.strokeStyle = b.color; g.lineWidth = 1; g.strokeRect(x0 + 0.5, y + 3.5, bw - 1, h - 7); }
     if (st.bd) {
       g.lineWidth = 1;
       for (const [side, [style, col]] of Object.entries(st.bd)) {
@@ -74,7 +77,7 @@ export function drawGrid(cv, s) {
       g.lineWidth = 1;
     }
     if (d.text === '' || (s.edit && s.edit.r === r && s.edit.c === c)) return;
-    const hdr = s.band && T.hdBg && r === 0; g.font = fontOf(hdr && !st.b ? { ...st, b: 1 } : st, z); g.fillStyle = d.color || st.color || (hdr ? T.hdFg : T.fg);
+    const hdr = s.band && T.hdBg && r === 0; g.font = fontOf(hdr && !st.b ? { ...st, b: 1 } : st, z); g.fillStyle = (ov && ov.color) || d.color || st.color || (hdr ? T.hdFg : T.fg);
     let text = d.text; const pad = 4 * z;
     let tw = g.measureText(text).width;
     if (d.num && st.nf === undefined && tw > w - pad * 2 && typeof d.v === 'number') { // General numbers shrink their decimals before turning into ####
@@ -141,6 +144,24 @@ export function drawGrid(cv, s) {
   if (fr && fc) region(0, fr - 1, 0, fc - 1, [hw, hh, fw, fh]);
   if (fr || fc) { g.strokeStyle = T.accent; g.lineWidth = 1; g.beginPath(); if (fc) { g.moveTo(Math.round(bx0) - 0.5, hh); g.lineTo(Math.round(bx0) - 0.5, H); } if (fr) { g.moveTo(hw, Math.round(by0) - 0.5); g.lineTo(W, Math.round(by0) - 0.5); } g.stroke(); }
 
+  // AutoFilter buttons on the header row of the filter range
+  if (sheet.filter) {
+    const f = sheet.filter; const act = (c) => f.cols[c] && f.cols[c].allow;
+    g.save(); g.beginPath(); g.rect(hw, hh, W - hw, H - hh); g.clip();
+    for (let c = f.rng.c1; c <= f.rng.c2; c += 1) {
+      if (sheet.hiddenCols.has(c)) continue; const b = cellBox(f.rng.r1, c); if (b.x + b.w < hw || b.x > W || b.y + b.h < hh || b.y > H || b.w < 22 * z) continue;
+      const bs = Math.min(16 * z, b.h - 4); const bx = b.x + b.w - bs - 2; const by = b.y + b.h - bs - 2;
+      g.fillStyle = act(c) ? T.accent : (T.dark ? '#2b3550' : '#f3f3f3'); g.fillRect(bx, by, bs, bs); g.strokeStyle = act(c) ? T.accent : (T.dark ? T.grid : '#a6a6a6'); g.lineWidth = 1; g.strokeRect(bx + 0.5, by + 0.5, bs - 1, bs - 1);
+      g.fillStyle = act(c) ? '#fff' : (T.dark ? T.fg : '#333'); g.beginPath(); const cx0 = bx + bs / 2; const cy0 = by + bs / 2; const t = bs * 0.22; g.moveTo(cx0 - t * 1.3, cy0 - t * 0.5); g.lineTo(cx0 + t * 1.3, cy0 - t * 0.5); g.lineTo(cx0, cy0 + t * 1.1); g.closePath(); g.fill();
+    }
+    g.restore();
+  }
+  // charts float above the cells
+  if (sheet.charts && sheet.charts.length) {
+    g.save(); g.beginPath(); g.rect(hw, hh, W - hw, H - hh); g.clip();
+    for (const ch of sheet.charts) { const box = { x: hw + ch.x * z - sx, y: hh + ch.y * z - sy, w: ch.w * z, h: ch.h * z }; if (box.x > W || box.y > H || box.x + box.w < hw || box.y + box.h < hh) continue; drawChart(g, ch, chartData(wb, sheet, ch), box, T, z, s.selChart === ch.id); }
+    g.restore();
+  }
   // formula references being edited
   if (s.edit && s.edit.text[0] === '=') {
     refTokens(s.edit.text.slice(1)).filter((t) => t.t === 'ref').forEach((t, i) => {

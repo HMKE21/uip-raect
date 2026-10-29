@@ -5,6 +5,9 @@ import { autoGrow } from './autofit.js';
 
 const HIST = 100;
 const cloneCell = (c) => (c ? { ...c } : null);
+const cloneRule = (r) => { const { _c, ...o } = r; return { ...o, rng: { ...o.rng }, fmt: o.fmt ? { ...o.fmt } : o.fmt, colors: o.colors ? [...o.colors] : o.colors }; };
+const cloneFilter = (f) => (f ? { rng: { ...f.rng }, cols: Object.fromEntries(Object.entries(f.cols).map(([k, v]) => [k, { ...v, allow: v.allow ? [...v.allow] : v.allow }])), hidden: new Set(f.hidden || []) } : null);
+const cloneChart = (c) => { const { _d, ...o } = c; return { ...o, rng: { ...o.rng } }; };
 
 /** Every mutation of the workbook from the UI goes through here so undo / redo / change events stay in one place. */
 export class Ctl {
@@ -17,11 +20,11 @@ export class Ctl {
   markSaved() { this.savedAt = this.rev; this.subs.forEach((f) => f()); }
 
   cap(sheet, keys) {
-    if (keys === 'all') return { all: true, cells: new Map([...sheet.cells].map(([k, c]) => [k, { ...c }])), meta: { colW: new Map(sheet.colW), rowH: new Map(sheet.rowH), merges: sheet.merges.map((m) => ({ ...m })), hr: new Set(sheet.hiddenRows), hc: new Set(sheet.hiddenCols), freeze: { ...sheet.freeze } } };
+    if (keys === 'all') return { all: true, cells: new Map([...sheet.cells].map(([k, c]) => [k, { ...c }])), meta: { colW: new Map(sheet.colW), rowH: new Map(sheet.rowH), merges: sheet.merges.map((m) => ({ ...m })), hr: new Set(sheet.hiddenRows), hc: new Set(sheet.hiddenCols), freeze: { ...sheet.freeze }, cf: sheet.cf.map(cloneRule), filter: cloneFilter(sheet.filter), charts: sheet.charts.map(cloneChart) } };
     return { cells: new Map(keys.map((k) => [k, cloneCell(sheet.cells.get(k))])) };
   }
   put(sheet, snap) {
-    if (snap.all) { sheet.cells = new Map([...snap.cells].map(([k, c]) => [k, { ...c }])); const m = snap.meta; sheet.colW = new Map(m.colW); sheet.rowH = new Map(m.rowH); sheet.merges = m.merges.map((x) => ({ ...x })); sheet.hiddenRows = new Set(m.hr); sheet.hiddenCols = new Set(m.hc); sheet.freeze = { ...m.freeze }; } else for (const [k, c] of snap.cells) { if (c) sheet.cells.set(k, { ...c }); else sheet.cells.delete(k); }
+    if (snap.all) { sheet.cells = new Map([...snap.cells].map(([k, c]) => [k, { ...c }])); const m = snap.meta; sheet.colW = new Map(m.colW); sheet.rowH = new Map(m.rowH); sheet.merges = m.merges.map((x) => ({ ...x })); sheet.hiddenRows = new Set(m.hr); sheet.hiddenCols = new Set(m.hc); sheet.freeze = { ...m.freeze }; sheet.cf = (m.cf || []).map(cloneRule); sheet.filter = cloneFilter(m.filter || null); sheet.charts = (m.charts || []).map(cloneChart); } else for (const [k, c] of snap.cells) { if (c) sheet.cells.set(k, { ...c }); else sheet.cells.delete(k); }
     sheet.recomputeBounds(); this.wb.touch();
   }
   /** keys: array of cell keys that fn may touch, or 'all' for structural edits. */
@@ -199,6 +202,13 @@ export class Ctl {
       if (n > 0) { if (lo >= at) nl += n; if (hi >= at) nh += n; } else { const end = at - n - 1; if (lo >= at && hi <= end) return null; nl = lo > end ? lo + n : lo >= at ? at : lo; nh = hi > end ? hi + n : hi >= at ? at - 1 : hi; }
       return axis === 'r' ? { ...m, r1: nl, r2: nh } : { ...m, c1: nl, c2: nh };
     }).filter((m) => m && (m.r1 !== m.r2 || m.c1 !== m.c2));
+    // conditional formats, the filter and the charts' data follow the cells they were attached to
+    const sh = (g) => { const lo = axis === 'r' ? g.r1 : g.c1; const hi = axis === 'r' ? g.r2 : g.c2; let nl = lo; let nh = hi;
+      if (n > 0) { if (lo >= at) nl += n; if (hi >= at) nh += n; } else { const end = at - n - 1; if (lo >= at && hi <= end) return null; nl = lo > end ? lo + n : lo >= at ? at : lo; nh = hi > end ? hi + n : hi >= at ? at - 1 : hi; }
+      return axis === 'r' ? { ...g, r1: nl, r2: nh } : { ...g, c1: nl, c2: nh }; };
+    sheet.cf = sheet.cf.map((x) => { const g = sh(x.rng); return g ? { ...x, rng: g, _c: undefined } : null; }).filter(Boolean);
+    sheet.charts = sheet.charts.map((x) => { const g = sh(x.rng); return g ? { ...x, rng: g, _d: undefined } : null; }).filter(Boolean);
+    if (sheet.filter) { const g = sh(sheet.filter.rng); if (g) { sheet.filter = { ...sheet.filter, rng: g, hidden: new Set([...(sheet.filter.hidden || [])].filter((i) => !(axis === 'r' && (n < 0 && i >= at && i < at - n))).map((i) => (axis === 'r' && i >= at ? i + n : i))) }; } else sheet.filter = null; }
     this.rewriteAll(sheet, axis, at, n);
     sheet.recomputeBounds();
     const afters = snaps.map(([s]) => [s, this.cap(s, 'all')]);
@@ -206,14 +216,15 @@ export class Ctl {
     this.undoS.push({ sheet, before: null, after: null, ...entry }); if (this.undoS.length > HIST) this.undoS.shift(); this.redoS = [];
     this.wb.touch(); this.emit();
   }
-  sort(sheet, g, col, asc = true, header = false) {
-    const keys = this.cellKeys(g); if (keys === 'all') return;
+  sort(sheet, g, col, asc = true, header = false, post = null) {
+    const keys = post ? 'all' : this.cellKeys(g); if (keys === 'all' && !post) return;
     this.run(sheet, keys, () => {
       const rows = []; for (let r = g.r1 + (header ? 1 : 0); r <= g.r2; r += 1) { const row = []; for (let c = g.c1; c <= g.c2; c += 1) row.push({ cell: sheet.cells.get(key(r, c)), r, c }); rows.push({ row, key: this.wb.getValue(sheet, r, col) }); }
       const rank = (v) => (v === null ? 9 : 0);
       rows.sort((a, b) => { const ra = rank(a.key); const rb = rank(b.key); if (ra !== rb) return ra - rb; return (asc ? 1 : -1) * cmp(a.key, b.key); });
       const r0 = g.r1 + (header ? 1 : 0);
       rows.forEach((x, i) => x.row.forEach(({ cell }, j) => { const k = key(r0 + i, g.c1 + j); if (cell) { const d = { ...cell }; if (d.f) d.f = shiftFormula(d.f, r0 + i - x.row[j].r, 0); sheet.cells.set(k, d); } else sheet.cells.delete(k); }));
+      if (post) post();
     });
   }
   addSheet(name) { const s = this.wb.addSheet(name); this.emit(); return s; }
