@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { createPortal } from 'react-dom';
 import Icon from './Icon';
 import VideoPlayer from './VideoPlayer';
+import VoiceMessage from './messaging/VoiceMessage';
 import { BoostedAudio } from './VolumeBoost';
 import { useBackLayer } from '../lib/backStack';
 import { lockScroll } from '../lib/scrollLock';
@@ -75,7 +76,9 @@ const isBlobUrl = (u) => typeof u === 'string' && u.startsWith('blob:');
 const revoke = (data) => { if (data && isBlobUrl(data.url)) URL.revokeObjectURL(data.url); };
 // All versions of one file share a root id; the viewer follows that, so a saved ZIP (new row, new id) stays on screen.
 const rootOf = (f) => (f ? (f.root_id ?? f.id) : null);
-const directKind = (ext) => (VIDEO_EXT.includes(ext) ? 'video' : AUDIO_EXT.includes(ext) ? 'audio' : null);
+/** Chat voice notes are recorded as voice-message-<time>.webm: audio only, although .webm normally means video. */
+const isVoiceNote = (name, type) => /^voice-message-/i.test(name || '') || String(type || '').toLowerCase().startsWith('audio/');
+const directKind = (ext, name) => (isVoiceNote(name) ? 'audio' : VIDEO_EXT.includes(ext) ? 'video' : AUDIO_EXT.includes(ext) ? 'audio' : null);
 
 function humanBytes(n) {
   const b = Number(n) || 0;
@@ -112,7 +115,7 @@ async function buildView(file, blob) {
     return { kind: 'image', url: URL.createObjectURL(new Blob([blob], { type: IMAGE_MIME[ext] })), blob };
   }
   if (VIDEO_EXT.includes(ext) || AUDIO_EXT.includes(ext)) {
-    const k = VIDEO_EXT.includes(ext) ? 'video' : 'audio';
+    const k = isVoiceNote(file.original_name, blob.type) ? 'audio' : VIDEO_EXT.includes(ext) ? 'video' : 'audio';
     return { kind: k, url: URL.createObjectURL(new Blob([blob], { type: blob.type || (k === 'video' ? 'video/mp4' : 'audio/mpeg') })), blob };
   }
   if (ext === 'zip') {
@@ -386,7 +389,7 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
     if (!file) return undefined;
     const cached = cache.current.get(file.id);
     if (cached) { setView({ status: 'ready', data: cached }); return undefined; }
-    const direct = directKind(ext);
+    const direct = directKind(ext, file.original_name);
     if (direct && !loadBlob) { setView({ status: 'ready', data: { kind: direct, url: file.url } }); return undefined; }
     const ctrl = new AbortController();
     setView({ status: 'loading', progress: 0 });
@@ -673,7 +676,13 @@ export default function FileViewer({ files, startIndex = 0, onClose: onCloseProp
         {stage === 'audio' && (
           <div className="st-fv__center st-fv__card">
             <span className="st-fv__bigbadge" style={{ '--k': color }}>{(ext || 'audio').slice(0, 4).toUpperCase()}</span>
-            <BoostedAudio src={data.url} autoPlay style={{ width: 'min(420px, 80vw)' }} />
+            {isVoiceNote(file?.original_name) ? (
+              <div className="msg-voice" style={{ width: 'min(420px, 86vw)', maxWidth: '100%' }}>
+                <VoiceMessage key={data.url} src={data.url} name={downloadName} />
+              </div>
+            ) : (
+              <BoostedAudio src={data.url} autoPlay style={{ width: 'min(420px, 80vw)' }} />
+            )}
           </div>
         )}
         {stage === 'zip' && (
