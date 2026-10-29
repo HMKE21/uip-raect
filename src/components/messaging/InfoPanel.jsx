@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Icon from '../Icon';
 import { Avatar } from './ConversationRail';
 import { GroupTop, GroupMembers, GroupDanger } from './GroupPanel';
+import WallpaperPicker from './WallpaperPicker';
 import { fmtBytes, roleLabel } from './format';
 import { useProtectedSrc } from '../../lib/chatMedia';
 import { useLanguage } from '../../context/LanguageContext';
@@ -42,7 +43,9 @@ export default function InfoPanel({
   onRenameSaved,
   onClose,
   wall = 'dots',
+  wallIsDefault = true,
   onWall,
+  onWallUseDefault,
   customWalls = [],
   onAddCustomWall,
   onRemoveCustomWall,
@@ -54,7 +57,6 @@ export default function InfoPanel({
   const { locale } = useLanguage();
   const t = (en, ar) => (locale === 'ar' ? ar : en);
   const [category, setCategory] = useState(convMeta?.category || '');
-  const wallFileRef = useRef(null);
   const [savedName, setSavedName] = useState(conversation?.saved_default_name === false ? (conversation.subject || '') : '');
   const [savedBusy, setSavedBusy] = useState(false);
   const saveName = async () => {
@@ -62,28 +64,6 @@ export default function InfoPanel({
     setSavedBusy(true);
     try { await onRenameSaved(savedName.trim()); } finally { setSavedBusy(false); }
   };
-  const [wallBusy, setWallBusy] = useState(false);
-  const [wallError, setWallError] = useState(null);
-
-  async function pickWallFile(e) {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
-    if (!file || !onAddCustomWall) return;
-    setWallBusy(true);
-    setWallError(null);
-    try {
-      await onAddCustomWall(file);
-    } catch (err) {
-      const code = err && err.message;
-      setWallError(
-        code === 'not_image' ? t('Choose an image file.', 'اختار ملف صورة.')
-          : code === 'too_big' ? t('This image is larger than 15 MB.', 'الصورة أكبر من 15 ميجا.')
-            : code === 'limit' ? t('You reached the limit of 12 saved backgrounds — delete one first.', 'وصلت للحد الأقصى (12 خلفية محفوظة) — امسح واحدة الأول.')
-              : t('Could not save this image on this device.', 'مقدرتش أحفظ الصورة على الجهاز ده.'),
-      );
-    } finally { setWallBusy(false); }
-  }
-
   useEffect(() => {
     setCategory(convMeta?.category || '');
   }, [conversation?.id, convMeta?.category]);
@@ -141,6 +121,7 @@ export default function InfoPanel({
             {others[0]?.account_role && <span className="msg-info__role">{roleLabel(others[0].account_role)}</span>}
             {others[0]?.email && <span className="msg-info__email" dir="ltr">{others[0].email}</span>}
             {others[0]?.org && <span className="msg-info__org">{others[0].org}</span>}
+            {others[0]?.bio && <span className="msg-info__bio">{others[0].bio}</span>}
           </div>
         )}
 
@@ -159,46 +140,19 @@ export default function InfoPanel({
         )}
         {onWall && (
           <div>
-            <div className="msg-info__section-title">{t('Chat background', 'خلفية المحادثة')}</div>
-            <div className="msg-wall-picker" role="group" aria-label={t('Chat background', 'خلفية المحادثة')}>
-              {[
-                ['dots', t('Classic', 'كلاسيك')], ['aurora', t('Aurora', 'أورورا')], ['lagoon', t('Lagoon', 'لاجون')], ['forest', t('Forest', 'غابة')],
-                ['rose', t('Rose', 'وردي')], ['amber', t('Amber', 'عنبري')], ['graphite', t('Graphite', 'جرافيت')], ['midnight', t('Midnight', 'منتصف الليل')],
-              ].map(([id, label]) => (
-                <button key={id} type="button" className="msg-wall-opt" aria-pressed={wall === id} aria-label={label} title={label} onClick={() => onWall(id)}>
-                  <span className={`msg-wall-swatch msg-wall-swatch--${id}`} />
-                  <em>{label}</em>
-                </button>
-              ))}
-            </div>
-            {onAddCustomWall && (
-              <div className="msg-wall-mine">
-                <div className="msg-wall-mine__title">{t('My photos', 'صوري')}</div>
-                <div className="msg-wall-mine__grid">
-                  <input ref={wallFileRef} type="file" accept="image/*" hidden onChange={pickWallFile} />
-                  <button type="button" className="msg-wall-add" onClick={() => wallFileRef.current?.click()} disabled={wallBusy} aria-label={t('Upload a photo as background', 'ارفع صورة كخلفية')} title={t('Upload a photo as background', 'ارفع صورة كخلفية')}>
-                    <Icon name={'plus'} size={18} />
-                  </button>
-                  {customWalls.map((w) => (
-                    <div key={w.id} className="msg-wall-mine__item">
-                      <button type="button" className="msg-wall-mine__pick" aria-pressed={wall === `img:${w.id}`} aria-label={t('Use this photo', 'استخدم الصورة دي')} onClick={() => onWall(`img:${w.id}`)} style={{ backgroundImage: `url("${w.url}")` }} />
-                      {onRemoveCustomWall && (
-                        <button type="button" className="msg-wall-mine__del" aria-label={t('Delete this photo', 'امسح الصورة دي')} title={t('Delete this photo', 'امسح الصورة دي')} onClick={() => onRemoveCustomWall(w.id)}>
-                          <Icon name="x" size={11} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {wallError && <p className="msg-wall-mine__err">{wallError}</p>}
-              </div>
-            )}
-            {onWallAnim && (
-              <div className="msg-info__toggle-row msg-wall-anim">
-                <span>{t('Animated background', 'خلفية متحركة')}</span>
-                <button type="button" className={`msg-switch${wallAnim ? ' is-on' : ''}`} onClick={() => onWallAnim(!wallAnim)} aria-pressed={wallAnim} aria-label={t('Animated background', 'خلفية متحركة')} />
-              </div>
-            )}
+            <div className="msg-info__section-title">{t('Background for this chat', 'خلفية المحادثة دي')}</div>
+            <WallpaperPicker
+              value={wall}
+              usingDefault={wallIsDefault}
+              onChange={onWall}
+              onUseDefault={onWallUseDefault}
+              customWalls={customWalls}
+              onAddCustomWall={onAddCustomWall}
+              onRemoveCustomWall={onRemoveCustomWall}
+              anim={wallAnim}
+              onAnim={onWallAnim}
+            />
+            <p className="msg-info__hint">{t('Only this chat. Set one for all chats in Chat settings.', 'للمحادثة دي بس. خلفية كل المحادثات من إعدادات الشات.')}</p>
           </div>
         )}
         <div className="msg-info__card">

@@ -9,6 +9,7 @@ import ConfirmDialog from '../components/messaging/ConfirmDialog';
 import ThreadPanel from '../components/messaging/ThreadPanel';
 import InfoPanel from '../components/messaging/InfoPanel';
 import { useCustomWallpapers, isCustomWall, customWallId } from '../lib/customWallpapers';
+import { useChatSettings, wallFor } from '../lib/chatSettings';
 import GroupSettingsModal from '../components/messaging/GroupSettingsModal';
 import { localizeError } from '../components/messaging/groupText';
 import {
@@ -19,7 +20,6 @@ import {
   ForwardModal,
   BulkDeleteModal,
   PollModal,
-  ChatPrivacyModal,
   VideoViewer,
   Lightbox,
 } from '../components/messaging/modals';
@@ -190,12 +190,33 @@ export default function Messages() {
       return next;
     });
   }, []);
-  // Chat wallpaper (per browser).
-  const [wall, setWall] = useState(readWall);
+  // Chat settings (account-wide, enforced by the server): wallpapers, sounds, enter-to-send, text size…
+  const { settings: chatSettings, loaded: settingsLoaded, patch: patchSettings } = useChatSettings();
+  // Chat wallpaper: this chat's own background if it has one, else the account default. Until the account's settings
+  // arrive, the last default is shown from this browser so the chat doesn't flash the classic look.
+  const localWall = useMemo(readWall, []);
+  const defaultWall = settingsLoaded ? chatSettings.wallpaper.default : localWall;
+  const ownWall = settingsLoaded && activeId != null ? chatSettings.wallpaper.per_chat[String(activeId)] || '' : '';
+  const wall = ownWall || defaultWall;
+  useEffect(() => { // keep a local copy of the default for the next first paint
+    if (!settingsLoaded) return;
+    try { localStorage.setItem(WALL_KEY, chatSettings.wallpaper.default); } catch { /* not remembered */ }
+  }, [settingsLoaded, chatSettings.wallpaper.default]);
+  // One-time move of the background this browser used before the settings lived on the account.
+  const wallMigrated = useRef(false);
+  useEffect(() => {
+    if (!settingsLoaded || wallMigrated.current) return;
+    wallMigrated.current = true;
+    if (chatSettings.initialized) return;
+    const anim = readWallAnim();
+    if (localWall !== 'dots' || anim) patchSettings({ wallpaper: { default: localWall, anim } }).catch(() => {});
+  }, [settingsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Picking in the details panel changes THIS chat only; "use default" removes its own background.
   const onWall = useCallback((id) => {
-    setWall(id);
-    try { localStorage.setItem(WALL_KEY, id); } catch { /* not remembered */ }
-  }, []);
+    if (activeId == null) return;
+    patchSettings({ wallpaper: { per_chat: { [activeId]: id } } }).catch(() => {});
+  }, [activeId, patchSettings]);
+  const onWallUseDefault = useCallback(() => onWall(null), [onWall]);
   // The person's own photos: stay in the library until deleted, whichever theme is selected.
   const wallpapers = useCustomWallpapers();
   const customWallUrl = wallpapers.urlFor(wall);
@@ -203,16 +224,29 @@ export default function Messages() {
   const addCustomWall = useCallback(async (file) => { const id = await wallpapers.add(file); onWall(`img:${id}`); }, [wallpapers, onWall]);
   const removeCustomWall = useCallback(async (id) => {
     await wallpapers.remove(id);
-    if (customWallId(wall) === id) onWall('dots'); // deleting the photo in use falls back to the classic background
-  }, [wallpapers, wall, onWall]);
+    // every place that used the deleted photo falls back (default -> classic, chats -> default)
+    const patch = {};
+    if (chatSettings.wallpaper.default === `img:${id}`) patch.default = 'dots';
+    const per = {};
+    Object.entries(chatSettings.wallpaper.per_chat).forEach(([cid, w]) => { if (w === `img:${id}`) per[cid] = null; });
+    if (Object.keys(per).length) patch.per_chat = per;
+    if (Object.keys(patch).length) patchSettings({ wallpaper: patch }).catch(() => {});
+  }, [wallpapers, chatSettings.wallpaper, patchSettings]);
+  // arrived from "Select & delete chats" in the settings page: the rail already started selecting, drop the one-shot flag
+  useEffect(() => {
+    if (location.state?.selectChats) navigate(location.pathname, { replace: true, state: null });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Android app only: save media/files other people send to the phone (Pictures/Movies/Documents > UIP).
   const [autoSave, setAutoSave] = useState(isAutoSaveOn);
   const onAutoSave = useCallback((on) => { setAutoSaveOn(on); setAutoSave(on); }, []);
-  const [wallAnim, setWallAnim] = useState(readWallAnim);
+  const wallAnim = settingsLoaded ? chatSettings.wallpaper.anim : readWallAnim();
   const onWallAnim = useCallback((on) => {
-    setWallAnim(on);
     try { localStorage.setItem(WALL_ANIM_KEY, on ? '1' : '0'); } catch { /* not remembered */ }
-  }, []);
+    patchSettings({ wallpaper: { anim: on } }).catch(() => {});
+  }, [patchSettings]);
+  // Chat sounds follow the account setting (a ref: the inbox/thread pollers are long-lived callbacks).
+  const soundsRef = useRef(true);
+  soundsRef.current = chatSettings.sounds !== false;
   // Desktop only: hide the conversation list to give the thread the full width.
   const [railCollapsed, setRailCollapsed] = useState(readRailPref);
   const toggleRail = useCallback(() => {
@@ -358,7 +392,7 @@ export default function Messages() {
           if (unreadSeenRef.current && n > before && !c.is_muted && String(c.id) !== String(activeIdRef.current)) ring = true;
         });
         unreadSeenRef.current = next;
-        if (ring) playSound('message');
+        if (ring && soundsRef.current) playSound('message');
       }
       setConversations((prev) => (conversationsEqual(prev, res.data) ? prev : res.data));
     } catch (err) {
@@ -421,6 +455,8 @@ export default function Messages() {
       const p = res.data?.[userIds[0]];
       if (p) {
         setPresenceText(p.is_online ? (ar ? 'متصل' : 'Online') : p.last_seen_at ? `${ar ? 'آخر ظهور' : 'Last seen'} ${fmtTime(p.last_seen_at)}` : (ar ? 'غير متصل' : 'Offline'));
+      } else {
+        setPresenceText(''); // the person hides their last seen from me: show no status at all
       }
     } catch {
       /* non-critical */
@@ -476,15 +512,6 @@ export default function Messages() {
       }
     }
   }, [refreshPresence]);
-
-  // Chat privacy (show my photo / read receipts) — same endpoint for every role.
-  const loadPrivacy = useCallback(async () => (await api.get(BASE + '/privacy')).data, []);
-  const savePrivacy = useCallback(async (patch) => {
-    const res = await api.patch(BASE + '/privacy', patch);
-    // Others' avatars are filtered server-side, so nothing to refresh here;
-    // reload the inbox anyway so a changed setting is reflected next poll.
-    return res.data;
-  }, []);
 
   const openConversation = useCallback((id) => {
     activeIdRef.current = id;
@@ -600,7 +627,7 @@ export default function Messages() {
           }
           if (newMsgs.length) {
             autoSaveMessages(newMsgs);
-            if (newMsgs.some((m) => !m.is_mine && !isTmp(m.id))) playSound('message');
+            if (soundsRef.current && newMsgs.some((m) => !m.is_mine && !isTmp(m.id))) playSound('message');
             setMessages((prev) => {
               const byId = new Map(prev.map((m) => [String(m.id), m]));
               newMsgs.forEach((m) => byId.set(String(m.id), m));
@@ -1454,14 +1481,15 @@ export default function Messages() {
 
   return (
     <>
-    <div className={`msg-app${infoOpen && activeConversation ? ' has-info' : ''}${activeId ? ' thread-open' : ''}${railCollapsed && activeId ? ' rail-collapsed' : ''}${fullView ? ' is-full' : ''}`} data-msg-app data-wall={shownWall} data-wall-anim={wallAnim ? 'on' : 'off'} style={customWallUrl && shownWall === 'custom' ? { '--msg-wall-img': `url("${customWallUrl}")` } : undefined}>
+    <div className={`msg-app${infoOpen && activeConversation ? ' has-info' : ''}${activeId ? ' thread-open' : ''}${railCollapsed && activeId ? ' rail-collapsed' : ''}${fullView ? ' is-full' : ''}`} data-msg-app data-wall={shownWall} data-wall-anim={wallAnim ? 'on' : 'off'} data-font={chatSettings.font_size} style={customWallUrl && shownWall === 'custom' ? { '--msg-wall-img': `url("${customWallUrl}")` } : undefined}>
       {shownWall === 'custom' && (
         /* The person's own photo. Delivered from JS (not only from the stylesheet) with !important so no other wallpaper rule can paint over it. */
         <style>{`html body .msg-app[data-msg-app][data-wall="custom"] .msg-thread{background:linear-gradient(var(--wall-veil,transparent),var(--wall-veil,transparent)),var(--msg-wall-img) center / cover no-repeat,var(--bg-canvas)!important}`}</style>
       )}
       <ConversationRail
         onDeleteConversations={requestDelete}
-        onOpenTrash={() => navigate(centerBase + '/trash')}
+        onOpenSettings={() => navigate(centerBase + '/settings')}
+        initialSelecting={Boolean(location.state?.selectChats)}
         trashCount={trashItems.length}
         conversations={conversations}
         categories={categories}
@@ -1480,11 +1508,6 @@ export default function Messages() {
         onNewDirect={() => setModal('newDirect')}
         onNewGroup={() => setModal('newGroup')}
         myUserId={user?.id}
-        onOpenPrivacy={() => setModal('privacy')}
-        onOpenSafety={() => navigate(centerBase + '/blocked')}
-        onCollapse={toggleRail}
-        fullView={fullView}
-        onToggleFull={toggleFull}
         loading={loadingInbox}
       />
 
@@ -1542,6 +1565,7 @@ export default function Messages() {
         fullView={fullView}
         onToggleFull={toggleFull}
         onError={showError}
+        enterToSend={chatSettings.enter_to_send !== false}
         myUserId={user?.id}
       />
 
@@ -1565,7 +1589,9 @@ export default function Messages() {
           onReportUser={onReportUser}
           onClose={() => rememberInfo(false)}
           wall={wall}
+          wallIsDefault={!ownWall}
           onWall={onWall}
+          onWallUseDefault={onWallUseDefault}
           customWalls={wallpapers.items}
           onAddCustomWall={addCustomWall}
           onRemoveCustomWall={removeCustomWall}
@@ -1608,9 +1634,6 @@ export default function Messages() {
       )}
       {modal === 'bulkDelete' && (
         <BulkDeleteModal count={selectedIds.length} canAll={bulkCanAll()} onClose={() => setModal(null)} onDelete={submitBulkDelete} />
-      )}
-      {modal === 'privacy' && (
-        <ChatPrivacyModal onClose={() => setModal(null)} loadPrivacy={loadPrivacy} savePrivacy={savePrivacy} />
       )}
       {reportTarget && <ReportModal target={reportTarget} onClose={() => setReportTarget(null)} onSubmit={submitReport} />}
       {modal === 'poll' && <PollModal onClose={() => setModal(null)} onSubmit={createPoll} />}

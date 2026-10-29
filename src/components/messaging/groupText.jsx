@@ -115,6 +115,9 @@ const AR_ERRORS = {
   'That person is not in the group.': 'هذا الشخص ليس في المجموعة.',
   'Admins cannot be restricted. Remove their admin role first.': 'لا يمكن تقييد مشرف. أزل صلاحية الإشراف أولًا.',
   'This request was already handled.': 'تم التعامل مع هذا الطلب بالفعل.',
+  'This person is not accepting new messages from you.': 'هذا الشخص لا يستقبل محادثات جديدة منك.',
+  'This person is not accepting calls from you.': 'هذا الشخص لا يستقبل مكالمات منك.',
+  'This person does not allow being added to groups by you.': 'هذا الشخص لا يسمح بإضافته للمجموعات من قبلك.',
   'Conversation not found.': 'المحادثة غير موجودة أو لم تعد عضوًا فيها.',
 };
 const AR_PREFIX = [

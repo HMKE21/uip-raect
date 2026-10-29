@@ -930,6 +930,7 @@ export default function ThreadPanel({
   onToggleRail,
   fullView,
   onToggleFull,
+  enterToSend = true,
   onError,
   myUserId,
 }) {
@@ -1695,7 +1696,7 @@ export default function ThreadPanel({
                 // sent messages could come through as just one or two
                 // characters. e.keyCode === 229 is the classic fallback for
                 // browsers that don't set isComposing on the event itself.
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
+                if (e.key === 'Enter' && (enterToSend ? !e.shiftKey : (e.ctrlKey || e.metaKey)) && !e.nativeEvent.isComposing && e.keyCode !== 229) {
                   e.preventDefault();
                   handleSend();
                 }

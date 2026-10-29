@@ -75,27 +75,21 @@ export default function ConversationRail({
   onOpenSearchResult,
   onNewDirect,
   onNewGroup,
-  onOpenPrivacy,
-  onOpenSafety,
-  onCollapse,
-  fullView,
-  onToggleFull,
   loading,
   myUserId,
   onDeleteConversations,
-  onOpenTrash,
   trashCount = 0,
+  onOpenSettings,
+  initialSelecting = false,
 }) {
   const { locale } = useLanguage();
   const t = (en, ar) => (locale === 'ar' ? ar : en);
   const list = filterConversations(conversations, filter, categoryFilter);
 
   // Multi-select: pick several chats (or all of them) and delete them in one go.
-  const [selecting, setSelecting] = useState(false);
+  const [selecting, setSelecting] = useState(Boolean(initialSelecting));
   const [selected, setSelected] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
   // Touch: long-press a chat to start selecting (replaces the hover delete button on phones).
   const pressRef = useRef({ timer: null, fired: false });
   const startPress = (e, id) => {
@@ -110,15 +104,6 @@ export default function ConversationRail({
     }, 480);
   };
   const cancelPress = () => clearTimeout(pressRef.current.timer);
-  const pick = (fn) => { setMenuOpen(false); fn?.(); };
-  useEffect(() => {
-    if (!menuOpen) return undefined;
-    const onDoc = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
-    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
-    document.addEventListener('mousedown', onDoc);
-    document.addEventListener('keydown', onKey);
-    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey); };
-  }, [menuOpen]);
   const unreadChats = conversations.filter((c) => c.is_unread && !c.is_archived).length;
   const exitSelect = () => { setSelecting(false); setSelected(new Set()); };
   // Chats that disappear (deleted elsewhere / filtered away) drop out of the selection.
@@ -156,61 +141,17 @@ export default function ConversationRail({
               <Icon name="plus" size={16} />
               <span>{t('New chat', 'محادثة جديدة')}</span>
             </button>
-            <div className="mr-more" ref={menuRef}>
-              <button
-                type="button"
-                className={`mr-iconbtn${menuOpen ? ' is-open' : ''}`}
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                aria-label={t('More options', 'المزيد')}
-                title={t('More options', 'المزيد')}
-                onClick={() => setMenuOpen((o) => !o)}
-              >
-                <Icon name="more-vertical" size={18} />
+            {onNewGroup && (
+              <button type="button" className="mr-iconbtn" aria-label={t('New group', 'مجموعة جديدة')} title={t('New group', 'مجموعة جديدة')} onClick={onNewGroup}>
+                <Icon name="users" size={18} />
+              </button>
+            )}
+            {onOpenSettings && (
+              <button type="button" className="mr-iconbtn mr-settings" aria-label={t('Chat settings', 'إعدادات الشات')} title={t('Chat settings', 'إعدادات الشات')} onClick={onOpenSettings}>
+                <Icon name="settings" size={18} />
                 {trashCount > 0 && <i className="mr-dot" />}
               </button>
-              {menuOpen && (
-                <div className="mr-menu" role="menu">
-                  <button type="button" role="menuitem" className="mr-menu__item" onClick={() => pick(onNewGroup)}>
-                    <Icon name="users" size={16} /><span>{t('New group', 'مجموعة جديدة')}</span>
-                  </button>
-                  {onDeleteConversations && (
-                    <button type="button" role="menuitem" className="mr-menu__item" onClick={() => pick(() => setSelecting(true))}>
-                      <Icon name="check-circle" size={16} /><span>{t('Select chats', 'تحديد محادثات')}</span>
-                    </button>
-                  )}
-                  <div className="mr-menu__sep" role="separator" />
-                  {onOpenTrash && (
-                    <button type="button" role="menuitem" className="mr-menu__item" onClick={() => pick(onOpenTrash)}>
-                      <Icon name="trash" size={16} /><span>{t('Trash', 'المحذوفات')}</span>
-                      {trashCount > 0 && <b className="mr-menu__badge">{trashCount > 99 ? '99+' : trashCount}</b>}
-                    </button>
-                  )}
-                  {onOpenSafety && (
-                    <button type="button" role="menuitem" className="mr-menu__item" onClick={() => pick(onOpenSafety)}>
-                      <Icon name="shield" size={16} /><span>{t('Blocked & reports', 'المحظورون والبلاغات')}</span>
-                    </button>
-                  )}
-                  {onOpenPrivacy && (
-                    <button type="button" role="menuitem" className="mr-menu__item" onClick={() => pick(onOpenPrivacy)}>
-                      <Icon name="lock" size={16} /><span>{t('Chat privacy', 'خصوصية المحادثات')}</span>
-                    </button>
-                  )}
-                  {(onToggleFull || onCollapse) && <div className="mr-menu__sep" role="separator" />}
-                  {onToggleFull && (
-                    <button type="button" role="menuitem" className="mr-menu__item msg-full-btn" onClick={() => pick(onToggleFull)}>
-                      <Icon name={fullView ? 'collapse' : 'maximize'} size={16} />
-                      <span>{fullView ? t('Exit full screen', 'الخروج من ملء الشاشة') : t('Full screen', 'ملء الشاشة')}</span>
-                    </button>
-                  )}
-                  {onCollapse && (
-                    <button type="button" role="menuitem" className="mr-menu__item msg-rail-toggle" onClick={() => pick(onCollapse)}>
-                      <Icon name="panel-left" size={16} /><span>{t('Hide conversation list', 'إخفاء قائمة المحادثات')}</span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+            )}
           </div>
         </div>
 

@@ -1,0 +1,83 @@
+/* ---------- Chat settings page (/messages/settings) ---------- */
+.cs { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.cs-nav { display: flex; flex-direction: column; gap: 4px; padding: 8px; border-radius: 16px; background: var(--glass-bg); border: 1px solid var(--border-subtle); position: sticky; top: 12px; }
+.cs-nav__item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 0; border-radius: 11px; background: transparent; color: var(--text-secondary); font-size: 14px; font-weight: 600; cursor: pointer; text-align: start; }
+.cs-nav__item:hover { color: var(--text-primary); background: rgba(127,127,127,.08); }
+.cs-nav__item.is-active { background: var(--color-primary); color: #fff; box-shadow: 0 2px 10px rgba(var(--color-primary-rgb), .35); }
+.cs-main { padding: 20px 22px 26px; display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.cs-main__title { margin: 0; font-size: 20px; }
+.cs-group__title { margin: 0 0 4px; font-size: 14px; font-weight: 700; color: var(--text-primary); }
+.cs-group__hint { margin: 0 0 10px; font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.cs-rows { display: flex; flex-direction: column; border: 1px solid var(--border-subtle); border-radius: 14px; overflow: hidden; background: var(--bg-surface, var(--bg-canvas)); }
+.cs-row { display: flex; align-items: center; gap: 12px; padding: 13px 16px; border: 0; border-bottom: 1px solid var(--border-subtle); background: transparent; color: inherit; text-align: start; width: 100%; font: inherit; }
+.cs-row:last-child { border-bottom: 0; }
+.cs-row.is-click { cursor: pointer; }
+.cs-row.is-click:hover { background: var(--glass-bg); }
+.cs-row__icon { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: rgba(var(--color-primary-rgb), .12); color: var(--color-primary); }
+.cs-row__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.cs-row__text strong { font-size: 14px; }
+.cs-row__text small { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+.cs-row__value { flex: none; font-size: 13px; font-weight: 600; color: var(--color-primary); max-width: 40%; text-align: end; }
+.cs-row__chev { flex: none; color: var(--text-secondary); }
+[dir="rtl"] .cs-row__chev { transform: scaleX(-1); }
+.cs-pad { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.cs-profile { display: flex; align-items: center; gap: 16px; padding: 16px; border-radius: 16px; background: linear-gradient(135deg, rgba(var(--color-primary-rgb), .12), transparent); border: 1px solid var(--border-subtle); }
+.cs-profile .msg-avatar { width: 64px; height: 64px; font-size: 22px; }
+.cs-profile__text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.cs-profile__text strong { font-size: 17px; }
+.cs-profile__text span { font-size: 13px; color: var(--text-secondary); }
+.cs-profile__bio { font-size: 13.5px; font-style: normal; color: var(--text-primary); }
+.cs-bio { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.cs-bio textarea { width: 100%; resize: vertical; }
+.cs-bio__foot { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.cs-count { margin-inline-end: auto; font-size: 12px; color: var(--text-secondary); }
+.cs-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 11px; background: var(--glass-bg); border: 1px solid var(--border-subtle); }
+.cs-seg button { border: 0; background: transparent; padding: 6px 13px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--text-secondary); cursor: pointer; }
+.cs-seg button.is-on { background: var(--color-primary); color: #fff; }
+.cs-mini { margin: 0; font-size: 12.5px; color: var(--text-secondary); }
+.cs-empty { margin: 0; padding: 14px; text-align: center; font-size: 13px; color: var(--text-secondary); }
+.cs-chatlist { display: flex; flex-direction: column; max-height: 340px; overflow: auto; border: 1px solid var(--border-subtle); border-radius: 12px; }
+.cs-chatrow { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--border-subtle); background: transparent; color: inherit; cursor: pointer; text-align: start; font: inherit; }
+.cs-chatrow:last-child { border-bottom: 0; }
+.cs-chatrow:hover { background: var(--glass-bg); }
+.cs-chatrow__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
+.cs-chatrow__wall { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.cs-chatrow__wall.is-own { color: var(--color-primary); font-weight: 600; }
+.cs-chatrow__wall .msg-wall-swatch { width: 38px; height: 26px; border-radius: 8px; display: inline-block; position: relative; }
+.cs-chatrow__wall .msg-wall-swatch::before, .cs-chatrow__wall .msg-wall-swatch::after { display: none; }
+.wp-default { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px 14px; border-radius: 10px; border: 1px solid var(--border-subtle); background: transparent; color: var(--text-primary); font-size: 13px; font-weight: 600; cursor: pointer; }
+.wp-default.is-on { border-color: var(--color-primary); color: var(--color-primary); }
+/* audience dialog */
+.cs-radios { display: flex; flex-direction: column; gap: 8px; }
+.cs-radio { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--border-subtle); background: transparent; color: inherit; cursor: pointer; text-align: start; font: inherit; }
+.cs-radio.is-on { border-color: var(--color-primary); background: rgba(var(--color-primary-rgb), .08); }
+.cs-radio span { display: flex; flex-direction: column; gap: 2px; }
+.cs-radio small { font-size: 12px; color: var(--text-secondary); }
+.cs-radio__dot { flex: none; width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border-subtle); position: relative; }
+.cs-radio.is-on .cs-radio__dot { border-color: var(--color-primary); }
+.cs-radio.is-on .cs-radio__dot::after { content: ''; position: absolute; inset: 3px; border-radius: 50%; background: var(--color-primary); }
+.cs-people { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.cs-people__title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+.cs-people__title b { padding: 1px 8px; border-radius: 999px; background: rgba(var(--color-primary-rgb), .14); color: var(--color-primary); font-size: 12px; }
+.cs-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.cs-pchip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 4px; border-radius: 999px; border: 1px solid var(--border-subtle); background: var(--glass-bg); color: inherit; font-size: 12.5px; cursor: pointer; }
+.cs-plist { max-height: 220px; overflow: auto; display: flex; flex-direction: column; }
+.cs-person { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: inherit; cursor: pointer; text-align: start; font: inherit; }
+.cs-person span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.cs-person:hover, .cs-person.is-on { background: var(--glass-bg); }
+.cs-check { flex: none; width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid var(--border-subtle); display: grid; place-items: center; }
+.cs-person.is-on .cs-check { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+/* rail header gear + bio in details */
+.mr-settings { position: relative; }
+.msg-info__bio { font-size: 13px; color: var(--text-secondary); text-align: center; line-height: 1.5; max-width: 90%; }
+.msg-info__hint { margin: 6px 2px 0; font-size: 12px; color: var(--text-secondary); }
+/* message text size */
+.msg-app[data-font="sm"] .msg-bubble { font-size: 13px; }
+.msg-app[data-font="lg"] .msg-bubble { font-size: 16.5px; line-height: 1.6; }
+@media (max-width: 860px) {
+  .cs { grid-template-columns: 1fr; }
+  .cs-nav { flex-direction: row; overflow-x: auto; position: static; scrollbar-width: none; }
+  .cs-nav__item { white-space: nowrap; }
+  .cs-main { padding: 14px 12px 22px; border-radius: 0; }
+  .cs-main__title { display: none; }
+}
