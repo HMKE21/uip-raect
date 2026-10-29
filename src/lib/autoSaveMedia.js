@@ -12,7 +12,7 @@
  *  - the person can turn it off from the chat details panel.
  */
 import { isNative, nativeSaveUrl, showToast } from '../native';
-import { attachmentUrl } from '../components/messaging/format';
+import { resolveMediaUrl, isProtectedAttachmentUrl, loadAttachmentBlob } from './chatMedia';
 import { parseServerDate } from '../utils/serverDate';
 
 const PREF_KEY = 'uip_autosave_media';       // '0' = off, anything else = on
@@ -62,7 +62,8 @@ function pump() {
   while (running < CONCURRENCY && queue.length) {
     const job = queue.shift();
     running += 1;
-    nativeSaveUrl(job.args)
+    resolveMediaUrl(job.args.url)
+      .then((url) => nativeSaveUrl({ ...job.args, url }))
       .then(() => remember(job.id))
       .catch(() => { /* try again next time the message is shown */ })
       .finally(() => { running -= 1; queued.delete(job.id); pump(); });
@@ -86,7 +87,7 @@ export function autoSaveMessages(messages) {
       queued.add(id);
       queue.push({
         id,
-        args: { url: attachmentUrl(a.url), filename: a.original_name || `UIP-${id}`, mimeType: a.mime_type, kind: a.kind },
+        args: { url: a.url, filename: a.original_name || `UIP-${id}`, mimeType: a.mime_type, kind: a.kind },
       });
     });
   });
@@ -98,15 +99,14 @@ const isAr = () => { try { return document.documentElement.lang === 'ar' || loca
 
 async function webDownload(url, name) {
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`http_${res.status}`);
-    const blob = await res.blob();
+    const blob = await loadAttachmentBlob(url);
     const href = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = href; a.download = name || 'file';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(href), 10000);
-  } catch {
+  } catch (e) {
+    if (isProtectedAttachmentUrl(url)) throw e; // a private file cannot be opened without the token: report the failure
     window.open(url, '_blank', 'noopener');
   }
 }
@@ -124,9 +124,10 @@ export async function saveAttachmentsToPhone(attachments) {
   let permission = false;
   for (const a of list) {
     try {
-      const url = attachmentUrl(a.url);
+      const url = a.url;
       if (isNative) {
-        await nativeSaveUrl({ url, filename: a.original_name || `UIP-${a.id ?? Date.now()}`, mimeType: a.mime_type, kind: a.kind });
+        const signed = await resolveMediaUrl(url);
+        await nativeSaveUrl({ url: signed, filename: a.original_name || `UIP-${a.id ?? Date.now()}`, mimeType: a.mime_type, kind: a.kind });
         remember(String(a.id ?? a.url));
       } else {
         await webDownload(url, a.original_name);

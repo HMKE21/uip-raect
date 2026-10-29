@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from '../Icon';
 import { Avatar } from './ConversationRail';
 import { GroupTop, GroupMembers, GroupDanger } from './GroupPanel';
-import { attachmentUrl, fmtBytes, roleLabel } from './format';
+import { fmtBytes, roleLabel } from './format';
+import { useProtectedSrc } from '../../lib/chatMedia';
 import { useLanguage } from '../../context/LanguageContext';
 
 /**
@@ -16,6 +17,12 @@ import { useLanguage } from '../../context/LanguageContext';
  * `conversation` object, same split the original state had between
  * state.activeConversation and findConv()).
  */
+/** Thumbnail of a shared chat photo (private file: fetched with the token). */
+function InfoThumb({ url, alt }) {
+  const { src } = useProtectedSrc(url);
+  return <img src={src || undefined} alt={alt} />;
+}
+
 export default function InfoPanel({
   conversation,
   convMeta,
@@ -201,10 +208,10 @@ export default function InfoPanel({
             <p className="text-small text-muted">{t('No files shared yet.', 'لا توجد ملفات مشتركة بعد.')}</p>
           ) : (
             recentFiles.map((a, i) => (
-              <a className="msg-info__file" key={i} href={attachmentUrl(a.url)} target="_blank" rel="noopener noreferrer"
-                onClick={(e) => { if (e.ctrlKey || e.metaKey || e.shiftKey || e.button > 0) return; e.preventDefault(); e.stopPropagation(); window.dispatchEvent(new CustomEvent('uip:open-file', { detail: { files: recentFiles.map((f) => ({ url: attachmentUrl(f.url), name: f.original_name })), index: i } })); }}>
+              <a className="msg-info__file" key={i} href="#"
+                onClick={(e) => { if (e.ctrlKey || e.metaKey || e.shiftKey || e.button > 0) return; e.preventDefault(); e.stopPropagation(); window.dispatchEvent(new CustomEvent('uip:open-file', { detail: { files: recentFiles.map((f) => ({ url: f.url, name: f.original_name, protected: true })), index: i } })); }}>
                 {a.kind === 'image' ? (
-                  <img src={attachmentUrl(a.url)} alt={a.original_name} />
+                  <InfoThumb url={a.url} alt={a.original_name} />
                 ) : (
                   <span className="msg-info__file-icon">
                     <Icon name="file" size={16} />

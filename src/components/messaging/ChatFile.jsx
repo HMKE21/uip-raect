@@ -100,7 +100,7 @@ export default function ChatFile({ attachment: a, fmtBytes }) {
       <span className="msg-attach-file-wrap" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: '100%' }}>
         <a
           className="msg-attach-file"
-          href={attachmentUrl(a.url)}
+          href="#"
           role="button"
           aria-busy={busy}
           title={tt('Open', 'فتح')}

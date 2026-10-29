@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isNative, canCacheNatively, nativeCachedSrc, nativeCacheUrl } from '../native';
-import { attachmentUrl } from '../components/messaging/format';
+import { resolveMediaUrl } from './chatMedia';
 
 const CONCURRENCY = 2;
 const AUTO_MAX_BYTES = 80 * 1024 * 1024;     // bigger clips wait for a tap (like WhatsApp's mobile-data limit)
@@ -32,10 +32,12 @@ function pump() {
     const job = waiting.shift();
     running += 1;
     publish(job.key, { state: 'downloading', pct: 0 });
-    nativeCacheUrl({
-      url: job.url, key: job.key, ext: job.ext,
-      onProgress: (loaded, total) => publish(job.key, { pct: total > 0 ? Math.min(99, Math.round((loaded / total) * 100)) : 0 }),
-    })
+    // the file is private: the native downloader gets a short-lived signed link (it cannot send the Bearer token)
+    resolveMediaUrl(job.url)
+      .then((url) => nativeCacheUrl({
+        url, key: job.key, ext: job.ext,
+        onProgress: (loaded, total) => publish(job.key, { pct: total > 0 ? Math.min(99, Math.round((loaded / total) * 100)) : 0 }),
+      }))
       .then((src) => publish(job.key, { state: 'ready', pct: 100, src }))
       .catch(() => publish(job.key, { state: 'remote', pct: 0 }))
       .finally(() => { running -= 1; pump(); });
@@ -46,7 +48,7 @@ function enqueue(a) {
   const key = keyOf(a);
   const cur = live.get(key);
   if (cur && (cur.state === 'queued' || cur.state === 'downloading' || cur.state === 'ready')) return;
-  waiting.push({ key, url: attachmentUrl(a.url), ext: extOf(a) });
+  waiting.push({ key, url: a.url, ext: extOf(a) });
   publish(key, { state: 'queued' });
   pump();
 }

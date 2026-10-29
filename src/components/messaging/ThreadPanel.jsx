@@ -11,7 +11,7 @@ import ChatFile from './ChatFile';
 import PollBubble from './PollBubble';
 import MsgIcon from './msgIcons';
 import { Avatar } from './ConversationRail';
-import { fmtTime, fmtDayLabel, fmtBytes, fmtDuration, fmtClock, peerLabel, renderBody, attachmentUrl, roleLabel, avatarUrl } from './format';
+import { fmtTime, fmtDayLabel, fmtBytes, fmtDuration, fmtClock, peerLabel, renderBody, roleLabel, avatarUrl } from './format';
 import { bgCss } from './stories/storyUtils';
 import { parseServerDate } from '../../utils/serverDate';
 import { useLanguage } from '../../context/LanguageContext';
@@ -21,6 +21,7 @@ import { createVoiceEngine, voiceConstraints, LIVE_PROCESSING } from './voiceEng
 import { warmRnnoise } from '../../lib/rnnoise';
 import { saveAttachmentsToPhone, isAutoSaveOn } from '../../lib/autoSaveMedia';
 import { useCachedVideo } from '../../lib/mediaCache';
+import { useProtectedSrc, useSignedMediaUrl } from '../../lib/chatMedia';
 import { isNative, canCacheNatively } from '../../native';
 import { systemLine, fileKind, typeLabel } from './groupText';
 import CallBubble from '../calls/CallBubble';
@@ -736,15 +737,37 @@ function isRecentMessage(m) {
  * that local file: instant start, no re-download. While it is still coming down the tile shows a progress ring and a tap
  * plays the stream right away, so nobody waits.
  */
-function InlineVideo({ attachment, src: remoteSrc, poster, name, duration, auto }) {
+/** <img> for a chat file: protected files are fetched with the Bearer token and shown from a blob: URL. */
+function ProtectedImg({ url, alt, ...rest }) {
+  const { src } = useProtectedSrc(url);
+  return <img src={src || BLANK_POSTER} alt={alt} {...rest} />;
+}
+
+/** Voice note: the audio is fetched with the token (small), then handed to the player as a blob: URL. */
+function ProtectedVoice({ attachment: a }) {
+  const t = useT();
+  const { src, error } = useProtectedSrc(a.url);
+  if (!src) {
+    return <span className="msg-voice__loading" style={{ fontSize: 12, opacity: 0.7 }}>{error ? t('Could not load the voice note', 'تعذّر تحميل الرسالة الصوتية') : '…'}</span>;
+  }
+  return <VoiceMessage src={src} duration={a.duration_seconds} name={a.original_name} />;
+}
+
+function InlineVideo({ attachment, url, thumbUrl, name, duration, auto }) {
   const t = useT();
   const [playing, setPlaying] = useState(false);
   const cache = useCachedVideo(attachment, { auto });
-  const src = cache.src || remoteSrc;
+  const { src: poster } = useProtectedSrc(thumbUrl);
+  // A <video> cannot send the token: it plays from a short-lived signed link, requested only when it is needed
+  // (on play, or for the first-frame preview when the server made no thumbnail).
+  const signed = useSignedMediaUrl(url, { enabled: playing || (!thumbUrl && !isNative) });
+  const src = cache.src || signed.src;
   if (playing) {
     return (
       <div className="msg-attach-video msg-attach-video--inline">
-        <VideoPlayer src={src} poster={poster} autoPlay />
+        {src
+          ? <VideoPlayer src={src} poster={poster || undefined} autoPlay />
+          : <span style={{ display: 'block', padding: 16, fontSize: 13 }}>{signed.error ? t('Could not load the video', 'تعذّر تحميل الفيديو') : t('Loading…', 'جارٍ التحميل…')}</span>}
       </div>
     );
   }
@@ -759,7 +782,7 @@ function InlineVideo({ attachment, src: remoteSrc, poster, name, duration, auto 
       aria-label={`${t('Play video', 'تشغيل الفيديو')} ${name || ''}`}
     >
       {/* once the local copy exists the first frame is painted from it; before that the server poster (or the dark tile) shows */}
-      {cache.src || !isNative ? <VideoFace src={src} poster={poster} /> : (poster ? <img className="msg-attach-video__poster" src={poster} alt="" /> : <span className="msg-attach-video__blank" />)}
+      {cache.src || !isNative ? <VideoFace src={src} poster={poster || undefined} /> : (poster ? <img className="msg-attach-video__poster" src={poster} alt="" /> : <span className="msg-attach-video__blank" />)}
       {busy ? (
         <span className="msg-attach-video__play msg-attach-video__play--busy" aria-hidden="true">
           <svg width="52" height="52" viewBox="0 0 52 52"><circle cx="26" cy="26" r="22" fill="none" stroke="rgba(255,255,255,.3)" strokeWidth="3" /><circle cx="26" cy="26" r="22" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${(cache.pct / 100) * 138.2} 138.2`} transform="rotate(-90 26 26)" /></svg>
@@ -797,8 +820,8 @@ function MessageAttachments({ attachments, onOpenLightbox, onOpenVideo, autoCach
         <div className={`msg-attach-image-grid${images.length === 1 ? ' single' : ''}${expanded.size ? ' has-expanded' : ''}`}>
           {images.map((a, i) => (
             <span key={i} className={`msg-attach-img${expanded.has(i) ? ' is-expanded' : ''}`}>
-              <img
-                src={attachmentUrl(a.url)}
+              <ProtectedImg
+                url={a.url}
                 alt={a.original_name}
                 onClick={() => toggle(i)}
                 style={{ cursor: expanded.has(i) ? 'zoom-out' : 'zoom-in' }}
@@ -810,7 +833,7 @@ function MessageAttachments({ attachments, onOpenLightbox, onOpenVideo, autoCach
                 aria-label={t('Open full screen', 'فتح بملء الشاشة')}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onOpenLightbox(attachmentUrl(a.url));
+                  onOpenLightbox(a.url);
                 }}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -825,14 +848,12 @@ function MessageAttachments({ attachments, onOpenLightbox, onOpenVideo, autoCach
         if (a.kind === 'video' && !isVoiceAttachment(a)) {
           // Compact tile in the bubble; tapping it plays the video right
           // here inside the conversation (native controls incl. fullscreen).
-          const src = attachmentUrl(a.url);
-          const poster = a.thumbnail_url ? attachmentUrl(a.thumbnail_url) : undefined;
-          return <InlineVideo key={a.id ?? i} attachment={a} src={src} poster={poster} name={a.original_name} duration={a.duration_seconds} auto={autoCache} />;
+          return <InlineVideo key={a.id ?? i} attachment={a} url={a.url} thumbUrl={a.thumbnail_url} name={a.original_name} duration={a.duration_seconds} auto={autoCache} />;
         }
         if (isVoiceAttachment(a)) {
           return (
             <div className="msg-voice" key={i}>
-              <VoiceMessage src={attachmentUrl(a.url)} duration={a.duration_seconds} name={a.original_name} />
+              <ProtectedVoice attachment={a} />
             </div>
           );
         }

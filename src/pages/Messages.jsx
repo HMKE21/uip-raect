@@ -23,7 +23,7 @@ import {
   Lightbox,
 } from '../components/messaging/modals';
 import { ReportModal } from '../components/messaging/SafetyModals';
-import { attachmentUrl, fmtTime } from '../components/messaging/format';
+import { fmtTime } from '../components/messaging/format';
 import { useLanguage } from '../context/LanguageContext';
 import { getPortalBrand, pick } from '../config/portalBrand';
 import { usePageMeta } from '../context/PageMetaContext';
@@ -247,6 +247,9 @@ export default function Messages() {
   const [forwardMessageId, setForwardMessageId] = useState(null);
 
   const lastPollIdRef = useRef(0);
+  // id of the conversation whose first page has finished loading. Polling waits for it: before that lastPollIdRef still holds
+  // the PREVIOUS chat's id (or 0), so a poll would return the whole history as "new" messages and ring once per message.
+  const threadReadyRef = useRef(null);
   // server clock echoed back as `changes_since` so the poll also reports older messages that were deleted / unsent / edited
   const pollClockRef = useRef(null);
   const activeIdRef = useRef(null);
@@ -430,12 +433,15 @@ export default function Messages() {
       setActiveConversation(conversation);
       setActiveOthers(others);
       const batch = res.data?.messages || [];
+      // the user already moved on to another chat while this page was loading: drop it
+      if (!beforeId && String(activeIdRef.current) !== String(id)) return;
       if (!beforeId) pollClockRef.current = null;
       setMessages((prev) => {
         const next = beforeId ? [...batch, ...prev] : batch;
         lastPollIdRef.current = lastRealId(next, 0);
         return next;
       });
+      if (!beforeId) threadReadyRef.current = id;
       setHasMoreOlder(beforeId ? batch.length > 0 : batch.length >= 50);
       if (!beforeId) autoSaveMessages(batch);
 
@@ -475,6 +481,10 @@ export default function Messages() {
   }, []);
 
   const openConversation = useCallback((id) => {
+    activeIdRef.current = id;
+    threadReadyRef.current = null;
+    lastPollIdRef.current = 0;
+    pollClockRef.current = null;
     setActiveId(id);
     setActiveConversation(null);
     setMessages([]);
@@ -517,13 +527,19 @@ export default function Messages() {
     const runPoll = () => {
       const id = activeIdRef.current;
       if (!id || document.hidden) return;
+      if (String(threadReadyRef.current) !== String(id)) return; // first page not loaded yet: nothing to diff against
       // never two polls at once (they share since_id / the server clock); a ping that lands meanwhile re-polls right after
       if (busy) { again = true; return; }
       busy = true;
+      const sinceSent = lastPollIdRef.current;
       api
-        .get(BASE + '/conversations/' + id + '/poll', { since_id: lastPollIdRef.current, ...(pollClockRef.current ? { changes_since: pollClockRef.current } : {}) })
+        .get(BASE + '/conversations/' + id + '/poll', { since_id: sinceSent, ...(pollClockRef.current ? { changes_since: pollClockRef.current } : {}) })
         .then((res) => {
-          if (String(activeIdRef.current) !== String(id)) return;
+          if (String(activeIdRef.current) !== String(id) || String(threadReadyRef.current) !== String(id)) return;
+          if (lastPollIdRef.current !== sinceSent) {
+            // the thread was reloaded while this poll was in flight: its delta is stale (would replay old messages + sound)
+            return;
+          }
           if (res.data?.server_time) pollClockRef.current = res.data.server_time;
           const changed = res.data?.updated || [];
           if (changed.length) {
@@ -1021,7 +1037,7 @@ export default function Messages() {
   const lightboxImages = useMemo(
     () =>
       messages.flatMap((m) =>
-        (m.attachments || []).filter((a) => a.kind === 'image' && a.url && !a.view_mode).map((a) => attachmentUrl(a.url))
+        (m.attachments || []).filter((a) => a.kind === 'image' && a.url && !a.view_mode).map((a) => a.url)
       ),
     [messages]
   );

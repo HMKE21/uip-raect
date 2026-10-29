@@ -1,7 +1,11 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
+import { isProtectedAttachmentUrl, loadAttachmentBlob } from '../lib/chatMedia';
 
 const FileViewer = lazy(() => import('./FileViewer'));
+
+// Private chat files (/api/v1/messaging/attachments/{id}/file) need the Bearer token: the viewer loads them through the API client.
+const loadBlob = (file) => loadAttachmentBlob(file.url);
 
 /**
  * Files (photos, videos, voice notes, PDFs …) that the app would otherwise open in the phone's browser sheet (which shows
@@ -22,5 +26,6 @@ export default function NativeFileOpener() {
     return () => window.removeEventListener('uip:open-file', on);
   }, []);
   if (!open) return null;
-  return <Suspense fallback={null}><FileViewer files={open.files} startIndex={open.start} locale={locale} onClose={() => setOpen(null)} /></Suspense>;
+  const hasPrivate = open.files.some((f) => isProtectedAttachmentUrl(f.url));
+  return <Suspense fallback={null}><FileViewer files={open.files} startIndex={open.start} locale={locale} loadBlob={hasPrivate ? loadBlob : undefined} onClose={() => setOpen(null)} /></Suspense>;
 }

@@ -5,6 +5,7 @@ import VideoPlayer from '../VideoPlayer';
 import { Avatar } from './ConversationRail';
 import { fmtTime, peerLabel, bi } from './format';
 import { useLanguage } from '../../context/LanguageContext';
+import { useProtectedSrc } from '../../lib/chatMedia';
 
 /** Inline bilingual picker: const t = useT(); t('English', 'عربي'). */
 function useT() {
@@ -439,7 +440,9 @@ export function Lightbox({ images, initialSrc, onClose }) {
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
 
-  const src = list[index];
+  const rawSrc = list[index];
+  const { src: shown } = useProtectedSrc(rawSrc); // chat images are private: fetched with the token, shown from a blob: URL
+  const src = shown || '';
 
   const goPrev = () => {
     setIndex((i) => (i - 1 + list.length) % list.length);
@@ -495,7 +498,7 @@ export function Lightbox({ images, initialSrc, onClose }) {
         </>
       )}
       <div className="msg-lightbox__stage" data-lightbox-stage onClick={(e) => e.stopPropagation()}>
-        <img src={src} alt="" style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }} />
+        <img src={src || undefined} alt="" style={{ transform: `scale(${zoom}) rotate(${rotation}deg)` }} />
       </div>
       <div className="msg-lightbox__tools" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="msg-icon-btn" onClick={zoomOut} aria-label={t('Zoom out', 'تصغير')} title={t('Zoom out', 'تصغير')}>
@@ -507,7 +510,7 @@ export function Lightbox({ images, initialSrc, onClose }) {
         <button type="button" className="msg-icon-btn" onClick={rotate} aria-label={t('Rotate', 'تدوير')} title={t('Rotate', 'تدوير')}>
           <Icon name="refresh" size={16} />
         </button>
-        <a className="msg-icon-btn" href={src} download aria-label={t('Download', 'تنزيل')} title={t('Download', 'تنزيل')}>
+        <a className="msg-icon-btn" href={src || undefined} download aria-label={t('Download', 'تنزيل')} title={t('Download', 'تنزيل')}>
           <Icon name="download" size={16} />
         </a>
       </div>
