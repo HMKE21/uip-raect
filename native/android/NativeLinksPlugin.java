@@ -296,4 +296,39 @@ public class NativeLinksPlugin extends Plugin {
             }
         }, "uip-fcm-token").start();
     }
+
+    /** Can the app open the call screen over other apps / the lock screen? { fsi: full-screen-intent allowed (Android 14+), overlay: "display over other apps" } */
+    @PluginMethod
+    public void callScreenStatus(final PluginCall call) {
+        boolean fsi = true;
+        boolean overlay = true;
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                android.app.NotificationManager nm = (android.app.NotificationManager) getContext().getSystemService(Context.NOTIFICATION_SERVICE);
+                fsi = nm == null || nm.canUseFullScreenIntent();
+            }
+            if (Build.VERSION.SDK_INT >= 23) overlay = Settings.canDrawOverlays(getContext());
+        } catch (Throwable ignored) { /* assume allowed */ }
+        JSObject r = new JSObject();
+        r.put("fsi", fsi);
+        r.put("overlay", overlay);
+        call.resolve(r);
+    }
+
+    /** Opens the exact Settings page for the call screen: kind = "fsi" (full-screen notifications) or "overlay" (display over other apps). */
+    @PluginMethod
+    public void openCallScreenSettings(final PluginCall call) {
+        String kind = call.getString("kind", "overlay");
+        try {
+            Intent intent;
+            Uri pkg = Uri.parse("package:" + getContext().getPackageName());
+            if ("fsi".equals(kind) && Build.VERSION.SDK_INT >= 34) intent = new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg);
+            else intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, pkg);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            openAppSettings(call);
+        }
+    }
 }

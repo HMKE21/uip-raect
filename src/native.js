@@ -655,6 +655,27 @@ async function ensureBackgroundDelivery() {
   } catch { /* old APK without the new native methods */ }
 }
 
+
+// ---- Incoming-call screen (WhatsApp style): needs "display over other apps" + (Android 14+) full-screen notifications ----
+const CALL_PROMPT_KEY = 'uip_call_screen_prompt_v1';
+async function ensureCallScreenPermissions() {
+  if (!isNative || !NativeLinksPerm?.callScreenStatus) return;
+  try {
+    if (!(await notificationsGranted())) return;
+    const st = await NativeLinksPerm.callScreenStatus();
+    if (st?.fsi !== false && st?.overlay !== false) return;
+    let log = { n: 0, ts: 0 };
+    try { log = JSON.parse(localStorage.getItem(CALL_PROMPT_KEY) || '') || log; } catch { /* first time */ }
+    if (log.n >= 4 || Date.now() - log.ts < 2 * 24 * 3600 * 1000) return;
+    try { localStorage.setItem(CALL_PROMPT_KEY, JSON.stringify({ n: log.n + 1, ts: Date.now() })); } catch { /* storage blocked */ }
+    const pick = await permissionCard('uip-call-card',
+      'عشان شاشة المكالمة تظهر لك على طول زي الواتساب حتى والتطبيق مقفول، فعّل "الظهور فوق التطبيقات الأخرى" للتطبيق.',
+      'So the call screen pops up instantly like WhatsApp, even with the app closed, allow "Display over other apps" for UIP.',
+      [{ id: 'go', ar: 'تفعيل', en: 'Enable', primary: true }, { id: 'later', ar: 'لاحقًا', en: 'Later' }]);
+    if (pick === 'go') await NativeLinksPerm.openCallScreenSettings({ kind: st.overlay === false ? 'overlay' : 'fsi' });
+  } catch { /* old APK without the new native methods */ }
+}
+
 // ---- Location permission, asked the way polished apps do: a short reason first, then Android's own dialog ----
 const LOC_PROMPT_KEY = 'uip_loc_prompt_v1';
 async function locationPermState() {
@@ -762,7 +783,7 @@ async function requestStartupPermissions() {
     // Everything came back refused in well under a second: Android did not show a dialog (refused too often) -> Settings card.
     const stillMissing = !(await notificationsGranted()) || (await mediaGranted()) === false;
     if (stillMissing && Date.now() - t0 < 800) showSettingsCard();
-  } finally { permRunning = false; ensurePushRegistered(); setTimeout(async () => { await ensureLocationPermission(); setTimeout(ensureBackgroundDelivery, 1500); }, 1500); }
+  } finally { permRunning = false; ensurePushRegistered(); setTimeout(async () => { await ensureLocationPermission(); setTimeout(async () => { await ensureCallScreenPermissions(); ensureBackgroundDelivery(); }, 1500); }, 1500); }
 }
 /** Opens this app's page in Android Settings (where a permission that was refused for good can be switched on). */
 export function openAppSettings() { return NativeLinksPerm?.openAppSettings?.().catch(() => {}); }

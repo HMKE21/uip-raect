@@ -143,36 +143,73 @@ public class UipMessagingService extends MessagingService {
         int icon = ctx.getResources().getIdentifier("ic_stat_uip", "drawable", ctx.getPackageName());
         if (icon == 0) icon = ctx.getApplicationInfo().icon;
 
-        NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CH_CALLS)
-                .setSmallIcon(icon)
-                .setColor(0xFF1FA855)
-                .setContentTitle(title)
-                .setContentText(text)
-                .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setOngoing(true)
-                .setAutoCancel(true)
-                .setTimeoutAfter(ringMs)
-                .setContentIntent(openPi)
-                .setFullScreenIntent(openPi, true)
-                .addAction(0, ar ? "رد" : "Answer", openPi)
-                .addAction(0, ar ? "تجاهل" : "Dismiss", dismissPi);
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            b.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), android.media.AudioManager.STREAM_RING);
-            b.setVibrate(new long[]{0, 900, 700, 900, 700});
+        // Full-screen call screen (over the lock screen). Its extras carry everything it shows.
+        Intent screen = new Intent(ctx, IncomingCallActivity.class);
+        screen.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_NO_USER_ACTION | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        screen.putExtra(EXTRA_LINK, link);
+        screen.putExtra(EXTRA_CALL_ID, callId);
+        screen.putExtra("caller_name", name);
+        screen.putExtra("video", video);
+        screen.putExtra("ar", ar);
+        screen.putExtra("ring_ms", ringMs);
+        PendingIntent screenPi = PendingIntent.getActivity(ctx, notificationId(callId) + 2, screen, flags);
+
+        Notification n = null;
+        try {
+            // Android's own call notification: avatar, green Answer / red Decline buttons (needs a full-screen intent, which we set).
+            androidx.core.app.Person caller = new androidx.core.app.Person.Builder().setName(title).setImportant(true).build();
+            NotificationCompat.Builder cs = new NotificationCompat.Builder(ctx, CH_CALLS)
+                    .setSmallIcon(icon)
+                    .setColor(0xFF1FA855)
+                    .setContentText(text)
+                    .setCategory(NotificationCompat.CATEGORY_CALL)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setOngoing(true)
+                    .setTimeoutAfter(ringMs)
+                    .setContentIntent(screenPi)
+                    .setFullScreenIntent(screenPi, true)
+                    .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, dismissPi, openPi));
+            n = cs.build();
+        } catch (Throwable ignored) { n = null; }
+        if (n == null) {
+            NotificationCompat.Builder b = new NotificationCompat.Builder(ctx, CH_CALLS)
+                    .setSmallIcon(icon)
+                    .setColor(0xFF1FA855)
+                    .setContentTitle(title)
+                    .setContentText(text)
+                    .setCategory(NotificationCompat.CATEGORY_CALL)
+                    .setPriority(NotificationCompat.PRIORITY_MAX)
+                    .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                    .setOngoing(true)
+                    .setAutoCancel(true)
+                    .setTimeoutAfter(ringMs)
+                    .setContentIntent(screenPi)
+                    .setFullScreenIntent(screenPi, true)
+                    .addAction(0, ar ? "رد" : "Answer", openPi)
+                    .addAction(0, ar ? "تجاهل" : "Dismiss", dismissPi);
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+                b.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE), android.media.AudioManager.STREAM_RING);
+                b.setVibrate(new long[]{0, 900, 700, 900, 700});
+            }
+            n = b.build();
         }
-        Notification n = b.build();
         n.flags |= Notification.FLAG_INSISTENT; // keep ringing until answered / dismissed / timed out
 
         try {
             NotificationManagerCompat.from(ctx).notify(CALL_TAG, notificationId(callId), n);
         } catch (SecurityException ignored) { /* notifications permission not granted */ }
+
+        // With "display over other apps" granted, Android lets us open the call screen straight away even with the phone unlocked.
+        try {
+            if (Build.VERSION.SDK_INT < 23 || android.provider.Settings.canDrawOverlays(ctx)) ctx.startActivity(screen);
+        } catch (Throwable e) { android.util.Log.w("UIP-PUSH", "direct call screen not allowed: " + e.getMessage()); }
     }
 
     static void cancelCall(Context ctx, int callId) {
         try {
             if (callId > 0) NotificationManagerCompat.from(ctx).cancel(CALL_TAG, notificationId(callId));
+            IncomingCallActivity.dismiss(callId);
         } catch (Exception ignored) { /* ignore */ }
     }
 }

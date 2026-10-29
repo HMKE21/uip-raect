@@ -28,7 +28,7 @@ if (!existsSync(androidDir)) {
 const javaDir = join(androidDir, 'app', 'src', 'main', 'java', ...pkg.split('.'));
 mkdirSync(javaDir, { recursive: true });
 
-for (const file of ['ExamLockPlugin.java', 'ScreenCapturePlugin.java', 'NativePrintPlugin.java', 'NativeLinksPlugin.java', 'NativeFilesPlugin.java', 'UipMessagingService.java', 'UipCallActionReceiver.java', 'MainActivity.java']) {
+for (const file of ['ExamLockPlugin.java', 'ScreenCapturePlugin.java', 'NativePrintPlugin.java', 'NativeLinksPlugin.java', 'NativeFilesPlugin.java', 'UipMessagingService.java', 'UipCallActionReceiver.java', 'IncomingCallActivity.java', 'MainActivity.java']) {
   const src = readFileSync(join(root, 'native', 'android', file), 'utf8').replaceAll('__PACKAGE__', pkg);
   writeFileSync(join(javaDir, file), src);
   console.log(`[patch-android] wrote ${pkg}.${file.replace('.java', '')}`);
@@ -55,6 +55,7 @@ if (existsSync(manifestPath)) {
     'android.permission.WAKE_LOCK',
     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', // keep pushes arriving with the app closed (like WhatsApp)
     'android.permission.RECEIVE_BOOT_COMPLETED',
+    'android.permission.SYSTEM_ALERT_WINDOW',      // open the incoming-call screen straight away, even with the phone unlocked
     'android.permission.USE_FULL_SCREEN_INTENT',   // incoming call rings full-screen over the lock screen
     'android.permission.DETECT_SCREEN_CAPTURE',   // Android 14+: warn the other people in a meeting when someone takes a screenshot
     'android.permission.DETECT_SCREEN_RECORDING', // Android 15+: same for a screen recording
@@ -100,6 +101,14 @@ if (existsSync(manifestPath)) {
         <receiver android:name=".UipCallActionReceiver" android:exported="false" />
 `;
     xml = xml.replace('</application>', `${svc}    </application>`);
+  }
+  if (!xml.includes('IncomingCallActivity')) {
+    const act = `
+        <activity android:name=".IncomingCallActivity" android:exported="false" android:launchMode="singleInstance"
+            android:excludeFromRecents="true" android:taskAffinity="" android:showWhenLocked="true" android:turnScreenOn="true"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+`;
+    xml = xml.replace('</application>', `${act}    </application>`);
   }
   if (xml !== before) { writeFileSync(manifestPath, xml); console.log('[patch-android] AndroidManifest.xml updated (permissions, uip:// link)'); }
 }
