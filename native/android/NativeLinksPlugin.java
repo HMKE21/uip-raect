@@ -248,4 +248,15 @@ public class NativeLinksPlugin extends Plugin {
         }
         handler.postDelayed(finish[0], timeout);
     }
+
+    /** Link / call of the notification that launched (or re-focused) the app: read once, then cleared. */
+    @PluginMethod
+    public void consumeLaunch(final PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("link", MainActivity.pendingLink == null ? "" : MainActivity.pendingLink);
+        r.put("call_id", MainActivity.pendingCallId);
+        MainActivity.pendingLink = null;
+        MainActivity.pendingCallId = 0;
+        call.resolve(r);
+    }
 }

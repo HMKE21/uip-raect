@@ -307,6 +307,11 @@ export function CallProvider({ children }) {
     const onVisible = () => { if (document.visibilityState === 'visible') engine.kick(); };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
+    // Instant ring: server "call" ping (Reverb) or a phone push arriving while the app is open -> poll right now, don't wait for the next tick.
+    const onRt = (e) => { if (e?.detail?.topic === 'call') engine.kick(); };
+    const onPush = (e) => { const t = e?.detail?.type; if (t === 'incoming_call' || t === 'call_cancel' || e?.detail?.resume) engine.kick(); };
+    window.addEventListener('uip:rt', onRt);
+    window.addEventListener('uip:push-received', onPush);
     // Reload vs. close: a reload must NOT hang up. While the call is live (connecting/active) we only remember it in sessionStorage
     // (survives a reload, vanishes when the tab is closed) and the reloaded page re-joins it; if nobody comes back the server hangs
     // up by itself after ~25 s. A call that is still ringing out (nobody answered yet) is cancelled right away, as before.
@@ -349,6 +354,8 @@ export function CallProvider({ children }) {
     return () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
+      window.removeEventListener('uip:rt', onRt);
+      window.removeEventListener('uip:push-received', onPush);
       clearTimeout(resumeTimer);
       window.removeEventListener('beforeunload', leave);
       window.removeEventListener('pagehide', leave);

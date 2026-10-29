@@ -28,7 +28,7 @@ if (!existsSync(androidDir)) {
 const javaDir = join(androidDir, 'app', 'src', 'main', 'java', ...pkg.split('.'));
 mkdirSync(javaDir, { recursive: true });
 
-for (const file of ['ExamLockPlugin.java', 'ScreenCapturePlugin.java', 'NativePrintPlugin.java', 'NativeLinksPlugin.java', 'NativeFilesPlugin.java', 'MainActivity.java']) {
+for (const file of ['ExamLockPlugin.java', 'ScreenCapturePlugin.java', 'NativePrintPlugin.java', 'NativeLinksPlugin.java', 'NativeFilesPlugin.java', 'UipMessagingService.java', 'UipCallActionReceiver.java', 'MainActivity.java']) {
   const src = readFileSync(join(root, 'native', 'android', file), 'utf8').replaceAll('__PACKAGE__', pkg);
   writeFileSync(join(javaDir, file), src);
   console.log(`[patch-android] wrote ${pkg}.${file.replace('.java', '')}`);
@@ -55,6 +55,7 @@ if (existsSync(manifestPath)) {
     'android.permission.WAKE_LOCK',
     'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS', // keep pushes arriving with the app closed (like WhatsApp)
     'android.permission.RECEIVE_BOOT_COMPLETED',
+    'android.permission.USE_FULL_SCREEN_INTENT',   // incoming call rings full-screen over the lock screen
     'android.permission.DETECT_SCREEN_CAPTURE',   // Android 14+: warn the other people in a meeting when someone takes a screenshot
     'android.permission.DETECT_SCREEN_RECORDING', // Android 15+: same for a screen recording
   ];
@@ -87,6 +88,18 @@ if (existsSync(manifestPath)) {
         <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="uip" />
 `;
     xml = xml.replace('</application>', `${meta}    </application>`);
+  }
+  // Incoming calls: our FirebaseMessagingService (subclass of Capacitor's) wins over Capacitor's because of the higher priority.
+  if (!xml.includes('UipMessagingService')) {
+    const svc = `
+        <service android:name=".UipMessagingService" android:exported="false">
+            <intent-filter android:priority="100">
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+        <receiver android:name=".UipCallActionReceiver" android:exported="false" />
+`;
+    xml = xml.replace('</application>', `${svc}    </application>`);
   }
   if (xml !== before) { writeFileSync(manifestPath, xml); console.log('[patch-android] AndroidManifest.xml updated (permissions, uip:// link)'); }
 }
@@ -123,5 +136,16 @@ if (existsSync(appGradle)) {
     g += "\ntry {\n    def servicesJSON = file('google-services.json')\n    if (servicesJSON.text) {\n        apply plugin: 'com.google.gms.google-services'\n    }\n} catch (Exception e) {\n    logger.info('google-services.json not found, google-services plugin not applied. Push Notifications will not work')\n}\n";
     writeFileSync(appGradle, g);
     console.log('[patch-android] google-services plugin applied in android/app/build.gradle');
+  }
+}
+
+// Our FirebaseMessagingService subclass needs firebase-messaging on the app module's own compile classpath
+// (the Capacitor push plugin declares it as "implementation", which is not visible to the app module).
+if (existsSync(appGradle)) {
+  let g = readFileSync(appGradle, 'utf8');
+  if (!g.includes('uip-firebase-messaging')) {
+    g += "\n// uip-firebase-messaging\ndependencies {\n    implementation 'com.google.firebase:firebase-messaging:25.0.1'\n}\n";
+    writeFileSync(appGradle, g);
+    console.log('[patch-android] firebase-messaging dependency added to android/app/build.gradle');
   }
 }

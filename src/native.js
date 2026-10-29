@@ -214,7 +214,7 @@ export function initNative() {
   setupExternalLinks();
   setTimeout(requestStartupPermissions, 2500);
   setupMediaPermissions();
-  import('@capacitor/app').then(({ App }) => { App.addListener('appStateChange', (st) => { if (st.isActive) recheckPermissions(); }); }).catch(() => {});
+  import('@capacitor/app').then(({ App }) => { App.addListener('appStateChange', (st) => { if (st.isActive) { recheckPermissions(); resyncPushOnResume(); } }); }).catch(() => {});
 }
 
 // ---- Android back button ---------------------------------------------------
@@ -984,6 +984,26 @@ async function ensurePushRegistered() {
   } catch { /* plugin unavailable / Firebase not configured in this build */ }
 }
 
+/** App came to the foreground: re-send the FCM token (also refreshes last_seen_at / recovers a failed first send) and open what a notification pointed to. */
+function resyncPushOnResume() {
+  if (!pushWanted) return;
+  sendPushToken();
+  ensurePushRegistered();
+  handleNativeLaunch();
+  try { window.dispatchEvent(new CustomEvent('uip:push-received', { detail: { resume: '1' } })); } catch { /* ignore */ }
+}
+
+/** The app was opened from our own incoming-call notification: go to that chat and poll for the call right now. */
+async function handleNativeLaunch() {
+  if (!isNative || !NativeLinksPerm?.consumeLaunch) return;
+  try {
+    const r = await NativeLinksPerm.consumeLaunch();
+    if (r?.link) openFromPush({ link_url: r.link });
+    if (r?.call_id) window.dispatchEvent(new CustomEvent('uip:push-received', { detail: { type: 'incoming_call', call_id: String(r.call_id) } }));
+  } catch { /* old APK without the method */ }
+}
+if (typeof window !== 'undefined') window.addEventListener('uip:native-launch', () => { handleNativeLaunch(); });
+
 export async function registerPush() {
   if (!isNative) return;
   pushWanted = true;
@@ -1006,6 +1026,9 @@ export async function registerPush() {
     } catch { pushListening = false; }
   }
   await ensurePushRegistered();
+  handleNativeLaunch();
+  // token is only sent when the plugin reports it; if that send failed earlier, try again shortly
+  setTimeout(sendPushToken, 8000);
 }
 
 export async function unregisterPush() {
