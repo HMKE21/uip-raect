@@ -35,6 +35,7 @@ const b64u = {
 
 let session = null;      // { kid, key: CryptoKey } — or { disabled: true } when the admin switched encryption off
 let pending = null;      // in-flight handshake promise
+let skewMs = 0;          // server clock minus this phone's clock (a phone whose clock is off by minutes made the server refuse every encrypted body)
 let plainUntil = 0;      // while Date.now() < this, the server said "encryption is off": send plain, don't re-handshake
 const PLAIN_RECHECK_MS = 60_000;
 
@@ -53,10 +54,11 @@ async function handshake() {
       body: JSON.stringify({ pub: b64u.enc(pub) }),
     }),
     // Every API call waits for this handshake; without a limit one stalled request froze the whole app on launch.
-    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('handshake timeout')), 12000); }),
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('handshake timeout')), 20000); }),
   ]).finally(() => clearTimeout(timer));
   if (!res.ok) throw new Error('handshake failed: HTTP ' + res.status);
   const { data } = await res.json();
+  if (data && Number(data.server_time) > 0) skewMs = Number(data.server_time) - Date.now();
   // Admin → Platform Policy turned response encryption off: no key is issued, everything is plain JSON.
   if (data && data.enabled === false) return { disabled: true };
   const serverPub = await subtle.importKey('raw', b64u.dec(data.server_pub), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
@@ -79,6 +81,14 @@ function ensureSession(force) {
     pending = handshake().then((s) => { session = s; return s; }).finally(() => { pending = null; });
   }
   return pending;
+}
+
+/** A request was refused with the key `failed`: negotiate a new one - but only once for all requests that failed together
+ *  (a page fires a dozen calls at once; one handshake each hit the server's 60/min handshake limit and kept replacing the key). */
+function renewSession(failed) {
+  if (session && session !== failed && !session.disabled) return Promise.resolve(session);
+  if (pending) return pending;
+  return ensureSession(true);
 }
 
 function isApiCall(input) {
@@ -141,7 +151,7 @@ async function encryptBody(url, method, headers, body, s) {
   const u = new URL(url, window.location.href);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const nonce = b64u.enc(crypto.getRandomValues(new Uint8Array(16)));
-  const plain = new TextEncoder().encode(JSON.stringify({ t: Date.now(), n: nonce, b: body }));
+  const plain = new TextEncoder().encode(JSON.stringify({ t: Date.now() + skewMs, n: nonce, b: body }));
   const out = await subtle.encrypt(
     { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(`uip-req|${s.kid}|${method}|${u.pathname}`), tagLength: 128 },
     s.reqKey, plain,
@@ -169,17 +179,29 @@ async function secureFetch(input, init) {
   if (Date.now() < plainUntil) return nativeFetch(input, init);
   let s;
   try {
-    s = await ensureSession(false);
+    try {
+      s = await ensureSession(false);
+    } catch (first) {
+      // One more try before giving up (cold server / slow mobile network): falling back to a plain request makes an enforcing
+      // server answer 428 "secure channel required", which is exactly what the APK showed on the login screen.
+      s = await ensureSession(true);
+    }
     if (s.disabled) { session = null; plainUntil = Date.now() + PLAIN_RECHECK_MS; return nativeFetch(input, init); }
   } catch (err) {
     // Visible in the browser console: tells you the encrypted channel is NOT active.
     if (!window.__uipEncWarned) { window.__uipEncWarned = true; console.warn('[secure-channel] handshake failed, sending plain requests:', err?.message || err); }
-    return nativeFetch(input, init);
+    const plain = await nativeFetch(input, init);
+    if (plain.status !== 428) return plain;
+    // The server enforces encryption: negotiate now (the network may have recovered) and resend once.
+    try {
+      s = await renewSession(null);
+      if (s.disabled) { session = null; plainUntil = Date.now() + PLAIN_RECHECK_MS; return plain; }
+    } catch { return plain; }
   }
 
   let res = await send(input, init, s);
-  if (res.status === 428) {
-    s = await ensureSession(true);
+  for (let attempt = 0; attempt < 2 && res.status === 428; attempt += 1) {
+    s = await renewSession(s);
     if (s.disabled) { session = null; plainUntil = Date.now() + PLAIN_RECHECK_MS; return nativeFetch(input, init); }
     res = await send(input, init, s);
   }
