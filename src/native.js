@@ -221,6 +221,7 @@ export function initNative() {
   Object.assign(UipXHR, NativeXHR);
   window.XMLHttpRequest = UipXHR;
 
+  checkWebViewVersion();
   patchDomUrls();
   setupBackButton();
   setupPullToRefresh();
@@ -229,6 +230,49 @@ export function initNative() {
   setTimeout(requestStartupPermissions, 2500);
   setupMediaPermissions();
   import('@capacitor/app').then(({ App }) => { App.addListener('appStateChange', (st) => { if (st.isActive) { recheckPermissions(); resyncPushOnResume(); } }); }).catch(() => {});
+}
+
+
+// ---- Old Android System WebView ---------------------------------------------------------------------------------------------
+// The app's styles need a reasonably modern WebView (CSS inset / logical properties / flex gap / aspect-ratio / container queries,
+// i.e. Chrome 105+). On Android 10 and older the WebView often stays at its factory version (Chrome 74-90), so the layout falls
+// apart. The WebView is a normal Play Store app that updates independently of Android itself: tell the person to update it.
+const MIN_WEBVIEW = 105;
+function checkWebViewVersion() {
+  try {
+    const m = /Chrome\/(\d+)/.exec(navigator.userAgent || '');
+    const v = m ? parseInt(m[1], 10) : 0;
+    if (!v) return;
+    document.documentElement.dataset.webview = String(v);
+    if (v >= MIN_WEBVIEW) return;
+    document.documentElement.classList.add('old-webview');
+    const KEY = 'uip_webview_hint';
+    try { if (localStorage.getItem(KEY) === String(v) && Date.now() - Number(localStorage.getItem(KEY + '_at') || 0) < 86400000) return; } catch { /* storage blocked */ }
+    const ar = (document.documentElement.lang || localStorage.getItem('uip_locale') || navigator.language || '').startsWith('ar');
+    const box = document.createElement('div');
+    box.dir = ar ? 'rtl' : 'ltr';
+    box.style.cssText = 'position:fixed;left:10px;right:10px;bottom:10px;z-index:2147483000;background:#1b2559;color:#fff;padding:14px 16px;border-radius:14px;font:600 13px/1.6 system-ui,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.4)';
+    const t = document.createElement('div');
+    t.textContent = ar
+      ? `نسخة Android System WebView على جهازك قديمة (${v}) فشكل التطبيق ممكن يبقى مكسور. حدّثها من Google Play وبعدها افتح التطبيق تاني.`
+      : `Your Android System WebView is outdated (${v}), so the app may look broken. Update it from Google Play, then reopen the app.`;
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;margin-top:10px;flex-wrap:wrap';
+    const a = document.createElement('a');
+    a.href = 'https://play.google.com/store/apps/details?id=com.google.android.webview';
+    a.target = '_blank';
+    a.textContent = ar ? 'تحديث WebView' : 'Update WebView';
+    a.style.cssText = 'background:#fff;color:#1b2559;padding:8px 14px;border-radius:999px;text-decoration:none;font-weight:700';
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = ar ? 'لاحقاً' : 'Later';
+    b.style.cssText = 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);padding:8px 14px;border-radius:999px;font:inherit';
+    b.onclick = () => { try { localStorage.setItem(KEY, String(v)); localStorage.setItem(KEY + '_at', String(Date.now())); } catch { /* ignore */ } box.remove(); };
+    row.append(a, b);
+    box.append(t, row);
+    const show = () => document.body.appendChild(box);
+    document.body ? setTimeout(show, 1500) : window.addEventListener('DOMContentLoaded', () => setTimeout(show, 1500));
+  } catch { /* never break the app for a hint */ }
 }
 
 // ---- Android back button ---------------------------------------------------
