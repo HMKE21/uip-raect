@@ -1038,7 +1038,7 @@ function pushDebug(msg) {
 /** Shown once, ~10 s after sign-in in the app: what the phone knows about push right now. */
 async function pushStatusBanner() {
   try {
-    const Push = await loadPush();
+    const Push = (await loadPush())?.plugin;
     let perm = 'plugin-missing';
     if (Push) { try { perm = (await Push.checkPermissions()).receive; } catch (e) { perm = `error:${e?.message || e}`; } }
     let token = '';
@@ -1049,11 +1049,15 @@ async function pushStatusBanner() {
   } catch { /* ignore */ }
 }
 
+/** Returns { plugin } (never the plugin itself): a Capacitor plugin is a Proxy, and returning/awaiting it from an async function makes
+ *  JS call plugin.then(), which Capacitor rejects with '"PushNotifications.then()" is not implemented on android' - registerPush used
+ *  to die on that line, silently, before ever asking for the token. */
 async function loadPush() {
   if (!isNative) return null;
-  if (PushPlugin) return PushPlugin;
-  try { ({ PushNotifications: PushPlugin } = await import('@capacitor/push-notifications')); } catch { PushPlugin = null; }
-  return PushPlugin;
+  if (!PushPlugin) {
+    try { ({ PushNotifications: PushPlugin } = await import('@capacitor/push-notifications')); } catch (e) { PushPlugin = null; pushDebug(`push plugin failed to load: ${String(e?.message || e).slice(0, 100)}`); }
+  }
+  return PushPlugin ? { plugin: PushPlugin } : null;
 }
 
 async function sendPushToken() {
@@ -1080,12 +1084,14 @@ function openFromPush(data) {
  *  native method and report the exact failure reason. Needs the APK built with the updated NativeLinksPlugin; older APKs skip it. */
 let nativeTokenTries = 0;
 async function nativeTokenFallback() {
-  if (!NativeLinksPerm?.getPushToken || nativeTokenTries >= 4) return;
+  if (nativeTokenTries >= 4) return;
+  if (!NativeLinksPerm?.getPushToken) { pushDebug('native getPushToken missing: old APK build'); return; }
   nativeTokenTries += 1;
   setTimeout(async () => {
     try { if (localStorage.getItem(PUSH_TOKEN_KEY)) return; } catch { /* storage blocked */ }
     try {
       const r = await NativeLinksPerm.getPushToken();
+      try { console.log('[UIP-PUSH] native token ' + (r?.token ? 'ok' : 'empty')); } catch { /* ignore */ }
       if (r?.token) {
         try { localStorage.setItem(PUSH_TOKEN_KEY, String(r.token)); } catch { /* storage blocked */ }
         sendPushToken();
@@ -1097,7 +1103,7 @@ async function nativeTokenFallback() {
 /** Registers this phone for push when the permission is granted (never asks: requestStartupPermissions owns the prompts). */
 async function ensurePushRegistered() {
   if (!pushWanted) return;
-  const Push = await loadPush();
+  const Push = (await loadPush())?.plugin;
   if (!Push) return;
   try {
     const p = await Push.checkPermissions();
@@ -1132,8 +1138,12 @@ if (typeof window !== 'undefined') window.addEventListener('uip:native-launch', 
 export async function registerPush() {
   if (!isNative) return;
   pushWanted = true;
-  const Push = await loadPush();
-  if (!Push) return;
+  try { console.log('[UIP-PUSH] registerPush start'); } catch { /* ignore */ }
+  // Status banner + native token path do not depend on the Capacitor push plugin, so a plugin that fails to load is visible, not silent.
+  if (!window.__uipPushStatusShown) { window.__uipPushStatusShown = true; setTimeout(pushStatusBanner, 10000); }
+  nativeTokenFallback();
+  const Push = (await loadPush())?.plugin;
+  if (!Push) { pushDebug('push plugin is not available in this build'); setTimeout(sendPushToken, 8000); return; }
   if (!pushListening) {
     pushListening = true;
     try {
@@ -1154,7 +1164,6 @@ export async function registerPush() {
   handleNativeLaunch();
   // token is only sent when the plugin reports it; if that send failed earlier, try again shortly
   setTimeout(sendPushToken, 8000);
-  if (!window.__uipPushStatusShown) { window.__uipPushStatusShown = true; setTimeout(pushStatusBanner, 10000); }
 }
 
 export async function unregisterPush() {
@@ -1167,7 +1176,7 @@ export async function unregisterPush() {
       try { const { api } = await import('./api/client'); await api.del('/api/v1/push/devices', { token }); } catch { /* server unreachable: it drops dead tokens by itself */ }
     }
     // Delete the phone's FCM token too, so the next account that signs in here gets a fresh one.
-    try { const Push = await loadPush(); await Push?.unregister?.(); } catch { /* ignore */ }
+    try { const Push = (await loadPush())?.plugin; await Push?.unregister?.(); } catch { /* ignore */ }
     try { localStorage.removeItem(PUSH_TOKEN_KEY); } catch { /* storage blocked */ }
   })();
   await Promise.race([work, new Promise((res) => setTimeout(res, 4000))]); // never block the sign-out button
