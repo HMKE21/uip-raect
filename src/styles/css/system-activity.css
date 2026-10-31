@@ -104,3 +104,19 @@
   .sa-refresh span { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .sa-skel__row i { animation: none; } }
+
+/* ---- table polish: nothing important wraps mid-value ---- */
+.sa-col-time { width: 1%; white-space: nowrap; }
+.sa-col-ip { width: 1%; white-space: nowrap; }
+.sa-col-sev { width: 1%; white-space: nowrap; }
+.sa-col-device { white-space: nowrap; }
+.sa-col-user { min-width: 170px; max-width: 260px; }
+.sa-ip { display: inline-block; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sa-user > span { word-break: normal; overflow-wrap: anywhere; }
+.sa-user strong { font-weight: 700; font-size: 13.5px; }
+.sa-user small { display: block; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sa-user--id i { background: var(--bg-muted); color: var(--text-secondary); }
+.sa-event { line-height: 1.5; overflow-wrap: anywhere; }
+.sa-table td { padding-block: 14px; }
+@media (max-width: 1100px) { .sa-col-device { white-space: normal; } }
+@media (max-width: 760px) { .sa-col-user, .sa-col-time, .sa-col-ip, .sa-col-sev, .sa-col-device { width: auto; max-width: none; min-width: 0; white-space: normal; } .sa-user small { max-width: 60vw; } }

@@ -22,6 +22,19 @@ const label = (v, t) => (v == null ? '' : typeof v === 'object' ? L(t, v.en, v.a
 const initials = (s) => String(s || '?').replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 const deviceIcon = (d) => (/mobile|phone/i.test(d || '') ? 'smartphone' : /tablet/i.test(d || '') ? 'tablet' : 'monitor');
 
+/** Who did it: a numeric id (no name stored) shows as "User #22", an e-mail shows its name part with the domain underneath. */
+function UserCell({ value, t }) {
+  const v = String(value);
+  if (/^\d+$/.test(v)) {
+    return <span className="sa-user sa-user--id"><i aria-hidden="true"><Icon name="user" size={15} /></i><span><strong>{t('User')} #{v}</strong></span></span>;
+  }
+  if (v.includes('@')) {
+    const [name, domain] = v.split('@');
+    return <span className="sa-user" title={v}><i>{initials(v)}</i><span><strong>{name}</strong><small>@{domain}</small></span></span>;
+  }
+  return <span className="sa-user" title={v}><i>{initials(v)}</i><span><strong>{v}</strong></span></span>;
+}
+
 function When({ value }) {
   if (!value) return <>—</>;
   const [d, tm] = String(value).slice(0, 19).replace('T', ' ').split(' ');
@@ -173,12 +186,12 @@ function SecurityTab() {
                   const dev = [r.device, r.browser, r.os].filter((v) => v && v !== '—');
                   return (
                     <tr key={i} data-sev={sev}>
-                      <td data-label={t('Time')}><When value={r.time} /></td>
+                      <td data-label={t('Time')} className="sa-col-time"><When value={r.time} /></td>
                       <td data-label={t('Event')} className="sa-event">{r.event}</td>
-                      <td data-label={t('User')}>{r.user ? <span className="sa-user"><i>{initials(r.user)}</i><span>{r.user}</span></span> : <span className="sa-muted">—</span>}</td>
-                      <td data-label={t('IP')}>{r.ip ? <code className="sa-ip">{r.ip}</code> : <span className="sa-muted">—</span>}</td>
-                      <td data-label={t('Device')}>{dev.length ? <span className="sa-device"><Icon name={deviceIcon(r.device)} size={15} />{dev.join(' · ')}</span> : <span className="sa-muted">—</span>}</td>
-                      <td data-label={t('Severity')}><span className={`sa-sev sa-sev--${sev}`}><Icon name={SEV_ICON[sev]} size={13} />{t(cap(sev))}</span></td>
+                      <td data-label={t('User')} className="sa-col-user">{r.user ? <UserCell value={r.user} t={t} /> : <span className="sa-muted">—</span>}</td>
+                      <td data-label={t('IP')} className="sa-col-ip">{r.ip ? <code className="sa-ip">{r.ip}</code> : <span className="sa-muted">—</span>}</td>
+                      <td data-label={t('Device')} className="sa-col-device">{dev.length ? <span className="sa-device"><Icon name={deviceIcon(r.device)} size={15} />{dev.join(' · ')}</span> : <span className="sa-muted">—</span>}</td>
+                      <td data-label={t('Severity')} className="sa-col-sev"><span className={`sa-sev sa-sev--${sev}`}><Icon name={SEV_ICON[sev]} size={13} />{t(cap(sev))}</span></td>
                     </tr>
                   );
                 })}
