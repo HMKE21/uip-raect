@@ -41,6 +41,7 @@
 import { examSessionHeaders } from '../lib/examSession';
 import { getExportLang } from '../lib/exportLang';
 import { getXhrChannel } from './secureTransport';
+import { activityHeaders, noteNetworkFailure } from '../lib/activityTracker';
 import { isNative, readNativeCookie, openUploadXhr, directUploadUrl } from '../native';
 
 /** Fired after every successful write (POST/PUT/PATCH/DELETE) so any mounted
@@ -272,6 +273,8 @@ async function rawRequest(method, path, { params, body, formData, headers, asRes
       ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       // Exam single-session: X-Device-Id (+ X-Exam-Session for /attempts/{id}) on exam-system calls only.
       ...examSessionHeaders(path),
+      // Which page / browser visit this call came from (per-user activity timeline, server side).
+      ...activityHeaders(),
       // Double-submit CSRF for the cookie-authenticated endpoints (the server checks it against the cookie).
       ...(csrf ? { 'X-CSRF-Token': csrf } : {}),
       ...headers,
@@ -288,9 +291,11 @@ async function rawRequest(method, path, { params, body, formData, headers, asRes
   }
 
   let response;
+  const startedAt = Date.now();
   try {
     response = await fetchWithRetry(method, path, url, opts);
-  } catch {
+  } catch (netErr) {
+    noteNetworkFailure({ method, path, message: netErr?.message || 'request failed', durationMs: Date.now() - startedAt });
     throw new ApiError(msg('Network error — please check your connection.', 'خطأ في الشبكة — من فضلك تحقق من اتصالك.'), 0, null);
   }
 

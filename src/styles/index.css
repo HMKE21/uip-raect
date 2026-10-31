@@ -111,6 +111,7 @@
 @import './css/tablet-fit.css';
 @import './css/responsive-forms.css';
 @import './css/admin-layout-fit.css';
+@import './css/user-activity.css';
 
 /* One sidebar design for every portal (Academic Staff look) — last so it wins over the per-shell sidebar rules */
 @import './css/sidebar-unified.css';

@@ -5,6 +5,7 @@ import { VirtualModeProvider } from './virtual/virtualMode';
 import MyPcAccessGate from './components/MyPcAccessGate';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import RealtimeBridge from './components/RealtimeBridge';
+import ActivityTracker from './components/ActivityTracker';
 import { readHeldFlag, readLockCache, readUnlockedFlag } from './desktop/desktopApi';
 import { STAFF_LOGIN_PATH } from './config/staffPortal';
 import StaffGate from './components/staff/StaffGate';
@@ -309,6 +310,7 @@ export default function App() {
         <DeviceGate>
         <AuthProvider>
           <AccountSettingsSync />
+          <ActivityTracker />
           {/* Virtual mode (UIP OS): the student's choice to run the whole platform inside the My PC desktop. */}
           <VirtualModeProvider>
           <RealtimeBridge />

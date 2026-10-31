@@ -12,6 +12,7 @@ import i18nPage from '../../i18n/admin/users';
 import { parseServerDate } from '../../utils/serverDate';
 import { ErrorState, Skeleton } from '../../components/admin/AdminPage';
 import AffiliationPanel from '../../components/admin/AffiliationPanel';
+import UserActivityPanel from '../../components/admin/UserActivityPanel';
 
 const translations = { ...i18nCommon, ...i18nPage };
 
@@ -19,7 +20,7 @@ const translations = { ...i18nCommon, ...i18nPage };
  * User Details (new page, /admin/users/:uuid). Built only on endpoints that already exist:
  *   GET    /api/v1/admin/users/{uuid}            profile + additional_roles
  *   GET    /api/v1/admin/roles, /roles/{slug}    role names + permission groups + granted_ids
- *   GET    /api/v1/admin/audit-logs?q=           activity (searched by the user's email)
+ *   GET    /api/v1/admin/users/{uuid}/activity[/summary|/sessions|/export]   per-user activity timeline (UserActivityPanel)
  *   POST   /api/v1/admin/users/{uuid}/suspend | activate | block-ip,  DELETE /users/{uuid}
  * Optional profile fields (last login, email verified, 2FA) are shown only when the API returns them.
  */
@@ -184,7 +185,7 @@ export default function AdminUserDetails() {
       </>)}
 
       {tab === 'permissions' && <PermissionsTab user={user} roles={roles} additional={additional} />}
-      {tab === 'activity' && <ActivityTab user={user} />}
+      {tab === 'activity' && <UserActivityPanel user={user} />}
 
       {tab === 'security' && (
         <div style={{ display: 'grid', gap: 14 }}>
@@ -316,40 +317,6 @@ function PermissionsTab({ user, roles, additional }) {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function ActivityTab({ user }) {
-  const t = useTranslations(translations);
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    api.get('/api/v1/admin/audit-logs', { page: 1, per_page: 15, q: user.email })
-      .then((json) => { if (!cancelled) setRows(json.data || []); })
-      .catch((err) => { if (!cancelled) setError(errorMessage(err)); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [user.email]);
-
-  return (
-    <div className="adm-panel">
-      <div className="adm-panel__head">
-        <div><h3>{t('Recent activity')}</h3><p>{t('Audit-log entries that mention')} {user.email}.</p></div>
-        <Link to="/admin/audit-logs" className="btn btn-outline btn-sm">{t('Open audit log')}</Link>
-      </div>
-      {loading && <Skeleton rows={6} cols={4} />}
-      {error && <ErrorState error={error} />}
-      {!loading && !error && rows.length === 0 && <p className="adm-empty">{t('No recorded activity for this user.')}</p>}
-      {rows.map((r, i) => (
-        <div key={i} className="adm-dot-item">
-          <span>{label(r.action, t)}{r.target ? ` — ${r.target}` : ''}</span>
-          <span className="adm-muted">{r.time ? r.time.slice(0, 16).replace('T', ' ') : ''}</span>
-        </div>
-      ))}
     </div>
   );
 }
