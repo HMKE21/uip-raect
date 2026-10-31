@@ -107,8 +107,11 @@ function DashboardShell() {
       });
     }).catch(() => {});
   }, [user]);
-  useEffect(() => { loadUnreadMessages(); }, [loadUnreadMessages]);
-  useLive(loadUnreadMessages, { watch: /\/(messaging|messages)(\/|$|\?)/, interval: 30000, enabled: !!user, topics: ['messaging'] });
+  // The My PC desktop is a full-screen overlay with its own notifications / clock / sync: while it is open the page shell below
+  // (sidebar, topbar, bottom bar, animated backdrop and every request they poll) is invisible work, so it is not mounted at all.
+  const inDesktopOs = /\/my-pc\/?$/.test(pathname);
+  useEffect(() => { if (!inDesktopOs) loadUnreadMessages(); }, [loadUnreadMessages, inDesktopOs]);
+  useLive(loadUnreadMessages, { watch: /\/(messaging|messages)(\/|$|\?)/, interval: 30000, enabled: !!user && !inDesktopOs, topics: ['messaging'] });
   useEffect(() => {
     const on = () => loadUnreadMessages();
     window.addEventListener('uip:push-received', on);
@@ -141,6 +144,14 @@ function DashboardShell() {
             <Outlet />
           </main>
         </div>
+      </PageMetaProvider>
+    );
+  }
+
+  if (inDesktopOs) {
+    return (
+      <PageMetaProvider>
+        <div data-portal={user?.role}><Outlet /></div>
       </PageMetaProvider>
     );
   }

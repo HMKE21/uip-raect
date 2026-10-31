@@ -156,7 +156,8 @@ export function useDesktopSync({ uid, state, apply }) {
   useEffect(() => {
     if (!synced) return undefined;
     const flush = () => { if (pending.current) { clearTimeout(timer.current); pushRef.current(); } };
-    const back = () => { if (document.visibilityState === 'visible') pullRef.current(false); else flush(); };
+    let lastBack = 0; // focus + visibilitychange both fire when the tab returns: pull once, and not more than every 20 s
+    const back = () => { if (document.visibilityState === 'visible') { if (Date.now() - lastBack < 20000) return; lastBack = Date.now(); pullRef.current(false); } else flush(); };
     document.addEventListener('visibilitychange', back); window.addEventListener('focus', back); window.addEventListener('pagehide', flush);
     const tick = setInterval(() => { if (document.visibilityState !== 'visible') return; if (pending.current && !busy.current) pushRef.current(); else pullRef.current(false); }, 45000);
     const retry = setInterval(() => { if (pending.current && !busy.current) pushRef.current(); }, 30000);

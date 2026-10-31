@@ -120,8 +120,9 @@ export function useDesktopSecurity({ uid, locked, onLock }) {
       } catch { /* offline: next beat */ }
     };
     beat();
-    const h = setInterval(beat, 20000);
-    const onVis = () => { if (document.visibilityState === 'visible') beat(); };
+    const h = setInterval(() => { beat(); }, 30000);
+    let lastBeat = Date.now();
+    const onVis = () => { if (document.visibilityState !== 'visible' || Date.now() - lastBeat < 15000) return; lastBeat = Date.now(); beat(); };
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('focus', onVis);
     return () => { dead = true; clearInterval(h); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('focus', onVis); };

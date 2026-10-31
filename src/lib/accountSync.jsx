@@ -126,12 +126,13 @@ function createEngine(uid) {
     if (sigOf(readLocal()) !== lastSig) { if (!dirtyAt) dirtyAt = Date.now(); run(); }
   };
 
-  const back = () => { if (document.visibilityState === 'visible') run(); };
+  let lastBack = 0; // focus + visibilitychange both fire when the tab returns: sync once, not more than every 20 s
+  const back = () => { if (document.visibilityState !== 'visible' || Date.now() - lastBack < 20000) return; lastBack = Date.now(); run(); };
   document.addEventListener('visibilitychange', back);
   window.addEventListener('focus', back);
   window.addEventListener('pagehide', watch);
   const w = setInterval(watch, 2500);
-  const p = setInterval(run, 60000);
+  const p = setInterval(() => { if (document.visibilityState === 'visible') run(); }, 180000); // lists the whole Desktop folder: every 3 min, visible tab only
   run();
   return () => {
     stopped = true; clearTimeout(timer); clearInterval(w); clearInterval(p);

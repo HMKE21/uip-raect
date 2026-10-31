@@ -163,7 +163,9 @@ const RUN_ALIASES = {
 function useDesktopFolder() {
   const [st, setSt] = useState({ id: null, items: [], binFull: false, usage: null, error: '', ready: false });
   const idRef = useRef(null);
-  const reload = useCallback(async () => {
+  const binRef = useRef(null); // last known "recycle bin has items"; the background poll reuses it instead of asking again
+  const reload = useCallback(async (arg) => {
+    const poll = !!(arg && arg.poll === true);
     const attempt = async () => {
       if (!idRef.current) {
         const root = await drive.list(null);
@@ -179,7 +181,9 @@ function useDesktopFolder() {
       let out;
       try { out = await attempt(); } catch (e) { idRef.current = null; out = await attempt(); }
       let binFull = false;
-      try { binFull = ((await drive.trashList()).data || []).length > 0; } catch { /* ignore */ }
+      if (poll && binRef.current !== null) binFull = binRef.current; // background poll: 2 requests instead of 3
+      else { try { binFull = ((await drive.trashList()).data || []).length > 0; } catch { binFull = binRef.current ?? false; } }
+      binRef.current = binFull;
       const items = out.listing.data.items || [];
       // the 45 s poll usually finds nothing new: keep the old state object so the whole desktop does not re-render
       setSt((prev) => {
@@ -193,7 +197,7 @@ function useDesktopFolder() {
     }
   }, []);
   // with the realtime socket connected the server pushes changes: the poll is only a safety net (3 min); without it, 45 s as before
-  useEffect(() => { reload(); let last = Date.now(); const h = setInterval(() => { if (document.visibilityState === 'hidden') return; if (Date.now() - last < (isRealtimeConnected() ? 180000 : 45000) - 2000) return; last = Date.now(); reload(); }, 15000); return () => clearInterval(h); }, [reload]);
+  useEffect(() => { reload(); let last = Date.now(); const h = setInterval(() => { if (document.visibilityState === 'hidden') return; if (Date.now() - last < (isRealtimeConnected() ? 180000 : 45000) - 2000) return; last = Date.now(); reload({ poll: true }); }, 15000); return () => clearInterval(h); }, [reload]);
   // optimistic: drop items from the list right away (e.g. after "Move to…"); the next reload brings back anything that failed
   const hideLocal = useCallback((ids) => { const gone = new Set(ids); setSt((x) => ({ ...x, items: x.items.filter((n) => !gone.has(n.id)) })); }, []);
   return [st, reload, hideLocal];

@@ -70,7 +70,8 @@ export function useDesktopWidgets(uid) {
     pull(true);
     const retry = setInterval(() => { if (!R.current.ready) pull(true); }, 5000);
     const tick = setInterval(() => { if (document.visibilityState === 'visible') pull(false); }, 45000);
-    const back = () => { if (document.visibilityState === 'visible') pull(false); else if (R.current.dirty) { clearTimeout(R.current.timer); push(); } };
+    let lastBack = 0; // focus + visibilitychange both fire when the tab returns: pull once, and not more than every 20 s
+    const back = () => { if (document.visibilityState === 'visible') { if (Date.now() - lastBack < 20000) return; lastBack = Date.now(); pull(false); } else if (R.current.dirty) { clearTimeout(R.current.timer); push(); } };
     const flush = () => { if (R.current.dirty) { clearTimeout(R.current.timer); push(); } };
     document.addEventListener('visibilitychange', back); window.addEventListener('focus', back); window.addEventListener('pagehide', flush);
     return () => { clearInterval(retry); clearInterval(tick); clearTimeout(R.current.timer); document.removeEventListener('visibilitychange', back); window.removeEventListener('focus', back); window.removeEventListener('pagehide', flush); };
