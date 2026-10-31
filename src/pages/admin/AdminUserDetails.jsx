@@ -169,20 +169,33 @@ export default function AdminUserDetails() {
         ))}
       </div>
 
-      {tab === 'overview' && (<>
-        <div className="adm-facts">
-          <Fact label={t('Primary role')}>{roleLabel(roles, user.role, t)}</Fact>
-          <Fact label={t('Status')}>{t(String(user.status || '').replace(/^./, (c) => c.toUpperCase()))}</Fact>
-          <Fact label={t('Phone')}>{user.phone}</Fact>
-          <Fact label={t('Joined')}>{fmtDate(user.created_at)}</Fact>
-          {(user.last_login_at || user.last_login) && <Fact label={t('Last sign-in')}>{fmtDate(user.last_login_at || user.last_login)}</Fact>}
-          {user.email_verified_at && <Fact label={t('Email verified')}>{fmtDate(user.email_verified_at)}</Fact>}
-          <Fact label={t('Additional access')}>
-            {additional.length ? additional.map((s) => roleLabel(roles, s, t)).join(', ') : t('None granted')}
-          </Fact>
+      {tab === 'overview' && (
+        <div className="adm-overview">
+          <section className="adm-overview__card" aria-label={t('Account')}>
+            <h3 className="adm-overview__title">{t('Account')}</h3>
+            <div className="adm-facts adm-facts--overview">
+              <Fact label={t('Primary role')}><RoleBadge roles={roles} slug={user.role} /></Fact>
+              <Fact label={t('Status')}><StatusBadge status={user.status} /></Fact>
+              <Fact label={t('Phone')}>{user.phone}</Fact>
+              <Fact label={t('Joined')}>{fmtDate(user.created_at)}</Fact>
+              <Fact label={t('Last sign-in')}>{fmtDate(user.last_login_at || user.last_login) || t('Never')}</Fact>
+              <Fact label={t('Email verified')}>{user.email_verified_at ? fmtDate(user.email_verified_at) : t('Not verified')}</Fact>
+            </div>
+            <div className="adm-access">
+              <div className="adm-access__head">
+                <strong>{t('Additional access')}</strong>
+                <span className="adm-access__count">{additional.length}</span>
+              </div>
+              {additional.length ? (
+                <div className="adm-access__chips">
+                  {additional.map((slug) => <span key={slug} className="adm-access__chip">{roleLabel(roles, slug, t)}</span>)}
+                </div>
+              ) : <p className="adm-muted">{t('None granted')}</p>}
+            </div>
+          </section>
+          <AffiliationPanel user={user} onChanged={load} />
         </div>
-        <AffiliationPanel user={user} onChanged={load} />
-      </>)}
+      )}
 
       {tab === 'permissions' && <PermissionsTab user={user} roles={roles} additional={additional} />}
       {tab === 'activity' && <UserActivityPanel user={user} />}

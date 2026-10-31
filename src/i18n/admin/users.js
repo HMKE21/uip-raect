@@ -1,6 +1,10 @@
 // Auto-extracted from api/app/Views/admin/users.php ($locale === 'ar' ? AR : EN pairs).
 // Shape matches useTranslations(dict) in context/LanguageContext.jsx.
 export default {
+  // User details → Overview
+  'Account': 'الحساب',
+  'Never': 'لم يسجّل دخولاً بعد',
+  'Not verified': 'غير مُفعَّل',
   // Delete / restore flow
   'Deleted': 'محذوف',
   'Restore': 'استرجاع',

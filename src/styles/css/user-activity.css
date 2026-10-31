@@ -114,3 +114,26 @@
   .uact-filters select.form-input, .uact-date { flex: 1 1 100%; }
   .uact-actions { justify-content: flex-start; }
 }
+
+/* ---- User details → Overview ---- */
+.adm-overview { display: grid; gap: 18px; }
+.adm-overview > .adm-panel { margin: 0; }
+.adm-overview__card { padding: 20px; border-radius: 20px; border: 1px solid var(--border-subtle); background: var(--bg-surface); box-shadow: var(--ap-card-shadow); display: grid; gap: 18px; }
+.adm-overview__title { margin: 0; font-size: 15px; font-weight: 800; letter-spacing: -.01em; }
+.adm-facts--overview { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.adm-facts--overview .adm-fact { display: grid; align-content: start; gap: 6px; min-height: 74px; padding: 14px 16px; border-radius: 14px; background: var(--bg-canvas, var(--bg-muted)); border: 1px solid var(--border-subtle); }
+.adm-facts--overview .adm-fact small { margin: 0; font-size: 11.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--text-secondary); }
+.adm-facts--overview .adm-fact strong { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; min-height: 24px; }
+.adm-access { padding: 16px; border-radius: 16px; border: 1px dashed var(--border-subtle); background: linear-gradient(180deg, rgba(var(--color-primary-rgb), .04), transparent); display: grid; gap: 12px; }
+.adm-access__head { display: flex; align-items: center; gap: 10px; font-size: 13.5px; }
+.adm-access__count { min-width: 24px; padding: 1px 8px; border-radius: 999px; text-align: center; font-size: 12px; font-weight: 800; background: rgba(var(--color-primary-rgb), .14); color: var(--color-primary); }
+.adm-access__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-access__chip { padding: 6px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 700; background: var(--bg-surface); border: 1px solid rgba(var(--color-primary-rgb), .3); color: var(--color-primary); }
+.adm-access .adm-muted { margin: 0; }
+@media (max-width: 900px) { .adm-facts--overview { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) {
+  .adm-overview__card { padding: 14px; border-radius: 16px; }
+  .adm-facts--overview { gap: 8px; }
+  .adm-facts--overview .adm-fact { padding: 12px; min-height: 0; }
+  .adm-facts--overview .adm-fact strong { font-size: 13.5px; overflow-wrap: anywhere; }
+}
