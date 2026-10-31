@@ -81,3 +81,40 @@
   .cs-main { padding: 14px 12px 22px; border-radius: 0; }
   .cs-main__title { display: none; }
 }
+
+/* ---------- Mobile: the settings page is a pinned full-screen app (see messaging-mobile.css), so the
+   section list + content must scroll INSIDE it. Before, the grid was neither a flex child nor a scroller:
+   body scroll is locked on this page, so everything below the first screen was unreachable. ---------- */
+@media (max-width: 760px) {
+  html body.msg-center-active .cs-page .cs {
+    display: flex; flex-direction: column; gap: 0; align-items: stretch;
+    flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden;
+    overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+    padding-bottom: calc(24px + var(--safe-bottom, 0px));
+  }
+  /* section chips stay pinned at the top of the scroller, one swipeable row */
+  html body.msg-center-active .cs-page .cs-nav {
+    position: sticky; top: 0; z-index: 3; flex: none; flex-direction: row; gap: 8px;
+    padding: 8px 12px; margin: 0; border: 0; border-bottom: 1px solid var(--border-subtle); border-radius: 0;
+    background: var(--bg-surface); overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-inline: 12px; scrollbar-width: none;
+  }
+  html body.msg-center-active .cs-page .cs-nav::-webkit-scrollbar { display: none; }
+  html body.msg-center-active .cs-page .cs-nav__item {
+    flex: none; scroll-snap-align: center; padding: 8px 14px; border-radius: 999px; font-size: 13.5px;
+    background: var(--glass-bg); white-space: nowrap;
+  }
+  html body.msg-center-active .cs-page .cs-nav__item.is-active { background: var(--color-primary); color: #fff; }
+  /* content: edge-to-edge, no card chrome, natural height */
+  html body.msg-center-active .cs-page .cs-main {
+    flex: none; padding: 16px 12px 8px; gap: 20px; border: 0; border-radius: 0; box-shadow: none; background: transparent;
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  html body.msg-center-active .cs-page .cs-row { padding: 12px 12px; gap: 10px; }
+  html body.msg-center-active .cs-page .cs-row__text strong { font-size: 14px; line-height: 1.35; }
+  html body.msg-center-active .cs-page .cs-row__value { max-width: 45%; font-size: 12.5px; line-height: 1.3; }
+  html body.msg-center-active .cs-page .cs-pad,
+  html body.msg-center-active .cs-page .cs-bio { padding: 12px; }
+  html body.msg-center-active .cs-page .cs-profile { padding: 12px; gap: 12px; }
+  html body.msg-center-active .cs-page .cs-chatlist { max-height: none; }
+  html body.msg-center-active .cs-page .cs-seg { flex-wrap: wrap; }
+}
