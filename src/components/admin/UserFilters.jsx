@@ -41,6 +41,14 @@ function Group({ icon, title, children }) {
   );
 }
 
+
+// "Newest first" / "A → Z" … instead of a bare arrow, so the current order is always readable.
+function dirLabel(tr, sort, dir) {
+  const isDate = sort === 'created_at' || sort === 'last_login_at';
+  if (isDate) return dir === 'asc' ? tr('Oldest first', 'الأقدم أولاً') : tr('Newest first', 'الأحدث أولاً');
+  return dir === 'asc' ? tr('A → Z', 'أ → ي') : tr('Z → A', 'ي → أ');
+}
+
 export default function UserFilters({ filters, onChange, roles, universities, facets, total, loading }) {
   const { locale } = useLanguage();
   const tr = (en, ar) => (locale === 'ar' ? ar : en);
@@ -171,27 +179,37 @@ export default function UserFilters({ filters, onChange, roles, universities, fa
           {qText && <button type="button" className="uf-search__x" onClick={() => { setQText(''); set({ q: '' }); }} aria-label={tr('Clear search', 'مسح البحث')}><Icon name="x" size={14} /></button>}
         </label>
 
-        <button type="button" className={`btn btn-outline uf-toggle${open ? ' is-open' : ''}`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-          <Icon name="filter" size={16} /> {tr('Filters', 'فلاتر')}
-          {count > 0 && <span className="uf-badge">{count}</span>}
-          <Icon name="chevron-down" size={14} />
-        </button>
 
-        <div className="uf-sort">
-          <select className="form-input" value={filters.sort} onChange={(e) => set({ sort: e.target.value })} aria-label={tr('Sort by', 'ترتيب حسب')}>
-            {SORTS.map(([v, n]) => <option key={v} value={v}>{tr('Sort', 'ترتيب')}: {n}</option>)}
-          </select>
-          <button type="button" className="btn btn-outline uf-dir" onClick={() => set({ dir: filters.dir === 'asc' ? 'desc' : 'asc' })}
-            title={filters.dir === 'asc' ? tr('Ascending', 'تصاعدي') : tr('Descending', 'تنازلي')} aria-label={tr('Toggle sort direction', 'عكس الترتيب')}>
-            <Icon name={filters.dir === 'asc' ? 'arrow-up' : 'arrow-down'} size={16} />
+        <div className="uf-controls">
+          <button type="button" className={`btn btn-outline uf-toggle${open ? ' is-open' : ''}`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+            <Icon name="filter" size={16} /> {tr('Filters', 'فلاتر')}
+            {count > 0 && <span className="uf-badge">{count}</span>}
+            <Icon name="chevron-down" size={14} />
           </button>
-          <select className="form-input uf-per" value={filters.per_page} onChange={(e) => set({ per_page: e.target.value })} aria-label={tr('Rows per page', 'عدد الصفوف')}>
-            {['20', '50', '100'].map((n) => <option key={n} value={n}>{n} / {tr('page', 'صفحة')}</option>)}
-          </select>
+          <div className="uf-sort" role="group" aria-label={tr('Sorting', 'الترتيب')}>
+            <span className="uf-sort__lbl">{tr('Sort', 'ترتيب')}</span>
+            <select className="form-input" value={filters.sort} onChange={(e) => set({ sort: e.target.value })} aria-label={tr('Sort by', 'ترتيب حسب')}>
+              {SORTS.map(([v, n]) => <option key={v} value={v}>{n}</option>)}
+            </select>
+            <button type="button" className="uf-dir" onClick={() => set({ dir: filters.dir === 'asc' ? 'desc' : 'asc' })}
+              title={tr('Reverse the order', 'عكس الترتيب')} aria-label={tr('Toggle sort direction', 'عكس الترتيب')}>
+              <svg className="uf-dir__ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {filters.dir === 'asc' ? <path d="M12 19V5M5 12l7-7 7 7" /> : <path d="M12 5v14M19 12l-7 7-7-7" />}
+              </svg>
+              <span>{dirLabel(tr, filters.sort, filters.dir)}</span>
+            </button>
+          </div>
+          <label className="uf-per-wrap">
+            <span className="uf-sr">{tr('Rows per page', 'عدد الصفوف')}</span>
+            <select className="form-input uf-per" value={filters.per_page} onChange={(e) => set({ per_page: e.target.value })}>
+              {['20', '50', '100'].map((n) => <option key={n} value={n}>{n} / {tr('page', 'صفحة')}</option>)}
+            </select>
+          </label>
         </div>
       </div>
 
       <div className="uf-quick" role="group" aria-label={tr('Quick views', 'عروض سريعة')}>
+        <span className="uf-quick__lbl">{tr('Quick views', 'عروض سريعة')}</span>
         {QUICK_VIEWS.map((v) => (
           <button key={v.id} type="button" className={`uf-pill${quickViewActive(filters, v) ? ' is-on' : ''}`} aria-pressed={quickViewActive(filters, v)} onClick={() => applyQuick(v)}>
             <Icon name={v.icon} size={14} /> {tr(v.en, v.ar)}
