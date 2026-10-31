@@ -13,6 +13,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { PageMetaProvider, PageMetaSync } from '../context/PageMetaContext';
 import { api } from '../api/client';
 import { useLive } from '../hooks/useLive';
+import { fetchSummary } from '../lib/appSummary';
 import { getPortalBrand } from '../config/portalBrand';
 import { ExamLockProvider, useExamLock } from '../context/ExamLockContext';
 import { useBackLayer, useSeedBackStack } from '../lib/backStack';
@@ -95,13 +96,16 @@ function DashboardShell() {
   // on realtime pings, when the app comes back to the foreground, and every 30 s as a safety net.
   const loadUnreadMessages = useCallback(() => {
     if (!user) return;
-    api.get('/api/v1/messaging/inbox')
-      .then((json) => {
+    // Preferred: the number from the shared app summary (no inbox download at all); old endpoint only as a fallback.
+    fetchSummary({ maxAge: 3000 }).then((sum) => {
+      if (sum && typeof sum.unread_messages === 'number') { setUnreadMessages(sum.unread_messages); return null; }
+      if (sum && sum.unread_messages === null && sum.permissions) return null; // no messaging access: no badge, no request
+      return api.get('/api/v1/messaging/inbox').then((json) => {
         const rows = Array.isArray(json?.data) ? json.data : null;
         if (!rows) return;
-        setUnreadMessages(rows.reduce((sum, c) => sum + (c.is_muted ? 0 : Number(c.unread_count || (c.is_unread ? 1 : 0))), 0));
-      })
-      .catch(() => {});
+        setUnreadMessages(rows.reduce((sum2, c) => sum2 + (c.is_muted ? 0 : Number(c.unread_count || (c.is_unread ? 1 : 0))), 0));
+      });
+    }).catch(() => {});
   }, [user]);
   useEffect(() => { loadUnreadMessages(); }, [loadUnreadMessages]);
   useLive(loadUnreadMessages, { watch: /\/(messaging|messages)(\/|$|\?)/, interval: 30000, enabled: !!user, topics: ['messaging'] });

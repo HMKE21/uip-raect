@@ -8,6 +8,7 @@ import { portalPrefix } from '../config/navConfig';
 import { getPortalBrand, pick } from '../config/portalBrand';
 import { AVATAR_EVENT, avatarSrc } from './insight/AvatarUploader';
 import { useLive, PROFILE_WRITE } from '../hooks/useLive';
+import { fetchSummary } from '../lib/appSummary';
 import { useTheme } from '../context/ThemeContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -111,10 +112,21 @@ export default function Topbar({ role, user, onMenuClick, onLogout, collapsed = 
   // Bell: list + unread count. Refreshes after notification/message writes and
   // polls every 30s so new notifications from other people appear on their own.
   const loadBell = useCallback(() => {
-    Promise.all([
-      api.get('/api/v1/notifications', { status: 'unread', per_page: 3 }),
-      api.get('/api/v1/notifications/counts'),
-    ])
+    // The counter comes from the shared app summary (already fetched for permissions/heartbeat); the list of the 3 newest
+    // unread is only requested when there is something unread. Old backend / failure => the two original calls.
+    fetchSummary({ maxAge: 3000 })
+      .then(async (sum) => {
+        const c = sum?.notification_counts;
+        if (c && typeof c.unread === 'number') {
+          const prevEmpty = bellSeen.current.ready && bellSeen.current.unread === 0;
+          const list = (c.unread === 0 && prevEmpty) ? { data: [] } : await api.get('/api/v1/notifications', { status: 'unread', per_page: 3 });
+          return [list, { data: c }];
+        }
+        return Promise.all([
+          api.get('/api/v1/notifications', { status: 'unread', per_page: 3 }),
+          api.get('/api/v1/notifications/counts'),
+        ]);
+      })
       .then(([list, counts]) => {
         setNotifications(list.data || []);
         const unread = counts.data?.unread ?? 0;

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { registerPush, unregisterPush } from '../native'; // [ANDROID]
 import { getGateToken } from '../config/staffGate';
 import { clearCache } from '../lib/draftStore';
+import { fetchSummary, resetSummary } from '../lib/appSummary';
 import { wipeLocalData } from '../lib/wipeLocalData';
 import { api, ApiError, getTokens, setTokens, clearTokens, restoreSession, markActivity, getLastActivity, getIdleMs, getStoredUser, setStoredUser, ACCESS_KEY, PERMISSION_DENIED_EVENT } from '../api/client';
 
@@ -282,24 +283,33 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const loadPermissions = useCallback(async () => {
+  const applyPermissions = useCallback((d) => {
+    setPermissions({ admin: !!d?.is_admin, set: new Set(d?.permissions || []) });
+    setJokerRoles(d?.is_joker ? (d?.available_roles || []) : []);
+  }, []);
+
+  const loadPermissions = useCallback(async (maxAge = 8000) => {
     try {
+      // One combined call (permissions + heartbeat + counters); the old endpoint is only the fallback.
+      const sum = await fetchSummary({ maxAge });
+      if (sum?.permissions) { applyPermissions(sum.permissions); return; }
+      api.get('/api/v1/session/heartbeat').catch(() => {}); // older backend without /app/summary
       const json = await api.get('/api/v1/auth/permissions');
-      setPermissions({ admin: !!json.data?.is_admin, set: new Set(json.data?.permissions || []) });
-      setJokerRoles(json.data?.is_joker ? (json.data?.available_roles || []) : []);
+      applyPermissions(json.data);
     } catch {
       /* keep the last known set; the server still enforces everything */
     }
-  }, []);
+  }, [applyPermissions]);
 
-  /** Load the permissions after sign-in and keep them fresh: when the tab regains focus,
-   *  right after the server says "permission_denied", and once a minute — so a permission
-   *  an admin revokes (or grants) in /admin/roles reaches an open session without re-login. */
+  /** Load the permissions after sign-in and keep them fresh: when the tab regains focus (at most once a minute),
+   *  right after the server says "permission_denied", and once a minute while the tab is visible — so a permission
+   *  an admin revokes (or grants) in /admin/roles reaches an open session without re-login. The same request is the
+   *  session heartbeat and carries the notification / unread-message counters (see lib/appSummary.js). */
   useEffect(() => {
-    if (status !== 'authenticated') { setPermissions(null); return undefined; }
+    if (status !== 'authenticated') { setPermissions(null); resetSummary(); return undefined; }
     registerPush(); // [ANDROID] phone notifications (no-op in the browser)
     loadPermissions();
-    const onVisible = () => { if (document.visibilityState === 'visible') loadPermissions(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') loadPermissions(55000); };
     // A polled endpoint (e.g. the unread-messages badge) can answer 403 every few seconds:
     // reload the list at most once per 10s so that never turns into a request storm.
     let lastDenied = 0;
@@ -307,11 +317,12 @@ export function AuthProvider({ children }) {
       const now = Date.now();
       if (now - lastDenied < 10000) return;
       lastDenied = now;
-      loadPermissions();
+      loadPermissions(0);
     };
     window.addEventListener(PERMISSION_DENIED_EVENT, onDenied);
     document.addEventListener('visibilitychange', onVisible);
-    const timer = setInterval(loadPermissions, 60000);
+    // Only while visible: a hidden tab does not need a heartbeat (the server keeps the session until logout).
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') loadPermissions(55000); }, 60000);
     return () => {
       window.removeEventListener(PERMISSION_DENIED_EVENT, onDenied);
       document.removeEventListener('visibilitychange', onVisible);
@@ -355,24 +366,7 @@ export function AuthProvider({ children }) {
     };
   }, [status, logout]);
 
-  /** Persistent sign-in: while this browser is open it sends a heartbeat every 20s (a plain GET, so it also
-   *  refreshes an expired access token, keeps "last active" fresh in the device list and notices a session
-   *  that was ended elsewhere). Closing the tab or the browser does NOT sign anyone out — only an explicit
-   *  logout, "sign out of this device", or the per-role device limit ends a session. */
-  useEffect(() => {
-    if (status !== 'authenticated') return undefined;
-    const beat = () => {
-      api.get('/api/v1/session/heartbeat').catch(() => { /* offline / session ended: normal requests handle it */ });
-    };
-    beat();
-    const timer = setInterval(beat, 20000);
-    const onVisible = () => { if (document.visibilityState === 'visible') beat(); };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearInterval(timer);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, [status, user?.id]);
+  // (the 20-second GET /session/heartbeat is gone: GET /app/summary above is the heartbeat, once a minute)
 
   /** POST /api/v1/auth/switch-role — joker accounts only. Swaps the token pair to the chosen role. */
   const switchRole = useCallback(async (role) => {

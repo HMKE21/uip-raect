@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { MUTATION_EVENT } from '../api/client';
-import { RT_EVENT } from '../lib/realtime';
+import { RT_EVENT, isRealtimeConnected } from '../lib/realtime';
 
 /**
  * Keeps a piece of UI in sync without a page reload.
@@ -25,15 +25,23 @@ export function useLive(refresh, { watch, interval = 0, debounce = 250, enabled 
     if (!enabled) return undefined;
     const re = watchSrc ? new RegExp(watchSrc) : null;
     let timer = null;
+    let lastRun = 0;
+    const run = () => { lastRun = Date.now(); ref.current?.(); };
     const fire = (ms) => { // `ms` is only a number when called by us; listeners pass an Event
       clearTimeout(timer);
-      timer = setTimeout(() => ref.current?.(), typeof ms === 'number' ? ms : debounce);
+      timer = setTimeout(run, typeof ms === 'number' ? ms : debounce);
+    };
+    // Returning to the tab / refocusing the window fires BOTH `focus` and `visibilitychange`, and people switch tabs all
+    // the time: re-fetch only if the data is at least MIN_GAP old (writes and realtime pings still refresh at once).
+    const MIN_GAP = 20000;
+    const onBack = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastRun < MIN_GAP) return;
+      fire();
     };
     const onMutation = (e) => {
       const path = e.detail?.path || '';
       if (!re || re.test(path)) fire();
     };
-    const onVisible = () => { if (document.visibilityState === 'visible') fire(); };
 
     // realtime ping from the Reverb socket (see lib/realtime.js): refresh now, ~40 ms coalescing
     const topicList = topicsKey ? topicsKey.split(',') : [];
@@ -44,10 +52,16 @@ export function useLive(refresh, { watch, interval = 0, debounce = 250, enabled 
 
     window.addEventListener(MUTATION_EVENT, onMutation);
     if (topicList.length) window.addEventListener(RT_EVENT, onRealtime);
-    window.addEventListener('focus', fire);
-    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onBack);
+    document.addEventListener('visibilitychange', onBack);
+    // While the realtime socket is connected the server pushes every change, so the poll is only a slow safety net.
     const poll = interval > 0
-      ? setInterval(() => { if (document.visibilityState === 'visible') ref.current?.(); }, interval)
+      ? setInterval(() => {
+        if (document.visibilityState !== 'visible') return;
+        const every = topicList.length && isRealtimeConnected() ? Math.max(interval * 6, 180000) : interval;
+        if (Date.now() - lastRun < every - 1000) return;
+        run();
+      }, interval)
       : null;
 
     return () => {
@@ -55,8 +69,8 @@ export function useLive(refresh, { watch, interval = 0, debounce = 250, enabled 
       if (poll) clearInterval(poll);
       window.removeEventListener(MUTATION_EVENT, onMutation);
       window.removeEventListener(RT_EVENT, onRealtime);
-      window.removeEventListener('focus', fire);
-      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onBack);
+      document.removeEventListener('visibilitychange', onBack);
     };
   }, [enabled, watchSrc, interval, debounce, topicsKey]);
 }

@@ -113,6 +113,14 @@ export async function getXhrChannel(force = false) {
   } catch { return null; }
 }
 
+const CAN_GZIP = typeof DecompressionStream !== 'undefined';
+
+/** Server compresses JSON before encrypting (envelope flag z:1) so the encrypted answer is ~5x smaller. */
+async function gunzip(buf) {
+  const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'));
+  return new Response(stream).arrayBuffer();
+}
+
 async function decryptText(text, status, s) {
   let env;
   try { env = JSON.parse(text); } catch { return text; }
@@ -122,7 +130,7 @@ async function decryptText(text, status, s) {
     { name: 'AES-GCM', iv: raw.slice(0, 12), additionalData: new TextEncoder().encode(`uip-resp|${s.kid}|${status}`), tagLength: 128 },
     s.key, raw.slice(12),
   );
-  return new TextDecoder().decode(plain);
+  return new TextDecoder().decode(env.z ? await gunzip(plain) : plain);
 }
 
 async function decryptResponse(res, s) {
@@ -141,7 +149,7 @@ async function decryptResponse(res, s) {
   );
   const headers = new Headers(res.headers);
   ['content-length', 'content-encoding', 'etag'].forEach((h) => headers.delete(h));
-  return new Response(plain, { status: res.status, statusText: res.statusText, headers });
+  return new Response(env.z ? await gunzip(plain) : plain, { status: res.status, statusText: res.statusText, headers });
 }
 
 /** JSON string bodies of write requests are sent as an AES-GCM envelope (uploads/FormData stay as is). */
@@ -165,10 +173,12 @@ async function send(input, init, s) {
   if (input instanceof Request) {
     const headers = new Headers(input.headers);
     headers.set('X-Enc-Kid', s.kid);
+    if (CAN_GZIP) headers.set('X-Enc-Z', '1');
     return nativeFetch(new Request(input.clone(), { headers }), init);
   }
   const headers = new Headers(init?.headers || undefined);
   headers.set('X-Enc-Kid', s.kid);
+  if (CAN_GZIP) headers.set('X-Enc-Z', '1'); // "I can open a gzip-then-encrypted answer"
   const method = String(init?.method || 'GET').toUpperCase();
   const body = await encryptBody(input, method, headers, init?.body, s);
   return nativeFetch(input, { ...(init || {}), headers, ...(body !== undefined ? { body } : {}) });

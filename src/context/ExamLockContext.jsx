@@ -43,7 +43,7 @@ export function ExamLockProvider({ enabled, children }) {
   useEffect(() => {
     if (!enabled) return undefined;
     refresh();
-    const iv = setInterval(refresh, POLL_MS);
+    const iv = setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, POLL_MS); // hidden tab: no request
     return () => clearInterval(iv);
   }, [enabled, refresh]);
 

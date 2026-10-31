@@ -641,8 +641,39 @@ async function uploadRequest(method, path, formData, onProgress, signal) {
   }
 }
 
+// ---- GET de-duplication ----------------------------------------------------
+// Several shell components (topbar, sidebar, gates...) ask for the SAME endpoint within the same
+// moment on every page load. Identical GETs that are still in flight now share ONE network request,
+// and a few cheap "shell" endpoints are also remembered for a few seconds. Any successful write
+// (MUTATION_EVENT) forgets everything, so screens never show stale data after a change.
+const SHARED_GET_TTL_MS = 4000;
+const SHAREABLE_GET = /^\/api\/v1\/(notifications(\/counts)?(\?|$)|guides(\?|$)|students\/me\/access|auth\/(permissions|mfa\/status)|device-status|app\/summary)/;
+const sharedGets = new Map(); // key -> { at, settled, promise }
+const cloneResult = (r) => {
+  if (typeof Response !== 'undefined' && r instanceof Response) return r.clone();
+  try { return typeof structuredClone === 'function' ? structuredClone(r) : JSON.parse(JSON.stringify(r)); } catch { return r; }
+};
+if (typeof window !== 'undefined') {
+  window.addEventListener(MUTATION_EVENT, () => sharedGets.clear());
+}
+function sharedGet(path, params) {
+  const key = `${(getTokens().accessToken || '').slice(-24)}|${path}|${params ? JSON.stringify(params) : ''}`;
+  const hit = sharedGets.get(key);
+  if (hit && (!hit.settled || (SHAREABLE_GET.test(path) && Date.now() - hit.at < SHARED_GET_TTL_MS))) {
+    return hit.promise.then(cloneResult);
+  }
+  const entry = { at: Date.now(), settled: false, promise: null };
+  entry.promise = request('GET', path, { params }).then(
+    (r) => { entry.settled = true; entry.at = Date.now(); return r; },
+    (e) => { sharedGets.delete(key); throw e; },
+  );
+  sharedGets.set(key, entry);
+  if (sharedGets.size > 200) sharedGets.delete(sharedGets.keys().next().value);
+  return entry.promise.then(cloneResult);
+}
+
 export const api = {
-  get: (path, params, headers) => request('GET', path, { params, ...(headers ? { headers } : {}) }),
+  get: (path, params, headers) => (headers ? request('GET', path, { params, headers }) : sharedGet(path, params)),
   /** GET a file. Same Bearer + refresh-on-401 path as every other call; returns the Response. */
   blob: (path, params, headers) => request('GET', path, { params, asResponse: true, headers: { Accept: '*/*', ...(headers || {}) } }),
   post: (path, body, headers) => request('POST', path, { body, ...(headers ? { headers } : {}) }),
