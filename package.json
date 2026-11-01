@@ -15,7 +15,10 @@
     "android:patch": "node scripts/patch-android.mjs",
     "predev": "node scripts/copy-ocr-assets.mjs",
     "prebuild": "node scripts/copy-ocr-assets.mjs",
-    "prebuild:native": "node scripts/copy-ocr-assets.mjs"
+    "prebuild:native": "node scripts/copy-ocr-assets.mjs",
+    "css:audit": "python3 scripts/css-audit.py",
+    "css:audit:report": "python3 scripts/css-audit.py --report",
+    "css:guard": "python3 scripts/css-audit.py --check 473"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
