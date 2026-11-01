@@ -123,19 +123,18 @@
    It used to render with a transparent background and, on phones, `position: fixed` inside the animated sheet, so it landed
    ON TOP of the text field. Now it is a solid dark popover anchored just above the field, never wider than the screen. */
 .meeting-chat-panel__compose { position: relative; }
-.meeting-chat-panel__field .att-sheet {
-  position: absolute; inset-block: auto calc(100% + 12px); inset-inline: 0 auto; z-index: 60; display: grid;
-  width: min(320px, calc(100vw - 28px)); box-sizing: border-box;
-  grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 6px; padding: 14px 10px;
+/* the shared attach menu (components/messaging/AttachMenu): dark list popover anchored above the field, on every screen size */
+.meeting-chat-panel__field .att-scrim { display: none; }
+.meeting-chat-panel__field .att-menu {
+  position: absolute; inset-block: auto calc(100% + 12px); inset-inline: 0 auto; z-index: 60; display: flex; flex-direction: column; gap: 1px;
+  width: min(250px, calc(100vw - 28px)); min-width: 0; box-sizing: border-box; padding: 8px; border-radius: 18px;
   background: var(--mr-surface-2, #1c1f2a); color: var(--mr-text, #fff);
-  border: 1px solid var(--mr-line-strong, rgba(255,255,255,.16)); border-radius: 18px; box-shadow: 0 18px 44px var(--mr-shadow, rgba(0,0,0,.5));
+  border: 1px solid var(--mr-line-strong, rgba(255,255,255,.16)); box-shadow: 0 18px 44px var(--mr-shadow, rgba(0,0,0,.5));
 }
-.meeting-chat-panel__field .att-wrap { position: relative; display: inline-flex; }
-/* messaging-pro.css (the normal chat's stylesheet) is not always loaded on the meeting route, so the tile layout is defined here too */
-.meeting-chat-panel__field .att-sheet .att-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; padding: 4px 0; border: 0; background: none; cursor: var(--cur-pointer, pointer); color: var(--mr-text, #fff); }
-.meeting-chat-panel__field .att-sheet .att-tile__icon { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; flex-shrink: 0; }
-.meeting-chat-panel__field .att-sheet .att-tile__label { text-align: center; }
-.meeting-chat-panel__field .att-sheet .att-tile__label { font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; color: var(--mr-text, #fff); }
+.meeting-chat-panel__field .att-item { flex-direction: row; gap: 14px; padding: 9px 12px; text-align: start; font-size: 14px; color: var(--mr-text, #fff); }
+.meeting-chat-panel__field .att-item:hover { background: var(--mr-fill-2, rgba(255,255,255,.08)); }
+.meeting-chat-panel__field .att-item__icon { width: 34px; height: 34px; border-radius: 10px; color: var(--att-c); background: color-mix(in srgb, var(--att-c) 18%, transparent); }
+.meeting-chat-panel__field .att-slot.has-divider { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--mr-line, rgba(255,255,255,.12)); }
 .meeting-chat-panel__field { position: relative; }
 
 /* ---- control dock on small phones: the 10 buttons scale with the screen width (no overflow, so popovers above the dock stay visible) ---- */

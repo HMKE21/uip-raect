@@ -847,5 +847,5 @@ a.meeting-files-panel__name:hover { text-decoration: underline; }
 }
 .meeting-chat-panel__field .att-wrap .msg-icon-btn:hover,
 .meeting-chat-panel__field .att-wrap .msg-icon-btn.is-active { background: var(--mr-fill-2); color: var(--mr-text); }
-.meeting-chat-panel__field .att-sheet { z-index: 30; grid-template-columns: repeat(3, 78px); }
+.meeting-chat-panel__field .att-menu { z-index: 30; }
 .meeting-chat-panel__picked button { cursor: var(--cur-pointer, pointer); }

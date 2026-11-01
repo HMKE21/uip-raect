@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { loadAttachmentBlob } from '../../lib/chatMedia';
 import { createPortal } from 'react-dom';
 import { api } from '../../api/client';
 import { useLanguage } from '../../context/LanguageContext';
@@ -84,8 +85,7 @@ export function menuToast(text) {
 
 /** Clipboard accepts PNG only, so GIF / WebP / SVG stickers are redrawn on a canvas first. */
 export async function copyImageToClipboard(url) {
-  const res = await fetch(url, { credentials: 'include' });
-  const blob = await res.blob();
+  const blob = await loadAttachmentBlob(url);
   const bmp = await createImageBitmap(blob);
   const canvas = document.createElement('canvas');
   canvas.width = bmp.width; canvas.height = bmp.height;
@@ -95,8 +95,7 @@ export async function copyImageToClipboard(url) {
 }
 
 export async function downloadFromUrl(url, filename) {
-  const res = await fetch(url, { credentials: 'include' });
-  const blob = await res.blob();
+  const blob = await loadAttachmentBlob(url);
   const a = document.createElement('a');
   const obj = URL.createObjectURL(blob);
   a.href = obj; a.download = filename || 'sticker';

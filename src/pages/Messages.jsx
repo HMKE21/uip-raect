@@ -65,9 +65,9 @@ import { autoSaveAvailable, autoSaveMessages, isAutoSaveOn, setAutoSaveOn } from
  * mentions, groups, presence, typing, search, categories,
  * favorite/mute/archive, poll voting).
  *
- * Sending GIFs/stickers is intentionally not exposed here (composer has
- * no GIF/sticker picker) — existing gif/sticker messages still render
- * fine in ThreadPanel, this only removes the ability to send new ones.
+ * The composer has the WhatsApp-style picker: emoji, GIF (Giphy through the API) and stickers (personal library +
+ * "New sticker" maker). Text, stickers and GIFs are sent optimistically: the bubble appears instantly and is settled by
+ * the response (or marked failed with Retry).
  */
 
 const BASE = '/api/v1/messaging';
@@ -746,9 +746,56 @@ export default function Messages() {
   const patchTmp = (tmpId, patch) =>
     setMessages((prev) => prev.map((m) => (m.id === tmpId ? { ...m, ...patch } : m)));
 
+  // ---- instant sends (text, stickers, GIFs): the bubble shows up immediately, the request settles it afterwards.
+  const mkTmp = (extra) => ({
+    id: `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    is_tmp: true,
+    conversation_id: activeId,
+    body: null,
+    message_type: 'text',
+    sender_id: user?.id,
+    sender_name: user?.full_name || (ar ? 'أنت' : 'You'),
+    is_mine: true,
+    created_at: new Date().toISOString(),
+    attachments: [],
+    parent_message_id: null,
+    reactions: [],
+    mentions: [],
+    ...extra,
+  });
+  const settleTmp = (tmpId, convId, real) => {
+    if (String(activeIdRef.current) === String(convId)) {
+      setMessages((prev) => {
+        const without = prev.filter((m) => m.id !== tmpId);
+        return without.some((m) => String(m.id) === String(real.id)) ? without : [...without, real];
+      });
+    }
+    lastPollIdRef.current = Math.max(Number(lastPollIdRef.current) || 0, Number(real.id) || 0);
+    loadInbox();
+  };
+  const runSend = async (tmpId) => {
+    const job = uploadsRef.current[tmpId];
+    if (!job?.send) return;
+    patchTmp(tmpId, { failed: false, is_tmp: true, upload_error: null });
+    try {
+      const data = await job.send();
+      delete uploadsRef.current[tmpId];
+      settleTmp(tmpId, job.convId, { ...data, _sentAt: Date.now() });
+    } catch (err) {
+      patchTmp(tmpId, { failed: true, upload_error: err?.message || (ar ? 'تعذّر الإرسال.' : 'Could not send.') });
+    }
+  };
+  const queueSend = (extra, send) => {
+    const tmp = mkTmp(extra);
+    uploadsRef.current[tmp.id] = { convId: activeId, send };
+    setMessages((prev) => [...prev, tmp]);
+    runSend(tmp.id);
+  };
+
   const runUpload = async (tmpId) => {
     const job = uploadsRef.current[tmpId];
     if (!job) return;
+    if (job.send) { runSend(tmpId); return; }
     const { convId, body, files, parentId, denoise } = job;
     // Big files (> 4 MB) go up in 3 MB pieces first (lib/chunkedUpload.js), then the message is sent with their ids; small ones
     // stay in the normal request. The message lists the small files first, then the big ones (denoise[] follows that order).
@@ -897,18 +944,38 @@ export default function Messages() {
       setReplyTarget(null);
       return;
     }
-    const fd = new FormData();
-    fd.append('body', body);
-    if (replyTarget) fd.append('parent_message_id', replyTarget.id);
+    const convId = activeId;
+    const parent = replyTarget;
     setReplyTarget(null);
-    try {
-      const res = await api.postForm(BASE + '/conversations/' + activeId + '/messages', fd);
-      setMessages((prev) => [...prev, { ...res.data, _sentAt: Date.now() }]);
-      lastPollIdRef.current = res.data.id;
-      loadInbox();
-    } catch (err) {
-      showError(err);
-    }
+    queueSend(
+      { body, parent_message_id: parent ? parent.id : null, parent_body: parent?.body || null, parent_sender_name: parent?.sender_name || null },
+      async () => {
+        const fd = new FormData();
+        fd.append('body', body);
+        if (parent) fd.append('parent_message_id', parent.id);
+        return (await api.postForm(BASE + '/conversations/' + convId + '/messages', fd)).data;
+      },
+    );
+  };
+
+  // Stickers: from my library (sticker_id), a received/favourite one (attachment_id) or a freshly made file.
+  const onSendSticker = (st) => {
+    if (!activeId || !st) return;
+    const convId = activeId;
+    queueSend({ message_type: 'sticker', metadata: { url: st.url, kind: st.kind } }, async () => {
+      const fd = new FormData();
+      if (st.file) fd.append('sticker', st.file, st.file.name);
+      else if (st.libId) fd.append('sticker_id', String(st.libId));
+      else if (st.attId) fd.append('attachment_id', String(st.attId));
+      return (await api.postForm(BASE + '/conversations/' + convId + '/sticker-message', fd)).data;
+    });
+  };
+  const onSendGif = (g) => {
+    if (!activeId || !g?.url) return;
+    const convId = activeId;
+    queueSend({ message_type: 'gif', metadata: { url: g.url, title: g.title || '' } }, async () => (
+      (await api.post(BASE + '/conversations/' + convId + '/gif-message', { url: g.url, title: g.title || '', preview: g.preview || '' })).data
+    ));
   };
 
   const onEditMessage = async (id, body) => {
@@ -1595,6 +1662,8 @@ export default function Messages() {
         onStopLive={onStopLive}
         onSendLocation={onSendLocation}
         onStartLiveLocation={onStartLiveLocation}
+        onSendSticker={onSendSticker}
+        onSendGif={onSendGif}
         typingUsers={typingUsers}
         onOpenInfo={toggleInfo}
         infoOpen={infoOpen}

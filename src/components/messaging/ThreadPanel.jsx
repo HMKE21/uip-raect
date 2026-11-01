@@ -29,14 +29,18 @@ import { isNative, canCacheNatively } from '../../native';
 import { systemLine, fileKind, typeLabel } from './groupText';
 import CallBubble from '../calls/CallBubble';
 import { useCall } from '../../context/callCtx';
-import EmojiPicker from './EmojiPicker';
+import ChatPicker from './ChatPicker';
+import StickerMaker from './StickerMaker';
+import StickerMedia from './StickerMedia';
 import AttachMenu from './AttachMenu';
+import { createMySticker, toSticker } from '../../lib/stickerStore';
 import CameraCaptureModal from './CameraCaptureModal';
 import ViewOnceMedia from './ViewOnceMedia';
 import { MessageContextMenu, DeleteMessageDialog, MessageInfoPanel, StarredMessagesModal, MIcon, menuToast, copyImageToClipboard, downloadFromUrl, loadFavourites, setFavLocal } from './MessageMenu';
 import LinkCard, { firstUrl } from './LinkCard';
 import { LocationBubble, LiveLocationBubble, LocationShareModal } from './LocationMessage';
 import '../../styles/css/messaging-pro.css';
+import '../../styles/css/chat-picker.css';
 
 /** Sent / delivered / read ticks (WhatsApp style): ✓ grey, ✓✓ grey, ✓✓ blue. */
 
@@ -222,7 +226,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
   const [showInfo, setShowInfo] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [isFav, setIsFav] = useState(false);
-  const stickerUrl = (m.message_type === 'sticker' || m.message_type === 'gif') ? (m.metadata?.url || '') : '';
+  const stickerUrl = (m.message_type === 'sticker' || m.message_type === 'gif') ? (m.metadata?.url || m.attachments?.[0]?.url || '') : '';
   const openCtx = ({ x, y, touch }) => {
     let selectedText = '';
     try {
@@ -250,7 +254,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
   // After a long press the finger is lifted over the photo: that must not count as a tap (enlarge / play).
   const swallowClickRef = useRef(0);
   const onPressStart = (e) => {
-    if (selectMode || !touchMode() || m.pending || m.failed || e.touches?.length > 1) return;
+    if (selectMode || !touchMode() || m.pending || m.failed || m.is_tmp || e.touches?.length > 1) return;
     if (pressBlocked(e.target)) return;
     cancelPress();
     pressRef.current.x = e.touches[0].clientX; pressRef.current.y = e.touches[0].clientY;
@@ -345,9 +349,16 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
   } else if (m.message_type === 'gif' && m.metadata) {
     isMedia = true;
     body = <img className="msg-gif-img" src={m.metadata.url} alt={m.metadata.title || 'GIF'} loading="lazy" />;
-  } else if (m.message_type === 'sticker' && m.metadata) {
+  } else if (m.message_type === 'sticker' && (m.metadata?.url || m.attachments?.[0]?.url)) {
     isMedia = true;
-    body = <img className="msg-sticker-img" src={m.metadata.url} alt={m.metadata.label || t('Sticker', 'ملصق')} loading="lazy" />;
+    body = (
+      <StickerMedia
+        className="msg-sticker-bubble"
+        url={m.metadata?.url || m.attachments[0].url}
+        kind={m.metadata?.kind || m.attachments?.[0]?.kind}
+        alt={m.metadata?.label || t('Sticker', 'ملصق')}
+      />
+    );
   } else {
     body = (
       <>
@@ -466,7 +477,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
       onTouchEnd={onPressEnd}
       onTouchCancel={cancelPress}
       onClickCapture={onClickCapture}
-      onContextMenu={(e) => { if (selectMode || m.pending || m.failed || pressBlocked(e.target)) return; e.preventDefault(); openCtx({ x: e.clientX, y: e.clientY, touch: touchMode() }); }}
+      onContextMenu={(e) => { if (selectMode || m.pending || m.failed || m.is_tmp || pressBlocked(e.target)) return; e.preventDefault(); openCtx({ x: e.clientX, y: e.clientY, touch: touchMode() }); }}
     >
       {selectMode ? (
         <span className={`msg-sel-dot msg-sel-dot--row${selected ? ' is-on' : ''}`} aria-hidden="true">{selected ? <Icon name="check" size={13} /> : null}</span>
@@ -593,7 +604,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
             </span>
           )}
           {m.is_mine && !m.pending && !m.failed && !isEditing && !m.is_tmp && !savedChat && <Ticks status={m.receipt_status || 'sent'} />}
-          {m.is_mine && !m.pending && !m.failed && !isEditing && <SentActions m={m} onUndo={onUndoSend} onDelete={onDelete} />}
+          {m.is_mine && !m.pending && !m.failed && !m.is_tmp && !isEditing && <SentActions m={m} onUndo={onUndoSend} onDelete={onDelete} />}
         </div>
       </div>
       {ctx && (
@@ -604,7 +615,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
           m={m}
           onClose={() => setShowInfo(false)}
           preview={stickerUrl
-            ? <img src={stickerUrl} alt="" />
+            ? (m.message_type === 'sticker' ? <StickerMedia url={stickerUrl} kind={m.metadata?.kind} /> : <img src={stickerUrl} alt="" />)
             : (textToCopy || (m.attachments?.length ? t('Attachment', 'مرفق') : ''))}
         />
       )}
@@ -937,6 +948,8 @@ export default function ThreadPanel({
   onStopLive,
   onSendLocation,
   onStartLiveLocation,
+  onSendSticker,
+  onSendGif,
   typingUsers,
   onOpenInfo,
   onBack,
@@ -974,6 +987,8 @@ export default function ThreadPanel({
   const { user: authUser } = useAuth();
   const [groupCallBusy, setGroupCallBusy] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showMaker, setShowMaker] = useState(false);
+  const [stickersRev, setStickersRev] = useState(0);
   const [showLocation, setShowLocation] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [starredOpen, setStarredOpen] = useState(false);
@@ -1004,6 +1019,7 @@ export default function ThreadPanel({
   const emojiPopoverRef = useRef(null);
   const mediaInputRef = useRef(null);
   const cameraInputRef = useRef(null);
+  const audioInputRef = useRef(null);
   const [showCamera, setShowCamera] = useState(false);
   const [showJump, setShowJump] = useState(false);
   const [unseen, setUnseen] = useState(0);
@@ -1672,6 +1688,10 @@ export default function ThreadPanel({
                 canMedia={typeOk('image') || typeOk('video')}
                 canPoll={typeOk('poll') && !!onOpenPollModal}
                 canLocation={typeOk('text') && !!onSendLocation}
+                canAudio={typeOk('audio')}
+                canSticker={typeOk('sticker') && !!onSendSticker}
+                onPickAudio={() => audioInputRef.current?.click()}
+                onNewSticker={() => setShowMaker(true)}
                 onPickFiles={() => fileInputRef.current?.click()}
                 onPickMedia={() => mediaInputRef.current?.click()}
                 onPickCamera={() => {
@@ -1684,6 +1704,21 @@ export default function ThreadPanel({
             )}
             <input type="file" accept="image/*,video/*" multiple hidden ref={mediaInputRef}
               onChange={(e) => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }} />
+            <input type="file" accept="audio/*" multiple hidden ref={audioInputRef}
+              onChange={(e) => { if (e.target.files?.length) handleFiles(e.target.files); e.target.value = ''; }} />
+            {showMaker && (
+              <StickerMaker
+                ar={ar}
+                onClose={() => setShowMaker(false)}
+                onSave={async (file) => { await createMySticker(file); setStickersRev((n) => n + 1); }}
+                onSend={async (file) => {
+                  // keep it in the library AND send it, so it is one tap away next time
+                  let saved = null;
+                  try { saved = await createMySticker(file); setStickersRev((n) => n + 1); } catch { /* still send it */ }
+                  if (saved) onSendSticker?.(saved); else onSendSticker?.({ file, url: URL.createObjectURL(file), kind: file.type.startsWith('video/') ? 'video' : 'image' });
+                }}
+              />
+            )}
             {showLocation && (
               <LocationShareModal
                 onClose={() => setShowLocation(false)}
@@ -1761,7 +1796,17 @@ export default function ThreadPanel({
             />
             {showEmoji && (
               <div className="msg-emoji-popover msg-emoji-popover--pro" ref={emojiPopoverRef}>
-                <EmojiPicker ar={ar} onClose={() => setShowEmoji(false)} onPick={insertEmoji} />
+                <ChatPicker
+                  ar={ar}
+                  onClose={() => setShowEmoji(false)}
+                  onPickEmoji={insertEmoji}
+                  canSticker={typeOk('sticker') && !!onSendSticker}
+                  canGif={typeOk('gif') && !!onSendGif}
+                  onSendSticker={(st) => onSendSticker?.(toSticker(st))}
+                  onSendGif={(g) => onSendGif?.(g)}
+                  onNewSticker={() => { setShowEmoji(false); setShowMaker(true); }}
+                  refreshKey={stickersRev}
+                />
               </div>
             )}
             {(text.trim() || pendingFiles.length > 0 || !typeOk('audio')) ? (

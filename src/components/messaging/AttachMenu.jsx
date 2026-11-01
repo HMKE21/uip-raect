@@ -1,30 +1,37 @@
 import { useEffect, useRef, useState } from 'react';
+import '../../styles/css/chat-picker.css';
 
 /**
- * WhatsApp-style attachment sheet: Document / Photos & videos / Camera / Poll / Location.
- * Only offers what the conversation allows (`can` flags). Rendered as a popover above the composer.
+ * WhatsApp-style attachment menu: Document / Photos & videos / Camera / Audio / Poll / Location / New sticker.
+ * Desktop: a compact popover list above the composer. Phones: a bottom sheet with big round icons.
+ * Only offers what the conversation allows (`can…` flags); new actions are optional so other callers keep working.
  */
-function Tile({ color, icon, label, onClick }) {
+const svg = (d) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d}</svg>
+);
+const ICONS = {
+  doc: svg(<><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></>),
+  media: svg(<><rect x="3" y="4" width="18" height="16" rx="2.5" /><circle cx="9" cy="10" r="1.6" /><path d="m21 16-5-5-8 8" /></>),
+  camera: svg(<><path d="M4 8h3l2-2h6l2 2h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>),
+  audio: svg(<><path d="M4 14v-2a8 8 0 0 1 16 0v2" /><rect x="3" y="14" width="4" height="6" rx="1.5" /><rect x="17" y="14" width="4" height="6" rx="1.5" /></>),
+  poll: svg(<><path d="M5 20V10M12 20V4M19 20v-7" /></>),
+  pin: svg(<><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z" /><circle cx="12" cy="10" r="2.5" /></>),
+  sticker: svg(<><path d="M20 12.5V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h5.5z" /><path d="M20 12.5a7.5 7.5 0 0 1-7.5 7.5v-3a4.5 4.5 0 0 1 4.5-4.5z" /></>),
+};
+
+function Item({ color, icon, label, onClick, delay }) {
   return (
-    <button type="button" className="att-tile" onClick={onClick}>
-      <span className="att-tile__icon" style={{ background: color }} aria-hidden="true">{icon}</span>
-      <span className="att-tile__label">{label}</span>
+    <button type="button" role="menuitem" className="att-item" style={{ '--att-c': color, '--att-d': `${delay}ms` }} onClick={onClick}>
+      <span className="att-item__icon" aria-hidden="true">{icon}</span>
+      <span className="att-item__label">{label}</span>
     </button>
   );
 }
 
-const svg = (d) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
-);
-const ICONS = {
-  doc: svg(<><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></>),
-  media: svg(<><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="m21 16-5-5-8 8" /></>),
-  camera: svg(<><path d="M4 8h3l2-2h6l2 2h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></>),
-  poll: svg(<><path d="M5 20V10M12 20V4M19 20v-7" /></>),
-  pin: svg(<><path d="M12 21s7-6.2 7-11a7 7 0 0 0-14 0c0 4.8 7 11 7 11z" /><circle cx="12" cy="10" r="2.5" /></>),
-};
-
-export default function AttachMenu({ ar, canFiles, canMedia, canPoll, canLocation, onPickFiles, onPickMedia, onPickCamera, onPoll, onLocation, title }) {
+export default function AttachMenu({
+  ar, canFiles, canMedia, canPoll, canLocation, canAudio, canSticker,
+  onPickFiles, onPickMedia, onPickCamera, onPickAudio, onPoll, onLocation, onNewSticker, title,
+}) {
   const [open, setOpen] = useState(false);
   const wrap = useRef(null);
 
@@ -33,25 +40,38 @@ export default function AttachMenu({ ar, canFiles, canMedia, canPoll, canLocatio
     const away = (e) => { if (!wrap.current?.contains(e.target)) setOpen(false); };
     const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', away);
+    document.addEventListener('touchstart', away, { passive: true });
     document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('touchstart', away); document.removeEventListener('keydown', esc); };
   }, [open]);
 
   const run = (fn) => () => { setOpen(false); fn?.(); };
+  const items = [
+    canFiles && { k: 'doc', color: '#7f66ff', icon: ICONS.doc, label: ar ? 'مستند' : 'Document', fn: onPickFiles },
+    canMedia && { k: 'media', color: '#1d8bf1', icon: ICONS.media, label: ar ? 'صور وفيديو' : 'Photos & videos', fn: onPickMedia },
+    canMedia && { k: 'camera', color: '#e53e6b', icon: ICONS.camera, label: ar ? 'الكاميرا' : 'Camera', fn: onPickCamera },
+    canAudio && onPickAudio && { k: 'audio', color: '#f2672a', icon: ICONS.audio, label: ar ? 'صوت' : 'Audio', fn: onPickAudio },
+    canPoll && { k: 'poll', color: '#f5a60b', icon: ICONS.poll, label: ar ? 'استطلاع' : 'Poll', fn: onPoll },
+    canLocation && { k: 'loc', color: '#0ea5a4', icon: ICONS.pin, label: ar ? 'الموقع' : 'Location', fn: onLocation },
+    canSticker && onNewSticker && { k: 'stk', color: '#19b57a', icon: ICONS.sticker, label: ar ? 'ستيكر جديد' : 'New sticker', fn: onNewSticker, divider: true },
+  ].filter(Boolean);
 
   return (
     <div className="att-wrap" ref={wrap}>
-      <button type="button" className={`msg-icon-btn${open ? ' is-active' : ''}`} title={title} aria-label={title} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={`msg-icon-btn${open ? ' is-active' : ''}`} title={title} aria-label={title} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: open ? 'rotate(45deg)' : 'none', transition: 'transform .18s' }}><path d="M12 5v14M5 12h14" /></svg>
       </button>
       {open && (
-        <div className="att-sheet" role="menu">
-          {canFiles && <Tile color="#7f66ff" icon={ICONS.doc} label={ar ? 'مستند' : 'Document'} onClick={run(onPickFiles)} />}
-          {canMedia && <Tile color="#1fa855" icon={ICONS.media} label={ar ? 'صور وفيديو' : 'Photos & videos'} onClick={run(onPickMedia)} />}
-          {canMedia && <Tile color="#e53e6b" icon={ICONS.camera} label={ar ? 'الكاميرا' : 'Camera'} onClick={run(onPickCamera)} />}
-          {canPoll && <Tile color="#f59e0b" icon={ICONS.poll} label={ar ? 'استطلاع' : 'Poll'} onClick={run(onPoll)} />}
-          {canLocation && <Tile color="#0ea5a4" icon={ICONS.pin} label={ar ? 'الموقع' : 'Location'} onClick={run(onLocation)} />}
-        </div>
+        <>
+          <div className="att-scrim" aria-hidden="true" />
+          <div className="att-menu" role="menu">
+            {items.map((it, i) => (
+              <span key={it.k} className={`att-slot${it.divider ? ' has-divider' : ''}`}>
+                <Item color={it.color} icon={it.icon} label={it.label} delay={i * 22} onClick={run(it.fn)} />
+              </span>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

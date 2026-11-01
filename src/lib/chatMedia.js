@@ -21,7 +21,9 @@ const PROTECTED = /^\/api\/v1\/messaging\/attachments\/(\d+)\/(file|thumbnail)$/
 const LINK_TTL_MS = 8 * 60 * 1000;   // server links live 10 min; refresh a little earlier
 const MAX_OBJECT_URLS = 250;
 
-export const isProtectedAttachmentUrl = (u) => typeof u === 'string' && PROTECTED.test(u.split('?')[0]);
+// The personal sticker library (/messaging/stickers/{id}/file) is protected the same way (owner-only, Bearer token).
+const PROTECTED_STICKER = /^\/api\/v1\/messaging\/stickers\/(\d+)\/file$/;
+export const isProtectedAttachmentUrl = (u) => typeof u === 'string' && (PROTECTED.test(u.split('?')[0]) || PROTECTED_STICKER.test(u.split('?')[0]));
 
 /** "/api/v1/messaging/attachments/12/file" -> { id: '12', variant: 'file' } */
 export function parseProtectedUrl(u) {
