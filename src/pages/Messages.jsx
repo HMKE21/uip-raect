@@ -11,12 +11,12 @@ import InfoPanel from '../components/messaging/InfoPanel';
 import { useCustomWallpapers, isCustomWall, customWallId } from '../lib/customWallpapers';
 import { useChatSettings, wallFor } from '../lib/chatSettings';
 import GroupSettingsModal from '../components/messaging/GroupSettingsModal';
+import { PinDurationModal, PinnedMessagesModal } from '../components/messaging/PinnedUi';
 import { localizeError } from '../components/messaging/groupText';
 import {
   NewDirectModal,
   NewGroupModal,
   AddMemberModal,
-  PinnedMessagesModal,
   ForwardModal,
   BulkDeleteModal,
   PollModal,
@@ -968,16 +968,57 @@ export default function Messages() {
     }
   };
 
-  const onPin = async (m) => {
+  // Pin flow: unpinned message -> duration dialog -> POST /pin {duration}; pinned message -> unpin straight away.
+  const [pinTarget, setPinTarget] = useState(null);
+  const [pinBusy, setPinBusy] = useState(false);
+  const refreshPinned = useCallback(async (convId) => {
+    const r = await api.get(BASE + '/conversations/' + convId + '/pinned');
+    setPinnedMessages(r.data || []);
+    return r.data || [];
+  }, []);
+  const syncPinFlags = useCallback((list) => {
+    const byId = new Map(list.map((p) => [p.id, p]));
+    setMessages((prev) => prev.map((x) => {
+      const p = byId.get(x.id);
+      if (p) return x.is_pinned && x.pinned_until === p.pinned_until ? x : { ...x, is_pinned: true, pinned_until: p.pinned_until ?? null };
+      return x.is_pinned ? { ...x, is_pinned: false, pinned_until: null } : x;
+    }));
+  }, []);
+  const onPin = (m) => {
+    if (!m.is_pinned) { setPinTarget(m); return; }
+    return unpinMessage(m);
+  };
+  const unpinMessage = async (m) => {
     try {
-      await api.post(BASE + '/messages/' + m.id + '/' + (m.is_pinned ? 'unpin' : 'pin'));
-      setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, is_pinned: !m.is_pinned } : x)));
-      const r = await api.get(BASE + '/conversations/' + activeId + '/pinned');
-      setPinnedMessages(r.data || []);
+      await api.post(BASE + '/messages/' + m.id + '/unpin');
+      setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, is_pinned: false, pinned_until: null } : x)));
+      setPinnedMessages((prev) => prev.filter((x) => x.id !== m.id));
     } catch (err) {
       showError(err);
     }
   };
+  const confirmPin = async (duration) => {
+    const m = pinTarget;
+    if (!m) return;
+    setPinBusy(true);
+    try {
+      await api.post(BASE + '/messages/' + m.id + '/pin', { duration });
+      setPinTarget(null);
+      syncPinFlags(await refreshPinned(activeId));
+    } catch (err) {
+      showError(err);
+    } finally {
+      setPinBusy(false);
+    }
+  };
+  // when the soonest timed pin runs out, refresh so the bar and the message badges drop it without a reload
+  useEffect(() => {
+    const times = pinnedMessages.map((p) => (p.pinned_until ? parseServerDate(p.pinned_until).getTime() : 0)).filter((n) => n > 0);
+    if (!times.length || !activeId) return undefined;
+    const wait = Math.min(Math.max(Math.min(...times) - Date.now() + 1500, 1000), 2147000000);
+    const h = setTimeout(() => { refreshPinned(activeId).then(syncPinFlags).catch(() => {}); }, wait);
+    return () => clearTimeout(h);
+  }, [pinnedMessages, activeId, refreshPinned, syncPinFlags]);
 
   const onVote = async (id, optionIndex) => {
     if (isTmp(id)) return;
@@ -1282,6 +1323,7 @@ export default function Messages() {
     setModal(null);
     const el = document.querySelector(`[data-msg-id="${id}"]`);
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (el) { el.classList.add('is-flash'); setTimeout(() => el.classList.remove('is-flash'), 1800); }
   };
 
   // ------------------------------------------------------------- safety (block / report)
@@ -1517,7 +1559,9 @@ export default function Messages() {
         messages={visibleMessages}
         hasMoreOlder={hasMoreOlder}
         onLoadOlder={onLoadOlder}
-        pinnedCount={pinnedMessages.length}
+        pinnedMessages={pinnedMessages}
+        onGoToMessage={onGoToMessage}
+        onUnpin={unpinMessage}
         onShowPinned={onShowPinned}
         presenceText={presenceText}
         replyTarget={replyTarget}
@@ -1622,7 +1666,10 @@ export default function Messages() {
         />
       )}
       {modal === 'pinned' && (
-        <PinnedMessagesModal pinned={pinnedMessages} onClose={() => setModal(null)} onGoToMessage={onGoToMessage} />
+        <PinnedMessagesModal pinned={pinnedMessages} onClose={() => setModal(null)} onGoToMessage={onGoToMessage} onUnpin={unpinMessage} />
+      )}
+      {pinTarget && (
+        <PinDurationModal message={pinTarget} busy={pinBusy} onClose={() => setPinTarget(null)} onConfirm={confirmPin} />
       )}
       {modal === 'forward' && (
         <ForwardModal

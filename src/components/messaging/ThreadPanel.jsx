@@ -11,6 +11,7 @@ import ChatFile from './ChatFile';
 import PollBubble from './PollBubble';
 import MsgIcon from './msgIcons';
 import { Avatar } from './ConversationRail';
+import { PinnedBar } from './PinnedUi';
 import { fmtTime, fmtDayLabel, fmtBytes, fmtDuration, fmtClock, peerLabel, renderBody, roleLabel, avatarUrl } from './format';
 import { bgCss } from './stories/storyUtils';
 import { parseServerDate } from '../../utils/serverDate';
@@ -883,7 +884,9 @@ export default function ThreadPanel({
   messages,
   hasMoreOlder,
   onLoadOlder,
-  pinnedCount,
+  pinnedMessages = [],
+  onGoToMessage,
+  onUnpin,
   onShowPinned,
   infoOpen,
   presenceText,
@@ -1405,11 +1408,8 @@ export default function ThreadPanel({
           </div>
         </header>
 
-        {pinnedCount > 0 && (
-          <div className="msg-thread__pinned-bar" onClick={onShowPinned} style={{ cursor: 'pointer' }}>
-            <MsgIcon name="pin" size={14} /> <strong>{pinnedCount}</strong> {pinnedCount > 1 ? t('pinned messages', 'رسائل مثبّتة') : t('pinned message', 'رسالة مثبّتة')}
-            <button type="button" className="msg-icon-btn msg-icon-btn--sm" style={{ marginInlineStart: 'auto' }}>{t('View', 'عرض')}</button>
-          </div>
+        {pinnedMessages.length > 0 && (
+          <PinnedBar pinned={pinnedMessages} onGo={(id) => onGoToMessage?.(id)} onOpenList={onShowPinned} onUnpin={(m) => onUnpin?.(m)} />
         )}
 
         <div className="msg-thread__scroll" data-message-list ref={scrollRef}>

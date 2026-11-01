@@ -297,39 +297,6 @@ export function AddMemberModal({ onClose, onSearchRecipients, onSubmit }) {
   );
 }
 
-export function PinnedMessagesModal({ pinned, onClose, onGoToMessage }) {
-  const t = useT();
-  return (
-    <Modal title={t('Pinned messages', 'الرسائل المثبّتة')} onClose={onClose}>
-      {pinned.length === 0 ? (
-        <p className="text-small text-muted">{t('No pinned messages yet.', 'لا توجد رسائل مثبّتة بعد.')}</p>
-      ) : (
-        pinned.map((m) => (
-          <div className="msg-picker-item" key={m.id} onClick={() => onGoToMessage(m.id)}>
-            <Avatar name={m.sender_name} size="sm" />
-            <span style={{ minWidth: 0, flex: 1 }}>
-              <strong style={{ display: 'block', fontSize: 12 }}>{m.sender_name}</strong>
-              <span
-                style={{
-                  fontSize: 12,
-                  color: 'var(--text-secondary)',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  display: 'block',
-                }}
-              >
-                {m.body || ''}
-              </span>
-            </span>
-            <span className="msg-conv__time">{fmtTime(m.created_at)}</span>
-          </div>
-        ))
-      )}
-    </Modal>
-  );
-}
-
 /** Ported from openForwardModal() in messaging.js — pick a conversation to forward a message into. */
 export function ForwardModal({ conversations, onClose, onForward, count = 1 }) {
   const t = useT();
