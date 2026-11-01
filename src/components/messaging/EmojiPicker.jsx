@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * WhatsApp-style emoji picker: category tabs, search (English + Arabic), "recent" row.
@@ -66,14 +66,22 @@ const Grid = memo(function Grid({ list }) {
   );
 });
 
-const Section = memo(function Section({ cat, title, setRef }) {
+const ROW_PX = 36; // one emoji row (button height + gap), used to size not-yet-mounted sections so the scrollbar stays honest
+
+const Section = memo(function Section({ cat, title, setRef, live }) {
   return (
-    <section className="emo-section" data-cat={cat.id} ref={setRef}>
+    <section className="emo-section" data-cat={cat.id} ref={setRef} style={live ? undefined : { minHeight: Math.ceil(cat.items.length / 8) * ROW_PX + 34 }}>
       <h4 className="emo-title">{title}</h4>
-      <Grid list={cat.items} />
+      {live ? <Grid list={cat.items} /> : null}
     </section>
   );
 });
+
+const idle = (fn) => (typeof window.requestIdleCallback === 'function'
+  ? window.requestIdleCallback(fn, { timeout: 400 })
+  : window.setTimeout(fn, 60));
+const cancelIdle = (id) => (typeof window.cancelIdleCallback === 'function' ? window.cancelIdleCallback(id) : window.clearTimeout(id));
+const MAX_RESULTS = 160;
 
 export default function EmojiPicker({ onPick, onClose, ar, top = false, autoFocus = false }) {
   const [tab, setTab] = useState(() => (readRecent().length ? 'recent' : 'smileys'));
@@ -81,7 +89,23 @@ export default function EmojiPicker({ onPick, onClose, ar, top = false, autoFocu
   const [recent, setRecent] = useState(readRecent);
   const bodyRef = useRef(null);
   const sectionRefs = useRef({});
+  const refSetters = useRef({});
   const lock = useRef(0);
+  const pendingJump = useRef(null);
+  // Only the first sections are built up front (the full set is ~1000 colour glyphs); the rest are mounted one by one
+  // while the browser is idle, or immediately when a tab is clicked. Opening the picker stays instant.
+  const [mounted, setMounted] = useState(2);
+  // stable ref callbacks: a new arrow function per render would defeat memo() and re-render every section on each tap/scroll
+  const refFor = useCallback((id) => {
+    if (!refSetters.current[id]) refSetters.current[id] = (el) => { sectionRefs.current[id] = el; };
+    return refSetters.current[id];
+  }, []);
+
+  useEffect(() => {
+    if (mounted >= ALL.length) return undefined;
+    const h = idle(() => setMounted((m) => Math.min(ALL.length, m + 1)));
+    return () => cancelIdle(h);
+  }, [mounted]);
 
   const pick = useCallback((e) => {
     onPick(e);
@@ -97,24 +121,39 @@ export default function EmojiPicker({ onPick, onClose, ar, top = false, autoFocu
     if (el) pick(el.getAttribute('data-e'));
   };
 
+  const dq = useDeferredValue(q); // typing stays responsive; the filtered grid catches up right after
   const results = useMemo(() => {
-    const term = q.trim().toLowerCase();
+    const term = dq.trim().toLowerCase();
     if (!term) return null;
-    return ALL_FLAT.filter((e) => e === term || (KEYWORDS[e] || '').toLowerCase().includes(term));
-  }, [q]);
+    return ALL_FLAT.filter((e) => e === term || (KEYWORDS[e] || '').toLowerCase().includes(term)).slice(0, MAX_RESULTS);
+  }, [dq]);
 
+  const scrollToSection = (id) => {
+    const box = bodyRef.current;
+    if (!box) return;
+    if (id === 'recent') { box.scrollTo({ top: 0 }); return; }
+    const el = sectionRefs.current[id];
+    if (el) box.scrollTo({ top: el.offsetTop - box.offsetTop - 2 });
+  };
   const jump = (id) => {
     setTab(id);
     setQ('');
     lock.current = Date.now();
-    requestAnimationFrame(() => {
-      const box = bodyRef.current;
-      if (!box) return;
-      if (id === 'recent') { box.scrollTo({ top: 0 }); return; }
-      const el = sectionRefs.current[id];
-      if (el) box.scrollTo({ top: el.offsetTop - box.offsetTop - 2 });
-    });
+    const idx = ALL.findIndex((c) => c.id === id);
+    if (idx >= mounted) {
+      // make sure everything above the target is built before measuring where to scroll
+      pendingJump.current = id;
+      setMounted(idx + 1);
+      return;
+    }
+    requestAnimationFrame(() => scrollToSection(id));
   };
+  useLayoutEffect(() => {
+    if (!pendingJump.current) return;
+    const id = pendingJump.current;
+    pendingJump.current = null;
+    scrollToSection(id);
+  }, [mounted]);
 
   // highlight the tab of the section currently in view (ignored briefly after a tab click)
   useEffect(() => {
@@ -159,7 +198,7 @@ export default function EmojiPicker({ onPick, onClose, ar, top = false, autoFocu
         <input
           type="search"
           value={q}
-          autoFocus={autoFocus}
+          autoFocus={autoFocus && !(typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches)}
           onChange={(e) => setQ(e.target.value)}
           placeholder={ar ? 'ابحث عن إيموجي (قلب، ضحك، love)' : 'Search emoji (love, laugh, قلب)'}
           dir="auto"
@@ -177,7 +216,7 @@ export default function EmojiPicker({ onPick, onClose, ar, top = false, autoFocu
                 <Grid list={recent} />
               </section>
             )}
-            {ALL.map((c) => <Section key={c.id} cat={c} title={ar ? c.ar : c.en} setRef={(el) => { sectionRefs.current[c.id] = el; }} />)}
+            {ALL.map((c, i) => <Section key={c.id} cat={c} title={ar ? c.ar : c.en} setRef={refFor(c.id)} live={i < mounted} />)}
           </>
         )}
       </div>

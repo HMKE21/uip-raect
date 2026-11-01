@@ -134,6 +134,20 @@ function StickerPane({ ar, canSend, onSend, onNew, onChanged }) {
   );
 }
 
+/** Grid thumbnail: a light still frame; the animated GIF is only fetched while the pointer is over it. */
+function GifThumb({ g, onClick }) {
+  const [play, setPlay] = useState(false);
+  const still = g.still && g.still !== g.preview ? g.still : null;
+  return (
+    <button type="button" className="gif-item" onClick={() => onClick(g)} title={g.title || 'GIF'}
+      onMouseEnter={still ? () => setPlay(true) : undefined} onMouseLeave={still ? () => setPlay(false) : undefined}
+      onFocus={still ? () => setPlay(true) : undefined} onBlur={still ? () => setPlay(false) : undefined}>
+      <img src={still && !play ? still : (g.preview || g.url)} alt={g.title || 'GIF'} loading="lazy" decoding="async" fetchpriority="low"
+        style={g.w && g.h ? { aspectRatio: `${g.w} / ${g.h}` } : undefined} />
+    </button>
+  );
+}
+
 function GifPane({ ar, canSend, onSend }) {
   const [tab, setTab] = useState(() => (getRecentGifs().length ? 'recent' : 'trending'));
   const [q, setQ] = useState('');
@@ -214,9 +228,7 @@ function GifPane({ ar, canSend, onSend }) {
             {cols.map((col, ci) => (
               <div key={ci} className="gif-col">
                 {col.map((g) => (
-                  <button type="button" key={g.url} className="gif-item" onClick={() => send(g)} title={g.title || 'GIF'}>
-                    <img src={g.preview || g.url} alt={g.title || 'GIF'} loading="lazy" decoding="async" style={g.w && g.h ? { aspectRatio: `${g.w} / ${g.h}` } : undefined} />
-                  </button>
+                  <GifThumb key={g.url} g={g} onClick={send} />
                 ))}
               </div>
             ))}

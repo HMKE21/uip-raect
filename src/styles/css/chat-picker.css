@@ -186,3 +186,13 @@
   .smk-tools { overflow: visible; }
   .smk-canvas-wrap { width: min(100%, 300px); }
 }
+
+/* ---- emoji picker performance: no per-button transforms/transitions (1000 of them), contained layout, GPU-friendly scroll ---- */
+html body .emo-body { contain: layout style; -webkit-overflow-scrolling: touch; }
+html body .emo-section { content-visibility: auto; contain-intrinsic-size: auto 300px; contain: layout style paint; }
+html body .emo-grid { contain: layout style; }
+html body .msg-emoji-popover .emo-btn, html body .emo-btn { transition: none; will-change: auto; }
+html body .msg-emoji-popover .emo-btn:hover, html body .emo-btn:hover { transform: none; background: var(--glass-bg); }
+html body .emo-btn:active { transform: none; background: color-mix(in srgb, var(--color-primary) 16%, transparent); }
+/* GIF grid: images decode off the main thread and reserve their space */
+html body .gif-item img { content-visibility: auto; background: var(--glass-bg); }
