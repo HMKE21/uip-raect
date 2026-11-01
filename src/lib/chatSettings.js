@@ -34,6 +34,7 @@ export const DEFAULT_SETTINGS = {
   sounds: true,
   wallpaper: { default: 'dots', per_chat: {}, anim: false },
   bio: '',
+  bio_style: 'classic',
   bio_max: 190,
   people: {},
   initialized: true,

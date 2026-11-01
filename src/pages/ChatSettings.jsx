@@ -8,6 +8,7 @@ import { usePageMeta } from '../context/PageMetaContext';
 import { Avatar } from '../components/messaging/ConversationRail';
 import { Modal } from '../components/messaging/modals';
 import WallpaperPicker from '../components/messaging/WallpaperPicker';
+import { BioEditor, BioBubble } from '../components/messaging/BioNote';
 import { useCustomWallpapers, isCustomWall } from '../lib/customWallpapers';
 import { useChatSettings, wallFor } from '../lib/chatSettings';
 import { peerLabel } from '../components/messaging/format';
@@ -220,14 +221,6 @@ function ProfileSection({ settings, save, openAudience }) {
   const { t } = useCopy();
   const { user } = useAuth();
   const name = user?.full_name || user?.name || user?.fullName || '';
-  const [bio, setBio] = useState(settings.bio || '');
-  const [busy, setBusy] = useState(false);
-  const loadedBio = useRef(settings.bio);
-  // the account's saved bio arrives after the first render: adopt it unless the person already typed
-  useEffect(() => { if (settings.bio !== loadedBio.current && bio === loadedBio.current) setBio(settings.bio || ''); loadedBio.current = settings.bio; }, [settings.bio]); // eslint-disable-line react-hooks/exhaustive-deps
-  const dirty = bio.trim() !== (settings.bio || '');
-  const max = settings.bio_max || 190;
-  const submit = async () => { setBusy(true); try { await save({ bio: bio.trim() }); } finally { setBusy(false); } };
   return (
     <>
       <div className="cs-profile">
@@ -235,18 +228,11 @@ function ProfileSection({ settings, save, openAudience }) {
         <div className="cs-profile__text">
           <strong>{name}</strong>
           <span dir="ltr">{user?.email}</span>
-          <em className="cs-profile__bio">{(settings.bio || '').trim() || t('No bio yet', 'لا يوجد بايو بعد')}</em>
+          {(settings.bio || '').trim() ? <BioBubble text={settings.bio.trim()} styleId={settings.bio_style} tail={false} className="cs-profile__bio" /> : <em className="cs-profile__bio">{t('No bio yet', 'لا يوجد بايو بعد')}</em>}
         </div>
       </div>
-      <Group title={t('Bio', 'البايو')} hint={t('A short line people see under your name in chats. You decide who sees it below.', 'سطر قصير يظهر للناس تحت اسمك في المحادثات. وإنت تحدد مين يشوفه من تحت.')}>
-        <div className="cs-bio">
-          <textarea className="msg-input" rows={3} maxLength={max} value={bio} onChange={(e) => setBio(e.target.value)} placeholder={t('e.g. Software engineering student · always learning', 'مثال: طالب هندسة برمجيات · دايمًا بتعلم')} />
-          <div className="cs-bio__foot">
-            <span className="cs-count">{bio.length}/{max}</span>
-            {bio && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setBio('')}>{t('Clear', 'مسح')}</button>}
-            <button type="button" className="btn btn-primary btn-sm" disabled={!dirty || busy} onClick={submit}>{busy ? t('Saving…', 'جارٍ الحفظ…') : t('Save bio', 'حفظ البايو')}</button>
-          </div>
-        </div>
+      <Group title={t('Bio', 'البايو')} hint={t('A short note (emoji welcome) shown in a bubble under the chat header, in the design you pick. You decide who sees it below.', 'ملاحظة قصيرة (والإيموجي مرحّب بيه) بتظهر في فقاعة تحت هيدر المحادثة بالتصميم اللي تختاره. وإنت تحدد مين يشوفها من تحت.')}>
+        <BioEditor settings={settings} save={save} />
       </Group>
       <Group title={t('Who sees my profile', 'مين يشوف ملفي الشخصي')}>
         <AudienceRow field="bio" settings={settings} onOpen={openAudience} />

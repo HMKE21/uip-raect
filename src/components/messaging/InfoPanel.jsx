@@ -7,6 +7,7 @@ import GroupInfoView from './GroupInfoView';
 import { fmtBytes, roleLabel } from './format';
 import { useProtectedSrc } from '../../lib/chatMedia';
 import { useLanguage } from '../../context/LanguageContext';
+import { BioBubble } from './BioNote';
 
 /**
  * Right-hand info panel — ported from renderInfoPanel()/infoToggleRow() in
@@ -153,7 +154,7 @@ export default function InfoPanel({
             {others[0]?.account_role && <span className="msg-info__role">{roleLabel(others[0].account_role)}</span>}
             {others[0]?.email && <span className="msg-info__email" dir="ltr">{others[0].email}</span>}
             {others[0]?.org && <span className="msg-info__org">{others[0].org}</span>}
-            {others[0]?.bio && <span className="msg-info__bio">{others[0].bio}</span>}
+            {others[0]?.bio && <BioBubble text={others[0].bio} styleId={others[0].bio_style} tail={false} />}
           </div>
         )}
 

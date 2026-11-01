@@ -12,6 +12,8 @@ import PollBubble from './PollBubble';
 import MsgIcon from './msgIcons';
 import { Avatar } from './ConversationRail';
 import { PinnedBar } from './PinnedUi';
+import { HeaderBio } from './BioNote';
+import { useChatSettings } from '../../lib/chatSettings';
 import { fmtTime, fmtDayLabel, fmtBytes, fmtDuration, fmtClock, peerLabel, renderBody, roleLabel, avatarUrl } from './format';
 import { bgCss } from './stories/storyUtils';
 import { parseServerDate } from '../../utils/serverDate';
@@ -967,6 +969,7 @@ export default function ThreadPanel({
 }) {
   const [text, setText] = useState('');
   const call = useCall(); // before the `if (!conversation)` early return below (hook order)
+  const { settings: myChatSettings } = useChatSettings(); // same: must stay above the early return
   const navigate = useNavigate();
   const { user: authUser } = useAuth();
   const [groupCallBusy, setGroupCallBusy] = useState(false);
@@ -1116,6 +1119,12 @@ export default function ThreadPanel({
   // WhatsApp-style group rules (closed group, restricted member, allowed message types). Admins/owner get everything.
   const grp = conversation?.is_group ? conversation : null;
   const peerDeleted = !!conversation && !conversation.is_group && (conversation.peer_deleted || others[0]?.is_deleted);
+  // bio note bubble: the other person's in a direct chat, my own in "Saved messages"; none in groups
+  const headerBio = conversation.is_group || peerDeleted
+    ? { text: '', style: null }
+    : conversation.is_saved
+      ? { text: (myChatSettings.bio || '').trim(), style: myChatSettings.bio_style }
+      : { text: (others[0]?.bio || '').trim(), style: others[0]?.bio_style };
   // Direct chat where one side blocked the other: 'blocked_by_me' (can unblock here) / 'blocked_by_peer' (generic notice).
   const dmBlock = conversation && !conversation.is_group && (conversation.send_block === 'blocked_by_me' || conversation.send_block === 'blocked_by_peer') ? conversation.send_block : null;
   const canSend = peerDeleted || dmBlock ? false : (!grp || grp.can_send !== false);
@@ -1397,6 +1406,10 @@ export default function ThreadPanel({
               </span>
             </div>
           </div>
+          {headerBio.text && (
+            <HeaderBio conversationId={conversation.id} text={headerBio.text} styleId={headerBio.style} own={!!conversation.is_saved}
+              onEdit={() => navigate(`/${portalPrefix(authUser?.role)}/messages/settings`)} />
+          )}
           <div className="msg-thread__header-actions">
             {onStar && (
               <button type="button" className="msg-icon-btn" onClick={() => setStarredOpen(true)}
