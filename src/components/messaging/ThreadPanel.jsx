@@ -31,6 +31,7 @@ import EmojiPicker from './EmojiPicker';
 import AttachMenu from './AttachMenu';
 import CameraCaptureModal from './CameraCaptureModal';
 import ViewOnceMedia from './ViewOnceMedia';
+import { MessageContextMenu, DeleteMessageDialog, MessageInfoPanel, StarredMessagesModal, MIcon, menuToast, copyImageToClipboard, downloadFromUrl, loadFavourites, setFavLocal } from './MessageMenu';
 import LinkCard, { firstUrl } from './LinkCard';
 import { LocationBubble, LiveLocationBubble, LocationShareModal } from './LocationMessage';
 import '../../styles/css/messaging-pro.css';
@@ -205,7 +206,7 @@ function FloatingPanel({ anchorRef, onClose, className, children }) {
   );
 }
 
-function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit, selectMode, selected, onToggleSelect, onStartSelect, savedChat }) {
+function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit, selectMode, selected, onToggleSelect, onStartSelect, savedChat, onStar }) {
   const t = useT();
   const navigate = useNavigate();
   const [showReactPicker, setShowReactPicker] = useState(false);
@@ -214,6 +215,21 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
   // Phone / touch: the action bar is NOT shown by a tap or touch, only by a long press (~0.45 s) on the bubble.
   const [touchOpen, setTouchOpen] = useState(false);
   const rowRef = useRef(null);
+  // right-click / long-press menu, message info, delete dialog
+  const [ctx, setCtx] = useState(null);          // { x, y, touch, selectedText }
+  const [showInfo, setShowInfo] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [isFav, setIsFav] = useState(false);
+  const stickerUrl = (m.message_type === 'sticker' || m.message_type === 'gif') ? (m.metadata?.url || '') : '';
+  const openCtx = ({ x, y, touch }) => {
+    let selectedText = '';
+    try {
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed && rowRef.current && rowRef.current.contains(sel.anchorNode)) selectedText = sel.toString().trim();
+    } catch { /* no selection */ }
+    if (stickerUrl) loadFavourites().then((set) => setIsFav(set.has(stickerUrl)));
+    setCtx({ x, y, touch, selectedText });
+  };
   const pressRef = useRef({ timer: 0, x: 0, y: 0 });
   const touchMode = () => window.matchMedia('(hover: none), (max-width: 760px)').matches;
   const cancelPress = () => { clearTimeout(pressRef.current.timer); pressRef.current.timer = 0; };
@@ -239,7 +255,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
     pressRef.current.timer = setTimeout(() => {
       pressRef.current.timer = 0;
       swallowClickRef.current = Date.now();
-      setTouchOpen(true);
+      openCtx({ x: pressRef.current.x, y: pressRef.current.y, touch: true });
       try { navigator.vibrate?.(15); } catch { /* no haptics */ }
     }, 450);
   };
@@ -388,6 +404,55 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
   const doCopy = () => {
     copyToClipboard(textToCopy).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1400); });
   };
+  const sentMs = sentAtOf(m);
+  const canDeleteAll = m.is_mine && (!sentMs || Date.now() - sentMs < DELETE_ALL_WINDOW_MIN * 60000);
+  const mineReaction = (m.reactions || []).find((r) => (r.users || []).some((u) => String(u.id) === String(myUserId)))?.emoji || null;
+  const menuCaps = {
+    info: m.is_mine && !savedChat && !m.is_tmp,
+    copy: !!textToCopy || !!ctx?.selectedText,
+    selected: !!ctx?.selectedText,
+    pinned: !!m.is_pinned,
+    starred: !!m.is_starred,
+    favourite: !!stickerUrl,
+    isFav,
+    copyImage: !!stickerUrl && !!window.ClipboardItem,
+    edit: canEdit,
+    saveAs: canSave || !!stickerUrl,
+    report: !m.is_mine && !!onReport && m.message_type !== 'system',
+    mineReaction,
+  };
+  const menuOn = {
+    react: (emoji) => onReact(m.id, emoji),
+    info: () => setShowInfo(true),
+    reply: () => onReply(m),
+    copy: () => {
+      const txt = ctx?.selectedText || textToCopy;
+      copyToClipboard(txt).then(() => menuToast(t('Copied', 'تم النسخ')));
+    },
+    forward: () => onForward(m.id),
+    pin: () => onPin(m),
+    star: () => onStar?.(m, !m.is_starred),
+    favourite: async () => {
+      try {
+        const r = await api.post('/api/v1/messaging/messages/' + m.id + '/favourite');
+        const on = !!(r.data?.is_favourite);
+        setFavLocal(stickerUrl, on); setIsFav(on);
+        menuToast(on ? t('Added to Favourites', 'تمت الإضافة للمفضلة') : t('Removed from Favourites', 'تمت الإزالة من المفضلة'));
+      } catch (err) { menuToast(errorMessage(err)); }
+    },
+    copyImage: async () => {
+      try { await copyImageToClipboard(stickerUrl); menuToast(t('Image copied', 'تم نسخ الصورة')); }
+      catch { menuToast(t('Could not copy the image', 'تعذّر نسخ الصورة')); }
+    },
+    edit: () => onStartEdit(m.id),
+    select: onStartSelect ? () => onStartSelect(m) : undefined,
+    saveAs: () => {
+      if (canSave) saveAttachmentsToPhone(m.attachments);
+      else if (stickerUrl) downloadFromUrl(stickerUrl, (m.metadata?.label || m.metadata?.title || 'sticker')).catch(() => menuToast(t('Could not save the file', 'تعذّر حفظ الملف')));
+    },
+    report: () => onReport(m),
+    del: () => setShowDelete(true),
+  };
 
   return (
     <div
@@ -399,7 +464,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
       onTouchEnd={onPressEnd}
       onTouchCancel={cancelPress}
       onClickCapture={onClickCapture}
-      onContextMenu={(e) => { if (touchMode() && !m.pending && !m.failed && !pressBlocked(e.target)) { e.preventDefault(); setTouchOpen(true); } }}
+      onContextMenu={(e) => { if (selectMode || m.pending || m.failed || pressBlocked(e.target)) return; e.preventDefault(); openCtx({ x: e.clientX, y: e.clientY, touch: touchMode() }); }}
     >
       {selectMode ? (
         <span className={`msg-sel-dot msg-sel-dot--row${selected ? ' is-on' : ''}`} aria-hidden="true">{selected ? <Icon name="check" size={13} /> : null}</span>
@@ -445,7 +510,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
                 <Icon name="download" size={14} />
               </button>
             )}
-            <button type="button" aria-label={t('More', 'المزيد')} ref={moreBtnRef} onClick={() => { setShowReactPicker(false); setShowMoreMenu((s) => !s); }}>
+            <button type="button" aria-label={t('More', 'المزيد')} ref={moreBtnRef} onClick={(e) => { setShowReactPicker(false); const r = e.currentTarget.getBoundingClientRect(); const rtl = getComputedStyle(document.documentElement).direction === 'rtl'; openCtx({ x: rtl ? r.right : r.left, y: r.bottom + 4, touch: false }); }}>
               <MsgIcon name="more" size={14} />
             </button>
           </div>
@@ -464,60 +529,6 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
                   {e}
                 </button>
               ))}
-            </FloatingPanel>
-          )}
-
-          {showMoreMenu && (
-            <FloatingPanel anchorRef={moreBtnRef} className="msg-menu__panel is-open" onClose={() => setShowMoreMenu(false)}>
-              {textToCopy && (
-                <button type="button" className="msg-menu__item" onClick={() => { doCopy(); setShowMoreMenu(false); }}>
-                  <Icon name="copy" size={15} />
-                  {t('Copy text', 'نسخ النص')}
-                </button>
-              )}
-              {canSave && (
-                <button type="button" className="msg-menu__item" onClick={() => { saveAttachmentsToPhone(m.attachments); setShowMoreMenu(false); }}>
-                  <Icon name="download" size={15} />
-                  {t('Save to phone', 'حفظ على الموبايل')}
-                </button>
-              )}
-              {m.is_mine && (
-                <button
-                  type="button"
-                  className="msg-menu__item msg-menu__item--danger"
-                  onClick={() => {
-                    onDelete(m.id, 'for-everyone');
-                    setShowMoreMenu(false);
-                  }}
-                >
-                  <Icon name="trash" size={15} />
-                  {t('Delete for everyone', 'حذف للجميع')}
-                </button>
-              )}
-              <button
-                type="button"
-                className="msg-menu__item"
-                onClick={() => {
-                  onDelete(m.id, 'for-me');
-                  setShowMoreMenu(false);
-                }}
-              >
-                <Icon name="eye-off" size={15} />
-                {t('Delete for me', 'حذف عندي')}
-              </button>
-              {!m.is_mine && onReport && m.message_type !== 'system' && (
-                <button
-                  type="button"
-                  className="msg-menu__item msg-menu__item--danger"
-                  onClick={() => {
-                    onReport(m);
-                    setShowMoreMenu(false);
-                  }}
-                >
-                  <Icon name="alert" size={15} />
-                  {t('Report message', 'الإبلاغ عن الرسالة')}
-                </button>
-              )}
             </FloatingPanel>
           )}
 
@@ -557,6 +568,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
         )}
 
         <div className="msg-meta-row">
+          {m.is_starred ? <span className="msg-star-tag" title={t('Starred', 'مميّزة بنجمة')}><MIcon name="star" size={11} filled /></span> : null}
           {m.is_pinned ? <MsgIcon name="pin" size={11} /> : null}
           {m.pending ? (
             <>
@@ -582,6 +594,21 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
           {m.is_mine && !m.pending && !m.failed && !isEditing && <SentActions m={m} onUndo={onUndoSend} onDelete={onDelete} />}
         </div>
       </div>
+      {ctx && (
+        <MessageContextMenu m={m} at={{ x: ctx.x, y: ctx.y }} touch={ctx.touch} caps={menuCaps} on={menuOn} rowEl={rowRef.current} onClose={() => setCtx(null)} />
+      )}
+      {showInfo && (
+        <MessageInfoPanel
+          m={m}
+          onClose={() => setShowInfo(false)}
+          preview={stickerUrl
+            ? <img src={stickerUrl} alt="" />
+            : (textToCopy || (m.attachments?.length ? t('Attachment', 'مرفق') : ''))}
+        />
+      )}
+      {showDelete && (
+        <DeleteMessageDialog canAll={canDeleteAll} onClose={() => setShowDelete(false)} onChoose={(mode) => onDelete(m.id, mode)} />
+      )}
     </div>
   );
 }
@@ -903,6 +930,7 @@ export default function ThreadPanel({
   onDeleteMessage,
   onReact,
   onPin,
+  onStar,
   onVote,
   onStopLive,
   onSendLocation,
@@ -945,6 +973,7 @@ export default function ThreadPanel({
   const [showEmoji, setShowEmoji] = useState(false);
   const [showLocation, setShowLocation] = useState(false);
   const [editingId, setEditingId] = useState(null);
+  const [starredOpen, setStarredOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState('00:00');
   const [noiseCancel, setNoiseCancel] = useState(() => { try { return localStorage.getItem('uip_voice_nc') !== '0'; } catch { return true; } });
@@ -1330,6 +1359,14 @@ export default function ThreadPanel({
             </button>
           </div>
         )}
+        {starredOpen && (
+          <StarredMessagesModal
+            conversationId={conversation.id}
+            onClose={() => setStarredOpen(false)}
+            onJump={(id) => { if (!jumpToMessage(id)) menuToast(t('Scroll up to load older messages first.', 'مرّر لأعلى لتحميل الرسائل الأقدم أولًا.')); }}
+            onUnstar={(row) => onStar(row, false)}
+          />
+        )}
         <header className="msg-thread__header">
           <button type="button" className="msg-icon-btn msg-thread__back" onClick={onBack} aria-label={t('Back to conversations', 'العودة إلى المحادثات')}>
             <Icon name="arrow-left" size={20} />
@@ -1361,6 +1398,12 @@ export default function ThreadPanel({
             </div>
           </div>
           <div className="msg-thread__header-actions">
+            {onStar && (
+              <button type="button" className="msg-icon-btn" onClick={() => setStarredOpen(true)}
+                title={t('Starred messages', 'الرسائل المميّزة')} aria-label={t('Starred messages', 'الرسائل المميّزة')}>
+                <MIcon name="star" size={18} />
+              </button>
+            )}
             {onToggleFull && <button type="button" className="msg-icon-btn msg-full-btn" title={fullView ? t('Exit full screen', 'الخروج من ملء الشاشة') : t('Full screen', 'ملء الشاشة')} aria-label={fullView ? t('Exit full screen', 'الخروج من ملء الشاشة') : t('Full screen', 'ملء الشاشة')} aria-pressed={!!fullView} onClick={onToggleFull}>
             <Icon name={fullView ? 'collapse' : 'maximize'} size={18} />
           </button>}
@@ -1457,6 +1500,7 @@ export default function ThreadPanel({
                     onDelete={onDeleteMessage}
                     onReact={onReact}
                     onPin={onPin}
+                    onStar={onStar}
                     onVote={onVote}
                     onStopLive={onStopLive}
                     onOpenLightbox={onOpenLightbox}

@@ -1020,6 +1020,17 @@ export default function Messages() {
     return () => clearTimeout(h);
   }, [pinnedMessages, activeId, refreshPinned, syncPinFlags]);
 
+  // Star: personal (the other side never sees it). Optimistic, rolled back if the server refuses.
+  const onStar = async (m, starred) => {
+    setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, is_starred: starred } : x)));
+    try {
+      await api.post(BASE + '/messages/' + m.id + '/star', { starred });
+    } catch (err) {
+      setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, is_starred: !starred } : x)));
+      showError(err);
+    }
+  };
+
   const onVote = async (id, optionIndex) => {
     if (isTmp(id)) return;
     // optimistic: move / remove my vote right away so the tap is felt instantly
@@ -1579,6 +1590,7 @@ export default function Messages() {
         onCancelUpload={onCancelUpload}
         onReact={onReact}
         onPin={onPin}
+        onStar={onStar}
         onVote={onVote}
         onStopLive={onStopLive}
         onSendLocation={onSendLocation}
