@@ -1450,10 +1450,6 @@ export default function ThreadPanel({
               </span>
             </div>
           </div>
-          {headerBio.text && (
-            <HeaderBio conversationId={conversation.id} text={headerBio.text} styleId={headerBio.style} own={!!conversation.is_saved}
-              onEdit={() => onOpenInfo?.()} />
-          )}
           <div className="msg-thread__header-actions">
             {onStar && (
               <button type="button" className="msg-icon-btn" onClick={() => setStarredOpen(true)}
@@ -1507,6 +1503,12 @@ export default function ThreadPanel({
             </button>
           </div>
         </header>
+
+        {/* bio sits in the flow right under the header, above the pinned bar / saved-items filters, so it never covers them */}
+        {headerBio.text && (
+          <HeaderBio conversationId={conversation.id} text={headerBio.text} styleId={headerBio.style} own={!!conversation.is_saved}
+            onEdit={() => onOpenInfo?.()} />
+        )}
 
         {pinnedMessages.length > 0 && (
           <PinnedBar pinned={pinnedMessages} onGo={(id) => onGoToMessage?.(id)} onOpenList={onShowPinned} onUnpin={(m) => onUnpin?.(m)} />

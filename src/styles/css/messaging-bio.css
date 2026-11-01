@@ -34,11 +34,11 @@
 
 /* chat header placement */
 .msg-thread__header { position: relative; }
-.bio-hdr { position: absolute; z-index: 30; top: calc(100% + 4px); inset-inline-start: 12px; max-width: min(78%, 360px); pointer-events: none; animation: bioIn .32s cubic-bezier(.2, .9, .3, 1.2); transform-origin: 34px -6px; }
-.bio-hdr__bubble { pointer-events: auto; cursor: pointer; padding-inline-end: 15px; }
+.bio-hdr { position: relative; flex-shrink: 0; z-index: 1; padding: 8px 14px 4px; max-width: 100%; pointer-events: none; animation: bioIn .32s cubic-bezier(.2, .9, .3, 1.2); transform-origin: 34px -6px; }
+.bio-hdr__bubble { pointer-events: auto; cursor: pointer; padding-inline-end: 15px; max-width: min(100%, 420px); }
 .bio-b__edit { border: 0; background: rgba(0, 0, 0, .12); color: inherit; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; cursor: pointer; flex: none; line-height: 1; }
 .bio-b__edit:hover { background: rgba(0, 0, 0, .22); }
-@media (max-width: 760px) { .bio-hdr { inset-inline-start: 8px; max-width: calc(100% - 16px); } }
+@media (max-width: 760px) { .bio-hdr { padding-inline: 8px; } }
 
 /* contact info panel */
 .msg-info__hero .bio-b { margin-top: 10px; align-self: center; }

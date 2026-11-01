@@ -55,6 +55,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), nativeHtml(mode)], // [ANDROID] nativeHtml is a no-op unless --mode native
     css: { postcss: { plugins: [windowUnits()] } },
+    // The OS shell + editors are intentionally large and code-split by route; silence the 500 kB advisory.
+    build: { chunkSizeWarningLimit: 2000 },
     server: { port: 5173, proxy },
     preview: { port: 4173, proxy },
   };

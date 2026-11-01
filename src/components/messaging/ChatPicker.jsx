@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import EmojiPicker from './EmojiPicker';
 import StickerMedia from './StickerMedia';
+import { setFavLocal } from './MessageMenu';
 import {
-  cachedFavourites, cachedMyStickers, cachedPacks, deleteMySticker, getRecentGifs, getRecentStickers, loadFavouriteItems, loadMyStickers, loadPack, loadPacks,
+  cachedFavourites, cachedMyStickers, cachedPacks, deleteMySticker, getRecentGifs, getRecentStickers, loadFavouriteItems, loadMyStickers, loadPack, loadPacks, forgetRecentSticker, removeFromPack, removeFavouriteSticker,
   pushRecentGif, pushRecentSticker, searchGifs,
 } from '../../lib/stickerStore';
 
@@ -88,6 +89,23 @@ function StickerPane({ ar, canSend, onSend, onNew, onChanged }) {
     try { await deleteMySticker(s.libId); setMine((m) => m.filter((x) => x.libId !== s.libId)); setRecent(getRecentStickers()); } catch { /* the list refreshes next time */ }
   };
 
+  // Recent: only clears it from the recents list (the sticker itself is untouched).
+  const forget = (s) => { forgetRecentSticker(s.key); setRecent(getRecentStickers()); };
+  // Favourites: un-favourites the sticker (also stops the message menu showing it as favourite after a refresh).
+  const unfav = async (s) => {
+    try { await removeFavouriteSticker(s.key); setFavLocal(s.url, false); setFavs((f) => f.filter((x) => x.key !== s.key)); } catch { /* the list refreshes next time */ }
+  };
+  // Pack: takes the sticker out of that pack (it stays in "My stickers").
+  const removeFromCurrentPack = async (s) => {
+    const id = Number(tab.slice(5));
+    if (!s.libId) return;
+    try {
+      const list = await removeFromPack(id, s.libId);
+      setPacks(list);
+      setPackItems((m) => ({ ...m, [id]: (m[id] || []).filter((x) => x.libId !== s.libId) }));
+    } catch { /* the list refreshes next time */ }
+  };
+
   const createTile = (
     <button type="button" className="stk-create" onClick={onNew}>
       <Icon d={I.plus} size={22} />
@@ -122,10 +140,10 @@ function StickerPane({ ar, canSend, onSend, onNew, onChanged }) {
       <div className="cp-body">
         {!canSend && <p className="cp-note">{ar ? 'الستيكرات متوقفة في هذه المحادثة.' : 'Stickers are turned off in this conversation.'}</p>}
         {tab.startsWith('pack:') && (packItems[Number(tab.slice(5))]
-          ? <StickerGrid items={packItems[Number(tab.slice(5))]} ar={ar} onPick={send} empty={ar ? 'الباك فاضية' : 'This pack is empty'} />
+          ? <StickerGrid items={packItems[Number(tab.slice(5))]} ar={ar} onPick={send} onRemove={removeFromCurrentPack} empty={ar ? 'الباك فاضية' : 'This pack is empty'} />
           : <div className="cp-loading"><span className="cp-spin" /></div>)}
-        {tab === 'recent' && <StickerGrid items={recent} ar={ar} onPick={send} lead={createTile} empty={ar ? 'الستيكرات اللي بتستخدمها هتظهر هنا' : 'Stickers you use show up here'} />}
-        {tab === 'favs' && <StickerGrid items={favs} ar={ar} onPick={send} lead={createTile} empty={ar ? 'اضغط على أي ستيكر في الشات وأضفه للمفضلة' : 'Tap any sticker in a chat to add it to Favourites'} />}
+        {tab === 'recent' && <StickerGrid items={recent} ar={ar} onPick={send} onRemove={forget} lead={createTile} empty={ar ? 'الستيكرات اللي بتستخدمها هتظهر هنا' : 'Stickers you use show up here'} />}
+        {tab === 'favs' && <StickerGrid items={favs} ar={ar} onPick={send} onRemove={unfav} lead={createTile} empty={ar ? 'اضغط على أي ستيكر في الشات وأضفه للمفضلة' : 'Tap any sticker in a chat to add it to Favourites'} />}
         {tab === 'mine' && (loading && !mine.length
           ? <div className="cp-loading"><span className="cp-spin" /></div>
           : <StickerGrid items={mine} ar={ar} onPick={send} onRemove={remove} lead={createTile} empty={ar ? 'اعمل أول ستيكر من صورة أو فيديو' : 'Make your first sticker from a photo or video'} />)}

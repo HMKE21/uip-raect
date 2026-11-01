@@ -79,6 +79,10 @@ export async function loadFavouriteItems(force = false) {
   };
   return favs;
 }
+export async function removeFavouriteSticker(key) {
+  await api.del(BASE + '/favourites/stickers/' + key);
+  if (favs) favs = { ...favs, stickers: favs.stickers.filter((s) => s.key !== key) };
+}
 export const invalidateFavourites = () => { favs = null; };
 
 /* ---- GIF search (Giphy through the API; needs GIPHY_API_KEY on the server) ---- */
