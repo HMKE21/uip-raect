@@ -8,6 +8,7 @@ import { fmtBytes, roleLabel } from './format';
 import { useProtectedSrc } from '../../lib/chatMedia';
 import { useLanguage } from '../../context/LanguageContext';
 import { BioBubble } from './BioNote';
+import SavedProfile from './SavedProfile';
 
 /**
  * Right-hand info panel — ported from renderInfoPanel()/infoToggleRow() in
@@ -43,6 +44,7 @@ export default function InfoPanel({
   onUnblockUser,
   onReportUser,
   onRenameSaved,
+  onSavedAvatar,
   onClose,
   wall = 'dots',
   wallIsDefault = true,
@@ -59,13 +61,6 @@ export default function InfoPanel({
   const { locale } = useLanguage();
   const t = (en, ar) => (locale === 'ar' ? ar : en);
   const [category, setCategory] = useState(convMeta?.category || '');
-  const [savedName, setSavedName] = useState(conversation?.saved_default_name === false ? (conversation.subject || '') : '');
-  const [savedBusy, setSavedBusy] = useState(false);
-  const saveName = async () => {
-    if (!onRenameSaved || savedBusy) return;
-    setSavedBusy(true);
-    try { await onRenameSaved(savedName.trim()); } finally { setSavedBusy(false); }
-  };
   useEffect(() => {
     setCategory(convMeta?.category || '');
   }, [conversation?.id, convMeta?.category]);
@@ -127,26 +122,7 @@ export default function InfoPanel({
         {conversation.is_group ? (
           <GroupTop conversation={conversation} others={others} onOpenSettings={onOpenGroupSettings} onAddMember={onAddMember} />
         ) : conversation.is_saved ? (
-          <div className="msg-info__hero">
-            <Avatar name="" saved />
-            <strong>{conversation.saved_default_name === false ? conversation.subject : t('Saved Messages', 'الرسائل المحفوظة')}</strong>
-            <span className="msg-info__org">{t('Your private space. Only you can see what you save here.', 'مساحتك الخاصة. أنت فقط تشوف اللي بتحفظه هنا.')}</span>
-            {onRenameSaved && (
-              <input
-                type="text"
-                className="msg-input"
-                style={{ width: '100%', marginTop: 8, textAlign: 'center' }}
-                maxLength={60}
-                value={savedName}
-                disabled={savedBusy}
-                placeholder={t('Saved Messages', 'الرسائل المحفوظة')}
-                aria-label={t('Chat name', 'اسم المحادثة')}
-                onChange={(e) => setSavedName(e.target.value)}
-                onBlur={saveName}
-                onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()}
-              />
-            )}
-          </div>
+          <SavedProfile conversation={conversation} onRenameSaved={onRenameSaved} onSavedAvatar={onSavedAvatar} />
         ) : (
           <div className="msg-info__hero">
             <Avatar name={others[0]?.full_name || ''} src={others[0]?.avatar_path} />

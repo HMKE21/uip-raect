@@ -992,6 +992,7 @@ export default function ThreadPanel({
   const [showLocation, setShowLocation] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [starredOpen, setStarredOpen] = useState(false);
+  const [savedFilter, setSavedFilter] = useState('all'); // "Saved messages" only: all | media | files | links | voice | starred
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState('00:00');
   const [noiseCancel, setNoiseCancel] = useState(() => { try { return localStorage.getItem('uip_voice_nc') !== '0'; } catch { return true; } });
@@ -1141,6 +1142,17 @@ export default function ThreadPanel({
     : conversation.is_saved
       ? { text: (myChatSettings.bio || '').trim(), style: myChatSettings.bio_style }
       : { text: (others[0]?.bio || '').trim(), style: others[0]?.bio_style };
+  // "Saved messages": filter chips (media / files / links / voice / starred) over what is loaded
+  const isSavedChat = !!conversation.is_saved;
+  const SAVED_TESTS = {
+    media: (m) => (m.attachments || []).some((a) => a.kind === 'image' || a.kind === 'video') || m.message_type === 'gif' || m.message_type === 'sticker',
+    files: (m) => (m.attachments || []).some((a) => a.kind === 'file'),
+    links: (m) => /https?:\/\/\S+/i.test(m.body || ''),
+    voice: (m) => (m.attachments || []).some((a) => a.kind === 'audio'),
+    starred: (m) => !!m.is_starred,
+  };
+  const savedCounts = isSavedChat ? Object.fromEntries(Object.entries(SAVED_TESTS).map(([k, fn]) => [k, messages.filter((m) => !m.is_deleted && fn(m)).length])) : {};
+  const shownMessages = isSavedChat && savedFilter !== 'all' && SAVED_TESTS[savedFilter] ? messages.filter((m) => !m.is_deleted && SAVED_TESTS[savedFilter](m)) : messages;
   // Direct chat where one side blocked the other: 'blocked_by_me' (can unblock here) / 'blocked_by_peer' (generic notice).
   const dmBlock = conversation && !conversation.is_group && (conversation.send_block === 'blocked_by_me' || conversation.send_block === 'blocked_by_peer') ? conversation.send_block : null;
   const canSend = peerDeleted || dmBlock ? false : (!grp || grp.can_send !== false);
@@ -1409,7 +1421,7 @@ export default function ThreadPanel({
             </button>
           )}
           <div className="msg-thread__peer" data-action="open-info" onClick={onOpenInfo} style={{ cursor: 'pointer' }}>
-            <Avatar name={peerLabel(conversation)} isGroup={conversation.is_group} saved={conversation.is_saved} src={conversation.is_group ? conversation.avatar_path : (peerDeleted ? null : others[0]?.avatar_path)} />
+            <Avatar name={peerLabel(conversation)} isGroup={conversation.is_group} saved={conversation.is_saved} src={conversation.is_saved ? conversation.me?.avatar_path : (conversation.is_group ? conversation.avatar_path : (peerDeleted ? null : others[0]?.avatar_path))} />
             <div className="msg-thread__peer-meta">
               <strong>
                 <span className="msg-thread__name">{peerLabel(conversation)}</span>
@@ -1424,7 +1436,7 @@ export default function ThreadPanel({
           </div>
           {headerBio.text && (
             <HeaderBio conversationId={conversation.id} text={headerBio.text} styleId={headerBio.style} own={!!conversation.is_saved}
-              onEdit={() => navigate(`/${portalPrefix(authUser?.role)}/messages/settings`)} />
+              onEdit={() => onOpenInfo?.()} />
           )}
           <div className="msg-thread__header-actions">
             {onStar && (
@@ -1484,15 +1496,47 @@ export default function ThreadPanel({
           <PinnedBar pinned={pinnedMessages} onGo={(id) => onGoToMessage?.(id)} onOpenList={onShowPinned} onUnpin={(m) => onUnpin?.(m)} />
         )}
 
+        {isSavedChat && messages.length > 0 && (
+          <div className="sv-filters" role="tablist" aria-label={t('Filter saved items', 'تصفية المحفوظات')}>
+            {[
+              ['all', t('All', 'الكل'), messages.length],
+              ['media', t('Media', 'وسائط'), savedCounts.media],
+              ['files', t('Files', 'ملفات'), savedCounts.files],
+              ['links', t('Links', 'روابط'), savedCounts.links],
+              ['voice', t('Voice', 'صوتيات'), savedCounts.voice],
+              ['starred', t('Starred', 'مميّزة'), savedCounts.starred],
+            ].map(([id, label, n]) => (
+              <button key={id} type="button" role="tab" aria-selected={savedFilter === id}
+                className={`sv-filter${savedFilter === id ? ' is-on' : ''}`} onClick={() => setSavedFilter(id)}>
+                {label}{n > 0 && id !== 'all' ? <b>{n}</b> : null}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="msg-thread__scroll" data-message-list ref={scrollRef}>
           {hasMoreOlder && (
             <button type="button" className="msg-load-older" onClick={onLoadOlder}>{t('Load older messages', 'تحميل رسائل أقدم')}</button>
           )}
           <div className="msg-messages" data-messages>
-            {messages.length === 0 ? (
+            {messages.length === 0 && isSavedChat ? (
+              <div className="sv-empty">
+                <span className="sv-empty__ic"><Icon name="bookmark" size={26} /></span>
+                <strong>{t('Your private notebook', 'مفكرتك الخاصة')}</strong>
+                <p>{t('Save anything for yourself — notes, links, photos, files, voice notes. Only you can see it, on every device.', 'احفظ أي حاجة لنفسك — ملاحظات، روابط، صور، ملفات، رسائل صوتية. أنت بس اللي بتشوفها، على كل أجهزتك.')}</p>
+                <ul>
+                  <li><Icon name="note" size={14} /> {t('Jot down a quick note or to-do', 'اكتب ملاحظة أو مهمة سريعة')}</li>
+                  <li><Icon name="link" size={14} /> {t('Paste a link to read later', 'الصق رابط تقراه بعدين')}</li>
+                  <li><Icon name="paperclip" size={14} /> {t('Send yourself a file or photo', 'ابعت لنفسك ملف أو صورة')}</li>
+                  <li><Icon name="mic" size={14} /> {t('Record a voice reminder', 'سجّل تذكير صوتي')}</li>
+                </ul>
+              </div>
+            ) : messages.length === 0 ? (
               <div className="msg-empty-state">{t('No messages yet — say hello!', 'لا توجد رسائل بعد — ابدأ بالسلام!')}</div>
+            ) : shownMessages.length === 0 ? (
+              <div className="msg-empty-state">{t('Nothing here yet in this filter.', 'مفيش حاجة في الفلتر ده لسه.')}</div>
             ) : (
-              messages.map((m) => {
+              shownMessages.map((m) => {
                 const day = m.created_at ? m.created_at.slice(0, 10) : '';
                 const nodes = [];
                 if (day !== lastDay) {

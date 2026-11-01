@@ -1000,6 +1000,12 @@ export default function Messages() {
     }
   };
 
+  // my photo changed from the saved-messages panel (null = removed): keep the rail, the header and the panel in sync
+  const onSavedAvatar = (path) => {
+    setConversations((prev) => prev.map((c) => (c.is_saved ? { ...c, saved_avatar: path } : c)));
+    setActiveConversation((c) => (c && c.is_saved ? { ...c, me: { ...(c.me || {}), avatar_path: path } } : c));
+  };
+
   const onDeleteMessage = async (id, mode) => {
     try {
       if (mode === 'for-everyone') await api.del(BASE + '/messages/' + id + '/for-everyone');
@@ -1709,6 +1715,7 @@ export default function Messages() {
           onLeaveGroup={onLeaveGroup}
           onDeleteGroup={onDeleteGroup}
           onRenameSaved={onRenameSaved}
+          onSavedAvatar={onSavedAvatar}
           onBlockUser={onBlockUser}
           onUnblockUser={onUnblockUser}
           onReportUser={onReportUser}

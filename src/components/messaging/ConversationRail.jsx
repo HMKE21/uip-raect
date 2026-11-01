@@ -29,14 +29,23 @@ function toneOf(name) {
  */
 function Avatar({ name, isGroup, size, src, saved }) {
   const [failed, setFailed] = useState(false);
+  const url = !failed ? avatarUrl(src) : null;
   if (saved) {
+    // "Saved messages": my own photo when I have one (with a small bookmark badge), otherwise the bookmark tile
+    if (url) {
+      return (
+        <span className={`msg-avatar msg-avatar--saved-photo${size === 'sm' ? ' msg-avatar--sm' : ''}`}>
+          <img src={url} alt="" onError={() => setFailed(true)} />
+          <span className="msg-avatar__badge" aria-hidden="true"><Icon name="bookmark" size={size === 'sm' ? 8 : 11} /></span>
+        </span>
+      );
+    }
     return (
       <span className={`msg-avatar msg-avatar--saved${size === 'sm' ? ' msg-avatar--sm' : ''}`}>
         <Icon name="bookmark" size={size === 'sm' ? 16 : 22} />
       </span>
     );
   }
-  const url = !failed ? avatarUrl(src) : null;
   return (
     <span className={`msg-avatar msg-avatar--tone-${toneOf(name)}${isGroup ? ' msg-avatar--group' : ''}${size === 'sm' ? ' msg-avatar--sm' : ''}`}>
       {url ? <img src={url} alt="" onError={() => setFailed(true)} /> : initials(name)}
@@ -307,7 +316,7 @@ export default function ConversationRail({
                   }}
                 >
                   {selecting && <span className="msg-check msg-check--box"><input type="checkbox" tabIndex={-1} readOnly checked={isSel} /></span>}
-                  <Avatar name={peerLabel(c)} isGroup={c.is_group} saved={c.is_saved} src={c.is_group ? c.group_avatar : (c.peer_deleted ? null : c.peer_avatar)} />
+                  <Avatar name={peerLabel(c)} isGroup={c.is_group} saved={c.is_saved} src={c.is_saved ? c.saved_avatar : (c.is_group ? c.group_avatar : (c.peer_deleted ? null : c.peer_avatar))} />
                   <span className="msg-conv__meta">
                     <span className="msg-conv__row1">
                       <span className="msg-conv__name">{peerLabel(c)}{c.peer_deleted && <em className="msg-conv__deleted">{t('Deleted account', 'حساب محذوف')}</em>}</span>
