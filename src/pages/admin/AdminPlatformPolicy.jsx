@@ -26,6 +26,9 @@ const SWITCHES = [
   { group: 'platform', key: 'animations_enabled', icon: 'sparkles', title: 'Platform animations', hint: 'Soft background shapes, pill / card / page-enter motion across the whole platform. Turn off if the platform feels slow: every page becomes static for everyone within a few minutes (right away for you).' },
   { group: 'platform', key: 'messaging_restricted', icon: 'mail', title: 'Restrict student messaging', hint: 'Off: anyone can message anyone. On: a student can only start chats with their own project group, university, faculty, staff and assigned supervisor (or with an approved permission request).' },
   { group: 'platform', key: 'require_university_link', icon: 'building', title: 'Require a university link', hint: 'On: a student account with no university can only use the profile and notifications until a university or faculty approves it, or an admin / university / faculty grants it access (Access & Pricing). Off: no restriction.' },
+  { group: 'platform', key: 'calls_enabled', icon: 'phone', title: 'Calls', hint: 'Voice (and video, if enabled) calls inside chats. Off: the call buttons stop working for everyone. Same as CALLS_ENABLED in the server .env — whichever you set here wins.' },
+  { group: 'platform', key: 'calls_video_enabled', icon: 'video', title: 'Video calls', hint: 'Allow video in calls (needs Calls on). Same as CALLS_VIDEO_ENABLED in the server .env.' },
+  { group: 'platform', key: 'drive_direct', icon: 'upload', title: 'Direct cloud uploads', hint: 'Browsers upload to / download from the storage bucket directly with signed links, so the server does not carry the files. Same as DRIVE_DIRECT in the server .env.' },
   { group: 'platform', key: 'response_encryption', icon: 'lock', title: 'API response encryption', hint: 'AES-GCM envelope on every JSON response. When off, responses are plain JSON (easier to debug, visible in the browser Network tab).', risky: true },
   { group: 'platform', key: 'response_enc_enforce', icon: 'shield', title: 'Require encrypted responses', hint: 'Clients that cannot negotiate an encryption key are refused instead of getting plain JSON. Needs response encryption to be on.', riskyOn: true, needsEncryption: true },
   { group: 'platform', key: 'request_enc_enforce', icon: 'shield', title: 'Require encrypted requests', hint: 'JSON request bodies must arrive encrypted (uploads are exempt). Needs response encryption to be on.', riskyOn: true, needsEncryption: true },
@@ -473,6 +476,28 @@ const GITHUB_FIELDS = [
   { key: 'github_oauth_redirect', icon: 'link', title: 'GitHub callback URL', hint: 'Must match the “Authorization callback URL” of your OAuth App exactly, and end with /api/v1/github/callback.', type: 'text', maxLength: 300, ltr: true, placeholder: 'https://your-site.com/api/v1/github/callback' },
 ];
 
+const LINK_FIELDS = [
+  { key: 'frontend_url', icon: 'link', title: 'Website address (FRONTEND_URL)', hint: 'Used for the links inside e-mails, push notifications and password-reset pages, for example https://uip-nub.vercel.app. Leave empty to use the server .env value.', type: 'text', maxLength: 300, ltr: true, placeholder: 'https://your-site.com' },
+  { key: 'cors_allowed_origins', icon: 'globe', title: 'Allowed websites (CORS)', hint: 'Websites allowed to call the API, comma-separated, for example https://uip-nub.vercel.app,https://localhost. Leave empty to use the server .env value.', type: 'text', maxLength: 1500, ltr: true, placeholder: 'https://app.example.com,https://localhost' },
+];
+
+const CLOUD_FIELDS = [
+  { key: 'google_drive_redirect', icon: 'link', title: 'Google Drive callback URL', hint: 'https://<api-domain>/api/v1/cloud/google/callback — must also be listed in the Google OAuth client. (GOOGLE_DRIVE_REDIRECT)', type: 'text', maxLength: 300, ltr: true, placeholder: 'https://api.example.com/api/v1/cloud/google/callback' },
+  { key: 'ms_client_id', icon: 'globe', title: 'Microsoft (OneDrive) client ID', hint: 'Application (client) ID from Entra ID / Azure. Public value. (MS_CLIENT_ID)', type: 'text', maxLength: 100, ltr: true, placeholder: '00000000-0000-0000-0000-000000000000' },
+  { key: 'ms_authority', icon: 'link', title: 'Microsoft authority', hint: 'https://login.microsoftonline.com/common for personal + university accounts, or …/<tenant-id>. (MS_AUTHORITY)', type: 'text', maxLength: 300, ltr: true, placeholder: 'https://login.microsoftonline.com/common' },
+  { key: 'drive_direct_ttl_min', icon: 'clock', title: 'Signed upload/download link lifetime (minutes)', hint: 'How long a direct-to-bucket link stays valid. (DRIVE_DIRECT_TTL_MIN)', type: 'number', min: 1, max: 1440 },
+];
+
+const CALL_FIELDS = [
+  { key: 'cf_turn_key_id', icon: 'phone', title: 'Cloudflare TURN key ID', hint: 'Cloudflare ▸ Realtime ▸ TURN. Helps calls connect on strict networks. (CF_TURN_KEY_ID)', type: 'text', maxLength: 100, ltr: true, placeholder: 'Key ID' },
+  { key: 'cf_turn_api_token', icon: 'lock', title: 'Cloudflare TURN API token', hint: 'Stored encrypted — only a masked preview is shown. Paste a new one to replace it. (CF_TURN_API_TOKEN)', type: 'password', maxLength: 300, ltr: true, secret: true, placeholder: 'Paste the API token here' },
+];
+
+const SANDBOX_FIELDS = [
+  { key: 'sandbox_url', icon: 'globe', title: 'Project sandbox address', hint: 'Address of the separate sandbox service that runs students’ projects. (SANDBOX_URL)', type: 'text', maxLength: 300, ltr: true, placeholder: 'https://sandbox.example.com' },
+  { key: 'sandbox_jwt_secret', icon: 'lock', title: 'Sandbox shared secret', hint: 'Must be identical on the sandbox service. Stored encrypted — only a masked preview is shown. (SANDBOX_JWT_SECRET)', type: 'password', maxLength: 300, ltr: true, secret: true, placeholder: 'Paste the secret here' },
+];
+
 const APP_FIELDS = [
   { key: 'app_download_url', icon: 'download', title: 'APK download link', hint: 'The https:// link people tap to download the Android app (Google Drive, GitHub Releases, your own file host…). Change it any time — it updates on the site instantly, no rebuild. Leave empty to hide every download button.', type: 'text', maxLength: 500, ltr: true, placeholder: 'https://…/uip.apk' },
   { key: 'app_download_version', icon: 'info', title: 'App version (optional)', hint: 'Shown next to “Mobile app” on the landing page, for example 1.4.0.', type: 'text', maxLength: 30, ltr: true, placeholder: '1.0.0' },
@@ -760,6 +785,10 @@ export default function AdminPlatformPolicy() {
       <div style={{ marginTop: 'var(--space-4)' }}><ValuesPanel values={data.values} onSaved={setData} t={t} fields={GITHUB_FIELDS} title="GitHub connection" subtitle="Lets students connect their GitHub account (OAuth) and import their repositories. Resetting a value brings back the server (.env) value." /></div>
       <div style={{ marginTop: 'var(--space-4)' }}><ValuesPanel values={data.values} onSaved={setData} t={t} fields={APP_FIELDS} title="Mobile app download" subtitle="The Android app download link shown on the landing page and footer. Update it here whenever you publish a new APK." /></div>
       <div style={{ marginTop: 'var(--space-4)' }}><ValuesPanel values={data.values} onSaved={setData} t={t} fields={PUSH_FIELDS} title="Push notifications (Firebase)" subtitle="Lets the platform send mobile push notifications through Firebase Cloud Messaging — no .env edit or redeploy. Resetting a value brings back the server (.env) value." /></div>
+      <div style={{ marginTop: 'var(--space-4)' }}><ValuesPanel values={data.values} onSaved={setData} t={t} fields={LINK_FIELDS} title="Website address & CORS" subtitle="Where the site lives and which websites may call the API. Set here or in the server .env — either works; a value saved here wins, and Reset brings back the .env value." /></div>
+      <div style={{ marginTop: 'var(--space-4)' }}><ValuesPanel values={data.values} onSaved={setData} t={t} fields={CLOUD_FIELDS} title="Cloud drives (Google Drive & OneDrive)" subtitle="Backup connections from My PC. Set here or in the server .env — either works; Reset brings back the .env value." /></div>
+      <div style={{ marginTop: 'var(--space-4)' }}><ValuesPanel values={data.values} onSaved={setData} t={t} fields={CALL_FIELDS} title="Calls relay (Cloudflare TURN)" subtitle="Lets calls connect through strict networks. Set here or in the server .env — either works; Reset brings back the .env value." /></div>
+      <div style={{ marginTop: 'var(--space-4)' }}><ValuesPanel values={data.values} onSaved={setData} t={t} fields={SANDBOX_FIELDS} title="Project sandbox" subtitle="Connection to the separate sandbox service. Set here or in the server .env — either works; Reset brings back the .env value." /></div>
       <div style={{ marginTop: 'var(--space-4)' }}><ValuesPanel values={data.values} onSaved={setData} t={t} fields={OTP_FIELDS} title="OTP protection" subtitle="Limits for email-confirmation, forgot-password, account-recovery and “not me” codes. Resetting a value brings back the server default." /></div>
       <div style={{ marginTop: 'var(--space-4)' }}><TestPanel t={t} /></div>
       <div style={{ marginTop: 'var(--space-4)' }}><DecryptPanel t={t} /></div>
