@@ -95,5 +95,10 @@
   },
   "engines": {
     "node": "24.x"
+  },
+  "allowScripts": {
+    "core-js": false,
+    "sharp": false,
+    "tesseract.js": false
   }
 }

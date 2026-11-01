@@ -34,7 +34,7 @@ const I = {
   reply: <path d="M9 17 4 12l5-5M4 12h11a4 4 0 0 1 4 4v1" />,
   copy: <><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></>,
   forward: <path d="m15 17 5-5-5-5M4 18v-2a4 4 0 0 1 4-4h12" />,
-  pin: <path d="M12 2 9 7l-5 2 5 3v6l2 4 2-4v-6l5-3-5-2Z" />,
+  pin: <><path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" /></>,
   star: <path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9L12 3Z" />,
   heart: <path d="M20.8 5.6a5.2 5.2 0 0 0-7.4 0L12 7l-1.4-1.4a5.2 5.2 0 0 0-7.4 7.4L12 21.8l8.8-8.8a5.2 5.2 0 0 0 0-7.4Z" />,
   image: <><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="1.6" /><path d="m21 16-5-5-8 8" /></>,
@@ -354,8 +354,8 @@ export function MessageInfoPanel({ m, onClose, preview }) {
   );
 
   return createPortal(
-    <div className="mm-info-back" onClick={onClose}>
-      <section className="mm-info" role="dialog" aria-modal="true" aria-label={t('Message info', 'معلومات الرسالة')} onClick={(e) => e.stopPropagation()}>
+    <div className="mm-info-back mm-info-back--card" onClick={onClose}>
+      <section className="mm-info mm-info--card" role="dialog" aria-modal="true" aria-label={t('Message info', 'معلومات الرسالة')} onClick={(e) => e.stopPropagation()}>
         <header className="mm-info__head">
           <button type="button" className="mm-iconbtn" onClick={onClose} aria-label={t('Back', 'رجوع')}><MIcon name="back" size={20} /></button>
           <h3>{t('Message info', 'معلومات الرسالة')}</h3>

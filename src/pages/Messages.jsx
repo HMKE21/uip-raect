@@ -1075,7 +1075,14 @@ export default function Messages() {
     if (!m.is_pinned) { setPinTarget(m); return; }
     return unpinMessage(m);
   };
-  const unpinMessage = async (m) => {
+  // Unpin always asks first, so a stray tap on the "x" of the pinned bar can't drop a pin by accident.
+  const unpinMessage = (m) => askConfirm({
+    title: ar ? 'إلغاء تثبيت الرسالة؟' : 'Unpin this message?',
+    message: ar ? 'هتتشال الرسالة من المثبّتات. تقدر تثبّتها تاني في أي وقت.' : 'It will be removed from the pinned messages. You can pin it again any time.',
+    confirmLabel: ar ? 'إلغاء التثبيت' : 'Unpin',
+    run: () => doUnpin(m),
+  });
+  const doUnpin = async (m) => {
     try {
       await api.post(BASE + '/messages/' + m.id + '/unpin');
       setMessages((prev) => prev.map((x) => (x.id === m.id ? { ...x, is_pinned: false, pinned_until: null } : x)));

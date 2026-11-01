@@ -152,11 +152,24 @@ body.mm-lock { overflow: hidden; }
 
 .msg-star-tag { display: inline-flex; color: #e8a317; margin-inline-end: 3px; vertical-align: middle; }
 
+/* message info: a compact centred card instead of a full-height drawer */
+.mm-info-back--card, [dir="rtl"] .mm-info-back--card { justify-content: center; align-items: center; padding: 16px; backdrop-filter: blur(3px); }
+.mm-info--card, [dir="rtl"] .mm-info--card { width: min(400px, 100%); height: auto; max-height: min(640px, calc(100vh - 32px)); border-radius: 20px; padding-bottom: 20px; box-shadow: 0 24px 60px rgba(0, 0, 0, .3); animation: mmPop .18s cubic-bezier(.2, .9, .3, 1.1); border: 1px solid var(--border-subtle); }
+.mm-info--card .mm-info__head { padding: 14px 16px 8px; border-radius: 20px 20px 0 0; }
+.mm-info--card .mm-info__head h3 { font-size: 16px; }
+.mm-info--card .mm-info__stage { min-height: 0; margin: 4px 16px 16px; padding: 16px 14px; border-radius: 14px; }
+.mm-info--card .mm-info__block { padding: 0 20px; gap: 16px; }
+.mm-info--card .mm-info__line strong { font-size: 15px; }
+.mm-info--card .mm-info__meta, .mm-info--card .mm-info__muted { margin-inline: 20px; }
+
 @media (max-width: 760px) {
   .mm-info-back { justify-content: stretch; }
+  .mm-info-back--card { align-items: flex-end; padding: 0; }
   .mm-info { width: 100%; box-shadow: none; animation-name: mmFade; }
+  .mm-info--card, [dir="rtl"] .mm-info--card { width: 100%; max-height: 85vh; border-radius: 20px 20px 0 0; animation-name: mmSheet; }
 }
 
+@keyframes mmSheet { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes mmFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mmPop { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: scale(1); } }
 @keyframes mmSheet { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
