@@ -32,6 +32,7 @@ import { useCall } from '../../context/callCtx';
 import ChatPicker from './ChatPicker';
 import StickerMaker from './StickerMaker';
 import StickerMedia from './StickerMedia';
+import StickerSheet from './StickerSheet';
 import AttachMenu from './AttachMenu';
 import { createMySticker, toSticker } from '../../lib/stickerStore';
 import CameraCaptureModal from './CameraCaptureModal';
@@ -212,7 +213,7 @@ function FloatingPanel({ anchorRef, onClose, className, children }) {
   );
 }
 
-function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit, selectMode, selected, onToggleSelect, onStartSelect, savedChat, onStar }) {
+function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVideo, onRetryUpload, onDiscardUpload, onCancelUpload, onUndoSend, onReply, onEdit, onDelete, onReact, onPin, onVote, onStopLive, onOpenLightbox, onForward, onReport, editingId, onStartEdit, onSaveEdit, onCancelEdit, selectMode, selected, onToggleSelect, onStartSelect, savedChat, onStar, onOpenSticker }) {
   const t = useT();
   const navigate = useNavigate();
   const [showReactPicker, setShowReactPicker] = useState(false);
@@ -348,16 +349,22 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
     body = <LiveLocationBubble m={m} onStop={onStopLive} />;
   } else if (m.message_type === 'gif' && m.metadata) {
     isMedia = true;
-    body = <img className="msg-gif-img" src={m.metadata.url} alt={m.metadata.title || 'GIF'} loading="lazy" />;
+    body = (
+      <button type="button" className="msg-sticker-hit" onClick={() => !selectMode && !m.is_tmp && onOpenSticker?.(m)} aria-label={t('GIF options', 'خيارات الـ GIF')}>
+        <img className="msg-gif-img" src={m.metadata.url} alt={m.metadata.title || 'GIF'} loading="lazy" />
+      </button>
+    );
   } else if (m.message_type === 'sticker' && (m.metadata?.url || m.attachments?.[0]?.url)) {
     isMedia = true;
     body = (
-      <StickerMedia
-        className="msg-sticker-bubble"
-        url={m.metadata?.url || m.attachments[0].url}
-        kind={m.metadata?.kind || m.attachments?.[0]?.kind}
-        alt={m.metadata?.label || t('Sticker', 'ملصق')}
-      />
+      <button type="button" className="msg-sticker-hit" onClick={() => !selectMode && !m.is_tmp && !m.pending && onOpenSticker?.(m)} aria-label={t('Sticker options', 'خيارات الملصق')}>
+        <StickerMedia
+          className="msg-sticker-bubble"
+          url={m.metadata?.url || m.attachments[0].url}
+          kind={m.metadata?.kind || m.attachments?.[0]?.kind}
+          alt={m.metadata?.label || t('Sticker', 'ملصق')}
+        />
+      </button>
     );
   } else {
     body = (
@@ -992,6 +999,7 @@ export default function ThreadPanel({
   const [showLocation, setShowLocation] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [starredOpen, setStarredOpen] = useState(false);
+  const [stickerMsg, setStickerMsg] = useState(null); // the sticker / GIF whose sheet is open
   const [savedFilter, setSavedFilter] = useState('all'); // "Saved messages" only: all | media | files | links | voice | starred
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState('00:00');
@@ -1396,6 +1404,14 @@ export default function ThreadPanel({
             </button>
           </div>
         )}
+        {stickerMsg && (
+          <StickerSheet
+            message={stickerMsg}
+            canSend={canSend && (stickerMsg.message_type === 'gif' ? typeOk('gif') && !!onSendGif : typeOk('sticker') && !!onSendSticker)}
+            onSend={(s) => (s.isGif ? onSendGif?.({ url: s.url, title: s.title || '', preview: s.preview || '' }) : onSendSticker?.(toSticker(s)))}
+            onClose={() => setStickerMsg(null)}
+          />
+        )}
         {starredOpen && (
           <StarredMessagesModal
             conversationId={conversation.id}
@@ -1581,6 +1597,7 @@ export default function ThreadPanel({
                     onForward={onForwardMessage}
                     onReport={onReportMessage}
                     savedChat={!!conversation?.is_saved}
+                    onOpenSticker={setStickerMsg}
                     selectMode={selectMode}
                     selected={selectedIds.includes(m.id)}
                     onToggleSelect={onToggleSelect}

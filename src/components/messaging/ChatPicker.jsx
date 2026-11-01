@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import EmojiPicker from './EmojiPicker';
 import StickerMedia from './StickerMedia';
 import {
-  cachedFavourites, cachedMyStickers, deleteMySticker, getRecentGifs, getRecentStickers, loadFavouriteItems, loadMyStickers,
+  cachedFavourites, cachedMyStickers, cachedPacks, deleteMySticker, getRecentGifs, getRecentStickers, loadFavouriteItems, loadMyStickers, loadPack, loadPacks,
   pushRecentGif, pushRecentSticker, searchGifs,
 } from '../../lib/stickerStore';
 
@@ -53,17 +53,29 @@ function StickerPane({ ar, canSend, onSend, onNew, onChanged }) {
   const [favs, setFavs] = useState(cachedFavourites()?.stickers || []);
   const [recent, setRecent] = useState(getRecentStickers);
   const [loading, setLoading] = useState(!cachedMyStickers());
+  const [packs, setPacks] = useState(cachedPacks() || []);
+  const [packItems, setPackItems] = useState({}); // pack id -> stickers
 
   useEffect(() => {
     let dead = false;
-    Promise.allSettled([loadMyStickers(true), loadFavouriteItems(true)]).then(([a, b]) => {
+    Promise.allSettled([loadMyStickers(true), loadFavouriteItems(true), loadPacks(true)]).then(([a, b, c]) => {
       if (dead) return;
       if (a.status === 'fulfilled') setMine(a.value);
       if (b.status === 'fulfilled') setFavs(b.value.stickers);
+      if (c.status === 'fulfilled') { setPacks(c.value); setPackItems({}); }
       setLoading(false);
     });
     return () => { dead = true; };
   }, [onChanged]);
+
+  useEffect(() => {
+    if (!tab.startsWith('pack:')) return undefined;
+    const id = Number(tab.slice(5));
+    if (packItems[id]) return undefined;
+    let dead = false;
+    loadPack(id).then((p) => { if (!dead) setPackItems((m) => ({ ...m, [id]: p.items })); }).catch(() => { if (!dead) setTab('mine'); });
+    return () => { dead = true; };
+  }, [tab, packItems]);
 
   const send = (s) => {
     if (!canSend) return;
@@ -97,10 +109,23 @@ function StickerPane({ ar, canSend, onSend, onNew, onChanged }) {
         ))}
         <span className="cp-tabs__fill" />
       </div>
+      {packs.length > 0 && (
+        <div className="stk-packs" role="tablist" aria-label={ar ? 'باكاتي' : 'My packs'}>
+          {packs.map((p) => (
+            <button key={p.id} type="button" role="tab" aria-selected={tab === `pack:${p.id}`} className={`stk-pack-chip${tab === `pack:${p.id}` ? ' is-on' : ''}`} onClick={() => setTab(`pack:${p.id}`)}>
+              <span className="stk-pack-chip__ic">{p.cover ? <StickerMedia url={p.cover.url} kind={p.cover.kind} className="stk-thumb" /> : null}</span>
+              <span className="stk-pack-chip__t" dir="auto">{p.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <div className="cp-body">
         {!canSend && <p className="cp-note">{ar ? 'الستيكرات متوقفة في هذه المحادثة.' : 'Stickers are turned off in this conversation.'}</p>}
+        {tab.startsWith('pack:') && (packItems[Number(tab.slice(5))]
+          ? <StickerGrid items={packItems[Number(tab.slice(5))]} ar={ar} onPick={send} empty={ar ? 'الباك فاضية' : 'This pack is empty'} />
+          : <div className="cp-loading"><span className="cp-spin" /></div>)}
         {tab === 'recent' && <StickerGrid items={recent} ar={ar} onPick={send} lead={createTile} empty={ar ? 'الستيكرات اللي بتستخدمها هتظهر هنا' : 'Stickers you use show up here'} />}
-        {tab === 'favs' && <StickerGrid items={favs} ar={ar} onPick={send} lead={createTile} empty={ar ? 'اضغط كليك يمين على أي ستيكر وأضفه للمفضلة' : 'Right-click any sticker in a chat to favourite it'} />}
+        {tab === 'favs' && <StickerGrid items={favs} ar={ar} onPick={send} lead={createTile} empty={ar ? 'اضغط على أي ستيكر في الشات وأضفه للمفضلة' : 'Tap any sticker in a chat to add it to Favourites'} />}
         {tab === 'mine' && (loading && !mine.length
           ? <div className="cp-loading"><span className="cp-spin" /></div>
           : <StickerGrid items={mine} ar={ar} onPick={send} onRemove={remove} lead={createTile} empty={ar ? 'اعمل أول ستيكر من صورة أو فيديو' : 'Make your first sticker from a photo or video'} />)}

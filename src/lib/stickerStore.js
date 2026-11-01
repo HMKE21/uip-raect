@@ -91,3 +91,48 @@ export async function searchGifs(q, offset = 0) {
   if (gifCache.size > 60) gifCache.delete(gifCache.keys().next().value);
   return res.data;
 }
+
+/* ---- sticker packs (my own groups of stickers) ---- */
+let packs = null;
+export const cachedPacks = () => packs;
+const srcBody = (src) => (src?.libId ? { sticker_id: src.libId } : src?.attId ? { attachment_id: src.attId } : {});
+const setPacks = (list) => { packs = list || []; return packs; };
+export async function loadPacks(force = false) {
+  if (packs && !force) return packs;
+  const res = await api.get(BASE + '/sticker-packs');
+  return setPacks(res.data);
+}
+/** Where does this sticker live? -> { sticker_id, pack_ids } (src: { libId } | { attId }) */
+export async function stickerState(src) {
+  const q = src?.libId ? { sticker_id: src.libId } : { attachment_id: src?.attId };
+  const res = await api.get(BASE + '/stickers/lookup', q);
+  return res.data || { sticker_id: null, pack_ids: [] };
+}
+export async function createPack(name, src) {
+  const res = await api.post(BASE + '/sticker-packs', { name, ...srcBody(src) });
+  setPacks(res.data.packs);
+  loadMyStickers(true).catch(() => {}); // a received sticker was copied into the library
+  return res.data; // { pack_id, sticker_id, packs }
+}
+export async function addToPack(packId, src) {
+  const res = await api.post(BASE + `/sticker-packs/${packId}/items`, srcBody(src));
+  setPacks(res.data.packs);
+  loadMyStickers(true).catch(() => {});
+  return res.data; // { sticker_id, packs }
+}
+export async function removeFromPack(packId, stickerId) {
+  const res = await api.del(BASE + `/sticker-packs/${packId}/items/${stickerId}`);
+  return setPacks(res.data);
+}
+export async function renamePack(packId, name) {
+  const res = await api.patch(BASE + `/sticker-packs/${packId}`, { name });
+  return setPacks(res.data);
+}
+export async function deletePack(packId) {
+  const res = await api.del(BASE + `/sticker-packs/${packId}`);
+  return setPacks(res.data);
+}
+export async function loadPack(packId) {
+  const res = await api.get(BASE + `/sticker-packs/${packId}`);
+  return { ...res.data, items: (res.data.items || []).map((s) => toSticker({ key: `lib-${s.id}`, url: s.url, kind: s.kind, libId: s.id })) };
+}
