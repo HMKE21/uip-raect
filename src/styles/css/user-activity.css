@@ -109,10 +109,20 @@
   .uact-insights { grid-template-columns: 1fr; }
 }
 @media (max-width: 640px) {
-  .uact-row__main { flex-wrap: wrap; }
-  .uact-row__meta { order: 3; flex-basis: 100%; justify-content: flex-start; padding-inline-start: 44px; }
-  .uact-filters select.form-input, .uact-date { flex: 1 1 100%; }
-  .uact-actions { justify-content: flex-start; }
+  /* event row: icon | title + detail | chevron, then pills + time on their own line */
+  .uact-row__main { display: grid; grid-template-columns: 32px minmax(0, 1fr) 16px; grid-template-areas: "ico body chev" ". meta time"; align-items: start; gap: 6px 10px; padding: 10px 12px; }
+  .uact-row__main > .uact-ico { grid-area: ico; }
+  .uact-row__main > .uact-row__body { grid-area: body; }
+  .uact-row__main > svg { grid-area: chev; margin-top: 8px; }
+  .uact-row__meta { grid-area: meta; justify-content: flex-start; padding: 0; flex-basis: auto; order: 0; }
+  .uact-row__time { grid-area: time; justify-self: end; align-self: center; font-size: 11.5px; }
+  .uact-filters .uact-search, .uact-filters select.form-input, .uact-date { flex: 1 1 100%; width: 100%; max-width: none; }
+  .uact-date { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 8px; }
+  .uact-date small { margin: 0; }
+  .uact-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; margin-top: 10px; }
+  .uact-actions .btn, .uact-actions > * { width: 100%; justify-content: center; }
+  .uact-kpis { gap: 8px; }
+  .uact-card { padding: 14px; }
 }
 
 /* ---- User details → Overview ---- */
@@ -137,3 +147,16 @@
   .adm-facts--overview .adm-fact { padding: 12px; min-height: 0; }
   .adm-facts--overview .adm-fact strong { font-size: 13.5px; overflow-wrap: anywhere; }
 }
+@media (max-width: 520px) {
+  .adm-overview .adm-panel .adm-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .adm-overview .adm-panel .adm-facts > :first-child { grid-column: 1 / -1; }
+}
+
+/* one height for every control in the filter row (selects/dates looked flat next to the search box) */
+.uact-filters__row { align-items: flex-end; }
+.uact-filters .uact-search input, .uact-filters select.form-input, .uact-date input.form-input { height: var(--ui-ctl-h); border-radius: var(--ui-radius-ctl); background: var(--bg-canvas); font-size: 13.5px; }
+.uact-filters select.form-input { padding-inline: 12px; }
+.uact-head .adm-panel__head { flex-wrap: wrap; gap: 12px 16px; }
+.uact-head .adm-panel__head > div:first-child { flex: 1 1 320px; min-width: 0; }
+@media (max-width: 640px) { .uact-head .adm-panel__head > .uact-actions { flex: 1 1 100%; } }
+@media (max-width: 640px) { .uact-actions > :last-child { grid-column: 1 / -1; } }
