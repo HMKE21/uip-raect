@@ -48,8 +48,14 @@ export default function AccessGate({ children }) {
 
   useEffect(() => {
     if (!isStudent || !st?.restricted) return undefined;
-    const id = setInterval(load, 45000);
-    return () => clearInterval(id);
+    // only while the tab is visible, spread randomly so thousands of locked students do not poll in lockstep
+    let timer;
+    const tick = () => {
+      if (document.visibilityState === 'visible') load();
+      timer = setTimeout(tick, 45000 * (0.8 + Math.random() * 0.4));
+    };
+    timer = setTimeout(tick, 45000 * (0.8 + Math.random() * 0.4));
+    return () => clearTimeout(timer);
   }, [isStudent, st?.restricted, load]);
 
   useEffect(() => {
