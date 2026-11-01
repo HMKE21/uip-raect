@@ -335,3 +335,25 @@ html body .msg-wall-swatch--dots { background: radial-gradient(rgba(60, 60, 130,
 
 .msg-avatar--saved { display: inline-flex; align-items: center; justify-content: center; color: #fff; background: linear-gradient(135deg, #4f6bff, #7c5cff); }
 .msg-avatar--saved svg { fill: currentColor; stroke: none; }
+
+/* =====================================================================================================
+   Message style (Settings → Chat) — MUST win over the gradient bubbles above.
+   Before: "Light" / "Soft" (messaging-pro.css) had the SAME specificity as the wallpaper gradient rule and
+   messaging-pro.css is a lazy chunk, so the gradient won whenever a wallpaper was set => picking a style
+   looked like it did nothing. These rules are last in the main bundle and one class stronger, so the
+   choice always shows, on every wallpaper.
+   ===================================================================================================== */
+/* Light (default): tinted bubble, dark text, accent stripe */
+html:not([data-msg-style="soft"]) body .msg-app.msg-app[data-msg-app][data-wall] .msg-row.is-mine .msg-bubble:not(.msg-bubble--media):not(.msg-bubble--deleted) {
+  background: rgba(var(--color-primary-rgb), .13); color: var(--text-primary);
+  border: 0; border-inline-start: 3px solid var(--color-primary); border-radius: 14px; box-shadow: none;
+}
+html[data-theme="dark"]:not([data-msg-style="soft"]) body .msg-app.msg-app[data-msg-app][data-wall] .msg-row.is-mine .msg-bubble:not(.msg-bubble--media):not(.msg-bubble--deleted) {
+  background: rgba(var(--color-primary-rgb), .26);
+}
+/* Soft: solid brand colour, white text, flat */
+html[data-msg-style="soft"] body .msg-app.msg-app[data-msg-app][data-wall] .msg-row.is-mine .msg-bubble:not(.msg-bubble--media):not(.msg-bubble--deleted) {
+  background: var(--color-primary); color: #fff; border: 0; border-radius: 16px; box-shadow: none; background-image: none;
+}
+/* contents of a soft bubble stay readable on the solid colour */
+html[data-msg-style="soft"] .msg-app.msg-app[data-msg-app] .msg-row.is-mine .msg-bubble a { color: #fff; }
