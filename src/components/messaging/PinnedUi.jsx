@@ -146,7 +146,8 @@ export function PinnedBar({ pinned, onGo, onOpenList, onUnpin }) {
       <button type="button" className="pinbar__main" onClick={go}>
         <span className="pinbar__label">
           <MsgIcon name="pin" size={12} />
-          {count > 1 ? t(`Pinned message ${idx + 1} of ${count}`, `رسالة مثبّتة ${idx + 1} من ${count}`) : t('Pinned message', 'رسالة مثبّتة')}
+          <span className="pinbar__lt">{count > 1 ? t(`Pinned message ${idx + 1} of ${count}`, `رسالة مثبّتة ${idx + 1} من ${count}`) : t('Pinned message', 'رسالة مثبّتة')}</span>
+          {count > 1 && <span className="pinbar__n">{idx + 1}/{count}</span>}
           {left ? <em>{left}</em> : <em className="is-forever"><Icon name="infinity" size={11} /> {t('Always', 'دائمة')}</em>}
         </span>
         <span className="pinbar__text"><b>{cur.sender_name}:</b> {pinPreview(cur, t)}</span>

@@ -999,6 +999,17 @@ export default function ThreadPanel({
   const [showLocation, setShowLocation] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [starredOpen, setStarredOpen] = useState(false);
+  // phones: the header keeps only back / name / the main call buttons and a "more" menu, so the name never gets squeezed out
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 760px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(max-width: 760px)');
+    if (!mq) return undefined;
+    const on = () => setPhone(mq.matches);
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreBtnRef = useRef(null);
   const [stickerMsg, setStickerMsg] = useState(null); // the sticker / GIF whose sheet is open
   const [savedFilter, setSavedFilter] = useState('all'); // "Saved messages" only: all | media | files | links | voice | starred
   const [isRecording, setIsRecording] = useState(false);
@@ -1451,15 +1462,15 @@ export default function ThreadPanel({
             </div>
           </div>
           <div className="msg-thread__header-actions">
-            {onStar && (
+            {!phone && onStar && (
               <button type="button" className="msg-icon-btn" onClick={() => setStarredOpen(true)}
                 title={t('Starred messages', 'الرسائل المميّزة')} aria-label={t('Starred messages', 'الرسائل المميّزة')}>
                 <MIcon name="star" size={18} />
               </button>
             )}
-            {onToggleFull && <button type="button" className="msg-icon-btn msg-full-btn" title={fullView ? t('Exit full screen', 'الخروج من ملء الشاشة') : t('Full screen', 'ملء الشاشة')} aria-label={fullView ? t('Exit full screen', 'الخروج من ملء الشاشة') : t('Full screen', 'ملء الشاشة')} aria-pressed={!!fullView} onClick={onToggleFull}>
-            <Icon name={fullView ? 'collapse' : 'maximize'} size={18} />
-          </button>}
+            {!phone && onToggleFull && <button type="button" className="msg-icon-btn msg-full-btn" title={fullView ? t('Exit full screen', 'الخروج من ملء الشاشة') : t('Full screen', 'ملء الشاشة')} aria-label={fullView ? t('Exit full screen', 'الخروج من ملء الشاشة') : t('Full screen', 'ملء الشاشة')} aria-pressed={!!fullView} onClick={onToggleFull}>
+              <Icon name={fullView ? 'collapse' : 'maximize'} size={18} />
+            </button>}
             {canCall && (
               <button type="button" className="msg-icon-btn msg-call-btn" onClick={() => startCall(false)} disabled={callBusy}
                 title={callBusy ? t('You are already in a call', 'أنت في مكالمة بالفعل') : t('Voice call', 'مكالمة صوتية')}
@@ -1474,33 +1485,70 @@ export default function ThreadPanel({
                 <Icon name="video" size={18} />
               </button>
             )}
-            {canGroupCall && (
+            {!phone && canGroupCall && (
               <button type="button" className="msg-icon-btn msg-call-btn" onClick={() => startGroupCall(false)} disabled={callBusy || groupCallBusy}
                 title={callBusy ? t('You are already in a call', 'أنت في مكالمة بالفعل') : t('Group voice call', 'مكالمة صوتية جماعية')}
                 aria-label={t('Group voice call', 'مكالمة صوتية جماعية')}>
                 <Icon name="phone" size={18} />
               </button>
             )}
-            {canGroupCall && (
+            {!phone && canGroupCall && (
               <button type="button" className="msg-icon-btn msg-call-btn" onClick={() => startGroupCall(true)} disabled={callBusy || groupCallBusy}
                 title={callBusy ? t('You are already in a call', 'أنت في مكالمة بالفعل') : t('Group video call', 'مكالمة فيديو جماعية')}
                 aria-label={t('Group video call', 'مكالمة فيديو جماعية')}>
                 <Icon name="video" size={18} />
               </button>
             )}
-            <button type="button" className="msg-icon-btn" title={t('Pinned messages', 'الرسائل المثبّتة')} aria-label={t('Pinned messages', 'الرسائل المثبّتة')} onClick={onShowPinned}>
-              <Icon name="pin" size={18} />
-            </button>
-            <button
-              type="button"
-              className="msg-icon-btn msg-panel-btn msg-info-toggle"
-              title={infoOpen ? t('Hide details', 'إخفاء التفاصيل') : t('Show details', 'إظهار التفاصيل')}
-              aria-label={infoOpen ? t('Hide details', 'إخفاء التفاصيل') : t('Show details', 'إظهار التفاصيل')}
-              aria-pressed={!!infoOpen}
-              onClick={onOpenInfo}
-            >
-              <PanelIcon filled={!!infoOpen} />
-            </button>
+            {!phone && (
+              <button type="button" className="msg-icon-btn" title={t('Pinned messages', 'الرسائل المثبّتة')} aria-label={t('Pinned messages', 'الرسائل المثبّتة')} onClick={onShowPinned}>
+                <Icon name="pin" size={18} />
+              </button>
+            )}
+            {!phone && (
+              <button
+                type="button"
+                className="msg-icon-btn msg-panel-btn msg-info-toggle"
+                title={infoOpen ? t('Hide details', 'إخفاء التفاصيل') : t('Show details', 'إظهار التفاصيل')}
+                aria-label={infoOpen ? t('Hide details', 'إخفاء التفاصيل') : t('Show details', 'إظهار التفاصيل')}
+                aria-pressed={!!infoOpen}
+                onClick={onOpenInfo}
+              >
+                <PanelIcon filled={!!infoOpen} />
+              </button>
+            )}
+            {phone && (
+              <>
+                <button type="button" ref={moreBtnRef} className="msg-icon-btn msg-more-btn" aria-haspopup="menu" aria-expanded={moreOpen}
+                  title={t('More', 'المزيد')} aria-label={t('More', 'المزيد')} onClick={() => setMoreOpen((o) => !o)}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.9" /><circle cx="12" cy="12" r="1.9" /><circle cx="12" cy="19" r="1.9" /></svg>
+                </button>
+                {moreOpen && (
+                  <FloatingPanel anchorRef={moreBtnRef} className="msg-menu__panel msg-more-menu is-open" onClose={() => setMoreOpen(false)}>
+                    <button type="button" className="msg-menu__item" onClick={() => { setMoreOpen(false); onOpenInfo?.(); }}>
+                      <PanelIcon filled={!!infoOpen} /> {conversation.is_group ? t('Group info', 'معلومات المجموعة') : t('Chat details', 'تفاصيل المحادثة')}
+                    </button>
+                    {onStar && (
+                      <button type="button" className="msg-menu__item" onClick={() => { setMoreOpen(false); setStarredOpen(true); }}>
+                        <MIcon name="star" size={18} /> {t('Starred messages', 'الرسائل المميّزة')}
+                      </button>
+                    )}
+                    <button type="button" className="msg-menu__item" onClick={() => { setMoreOpen(false); onShowPinned?.(); }}>
+                      <Icon name="pin" size={18} /> {t('Pinned messages', 'الرسائل المثبّتة')}{pinnedMessages.length > 0 ? ` (${pinnedMessages.length})` : ''}
+                    </button>
+                    {canGroupCall && (
+                      <button type="button" className="msg-menu__item" disabled={callBusy || groupCallBusy} onClick={() => { setMoreOpen(false); startGroupCall(false); }}>
+                        <Icon name="phone" size={18} /> {t('Group voice call', 'مكالمة صوتية جماعية')}
+                      </button>
+                    )}
+                    {canGroupCall && (
+                      <button type="button" className="msg-menu__item" disabled={callBusy || groupCallBusy} onClick={() => { setMoreOpen(false); startGroupCall(true); }}>
+                        <Icon name="video" size={18} /> {t('Group video call', 'مكالمة فيديو جماعية')}
+                      </button>
+                    )}
+                  </FloatingPanel>
+                )}
+              </>
+            )}
           </div>
         </header>
 
