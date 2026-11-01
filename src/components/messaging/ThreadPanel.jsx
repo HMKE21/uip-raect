@@ -1513,7 +1513,7 @@ export default function ThreadPanel({
         )}
 
         {isSavedChat && messages.length > 0 && (
-          <div className="sv-filters" role="tablist" aria-label={t('Filter saved items', 'تصفية المحفوظات')}>
+          <div className="savp-filters" role="tablist" aria-label={t('Filter saved items', 'تصفية المحفوظات')}>
             {[
               ['all', t('All', 'الكل'), messages.length],
               ['media', t('Media', 'وسائط'), savedCounts.media],
@@ -1523,7 +1523,7 @@ export default function ThreadPanel({
               ['starred', t('Starred', 'مميّزة'), savedCounts.starred],
             ].map(([id, label, n]) => (
               <button key={id} type="button" role="tab" aria-selected={savedFilter === id}
-                className={`sv-filter${savedFilter === id ? ' is-on' : ''}`} onClick={() => setSavedFilter(id)}>
+                className={`savp-filter${savedFilter === id ? ' is-on' : ''}`} onClick={() => setSavedFilter(id)}>
                 {label}{n > 0 && id !== 'all' ? <b>{n}</b> : null}
               </button>
             ))}
@@ -1536,8 +1536,8 @@ export default function ThreadPanel({
           )}
           <div className="msg-messages" data-messages>
             {messages.length === 0 && isSavedChat ? (
-              <div className="sv-empty">
-                <span className="sv-empty__ic"><Icon name="bookmark" size={26} /></span>
+              <div className="savp-empty">
+                <span className="savp-empty__ic"><Icon name="bookmark" size={26} /></span>
                 <strong>{t('Your private notebook', 'مفكرتك الخاصة')}</strong>
                 <p>{t('Save anything for yourself — notes, links, photos, files, voice notes. Only you can see it, on every device.', 'احفظ أي حاجة لنفسك — ملاحظات، روابط، صور، ملفات، رسائل صوتية. أنت بس اللي بتشوفها، على كل أجهزتك.')}</p>
                 <ul>

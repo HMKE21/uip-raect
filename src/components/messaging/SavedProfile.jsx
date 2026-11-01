@@ -150,26 +150,26 @@ export default function SavedProfile({ conversation, onRenameSaved, onSavedAvata
   const hasPhoto = !!me.avatar_path;
 
   return (
-    <section className="sv" aria-label={t('My profile in chat', 'ملفي في الشات')}>
-      <div className="sv-hero">
-        <div className="sv-hero__cover" aria-hidden="true" />
-        <div className="sv-hero__avatar">
-          <button type="button" className="sv-avatar-btn" onClick={() => fileRef.current?.click()} disabled={busyPhoto}
+    <section className="savp" aria-label={t('My profile in chat', 'ملفي في الشات')}>
+      <div className="savp-hero">
+        <div className="savp-hero__cover" aria-hidden="true" />
+        <div className="savp-hero__avatar">
+          <button type="button" className="savp-avatar-btn" onClick={() => fileRef.current?.click()} disabled={busyPhoto}
             aria-label={t('Change photo', 'تغيير الصورة')} title={t('Change photo', 'تغيير الصورة')}>
             <Avatar name={fullName} saved src={me.avatar_path} />
-            <span className="sv-avatar-btn__cam">{busyPhoto ? <span className="sv-spin" /> : <Icon name="edit" size={13} />}</span>
+            <span className="savp-avatar-btn__cam">{busyPhoto ? <span className="savp-spin" /> : <Icon name="edit" size={13} />}</span>
           </button>
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden onChange={onPick} />
         </div>
-        <strong className="sv-hero__title">{title}</strong>
-        <div className="sv-hero__id">
+        <strong className="savp-hero__title">{title}</strong>
+        <div className="savp-hero__id">
           {fullName && <span dir="auto">{fullName}</span>}
           {role && <span className="msg-info__role">{roleLabel(role)}</span>}
         </div>
-        <span className="sv-lock"><Icon name="lock" size={12} /> {t('Private — only you can see this chat', 'خاصة — أنت فقط تشوف المحادثة دي')}</span>
+        <span className="savp-lock"><Icon name="lock" size={12} /> {t('Private — only you can see this chat', 'خاصة — أنت فقط تشوف المحادثة دي')}</span>
       </div>
 
-      <div className="sv-tabs" role="tablist">
+      <div className="savp-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'edit'} className={tab === 'edit' ? 'is-on' : ''} onClick={() => setTab('edit')}>
           <Icon name="edit" size={14} /> {t('Edit', 'تعديل')}
         </button>
@@ -178,55 +178,55 @@ export default function SavedProfile({ conversation, onRenameSaved, onSavedAvata
         </button>
       </div>
 
-      {note && <div className={`sv-note ${note.ok ? 'is-ok' : 'is-err'}`} role="status">{note.text}</div>}
+      {note && <div className={`savp-note ${note.ok ? 'is-ok' : 'is-err'}`} role="status">{note.text}</div>}
 
       {tab === 'edit' ? (
-        <div className="sv-body">
-          <div className="sv-card">
-            <div className="sv-card__h">{t('Profile photo', 'الصورة الشخصية')}</div>
-            <div className="sv-row">
+        <div className="savp-body">
+          <div className="savp-card">
+            <div className="savp-card__h">{t('Profile photo', 'الصورة الشخصية')}</div>
+            <div className="savp-row">
               <button type="button" className="btn btn-secondary btn-sm" onClick={() => fileRef.current?.click()} disabled={busyPhoto}>
                 <Icon name="image" size={14} /> {hasPhoto ? t('Change', 'تغيير') : t('Upload', 'رفع صورة')}
               </button>
               {hasPhoto && (
-                <button type="button" className="btn btn-secondary btn-sm sv-danger" onClick={removePhoto} disabled={busyPhoto}>
+                <button type="button" className="btn btn-secondary btn-sm savp-danger" onClick={removePhoto} disabled={busyPhoto}>
                   <Icon name="trash" size={14} /> {t('Remove', 'حذف')}
                 </button>
               )}
             </div>
-            <p className="sv-hint">{t('This is your account photo — it updates everywhere on the platform.', 'دي صورة حسابك — بتتحدّث في كل المنصة.')}</p>
+            <p className="savp-hint">{t('This is your account photo — it updates everywhere on the platform.', 'دي صورة حسابك — بتتحدّث في كل المنصة.')}</p>
           </div>
 
-          <div className="sv-card">
-            <div className="sv-card__h">{t('Chat name', 'اسم المحادثة')}</div>
-            <input type="text" className="msg-input sv-input" maxLength={60} value={name} disabled={nameBusy}
+          <div className="savp-card">
+            <div className="savp-card__h">{t('Chat name', 'اسم المحادثة')}</div>
+            <input type="text" className="msg-input savp-input" maxLength={60} value={name} disabled={nameBusy}
               placeholder={t('Saved Messages', 'الرسائل المحفوظة')} aria-label={t('Chat name', 'اسم المحادثة')}
               onChange={(e) => setName(e.target.value)} onBlur={saveName}
               onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
-            <p className="sv-hint">{t('Only you see this name. Leave empty for the default.', 'الاسم ده بيظهرلك أنت بس. سيبه فاضي للاسم الافتراضي.')}</p>
+            <p className="savp-hint">{t('Only you see this name. Leave empty for the default.', 'الاسم ده بيظهرلك أنت بس. سيبه فاضي للاسم الافتراضي.')}</p>
           </div>
 
-          <div className="sv-card">
-            <div className="sv-card__h">
+          <div className="savp-card">
+            <div className="savp-card__h">
               {t('Bio', 'البايو')}
-              <button type="button" className="sv-link" onClick={() => setBioOpen((o) => !o)} aria-expanded={bioOpen}>
+              <button type="button" className="savp-link" onClick={() => setBioOpen((o) => !o)} aria-expanded={bioOpen}>
                 {bioOpen ? t('Close', 'إغلاق') : ((settings.bio || '').trim() ? t('Edit', 'تعديل') : t('Add', 'إضافة'))}
               </button>
             </div>
             {!bioOpen && ((settings.bio || '').trim()
               ? <BioBubble text={settings.bio} styleId={settings.bio_style} tail={false} />
-              : <p className="sv-hint">{t('No bio yet — a short line shown above your photo in your chats.', 'مفيش بايو لسه — سطر قصير بيظهر فوق صورتك في محادثاتك.')}</p>)}
+              : <p className="savp-hint">{t('No bio yet — a short line shown above your photo in your chats.', 'مفيش بايو لسه — سطر قصير بيظهر فوق صورتك في محادثاتك.')}</p>)}
             {bioOpen && <BioEditor settings={settings} save={saveBio} />}
           </div>
 
-          <button type="button" className="sv-more" onClick={() => navigate(`/${portalPrefix(authUser?.role)}/messages/settings`)}>
+          <button type="button" className="savp-more" onClick={() => navigate(`/${portalPrefix(authUser?.role)}/messages/settings`)}>
             <Icon name="settings" size={14} /> {t('All chat & privacy settings', 'كل إعدادات الشات والخصوصية')}
-            <Icon name="chevron-right" size={14} className="sv-more__arrow" />
+            <Icon name="chevron-right" size={14} className="savp-more__arrow" />
           </button>
         </div>
       ) : (
-        <div className="sv-body">
-          <div className="sv-seg" role="radiogroup" aria-label={t('Viewer', 'المشاهد')}>
+        <div className="savp-body">
+          <div className="savp-seg" role="radiogroup" aria-label={t('Viewer', 'المشاهد')}>
             <button type="button" role="radio" aria-checked={viewer === 'contact'} className={viewer === 'contact' ? 'is-on' : ''} onClick={() => setViewer('contact')}>
               {t('A contact', 'جهة اتصال')}
             </button>
@@ -235,31 +235,31 @@ export default function SavedProfile({ conversation, onRenameSaved, onSavedAvata
             </button>
           </div>
 
-          <div className="sv-pv" aria-live="polite">
-            <div className="sv-pv__bar">
+          <div className="savp-pv" aria-live="polite">
+            <div className="savp-pv__bar">
               <Avatar name={fullName} src={avatarVisible ? me.avatar_path : null} />
-              <div className="sv-pv__meta">
+              <div className="savp-pv__meta">
                 <strong dir="auto">{fullName || '—'}{role && <span className="msg-info__role">{roleLabel(role)}</span>}</strong>
-                <span className={`sv-pv__status${seenVisible ? ' is-on' : ''}`}>
+                <span className={`savp-pv__status${seenVisible ? ' is-on' : ''}`}>
                   {seenVisible ? t('Online · last seen shown', 'متصل · آخر ظهور ظاهر') : t('Last seen hidden', 'آخر ظهور مخفي')}
                 </span>
               </div>
             </div>
-            {bioVisible && <BioBubble text={settings.bio} styleId={settings.bio_style} tail={false} className="sv-pv__bio" />}
-            {!avatarVisible && <p className="sv-pv__ghost"><Icon name="eye-off" size={13} /> {t('Photo hidden — they see your initials', 'الصورة مخفية — بيشوفوا الحروف الأولى من اسمك')}</p>}
+            {bioVisible && <BioBubble text={settings.bio} styleId={settings.bio_style} tail={false} className="savp-pv__bio" />}
+            {!avatarVisible && <p className="savp-pv__ghost"><Icon name="eye-off" size={13} /> {t('Photo hidden — they see your initials', 'الصورة مخفية — بيشوفوا الحروف الأولى من اسمك')}</p>}
           </div>
 
-          <div className="sv-card sv-card--list">
+          <div className="savp-card savp-card--list">
             {FIELDS.map((f) => {
               const aud = privacy[f.key]?.audience || 'everyone';
               const ok = visibleTo(privacy, f.key, viewer);
               return (
-                <div className="sv-perm" key={f.key}>
-                  <span className={`sv-perm__ic${ok ? ' is-ok' : ''}`} aria-hidden="true"><Icon name={ok ? 'check' : 'x'} size={12} /></span>
-                  <span className="sv-perm__txt">
+                <div className="savp-perm" key={f.key}>
+                  <span className={`savp-perm__ic${ok ? ' is-ok' : ''}`} aria-hidden="true"><Icon name={ok ? 'check' : 'x'} size={12} /></span>
+                  <span className="savp-perm__txt">
                     <Icon name={f.icon} size={14} /> {locale === 'ar' ? f.ar : f.en}
                   </span>
-                  <select className="sv-select" value={aud} onChange={(e) => setAudience(f.key, e.target.value)} aria-label={locale === 'ar' ? f.ar : f.en}>
+                  <select className="savp-select" value={aud} onChange={(e) => setAudience(f.key, e.target.value)} aria-label={locale === 'ar' ? f.ar : f.en}>
                     {AUD_QUICK.map((a) => <option key={a} value={a}>{audLabel(a)}</option>)}
                     {!AUD_QUICK.includes(aud) && <option value={aud} disabled>{audLabel(aud)}</option>}
                   </select>
@@ -268,7 +268,7 @@ export default function SavedProfile({ conversation, onRenameSaved, onSavedAvata
             })}
           </div>
           {hasCustom && (
-            <p className="sv-hint">{t('Custom lists (“except…” / “only…”) are managed in chat settings; the preview assumes you are not on them.', 'القوائم المخصصة (“ما عدا…” / “ناس محددين”) بتتعدّل من إعدادات الشات؛ المعاينة بتفترض إنك مش فيها.')}</p>
+            <p className="savp-hint">{t('Custom lists (“except…” / “only…”) are managed in chat settings; the preview assumes you are not on them.', 'القوائم المخصصة (“ما عدا…” / “ناس محددين”) بتتعدّل من إعدادات الشات؛ المعاينة بتفترض إنك مش فيها.')}</p>
           )}
         </div>
       )}
