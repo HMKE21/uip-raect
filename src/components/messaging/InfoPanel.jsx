@@ -3,6 +3,7 @@ import Icon from '../Icon';
 import { Avatar } from './ConversationRail';
 import { GroupTop, GroupMembers, GroupDanger } from './GroupPanel';
 import WallpaperPicker from './WallpaperPicker';
+import GroupInfoView from './GroupInfoView';
 import { fmtBytes, roleLabel } from './format';
 import { useProtectedSrc } from '../../lib/chatMedia';
 import { useLanguage } from '../../context/LanguageContext';
@@ -69,6 +70,37 @@ export default function InfoPanel({
   }, [conversation?.id, convMeta?.category]);
 
   if (!conversation) return null;
+
+  if (conversation.is_group) {
+    return (
+      <GroupInfoView
+        conversation={conversation}
+        convMeta={convMeta}
+        others={others}
+        messages={messages}
+        myUserId={myUserId}
+        onClose={onClose}
+        onToggleFlag={onToggleFlag}
+        onSetCategory={onSetCategory}
+        onAddMember={onAddMember}
+        onOpenSettings={onOpenGroupSettings}
+        onMemberAction={onMemberAction}
+        onLeave={onLeaveGroup}
+        onDelete={onDeleteGroup}
+        wall={wall}
+        wallIsDefault={wallIsDefault}
+        onWall={onWall}
+        onWallUseDefault={onWallUseDefault}
+        customWalls={customWalls}
+        onAddCustomWall={onAddCustomWall}
+        onRemoveCustomWall={onRemoveCustomWall}
+        wallAnim={wallAnim}
+        onWallAnim={onWallAnim}
+        autoSave={autoSave}
+        onAutoSave={onAutoSave}
+      />
+    );
+  }
 
   const files = [];
   messages.forEach((m) => (m.attachments || []).forEach((a) => files.push(a)));
