@@ -47,9 +47,13 @@
 .bio-ed { display: flex; flex-direction: column; gap: 12px; padding: 4px 2px; }
 .bio-ed__preview { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; padding: 14px; border-radius: 14px; background: var(--glass-bg); }
 .bio-ed__label, .bio-ed__h { font-size: 12px; font-weight: 600; color: var(--text-secondary); margin: 0; }
-.bio-ed__field { position: relative; }
-.bio-ed__field textarea { width: 100%; padding-inline-end: 46px; resize: none; }
-.bio-ed__emoji { position: absolute; inset-inline-end: 8px; top: 8px; width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--glass-bg); font-size: 19px; cursor: pointer; }
+.bio-ed__field { display: flex; align-items: flex-start; gap: 8px; padding: 6px; border-radius: 14px; border: 1px solid var(--border-subtle); background: var(--bg-surface); transition: border-color .15s, box-shadow .15s; }
+.bio-ed__field:focus-within { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(var(--color-primary-rgb), .14); }
+/* the text box and the emoji button sit side by side, so the emoji can never cover what is typed */
+html body .bio-ed__field textarea { flex: 1 1 auto; min-width: 0; width: auto; min-height: 60px; padding: 8px 10px; margin: 0; border: 0; border-radius: 10px; background: transparent; box-shadow: none; outline: 0; resize: none; font: inherit; font-size: 14px; line-height: 1.6; color: var(--text-primary); }
+html body .bio-ed__field textarea:focus { border: 0; box-shadow: none; outline: 0; }
+.bio-ed__emoji { position: static; flex: none; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 50%; border: 0; background: var(--glass-bg); font-size: 19px; line-height: 1; cursor: pointer; transition: background .15s, box-shadow .15s; }
+.bio-ed__emoji:hover { background: rgba(var(--color-primary-rgb), .12); }
 .bio-ed__emoji.is-on { box-shadow: inset 0 0 0 2px var(--color-primary); }
 .bio-ed__picker { border: 1px solid var(--border-subtle); border-radius: 14px; overflow: hidden; max-height: 300px; }
 .bio-ed__presets { display: flex; flex-wrap: wrap; gap: 6px; }

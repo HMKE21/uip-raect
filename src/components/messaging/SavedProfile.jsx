@@ -249,24 +249,29 @@ export default function SavedProfile({ conversation, onRenameSaved, onSavedAvata
             {!avatarVisible && <p className="savp-pv__ghost"><Icon name="eye-off" size={13} /> {t('Photo hidden — they see your initials', 'الصورة مخفية — بيشوفوا الحروف الأولى من اسمك')}</p>}
           </div>
 
-          <div className="savp-card savp-card--list">
-            {FIELDS.map((f) => {
-              const aud = privacy[f.key]?.audience || 'everyone';
-              const ok = visibleTo(privacy, f.key, viewer);
-              return (
-                <div className="savp-perm" key={f.key}>
-                  <span className={`savp-perm__ic${ok ? ' is-ok' : ''}`} aria-hidden="true"><Icon name={ok ? 'check' : 'x'} size={12} /></span>
-                  <span className="savp-perm__txt">
-                    <Icon name={f.icon} size={14} /> {locale === 'ar' ? f.ar : f.en}
-                  </span>
-                  <select className="savp-select" value={aud} onChange={(e) => setAudience(f.key, e.target.value)} aria-label={locale === 'ar' ? f.ar : f.en}>
-                    {AUD_QUICK.map((a) => <option key={a} value={a}>{audLabel(a)}</option>)}
-                    {!AUD_QUICK.includes(aud) && <option value={aud} disabled>{audLabel(aud)}</option>}
-                  </select>
-                </div>
-              );
-            })}
-          </div>
+          {[['see', t('What they can see', 'اللي يقدروا يشوفوه')], ['do', t('What they can do', 'اللي يقدروا يعملوه')]].map(([kind, heading]) => (
+            <div className="savp-card savp-card--list" key={kind}>
+              <div className="savp-group-h">{heading}</div>
+              {FIELDS.filter((f) => f.kind === kind).map((f) => {
+                const aud = privacy[f.key]?.audience || 'everyone';
+                const ok = visibleTo(privacy, f.key, viewer);
+                const label = locale === 'ar' ? f.ar : f.en;
+                return (
+                  <div className="savp-perm" key={f.key}>
+                    <span className={`savp-perm__ic${ok ? ' is-ok' : ''}`} aria-hidden="true"><Icon name={ok ? 'check' : 'x'} size={12} /></span>
+                    <span className="savp-perm__txt">
+                      <Icon name={f.icon} size={14} />
+                      <span className="savp-perm__lbl">{label}</span>
+                    </span>
+                    <select className="savp-select" value={aud} onChange={(e) => setAudience(f.key, e.target.value)} aria-label={label}>
+                      {AUD_QUICK.map((a) => <option key={a} value={a}>{audLabel(a)}</option>)}
+                      {!AUD_QUICK.includes(aud) && <option value={aud} disabled>{audLabel(aud)}</option>}
+                    </select>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
           {hasCustom && (
             <p className="savp-hint">{t('Custom lists (“except…” / “only…”) are managed in chat settings; the preview assumes you are not on them.', 'القوائم المخصصة (“ما عدا…” / “ناس محددين”) بتتعدّل من إعدادات الشات؛ المعاينة بتفترض إنك مش فيها.')}</p>
           )}

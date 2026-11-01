@@ -283,7 +283,7 @@ html body .msg-app[data-msg-app].is-full {
   width: 100vw; max-width: 100vw; height: 100dvh !important; min-height: 0 !important;
   margin: 0 !important; border: none; border-radius: 0; box-shadow: none;
   padding-top: env(safe-area-inset-top, 0px);
-  --msg-rail-w: 360px; --msg-info-w: 380px;
+  --msg-rail-w: 360px;
 }
 html body .msg-app[data-msg-app].is-full.rail-collapsed { --msg-rail-w: 0px; }
 /* the real top bar / sidebar sit behind the full-screen messenger: hide them so their title never peeks through */
@@ -508,3 +508,43 @@ html body .msg-app[data-msg-app][data-wall="custom"] .msg-day-sep span {
   box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
 }
 .msg-wall-mine__err { margin: 8px 0 0; font-size: 12px; color: #e5484d; }
+
+/* ---------- Conversation-info panel: drag handle to widen / narrow it (desktop & laptop) ---------- */
+.msg-info-resizer { display: none; }
+@media (min-width: 761px) {
+  html body .msg-app[data-msg-app] > .msg-info-resizer {
+    display: block; position: absolute; top: 24px; bottom: 24px; z-index: calc(var(--z-sticky, 20) + 2);
+    width: 14px; touch-action: none; cursor: col-resize; outline: 0;
+    inset-inline-end: calc(var(--msg-info-w) + 1px); /* centred in the 16px gap between chat and panel */
+  }
+  /* overlay mode (< 1480px): the panel floats 8px from the edge and is at most 92% wide */
+  @media (max-width: 1479px) {
+    html body .msg-app[data-msg-app] > .msg-info-resizer { inset-inline-end: calc(min(var(--msg-info-w), 92%) + 1px); }
+  }
+  .msg-info-resizer__grip {
+    position: absolute; top: 50%; inset-inline-start: 50%; width: 4px; height: 44px; border-radius: 4px;
+    transform: translate(-50%, -50%); background: var(--border-subtle); opacity: 0; transition: opacity .15s, background .15s, height .15s;
+  }
+  [dir="rtl"] .msg-info-resizer__grip { transform: translate(50%, -50%); }
+  .msg-info-resizer:hover .msg-info-resizer__grip,
+  .msg-info-resizer:focus-visible .msg-info-resizer__grip,
+  .msg-info-resizer.is-drag .msg-info-resizer__grip { opacity: 1; }
+  .msg-info-resizer:hover .msg-info-resizer__grip { background: rgba(var(--color-primary-rgb), .55); }
+  .msg-info-resizer:focus-visible .msg-info-resizer__grip { background: var(--color-primary); height: 60px; }
+  .msg-info-resizer.is-drag .msg-info-resizer__grip { background: var(--color-primary); height: 72px; }
+  .msg-info-resizer__tip {
+    position: absolute; top: 50%; inset-inline-end: 22px; transform: translateY(-50%); padding: 3px 9px; border-radius: 8px;
+    font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff; background: rgba(20, 28, 70, .88); pointer-events: none; direction: ltr;
+  }
+}
+@media (max-width: 760px) { .msg-info-resizer { display: none !important; } }
+/* while dragging: no text selection, keep the cursor, and the chat does not eat the pointer */
+body.msg-resizing { cursor: col-resize !important; user-select: none; -webkit-user-select: none; }
+body.msg-resizing .msg-app iframe, body.msg-resizing .msg-app video { pointer-events: none; }
+/* a smooth, but not laggy, width change when using the keyboard / reset; none while dragging */
+@media (prefers-reduced-motion: no-preference) {
+  html body .msg-app[data-msg-app]:not(:has(.msg-info-resizer.is-drag)) { transition: grid-template-columns .18s ease; }
+}
+/* panel content follows the width instead of overflowing it */
+.msg-info__body { overflow-x: hidden; min-width: 0; }
+.msg-info__body > * { min-width: 0; }

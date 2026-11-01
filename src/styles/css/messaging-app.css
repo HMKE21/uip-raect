@@ -598,7 +598,7 @@ body.msg-page-active main.app-shell__main {
 /* --------------------------------------------------------- responsive */
 @media (max-width: 1000px) {
   .msg-app.has-info { grid-template-columns: var(--msg-rail-w) 1fr; }
-  .msg-info { position: absolute; inset-inline-end: 0; top: 0; bottom: 0; width: min(340px, 90vw); z-index: var(--z-sticky); box-shadow: var(--glass-shadow); }
+  .msg-info { position: absolute; inset-inline-end: 0; top: 0; bottom: 0; width: min(var(--msg-info-w, 340px), 90vw); z-index: var(--z-sticky); box-shadow: var(--glass-shadow); }
 }
 @media (max-width: 760px) {
   .msg-app { grid-template-columns: 1fr; border-radius: 0; margin-inline: 0; }
@@ -786,7 +786,7 @@ flex: 1 1 auto;
   html body .msg-app[data-msg-app].has-info { grid-template-columns: var(--msg-rail-w) minmax(0, 1fr); }
   .msg-app .msg-info {
     position: absolute; inset-inline-end: 0; top: 0; bottom: 0;
-    width: min(340px, 92%); z-index: var(--z-sticky);
+    width: min(var(--msg-info-w, 340px), 92%); z-index: var(--z-sticky);
     box-shadow: var(--glass-shadow); background: var(--bg-surface);
   }
 }

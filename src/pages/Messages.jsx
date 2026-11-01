@@ -8,6 +8,7 @@ import ConversationRail from '../components/messaging/ConversationRail';
 import ConfirmDialog from '../components/messaging/ConfirmDialog';
 import ThreadPanel from '../components/messaging/ThreadPanel';
 import InfoPanel from '../components/messaging/InfoPanel';
+import InfoResizer, { INFO_W_KEY, INFO_W_DEFAULT, readInfoWidth } from '../components/messaging/InfoResizer';
 import { useCustomWallpapers, isCustomWall, customWallId } from '../lib/customWallpapers';
 import { useChatSettings, wallFor } from '../lib/chatSettings';
 import GroupSettingsModal from '../components/messaging/GroupSettingsModal';
@@ -189,6 +190,13 @@ export default function Messages() {
       try { localStorage.setItem(INFO_KEY, next ? '1' : '0'); } catch { /* not remembered */ }
       return next;
     });
+  }, []);
+  // Details panel width: the user drags the panel's inner edge; remembered per browser.
+  const appRef = useRef(null);
+  const [infoW, setInfoW] = useState(() => readInfoWidth() || INFO_W_DEFAULT);
+  const onInfoWidth = useCallback((w, persist) => {
+    setInfoW(w);
+    if (persist) { try { localStorage.setItem(INFO_W_KEY, String(w)); } catch { /* not remembered */ } }
   }, []);
   // Chat settings (account-wide, enforced by the server): wallpapers, sounds, enter-to-send, text size…
   const { settings: chatSettings, loaded: settingsLoaded, patch: patchSettings } = useChatSettings();
@@ -1607,7 +1615,7 @@ export default function Messages() {
 
   return (
     <>
-    <div className={`msg-app${infoOpen && activeConversation ? ' has-info' : ''}${activeId ? ' thread-open' : ''}${railCollapsed && activeId ? ' rail-collapsed' : ''}${fullView ? ' is-full' : ''}`} data-msg-app data-wall={shownWall} data-wall-anim={wallAnim ? 'on' : 'off'} data-font={chatSettings.font_size} style={customWallUrl && shownWall === 'custom' ? { '--msg-wall-img': `url("${customWallUrl}")` } : undefined}>
+    <div className={`msg-app${infoOpen && activeConversation ? ' has-info' : ''}${activeId ? ' thread-open' : ''}${railCollapsed && activeId ? ' rail-collapsed' : ''}${fullView ? ' is-full' : ''}`} data-msg-app data-wall={shownWall} data-wall-anim={wallAnim ? 'on' : 'off'} data-font={chatSettings.font_size} ref={appRef} style={{ '--msg-info-w': `${infoW}px`, ...(customWallUrl && shownWall === 'custom' ? { '--msg-wall-img': `url("${customWallUrl}")` } : null) }}>
       {shownWall === 'custom' && (
         /* The person's own photo. Delivered from JS (not only from the stylesheet) with !important so no other wallpaper rule can paint over it. */
         <style>{`html body .msg-app[data-msg-app][data-wall="custom"] .msg-thread{background:linear-gradient(var(--wall-veil,transparent),var(--wall-veil,transparent)),var(--msg-wall-img) center / cover no-repeat,var(--bg-canvas)!important}`}</style>
@@ -1699,6 +1707,10 @@ export default function Messages() {
         enterToSend={chatSettings.enter_to_send !== false}
         myUserId={user?.id}
       />
+
+      {infoOpen && activeConversation && (
+        <InfoResizer appRef={appRef} width={infoW} onWidth={onInfoWidth} />
+      )}
 
       {infoOpen && activeConversation && (
         <InfoPanel
