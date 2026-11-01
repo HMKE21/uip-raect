@@ -322,11 +322,20 @@ export function AuthProvider({ children }) {
     window.addEventListener(PERMISSION_DENIED_EVENT, onDenied);
     document.addEventListener('visibilitychange', onVisible);
     // Only while visible: a hidden tab does not need a heartbeat (the server keeps the session until logout).
-    const timer = setInterval(() => { if (document.visibilityState === 'visible') loadPermissions(55000); }, 60000);
+    // 60s ±10s (random per tick): after a deploy / outage everybody reconnects together, and a fixed period would keep
+    // all of them hitting /app/summary in the same second forever.
+    let timer = null;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        if (document.visibilityState === 'visible') loadPermissions(55000);
+        schedule();
+      }, 50000 + Math.random() * 20000);
+    };
+    schedule();
     return () => {
       window.removeEventListener(PERMISSION_DENIED_EVENT, onDenied);
       document.removeEventListener('visibilitychange', onVisible);
-      clearInterval(timer);
+      clearTimeout(timer);
     };
   }, [status, user?.id, loadPermissions]);
 

@@ -234,6 +234,8 @@ function withTimeout(promise, ms) {
   const timeout = new Promise((_, reject) => { t = setTimeout(() => reject(new Error('request timeout')), ms); });
   return Promise.race([promise, timeout]).finally(() => clearTimeout(t));
 }
+// ±30% random spread: with thousands of clients, identical retry delays make them all hit the server again at the same instant.
+const jitter = (ms) => Math.round(ms * (0.7 + Math.random() * 0.6));
 async function fetchWithRetry(method, path, url, opts) {
   const retryable = isRetryable(method, path);
   let lastErr;
@@ -241,14 +243,21 @@ async function fetchWithRetry(method, path, url, opts) {
     try {
       const res = await withTimeout(fetch(url, opts), REQUEST_TIMEOUT_MS);
       if (retryable && TRANSIENT_STATUS.includes(res.status) && i < RETRY_DELAYS_MS.length) {
-        await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[i]));
+        await new Promise((r) => setTimeout(r, jitter(RETRY_DELAYS_MS[i])));
+        continue;
+      }
+      // Rate-limited (429): wait for what the server asked (Retry-After, capped at 8s) and try ONCE more instead of failing the screen.
+      if (retryable && res.status === 429 && i === 0) {
+        const asked = Number(res.headers?.get?.('Retry-After'));
+        const wait = Math.min(8000, Math.max(RETRY_DELAYS_MS[1], Number.isFinite(asked) ? asked * 1000 : 0));
+        await new Promise((r) => setTimeout(r, jitter(wait)));
         continue;
       }
       return res;
     } catch (e) {
       lastErr = e;
       if (!retryable || i >= RETRY_DELAYS_MS.length) break;
-      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[i]));
+      await new Promise((r) => setTimeout(r, jitter(RETRY_DELAYS_MS[i])));
     }
   }
   throw lastErr;
