@@ -3,7 +3,7 @@ import EmojiPicker from './EmojiPicker';
 import StickerMedia from './StickerMedia';
 import { setFavLocal } from './MessageMenu';
 import {
-  cachedFavourites, cachedMyStickers, cachedPacks, deleteMySticker, getRecentGifs, getRecentStickers, loadFavouriteItems, loadMyStickers, loadPack, loadPacks, forgetRecentSticker, removeFromPack, removeFavouriteSticker,
+  cachedFavourites, cachedMyStickers, cachedPacks, deleteMySticker, getRecentGifs, getRecentStickers, loadFavouriteItems, loadMyStickers, loadPack, loadPacks, forgetRecentSticker, removeFromPack, removeFavouriteSticker, cachedMediaPolicy, loadMediaPolicy,
   pushRecentGif, pushRecentSticker, searchGifs,
 } from '../../lib/stickerStore';
 
@@ -48,7 +48,7 @@ function StickerGrid({ items, ar, onPick, onRemove, empty, lead }) {
   );
 }
 
-function StickerPane({ ar, canSend, onSend, onNew, onChanged }) {
+function StickerPane({ ar, canSend, canCreate = true, onSend, onNew, onChanged }) {
   const [tab, setTab] = useState(() => (getRecentStickers().length ? 'recent' : 'mine'));
   const [mine, setMine] = useState(cachedMyStickers() || []);
   const [favs, setFavs] = useState(cachedFavourites()?.stickers || []);
@@ -106,7 +106,7 @@ function StickerPane({ ar, canSend, onSend, onNew, onChanged }) {
     } catch { /* the list refreshes next time */ }
   };
 
-  const createTile = (
+  const createTile = !canCreate ? null : (
     <button type="button" className="stk-create" onClick={onNew}>
       <Icon d={I.plus} size={22} />
       <span>{ar ? 'إنشاء' : 'Create'}</span>
@@ -166,8 +166,8 @@ function GifThumb({ g, onClick }) {
   );
 }
 
-function GifPane({ ar, canSend, onSend }) {
-  const [tab, setTab] = useState(() => (getRecentGifs().length ? 'recent' : 'trending'));
+function GifPane({ ar, canSend, canSearch = true, canTrending = true, onSend }) {
+  const [tab, setTab] = useState(() => (getRecentGifs().length || !canTrending ? 'recent' : 'trending'));
   const [q, setQ] = useState('');
   const [items, setItems] = useState([]);
   const [next, setNext] = useState(null);
@@ -195,10 +195,10 @@ function GifPane({ ar, canSend, onSend }) {
 
   useEffect(() => {
     const term = q.trim();
-    if (!term && tab !== 'trending') return undefined;
+    if (!term && (tab !== 'trending' || !canTrending)) return undefined;
     const h = setTimeout(() => load(term, 0), term ? 320 : 0);
     return () => clearTimeout(h);
-  }, [q, tab, load]);
+  }, [q, tab, load, canTrending]);
 
   const onScroll = (e) => {
     const el = e.currentTarget;
@@ -211,7 +211,7 @@ function GifPane({ ar, canSend, onSend }) {
     onSend(g);
   };
 
-  const searching = q.trim() !== '' || tab === 'trending';
+  const searching = q.trim() !== '' || (tab === 'trending' && canTrending);
   const list = searching ? items : (tab === 'favs' ? favs : recent);
   // two balanced columns (masonry-like) — GIFs have different heights
   const cols = [[], []];
@@ -221,14 +221,16 @@ function GifPane({ ar, canSend, onSend }) {
   const tabs = [
     { id: 'recent', icon: I.clock, label: ar ? 'الأحدث' : 'Recent' },
     { id: 'favs', icon: I.star, label: ar ? 'المفضلة' : 'Favourites' },
-    { id: 'trending', icon: I.trend, label: ar ? 'الأكثر رواجًا' : 'Trending' },
+    ...(canTrending ? [{ id: 'trending', icon: I.trend, label: ar ? 'الأكثر رواجًا' : 'Trending' }] : []),
   ];
   return (
     <>
-      <div className="emo-search">
-        <Icon d={I.search} size={18} />
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} dir="auto" placeholder={ar ? 'ابحث في GIF (ضحك، تصفيق…)' : 'Search GIFs (laugh, clap…)'} />
-      </div>
+      {canSearch && (
+        <div className="emo-search">
+          <Icon d={I.search} size={18} />
+          <input type="search" value={q} onChange={(e) => setQ(e.target.value)} dir="auto" placeholder={ar ? 'ابحث في GIF (ضحك، تصفيق…)' : 'Search GIFs (laugh, clap…)'} />
+        </div>
+      )}
       <div className="cp-tabs" role="tablist">
         {tabs.map((x) => (
           <button key={x.id} type="button" role="tab" aria-selected={tab === x.id && q.trim() === ''} className={`cp-tab${tab === x.id && q.trim() === '' ? ' is-on' : ''}`} onClick={() => { setTab(x.id); setQ(''); }} title={x.label}>
@@ -240,7 +242,7 @@ function GifPane({ ar, canSend, onSend }) {
       <div className="cp-body" ref={bodyRef} onScroll={onScroll}>
         {!canSend && <p className="cp-note">{ar ? 'الـ GIF متوقفة في هذه المحادثة.' : 'GIFs are turned off in this conversation.'}</p>}
         {searching && !state.configured ? (
-          <p className="stk-empty">{ar ? 'بحث GIF غير مفعّل بعد. على السيرفر ضيف GIPHY_API_KEY في ملف .env.' : 'GIF search is not set up yet. Add GIPHY_API_KEY to the server .env.'}</p>
+          <p className="stk-empty">{ar ? 'بحث GIF غير مفعّل بعد. الأدمن يضيف مفتاح Giphy من: وسائط الشات.' : 'GIF search is not set up yet. An admin can add the Giphy key under Chat Media.'}</p>
         ) : (
           <div className="gif-cols">
             {cols.map((col, ci) => (
@@ -263,17 +265,23 @@ function GifPane({ ar, canSend, onSend }) {
 
 export default function ChatPicker({ ar, onPickEmoji, onSendSticker, onSendGif, onNewSticker, canSticker = true, canGif = true, onClose, initialMode = 'emoji', refreshKey }) {
   const [mode, setMode] = useState(initialMode);
+  // Admin → Chat Media decides which tabs exist for this person's portal (the server enforces it too).
+  const [policy, setPolicy] = useState(cachedMediaPolicy);
+  useEffect(() => { let dead = false; loadMediaPolicy().then((p) => { if (!dead) setPolicy(p); }); return () => { dead = true; }; }, []);
+  const gifsOn = policy.gifs?.enabled !== false;
+  const stickersOn = policy.stickers?.enabled !== false;
   const modes = [
     { id: 'emoji', icon: I.smile, label: ar ? 'إيموجي' : 'Emoji' },
-    { id: 'gif', label: 'GIF' },
-    { id: 'sticker', icon: I.sticker, label: ar ? 'ستيكر' : 'Stickers' },
+    ...(gifsOn ? [{ id: 'gif', label: 'GIF' }] : []),
+    ...(stickersOn ? [{ id: 'sticker', icon: I.sticker, label: ar ? 'ستيكر' : 'Stickers' }] : []),
   ];
+  useEffect(() => { if (!modes.some((m) => m.id === mode)) setMode('emoji'); }, [mode, gifsOn, stickersOn]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="cp" role="dialog" aria-label={ar ? 'إيموجي وستيكرات' : 'Emoji, GIFs and stickers'}>
       <div className="cp-main">
         {mode === 'emoji' && <EmojiPicker ar={ar} top autoFocus onPick={onPickEmoji} />}
-        {mode === 'gif' && <GifPane ar={ar} canSend={canGif} onSend={(g) => { onSendGif(g); onClose?.(); }} />}
-        {mode === 'sticker' && <StickerPane ar={ar} canSend={canSticker} onSend={(s) => { onSendSticker(s); onClose?.(); }} onNew={onNewSticker} onChanged={refreshKey} />}
+        {mode === 'gif' && gifsOn && <GifPane ar={ar} canSend={canGif} canSearch={policy.gifs?.search !== false} canTrending={policy.gifs?.trending !== false} onSend={(g) => { onSendGif(g); onClose?.(); }} />}
+        {mode === 'sticker' && stickersOn && <StickerPane ar={ar} canSend={canSticker} canCreate={policy.stickers?.can_create !== false} onSend={(s) => { onSendSticker(s); onClose?.(); }} onNew={onNewSticker} onChanged={refreshKey} />}
       </div>
       <div className="cp-switch" role="tablist" aria-label={ar ? 'نوع المحتوى' : 'Content type'}>
         {modes.map((m) => (

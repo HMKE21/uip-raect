@@ -85,7 +85,7 @@
 .emo-search input::-webkit-search-cancel-button { cursor: pointer; }
 .msg-emoji-popover .emo-close { width: 28px; height: 28px; font-size: 20px; line-height: 1; color: var(--text-secondary); border-radius: 50%; }
 .emo-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 10px 8px; overscroll-behavior: contain; scrollbar-width: thin; }
-.emo-section { content-visibility: auto; contain-intrinsic-size: auto 260px; }
+.emo-section { /* no content-visibility: it gave off-screen sections a fake height, so tab jumps and the highlighted tab drifted */ }
 .emo-title { margin: 10px 2px 4px; font-size: 12px; font-weight: 700; color: var(--text-secondary); letter-spacing: 0; text-transform: none; }
 .emo-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; }
 .msg-emoji-popover .emo-btn, .emo-btn { font-size: 24px; line-height: 1; padding: 5px 0; border-radius: 9px; text-align: center; border: 0; background: none; cursor: var(--cur-pointer, pointer); transition: background .1s, transform .1s; font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif; }
@@ -189,7 +189,7 @@
 
 /* ---- emoji picker performance: no per-button transforms/transitions (1000 of them), contained layout, GPU-friendly scroll ---- */
 html body .emo-body { contain: layout style; -webkit-overflow-scrolling: touch; }
-html body .emo-section { content-visibility: auto; contain-intrinsic-size: auto 300px; contain: layout style paint; }
+html body .emo-section { contain: layout style; }
 html body .emo-grid { contain: layout style; }
 html body .msg-emoji-popover .emo-btn, html body .emo-btn { transition: none; will-change: auto; }
 html body .msg-emoji-popover .emo-btn:hover, html body .emo-btn:hover { transform: none; background: var(--glass-bg); }

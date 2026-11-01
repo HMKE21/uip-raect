@@ -118,6 +118,10 @@ export default function AdminMessagingSettings() {
         </div>
       </div>
 
+      <Link to="/admin/messaging/media" className="btn btn-outline" style={{ marginBottom: 16 }}>
+        <Icon name="image" size={16} /> Chat Media (GIFs &amp; Stickers) / وسائط الشات
+      </Link>
+
       {error && <p className="form-error">{error}</p>}
       {actionError && <p className="form-error">{actionError}</p>}
 

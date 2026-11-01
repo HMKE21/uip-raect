@@ -97,6 +97,7 @@ const AdminAiConversations = lazy(() => import('./pages/admin/AdminAiConversatio
 const AdminAiConversation = lazy(() => import('./pages/admin/AdminAiConversation'));
 const AdminMessagingAnalytics = lazy(() => import('./pages/admin/AdminMessagingAnalytics'));
 const AdminMessagingSettings = lazy(() => import('./pages/admin/AdminMessagingSettings'));
+const AdminChatMedia = lazy(() => import('./pages/admin/AdminChatMedia'));
 const AdminAiCodeReview = lazy(() => import('./pages/admin/AdminAiCodeReview'));
 const AdminAiCodeReviewHistory = lazy(() => import('./pages/admin/AdminAiCodeReviewHistory'));
 const AdminAiCodeReviewCompare = lazy(() => import('./pages/admin/AdminAiCodeReviewCompare'));
@@ -565,6 +566,7 @@ export default function App() {
                 <Route path="/admin/messaging/ai/:id" element={<AdminAiConversation />} />
                 <Route path="/admin/messaging/analytics" element={<AdminMessagingAnalytics />} />
                 <Route path="/admin/messaging/settings" element={<AdminMessagingSettings />} />
+                <Route path="/admin/messaging/media" element={<AdminChatMedia />} />
                 <Route path="/admin/ai-code-review" element={<AdminAiCodeReview />} />
                 <Route path="/admin/ai-code-review/project/:projectId/history" element={<AdminAiCodeReviewHistory />} />
                 <Route path="/admin/ai-code-review/compare/:idA/:idB" element={<AdminAiCodeReviewCompare />} />

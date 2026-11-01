@@ -96,6 +96,21 @@ export async function searchGifs(q, offset = 0) {
   return res.data;
 }
 
+/* ---- platform policy (Admin → Chat Media): which GIF / sticker features this person's portal may use ---- */
+const OPEN_POLICY = { gifs: { enabled: true, search: true, trending: true, configured: true }, stickers: { enabled: true, can_create: true, packs: true, allow_video: true } };
+let mediaPolicy = null;
+let mediaPolicyAt = 0;
+export const cachedMediaPolicy = () => mediaPolicy || OPEN_POLICY;
+export async function loadMediaPolicy(force = false) {
+  if (mediaPolicy && !force && Date.now() - mediaPolicyAt < 60000) return mediaPolicy;
+  try {
+    const res = await api.get(BASE + '/media-policy');
+    mediaPolicy = res.data || OPEN_POLICY;
+    mediaPolicyAt = Date.now();
+  } catch { /* offline / old server: keep everything visible, the server still enforces */ }
+  return mediaPolicy || OPEN_POLICY;
+}
+
 /* ---- sticker packs (my own groups of stickers) ---- */
 let packs = null;
 export const cachedPacks = () => packs;

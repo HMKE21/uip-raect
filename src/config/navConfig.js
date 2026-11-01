@@ -266,6 +266,7 @@ const RAW_CONFIGS = {
       { key: 'meetings-monitoring', en: 'Meetings Monitoring', ar: 'مراقبة الاجتماعات', icon: 'video-off', route: '/admin/meetings/monitoring', built: true },
       { key: 'messaging-analytics', en: 'Messaging Analytics', ar: 'تحليلات الرسائل', icon: 'trend', route: '/admin/messaging/analytics', built: true },
       { key: 'messaging-settings', en: 'Messaging Settings', ar: 'إعدادات الرسائل', icon: 'wrench', route: '/admin/messaging/settings', built: true },
+      { key: 'chat-media', en: 'Chat Media (GIF & Stickers)', ar: 'وسائط الشات (GIF وستيكرز)', icon: 'image', route: '/admin/messaging/media', built: true },
       { key: 'notification-settings', en: 'Notification Settings', ar: 'إعدادات الإشعارات', icon: 'mail', route: '/admin/notifications/settings', built: true },
     ],
     ai: [
