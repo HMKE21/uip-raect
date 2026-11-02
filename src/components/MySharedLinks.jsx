@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './Icon';
+import ShareQr from './ShareQr';
 import { StModal, timeAgo } from './student/stUi';
 import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
@@ -267,6 +268,7 @@ export function SharedLinksPanel({ ar, locale, onToast: onToastProp, embedded = 
     toastTimer.current = setTimeout(() => setLocalToast(null), kind === 'error' ? 4200 : 2400);
   }, [onToastProp]);
   const [copiedId, setCopiedId] = useState(null); // the link whose Copy button shows "Copied ✓" for a moment
+  const [qrId, setQrId] = useState(null); // link whose QR code is open
   const copiedTimer = useRef(0);
   useEffect(() => () => clearTimeout(copiedTimer.current), []);
   const [items, setItems] = useState(null);
@@ -470,7 +472,11 @@ export function SharedLinksPanel({ ar, locale, onToast: onToastProp, embedded = 
                   <button type="button" className={`mp-share__copy${copiedId === l.id ? ' is-done' : ''}`} onClick={() => copy(l)} disabled={l.expired} aria-live="polite">
                     <Icon name={copiedId === l.id ? 'check' : 'copy'} size={14} /><span>{copiedId === l.id ? tt('Copied', 'تم النسخ') : tt('Copy', 'نسخ')}</span>
                   </button>
+                  <button type="button" className={`mp-share__qrbtn${qrId === l.id ? ' is-on' : ''}`} onClick={() => setQrId(qrId === l.id ? null : l.id)} disabled={l.expired} aria-expanded={qrId === l.id}><Icon name="qr" size={14} /><span>QR</span></button>
                 </div>
+              )}
+              {live && qrId === l.id && !l.expired && (
+                <ShareQr url={shareUrl(l.token)} name={l.node?.name || l.title} ar={ar} onToast={onToast} />
               )}
 
               <div className="mp-share__meta">

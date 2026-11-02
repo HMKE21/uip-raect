@@ -401,13 +401,26 @@ function withMyPc(sections, role, prefix) {
   return { ...sections, [firstKey]: [firstItems[0], item, ...firstItems.slice(1)] };
 }
 
+/** "My Library" (مكتبتي) sits right after My PC in every portal: the same files, sorted by type. */
+function withLibrary(sections, prefix) {
+  const all = Object.values(sections).flat();
+  if (all.some((i) => i.key === 'my-library')) return sections;
+  const item = { key: 'my-library', en: 'My Library', ar: 'مكتبتي', icon: 'bookmark', route: `/${prefix}/my-library`, built: true };
+  const out = {};
+  for (const [k, items] of Object.entries(sections)) {
+    const i = items.findIndex((x) => x.key === 'my-pc');
+    out[k] = i >= 0 ? [...items.slice(0, i + 1), item, ...items.slice(i + 1)] : items;
+  }
+  return out;
+}
+
 /** Returns { main: [...], <groups>..., account: [...] } for a role.
  *  Section order = the order written in RAW_CONFIGS; `account` is always
  *  appended last (personal extras first, then Messages/Notifications/Settings). */
 export function getNavConfig(role, can) {
   const { account: accountExtras = [], ...rawSections } = RAW_CONFIGS[role] || RAW_CONFIGS.student;
   const prefix = portalPrefix(role);
-  const sections = withMyPc(rawSections, role, prefix);
+  const sections = withLibrary(withMyPc(rawSections, role, prefix), prefix);
   const overrides = ACCOUNT_ITEM_OVERRIDES[role] || {};
   const common = COMMON_ACCOUNT_ITEMS.map((item) => ({
     ...item,

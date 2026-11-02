@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from './Icon';
+import ShareQr from './ShareQr';
 import { StModal, timeAgo } from './student/stUi';
 import { errorMessage } from '../api/client';
 import { drive } from '../lib/driveApi';
@@ -7,6 +8,7 @@ import { publicOrigin } from '../config/siteUrl';
 import '../styles/css/drive-share.css'; // must load before the dialog refinements below
 import '../styles/css/drive-share-dialogs.css';
 import '../styles/css/share-access.css';
+import '../styles/css/share-qr.css';
 
 export const EXPIRIES = [
   { key: '1d', en: '1 day', ar: 'يوم' },
@@ -168,6 +170,7 @@ export default function ShareDialog({ nodes, node: nodeProp, ar, locale, onClose
   const [showPw, setShowPw] = useState(false);
   const pwBad = usePw && (pw.length < 4 || pw.length > 64);
   const [busy, setBusy] = useState(false);
+  const [qrId, setQrId] = useState(null); // link whose QR code is open
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -341,7 +344,9 @@ export default function ShareDialog({ nodes, node: nodeProp, ar, locale, onClose
               <div className="mp-share__url">
                 <input readOnly dir="ltr" value={shareUrl(l.token)} onFocus={(e) => e.target.select()} aria-label={tt('Share link', 'رابط المشاركة')} />
                 <button type="button" className="mp-share__copy" onClick={() => copy(l.token)} disabled={l.expired}><Icon name="copy" size={14} /><span>{tt('Copy', 'نسخ')}</span></button>
+                <button type="button" className={`mp-share__qrbtn${qrId === l.id ? ' is-on' : ''}`} onClick={() => setQrId(qrId === l.id ? null : l.id)} disabled={l.expired} aria-expanded={qrId === l.id}><Icon name="qr" size={14} /><span>QR</span></button>
               </div>
+              {qrId === l.id && !l.expired && <ShareQr url={shareUrl(l.token)} name={l.node?.name || node.name} ar={ar} onToast={onToast} />}
               <div className="mp-share__meta">
                 <span><Icon name="clock" size={12} /> {expiryText(l)}</span>
                 <span title={tt('Views', 'المشاهدات')}><Icon name="eye" size={12} /> {l.views}</span>

@@ -189,6 +189,7 @@ const StudentContacts = lazy(() => import('./pages/student/StudentContacts'));
 const StudentPortfolio = lazy(() => import('./pages/student/StudentPortfolio'));
 const StudentMyPC = lazy(() => import('./pages/student/StudentMyPC'));
 const DesktopOS = lazy(() => import('./desktop/DesktopOS'));
+const MyLibrary = lazy(() => import('./pages/MyLibrary'));
 /** The classic "My PC" view has no lock screen of its own: while the desktop is locked (or never unlocked in this tab) send the person back to the lock screen. */
 function ClassicLockGuard({ children }) {
   const { user } = useAuth();
@@ -423,6 +424,7 @@ export default function App() {
                 <Route path="/my-pc" element={<MyPcRedirect />} />
                 {MY_PC_PREFIXES.map((px) => [
                   <Route key={`${px}-pc`} path={`/${px}/my-pc`} element={<MyPcAccessGate><DesktopOS /></MyPcAccessGate>} />,
+                  <Route key={`${px}-lib`} path={`/${px}/my-library`} element={<MyPcAccessGate><MyLibrary /></MyPcAccessGate>} />,
                   <Route key={`${px}-pc-classic`} path={`/${px}/my-pc/classic`} element={<MyPcAccessGate><ClassicLockGuard><StudentMyPC /></ClassicLockGuard></MyPcAccessGate>} />,
                 ])}
                 <Route path="/student/graduation" element={<StudentGraduation />} />
