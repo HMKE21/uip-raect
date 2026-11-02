@@ -7,7 +7,7 @@ import '../../styles/css/messaging-bio.css';
  * Bio notes: a short line (emoji welcome) shown in a speech bubble hanging under the chat header, pointing at the
  * contact's photo, in the design its owner picked.
  *   BioBubble      – the bubble itself (header, contact info, live preview)
- *   HeaderBio      – the bubble in the chat header; tap it to tuck it away until the bio changes
+ *   HeaderBio      – the bubble in the chat header; floats over the chat, appears now and then, tap to tuck it away
  *   BioEditor      – text + emoji picker + quick statuses + counter + design picker + live preview + save
  * Style ids must match ChatSettingsService::BIO_STYLES on the server.
  */
@@ -48,27 +48,38 @@ export function BioBubble({ text, styleId, className = '', tail = true, children
   );
 }
 
-const sigOf = (text, style) => `${style || 'classic'}|${text}`;
-const readDismissed = (key) => { try { return sessionStorage.getItem(key); } catch { return null; } };
 
 export function HeaderBio({ conversationId, text, styleId, own, onEdit }) {
   const t = useT();
-  const key = `uip_bio_hide_${conversationId}`;
-  const sig = sigOf(text, styleId);
-  const [hiddenSig, setHiddenSig] = useState(() => readDismissed(key));
-  useEffect(() => { setHiddenSig(readDismissed(key)); }, [key]);
-  if (!text || hiddenSig === sig) return null;
-  const hide = () => {
-    try { sessionStorage.setItem(key, sig); } catch { /* private mode */ }
-    setHiddenSig(sig);
-  };
+  const [shown, setShown] = useState(false);
+
+  // The note floats over the top of the chat (it takes no room) and comes and goes: it fades in, stays long enough to read,
+  // fades out, and returns after a pause. Tap it to tuck it away until the next round.
+  useEffect(() => {
+    if (!text) { setShown(false); return undefined; }
+    const visibleMs = Math.min(12000, 5000 + cpLen(text) * 70);
+    const hiddenMs = 20000;
+    let timer;
+    let cancelled = false;
+    const step = (visible) => {
+      if (cancelled) return;
+      setShown(visible);
+      timer = setTimeout(() => step(!visible), visible ? visibleMs : hiddenMs);
+    };
+    timer = setTimeout(() => step(true), 600);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [conversationId, text, styleId]);
+
+  if (!text) return null;
   return (
-    <div className="bio-hdr" role="note" aria-label={t('Bio', 'البايو')}>
-      <BioBubble text={text} styleId={styleId} className="bio-hdr__bubble" onClick={hide} title={t('Tap to hide', 'اضغط للإخفاء')}>
-        {own && onEdit ? (
-          <button type="button" className="bio-b__edit" onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label={t('Edit bio', 'تعديل البايو')}>✎</button>
-        ) : null}
-      </BioBubble>
+    <div className="bio-float">
+      <div className={`bio-hdr${shown ? ' is-in' : ''}`} role="note" aria-hidden={!shown} aria-label={t('Bio', 'البايو')}>
+        <BioBubble text={text} styleId={styleId} tail={false} className="bio-hdr__bubble" onClick={() => setShown(false)} title={t('Tap to hide', 'اضغط للإخفاء')}>
+          {own && onEdit ? (
+            <button type="button" className="bio-b__edit" onClick={(e) => { e.stopPropagation(); onEdit(); }} aria-label={t('Edit bio', 'تعديل البايو')}>✎</button>
+          ) : null}
+        </BioBubble>
+      </div>
     </div>
   );
 }

@@ -1562,12 +1562,6 @@ export default function ThreadPanel({
           </div>
         </header>
 
-        {/* bio sits in the flow right under the header, above the pinned bar / saved-items filters, so it never covers them */}
-        {headerBio.text && (
-          <HeaderBio conversationId={conversation.id} text={headerBio.text} styleId={headerBio.style} own={!!conversation.is_saved}
-            onEdit={() => onOpenInfo?.()} />
-        )}
-
         {pinnedMessages.length > 0 && (
           <PinnedBar pinned={pinnedMessages} onGo={(id) => onGoToMessage?.(id)} onOpenList={onShowPinned} onUnpin={(m) => onUnpin?.(m)} />
         )}
@@ -1588,6 +1582,12 @@ export default function ThreadPanel({
               </button>
             ))}
           </div>
+        )}
+
+        {/* the bio floats over the top of the messages (zero height) and comes and goes, so it never pushes the chat down */}
+        {headerBio.text && (
+          <HeaderBio conversationId={conversation.id} text={headerBio.text} styleId={headerBio.style} own={!!conversation.is_saved}
+            onEdit={() => onOpenInfo?.()} />
         )}
 
         <div className="msg-thread__scroll" data-message-list ref={scrollRef}>
