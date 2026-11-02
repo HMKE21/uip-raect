@@ -1047,6 +1047,8 @@ let pushWanted = false; // true while someone is signed in
 let pushDebugShown = false;
 function pushBanner(text, ms = 15000) {
   try {
+    // Diagnostics are for developers: people never see them. Turn them on with localStorage.uip_push_debug_ui = '1'.
+    if (localStorage.getItem('uip_push_debug_ui') !== '1') return;
     const el = document.createElement('div');
     el.textContent = text;
     el.style.cssText = 'position:fixed;left:12px;right:12px;top:60px;z-index:2147483000;background:#1b2559;color:#fff;padding:12px 14px;border-radius:12px;font:600 13px/1.5 system-ui,sans-serif;direction:ltr;text-align:left;box-shadow:0 6px 24px rgba(0,0,0,.35)';
@@ -1086,14 +1088,32 @@ async function loadPush() {
   return PushPlugin ? { plugin: PushPlugin } : null;
 }
 
-async function sendPushToken() {
+const PUSH_SENT_KEY = 'uip_push_sent';
+let pushSending = false;
+/** Sends this phone's token to the API. A failed send is usually just a moment without network (the app was resumed, the phone
+ *  switched wifi/data): that is retried quietly a few times and is not recorded as a "problem". The same token is not re-sent
+ *  more than once every 30 minutes (resume used to post it every time the app came to the foreground). */
+async function sendPushToken(attempt = 0) {
   let token = '';
   try { token = localStorage.getItem(PUSH_TOKEN_KEY) || ''; } catch { /* storage blocked */ }
-  if (!token || !pushWanted) return;
+  if (!token || !pushWanted || pushSending) return;
+  try {
+    const sent = JSON.parse(localStorage.getItem(PUSH_SENT_KEY) || 'null');
+    if (sent && sent.t === token && Date.now() - sent.at < 30 * 60 * 1000) return;
+  } catch { /* unreadable: just send */ }
+  pushSending = true;
   try {
     const { api } = await import('./api/client'); // dynamic: client.js imports this file
     await api.post('/api/v1/push/devices', { token, platform: 'android', locale: localStorage.getItem('uip_locale') === 'ar' ? 'ar' : 'en' });
-  } catch (e) { pushDebug(`server refused the token (${e?.status || ''} ${String(e?.message || e).slice(0, 80)})`); /* retried at the next launch / token refresh */ }
+    try { localStorage.setItem(PUSH_SENT_KEY, JSON.stringify({ t: token, at: Date.now() })); localStorage.removeItem('uip_push_debug'); } catch { /* storage blocked */ }
+  } catch (e) {
+    if (!e?.status && attempt < 3) {
+      // status 0 = the request never reached the server (no network right now): try again shortly, silently
+      setTimeout(() => sendPushToken(attempt + 1), [8000, 30000, 90000][attempt]);
+    } else {
+      pushDebug(`server refused the token (${e?.status || ''} ${String(e?.message || e).slice(0, 80)})`); /* retried at the next launch / token refresh */
+    }
+  } finally { pushSending = false; }
 }
 
 /** Opens the screen a tapped notification points to (internal paths only). */
@@ -1164,6 +1184,7 @@ if (typeof window !== 'undefined') window.addEventListener('uip:native-launch', 
 export async function registerPush() {
   if (!isNative) return;
   pushWanted = true;
+  try { localStorage.removeItem(PUSH_SENT_KEY); } catch { /* storage blocked */ } // signed in / app started: send the token once for this account
   try { console.log('[UIP-PUSH] registerPush start'); } catch { /* ignore */ }
   // Status banner + native token path do not depend on the Capacitor push plugin, so a plugin that fails to load is visible, not silent.
   if (!window.__uipPushStatusShown) { window.__uipPushStatusShown = true; setTimeout(pushStatusBanner, 10000); }
@@ -1203,7 +1224,7 @@ export async function unregisterPush() {
     }
     // Delete the phone's FCM token too, so the next account that signs in here gets a fresh one.
     try { const Push = (await loadPush())?.plugin; await Push?.unregister?.(); } catch { /* ignore */ }
-    try { localStorage.removeItem(PUSH_TOKEN_KEY); } catch { /* storage blocked */ }
+    try { localStorage.removeItem(PUSH_TOKEN_KEY); localStorage.removeItem(PUSH_SENT_KEY); localStorage.removeItem('uip_push_debug'); } catch { /* storage blocked */ }
   })();
   await Promise.race([work, new Promise((res) => setTimeout(res, 4000))]); // never block the sign-out button
 }
