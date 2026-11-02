@@ -186,6 +186,10 @@ export const drive = {
   deleteVersion: (id, versionId) => api.del(`${B}/nodes/${id}/versions/${versionId}`),
   /** Whole-tree listing (metadata only) for the cloud backup engine. */
   manifest: () => api.get(`${B}/manifest`).then(unwrap),
+  /** "My Library" preferences kept on the server so they follow the person across devices: { marks, library, updated_at } (a section is null until first saved). */
+  libraryState: () => api.get(`${B}/library-state`).then(unwrap),
+  /** Replaces only the section(s) sent: { marks } and/or { library }. */
+  saveLibraryState: (body) => api.put(`${B}/library-state`, body).then(unwrap),
   sandboxTokenPath: (folderId) => `${B}/nodes/${folderId}/sandbox-token`,
 };
 

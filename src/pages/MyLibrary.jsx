@@ -7,6 +7,7 @@ import { errorMessage } from '../api/client';
 import { drive, fetchDownload, fetchDriveBlob } from '../lib/driveApi';
 import { useDriveMarks, tagColor } from '../lib/driveMarks';
 import { extOf } from '../lib/driveFileKinds';
+import { SMART_PRESETS, cleanRules, matchSmart, newSmartId, useLibraryPrefs } from '../lib/libraryPrefs';
 import { KINDS, KIND_BY_KEY, LANGS, fmtSize, hostOf, kindOf, makeLinkFile, normalizeUrl, parseLinkFile, safeName } from '../lib/libraryKinds';
 import { myPcPath } from '../config/myPc';
 import { useAuth } from '../context/AuthContext';
@@ -25,11 +26,6 @@ const PREVIEW_TEXT_MAX = 200000;
 const THUMB_MAX_BYTES = 4 * 1024 * 1024;
 const NO_THUMB = new Set(['heic', 'heif', 'tif', 'tiff', 'ico']);
 const idOf = (r) => (r?.data ?? r)?.id;
-
-// ---- tiny preferences kept in this browser (per account) ----
-const prefKey = (uid, k) => `uip_library_${k}_v1_${uid ?? 'anon'}`;
-const readPref = (uid, k, fb) => { try { const v = JSON.parse(localStorage.getItem(prefKey(uid, k)) || 'null'); return v ?? fb; } catch { return fb; } };
-const writePref = (uid, k, v) => { try { localStorage.setItem(prefKey(uid, k), JSON.stringify(v)); } catch { /* storage blocked */ } };
 
 // ---- thumbnails: at most 3 downloads at a time ----
 let activeThumbs = 0;
@@ -80,10 +76,11 @@ export default function MyLibrary() {
   const [error, setError] = useState('');
   const [q, setQ] = useState('');
   const [cat, setCat] = useState('all');
-  const [source, setSource] = useState(() => readPref(uid, 'source', 'all')); // all = whole My PC · lib = only what lives in "My Library"
-  const [view, setView] = useState(() => readPref(uid, 'view', 'grid'));
+  const prefs = useLibraryPrefs(uid); // hidden items, source, view and smart folders — synced to the server
+  const { source, view, hidden, smart } = prefs; // source: all = whole My PC · lib = only what lives in "My Library"
+  const { setSource, setView } = prefs;
   const [sort, setSort] = useState('new');
-  const [hidden, setHidden] = useState(() => new Set(readPref(uid, 'hidden', [])));
+  const [smartEdit, setSmartEdit] = useState(null); // smart folder being created / edited
   const [sel, setSel] = useState(() => new Set());
   const [shareNodes, setShareNodes] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -107,9 +104,7 @@ export default function MyLibrary() {
     try { setError(''); const r = await drive.manifest(); setNodes(r?.items || []); } catch (e) { setError(errorMessage(e)); setNodes((p) => p || []); }
   }, []);
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { writePref(uid, 'source', source); }, [uid, source]);
-  useEffect(() => { writePref(uid, 'view', view); }, [uid, view]);
-  useEffect(() => { writePref(uid, 'hidden', [...hidden]); }, [uid, hidden]);
+  useEffect(() => { if (cat.startsWith('smart:') && !smart.some((x) => `smart:${x.id}` === cat)) setCat('all'); }, [cat, smart]);
 
   // ---- structure ----
   const byId = useMemo(() => new Map((nodes || []).map((n) => [n.id, n])), [nodes]);
@@ -123,15 +118,19 @@ export default function MyLibrary() {
   const hiddenItems = useMemo(() => visible.filter((n) => hidden.has(n.id)), [visible, hidden]);
 
   const counts = useMemo(() => { const c = {}; shown.forEach((n) => { c[n.kind] = (c[n.kind] || 0) + 1; }); return c; }, [shown]);
-  const favCount = useMemo(() => shown.filter((n) => marks.isFav(n.id)).length, [shown, marks]);
+  const favCount = useMemo(() => shown.filter((n) => marks.isFav(n.id)).length, [shown, marks.favs]); // eslint-disable-line react-hooks/exhaustive-deps
   const weekAgo = Date.now() - 7 * 864e5;
   const recentCount = useMemo(() => shown.filter((n) => Date.parse(n.updated_at) >= weekAgo).length, [shown, weekAgo]);
+
+  const smartCtx = useMemo(() => ({ isFav: marks.isFav, tagsOf: marks.tagsOf, now: Date.now() }), [marks.favs, marks.tagsMap]); // eslint-disable-line react-hooks/exhaustive-deps
+  const smartCounts = useMemo(() => Object.fromEntries(smart.map((x) => [x.id, shown.filter((n) => matchSmart(x.rules, n, smartCtx)).length])), [smart, shown, smartCtx]);
 
   const list = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let r = cat === 'hidden' ? hiddenItems : shown;
     if (cat === 'fav') r = r.filter((n) => marks.isFav(n.id));
     else if (cat === 'recent') r = r.filter((n) => Date.parse(n.updated_at) >= weekAgo);
+    else if (cat.startsWith('smart:')) { const sf = smart.find((x) => `smart:${x.id}` === cat); r = sf ? r.filter((n) => matchSmart(sf.rules, n, smartCtx)) : r; }
     else if (KIND_BY_KEY[cat]) r = r.filter((n) => n.kind === cat);
     if (needle) r = r.filter((n) => n.name.toLowerCase().includes(needle) || marks.tagsOf(n.id).some((t) => t.toLowerCase().includes(needle)) || (linkUrls[n.id] || '').toLowerCase().includes(needle));
     const s = [...r];
@@ -140,7 +139,7 @@ export default function MyLibrary() {
     else if (sort === 'old') s.sort((a, b) => Date.parse(a.updated_at) - Date.parse(b.updated_at));
     else s.sort((a, b) => Date.parse(b.updated_at) - Date.parse(a.updated_at));
     return s;
-  }, [cat, shown, hiddenItems, q, sort, marks, linkUrls, locale, weekAgo]);
+  }, [cat, shown, hiddenItems, q, sort, marks.favs, marks.tagsMap, linkUrls, locale, weekAgo, smart, smartCtx]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // addresses of saved links (read lazily, a few at a time)
   useEffect(() => {
@@ -190,8 +189,8 @@ export default function MyLibrary() {
     } catch (e) { say(errorMessage(e), 'error'); return false; } finally { setBusy(''); }
   }, [ensureFolder, load, say, tt]);
 
-  const hide = (ids) => { setHidden((p) => new Set([...p, ...ids])); setSel(new Set()); say(tt('Hidden from the library (still in My PC).', 'اتخفى من المكتبة (لسه موجود في جهازي).')); };
-  const unhide = (ids) => { setHidden((p) => { const n = new Set(p); ids.forEach((i) => n.delete(i)); return n; }); setSel(new Set()); };
+  const hide = (ids) => { prefs.hide(ids); setSel(new Set()); say(tt('Hidden from the library (still in My PC).', 'اتخفى من المكتبة (لسه موجود في جهازي).')); };
+  const unhide = (ids) => { prefs.unhide(ids); setSel(new Set()); };
   const download = async (n) => {
     try { setBusy(tt('Preparing download…', 'جارِ تجهيز التنزيل…')); const r = await fetchDownload(n); const u = URL.createObjectURL(r.blob); const a = document.createElement('a'); a.href = u; a.download = r.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); } catch (e) { say(errorMessage(e), 'error'); } finally { setBusy(''); }
   };
@@ -261,6 +260,17 @@ export default function MyLibrary() {
         ))}
       </nav>
 
+      <div className="lib-smart" aria-label={tt('Smart folders', 'المجلدات الذكية')}>
+        <span className="lib-smart__lbl"><Icon name="sparkles" size={14} />{tt('Smart folders', 'مجلدات ذكية')}</span>
+        {smart.map((x) => (
+          <span key={x.id} className={`lib-sf${cat === `smart:${x.id}` ? ' is-on' : ''}`}>
+            <button type="button" className="lib-sf__main" onClick={() => setCat(`smart:${x.id}`)}><Icon name="filter" size={13} /><span>{x.name}</span><b>{smartCounts[x.id] ?? 0}</b></button>
+            <button type="button" className="lib-sf__edit" onClick={() => setSmartEdit({ id: x.id, name: x.name, rules: x.rules })} aria-label={`${tt('Edit', 'تعديل')} ${x.name}`}><Icon name="edit" size={12} /></button>
+          </span>
+        ))}
+        <button type="button" className="lib-sf__new" onClick={() => setSmartEdit({ id: null, name: '', rules: cleanRules({}) })}><Icon name="plus" size={13} /><span>{tt('New smart folder', 'مجلد ذكي جديد')}</span></button>
+      </div>
+
       {error && <div className="lib-err" role="alert">{error} <button type="button" className="lib-link" onClick={load}>{tt('Retry', 'إعادة المحاولة')}</button></div>}
       {source === 'lib' && nodes && !libRoot && <div className="lib-note">{tt('Nothing was added here yet. Upload a file, save a link or write a note — or switch to “All My PC”.', 'لسه مفيش حاجة اتضافت هنا. ارفع ملف أو احفظ لينك أو اكتب ملاحظة — أو غيّر لـ "كل جهازي".')}</div>}
 
@@ -327,6 +337,11 @@ export default function MyLibrary() {
           onHide={() => { hide([preview.id]); setPreview(null); }} />
       )}
       {adding && <AddDialog kind={adding} tt={tt} onClose={() => setAdding(null)} onSave={async (k, name, content) => { if (await saveText(k, name, content)) setAdding(null); }} busy={!!busy} />}
+      {smartEdit && (
+        <SmartDialog tt={tt} ar={ar} init={smartEdit} tagsAll={marks.allTags} nodes={shown} ctx={smartCtx} canDelete={!!smartEdit.id} onClose={() => setSmartEdit(null)}
+          onDelete={() => { prefs.removeSmart(smartEdit.id); if (cat === `smart:${smartEdit.id}`) setCat('all'); setSmartEdit(null); say(tt('Smart folder deleted (your files are untouched).', 'اتمسح المجلد الذكي (ملفاتك زي ما هي).')); }}
+          onSave={(name, rules) => { const id = smartEdit.id || newSmartId(); prefs.saveSmart({ id, name, rules }); setSmartEdit(null); setCat(`smart:${id}`); say(tt('Smart folder saved.', 'تم حفظ المجلد الذكي.')); }} />
+      )}
       {moving && <MoveDialog tt={tt} nodes={nodes || []} count={selected.length} onClose={() => setMoving(false)} onPick={moveTo} onAuto={autoSort} />}
     </div>
   );
@@ -471,6 +486,54 @@ function MoveDialog({ tt, nodes, count, onClose, onPick, onAuto }) {
           {shownF.map((x) => <li key={x.id} style={{ paddingInlineStart: f.trim() ? 0 : x.depth * 16 }}><button type="button" onClick={() => onPick(x.id)}><Icon name="folder" size={15} />{x.name}</button></li>)}
           {shownF.length === 0 && <li className="lib-move__none">{tt('No folders.', 'مفيش مجلدات.')}</li>}
         </ul>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------- smart folders
+function SmartDialog({ tt, ar, init, tagsAll, nodes, ctx, canDelete, onClose, onSave, onDelete }) {
+  const [name, setName] = useState(init.name);
+  const [r, setR] = useState(init.rules);
+  const set = (patch) => setR((p) => ({ ...p, ...patch }));
+  const rules = useMemo(() => cleanRules(r), [r]);
+  const n = useMemo(() => nodes.filter((x) => matchSmart(rules, x, ctx)).length, [nodes, rules, ctx]);
+  const toggleKind = (k) => set({ kinds: r.kinds.includes(k) ? r.kinds.filter((x) => x !== k) : [...r.kinds, k] });
+  const periods = [['any', 'Any time', 'أي وقت'], ['today', 'Today', 'النهارده'], ['7d', 'Last 7 days', 'آخر 7 أيام'], ['30d', 'Last 30 days', 'آخر 30 يوم'], ['month', 'This month', 'هذا الشهر'], ['year', 'This year', 'هذه السنة']];
+  const empty = !rules.kinds.length && rules.period === 'any' && rules.min_mb === null && rules.max_mb === null && !rules.tag && !rules.fav && !rules.contains;
+  const bad = rules.min_mb !== null && rules.max_mb !== null && rules.min_mb > rules.max_mb;
+  const can = name.trim() && !empty && !bad;
+  return (
+    <Modal title={init.id ? tt('Edit smart folder', 'تعديل المجلد الذكي') : tt('New smart folder', 'مجلد ذكي جديد')} onClose={onClose} actions={(
+      <>
+        {canDelete && <button type="button" className="btn btn-ghost lib-danger" onClick={onDelete}><Icon name="trash" size={15} /><span>{tt('Delete', 'حذف')}</span></button>}
+        <button type="button" className="btn btn-ghost" onClick={onClose}>{tt('Cancel', 'إلغاء')}</button>
+        <button type="button" className="btn btn-primary" disabled={!can} onClick={() => onSave(name.trim(), rules)}>{tt('Save', 'حفظ')}</button>
+      </>
+    )}>
+      <div className="lib-form">
+        {!init.id && (
+          <div className="lib-presets">
+            <span>{tt('Start from', 'ابدأ من')}</span>
+            {SMART_PRESETS.map((p) => <button key={p.en} type="button" className="lib-chip" onClick={() => { setName(ar ? p.ar : p.en); setR(cleanRules(p.rules)); }}>{ar ? p.ar : p.en}</button>)}
+          </div>
+        )}
+        <label><span>{tt('Name', 'الاسم')}</span><input value={name} maxLength={40} onChange={(e) => setName(e.target.value)} autoFocus /></label>
+        <div className="lib-form__grp"><span>{tt('Types (none = all)', 'الأنواع (من غير اختيار = الكل)')}</span>
+          <div className="lib-presets">{KINDS.map((k) => <button key={k.key} type="button" className={`lib-chip${r.kinds.includes(k.key) ? ' is-on' : ''}`} style={{ '--k': k.color }} aria-pressed={r.kinds.includes(k.key)} onClick={() => toggleKind(k.key)}><Icon name={k.icon} size={13} /><span>{ar ? k.ar : k.en}</span></button>)}</div>
+        </div>
+        <div className="lib-form__row">
+          <label><span>{tt('Modified', 'آخر تعديل')}</span><select value={r.period} onChange={(e) => set({ period: e.target.value })}>{periods.map((x) => <option key={x[0]} value={x[0]}>{ar ? x[2] : x[1]}</option>)}</select></label>
+          <label><span>{tt('Min size (MB)', 'أقل حجم (ميجا)')}</span><input type="number" min="0" dir="ltr" value={r.min_mb ?? ''} onChange={(e) => set({ min_mb: e.target.value })} /></label>
+          <label><span>{tt('Max size (MB)', 'أكبر حجم (ميجا)')}</span><input type="number" min="0" dir="ltr" value={r.max_mb ?? ''} onChange={(e) => set({ max_mb: e.target.value })} aria-invalid={bad} /></label>
+        </div>
+        <div className="lib-form__row">
+          <label><span>{tt('Name contains', 'الاسم يحتوي')}</span><input value={r.contains} maxLength={60} onChange={(e) => set({ contains: e.target.value })} /></label>
+          <label><span>{tt('Tag', 'التاج')}</span><input list="lib-tags-dl" value={r.tag} maxLength={24} onChange={(e) => set({ tag: e.target.value })} /><datalist id="lib-tags-dl">{tagsAll.map((t) => <option key={t.name} value={t.name} />)}</datalist></label>
+        </div>
+        <label className="lib-form__check"><input type="checkbox" checked={r.fav} onChange={(e) => set({ fav: e.target.checked })} /><span>{tt('Favorites only', 'المفضلة فقط')}</span></label>
+        {bad && <div className="lib-err" role="alert">{tt('Min size is bigger than max size.', 'أقل حجم أكبر من أكبر حجم.')}</div>}
+        <small className="lib-form__count">{empty ? tt('Pick at least one rule.', 'اختار شرط واحد على الأقل.') : tt(`${n} item(s) match right now — the folder updates by itself as files change.`, `${n} عنصر مطابق دلوقتي — والمجلد بيتحدث لوحده لما الملفات تتغير.`)}</small>
       </div>
     </Modal>
   );

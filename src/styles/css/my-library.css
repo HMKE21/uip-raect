@@ -120,3 +120,27 @@
   .lib-rows .lib-card__open { padding-inline-end: 76px; }
 }
 @media (prefers-reduced-motion: reduce) { .lib-card, .lib-skel, .lib-toast, .lib-busy svg { animation: none; transition: none; } }
+
+/* smart folders */
+.lib-smart { display: flex; gap: 8px; align-items: center; overflow-x: auto; padding: 2px 0 4px; scrollbar-width: thin; }
+.lib-smart__lbl { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 800; opacity: .6; }
+.lib-sf { flex-shrink: 0; display: inline-flex; align-items: stretch; border-radius: 12px; border: 1px solid var(--lib-line); background: var(--lib-soft); overflow: hidden; }
+.lib-sf.is-on { border-color: var(--lib-pri); background: color-mix(in srgb, var(--lib-pri) 16%, transparent); }
+.lib-sf button { border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.lib-sf__main { display: inline-flex; align-items: center; gap: 7px; padding: 7px 4px 7px 12px; font-size: 13px; font-weight: 600; }
+.lib-sf__main b { font-size: 11.5px; padding: 1px 7px; border-radius: 999px; background: var(--lib-soft); }
+.lib-sf__edit { padding: 0 10px; opacity: .45; }
+.lib-sf__edit:hover { opacity: 1; }
+.lib-sf__new { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 12px; border: 1px dashed var(--lib-line); background: transparent; color: inherit; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; opacity: .8; }
+.lib-sf__new:hover { opacity: 1; background: var(--lib-soft); }
+.lib-presets { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.lib-presets > span { font-size: 12px; font-weight: 700; opacity: .65; }
+.lib-presets .lib-chip { padding: 5px 11px; font-size: 12.5px; }
+.lib-form__grp { display: flex; flex-direction: column; gap: 6px; }
+.lib-form__grp > span { font-size: 12px; font-weight: 700; opacity: .7; }
+.lib-form__row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.lib-form__check { flex-direction: row !important; align-items: center; gap: 8px !important; }
+.lib-form__check span { opacity: 1 !important; font-size: 13px !important; }
+.lib-form input[aria-invalid="true"] { border-color: var(--color-danger, #d33); }
+.lib-form__count { font-weight: 600; }
+.lib-danger { color: var(--color-danger, #d33) !important; margin-inline-end: auto; }
