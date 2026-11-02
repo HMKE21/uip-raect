@@ -39,6 +39,35 @@
     Cross-Origin-Resource-Policy = "cross-origin"
     Cache-Control = "public, max-age=31536000, immutable"
 
+# Long cache for the fingerprinted build files + static images/icons (same rules as vercel.json).
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/images/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
+[[headers]]
+  for = "/font-boot.js"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
+
+[[headers]]
+  for = "/theme-boot.js"
+  [headers.values]
+    Cache-Control = "public, max-age=3600, stale-while-revalidate=86400"
+
+# Uploaded PDFs are never rendered inline (same as vercel.json). Check with: curl -I https://<site>/uploads/<some>.pdf
+[[headers]]
+  for = "/uploads/*.pdf"
+  [headers.values]
+    Content-Disposition = "attachment"
+    Content-Security-Policy = "sandbox; default-src 'none'"
+    X-Content-Type-Options = "nosniff"
+
 # Security headers for the React app (CSP = second line of defence against XSS).
 # Keep this block identical to vercel.json.
 # connect-src: `wss:` lets the meeting WebSocket (Reverb) connect; once you know the host,
