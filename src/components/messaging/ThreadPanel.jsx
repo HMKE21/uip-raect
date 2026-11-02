@@ -391,14 +391,14 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
             </button>
           </div>
         ) : null}
-        {m.body && !captioned && !groupCall ? <div>{renderBody(m.body, others)}</div> : null}
+        {m.body && !captioned && !groupCall ? <div className="msg-text" dir="auto">{renderBody(m.body, others)}</div> : null}
         {m.body && !captioned && !groupCall && !m.pending && firstUrl(m.body) ? <LinkCard url={firstUrl(m.body)} ar={t('a', 'b') === 'b'} /> : null}
         {m.attachments && m.attachments.length > 0 && (
           m.pending || m.failed
             ? <PendingAttachments attachments={m.attachments} pct={m.upload_progress || 0} uploading={!!m.pending} />
             : <MessageAttachments attachments={m.attachments} onOpenLightbox={onOpenLightbox} onOpenVideo={onOpenVideo} autoCache={isRecentMessage(m)} mine={!!m.is_mine} ar={t('en','ar') === 'ar'} />
         )}
-        {m.body && captioned ? <div className="msg-caption">{renderBody(m.body, others)}</div> : null}
+        {m.body && captioned ? <div className="msg-caption" dir="auto">{renderBody(m.body, others)}</div> : null}
       </>
     );
   }
@@ -556,6 +556,7 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
             <div>
               <textarea
                 className="msg-edit-textarea"
+                dir="auto"
                 style={{ width: '100%', minHeight: 60, background: 'transparent', border: '1px solid currentColor', borderRadius: 8, padding: 6, color: 'inherit', font: 'inherit' }}
                 value={editValue}
                 onChange={(e) => setEditValue(e.target.value)}
@@ -1027,6 +1028,15 @@ export default function ThreadPanel({
   const t = (en, arText) => (ar ? arText : en);
   const fileInputRef = useRef(null);
   const composerInputRef = useRef(null);
+  // the box grows with what is typed (up to the CSS max-height) and scrolls after that; no drag handle needed
+  useLayoutEffect(() => {
+    const el = composerInputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    const max = parseFloat(getComputedStyle(el).maxHeight) || 168;
+    el.style.height = `${Math.min(el.scrollHeight, max)}px`;
+    el.style.overflowY = el.scrollHeight > max ? 'auto' : 'hidden';
+  }, [text]);
   const mediaRecorderRef = useRef(null);
   const recordingStreamRef = useRef(null);
   const recordingChunksRef = useRef([]);
@@ -1879,6 +1889,10 @@ export default function ThreadPanel({
             <textarea
               className="msg-composer__input"
               data-composer-input
+              // Arabic text types right-to-left, English left-to-right, and every line of a mixed message takes its own
+              // direction (unicode-bidi: plaintext in the CSS). While empty, follow the app language so the placeholder sits right.
+              dir={text.trim() ? 'auto' : (ar ? 'rtl' : 'ltr')}
+              enterKeyHint={enterToSend ? 'send' : 'enter'}
               ref={composerInputRef}
               onPaste={onPaste}
               placeholder={typeOk('text') ? t('Type a message…', 'اكتب رسالة…') : t('Text messages are turned off in this group', 'الرسائل النصية متوقفة في هذه المجموعة')}
