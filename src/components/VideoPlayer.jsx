@@ -141,7 +141,8 @@ export default function VideoPlayer({ src, poster, autoPlay = false, loop = fals
   const everPip = useRef(false);
 
   const docPip = typeof window !== 'undefined' && 'documentPictureInPicture' in window;
-  const canPip = docPip || (typeof document !== 'undefined' && !!document.pictureInPictureEnabled);
+  const iosPip = typeof HTMLVideoElement !== 'undefined' && 'webkitSetPresentationMode' in HTMLVideoElement.prototype;   // iPhone / iPad Safari
+  const canPip = docPip || iosPip || (typeof document !== 'undefined' && !!document.pictureInPictureEnabled);
 
   /* ---------- helpers ---------- */
   const poke = useCallback(() => {
@@ -235,8 +236,12 @@ export default function VideoPlayer({ src, poster, autoPlay = false, loop = fals
       try { await openDocPip(); return; } catch { /* blocked / unsupported: fall back to the native window */ }
     }
     try {
-      if (document.pictureInPictureElement) await document.exitPictureInPicture();
-      else await v.requestPictureInPicture();
+      if (v.requestPictureInPicture && document.pictureInPictureEnabled) {
+        if (document.pictureInPictureElement) await document.exitPictureInPicture();
+        else await v.requestPictureInPicture();
+      } else if (v.webkitSetPresentationMode) {
+        v.webkitSetPresentationMode(v.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture');
+      }
     } catch { /* unsupported / blocked */ }
   };
 

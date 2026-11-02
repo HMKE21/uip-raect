@@ -246,7 +246,13 @@ function MessageBubble({ m, myUserId, showAvatar, others, onCallBack, onOpenVide
     if (!el || !el.closest) return false;
     // file chips and voice / audio notes: a long press opens the action bar too (Save to phone); a tap still opens / plays
     if (el.closest('.msg-attach-file, .msg-voice') && !el.closest('input,textarea,.msg-hover-actions')) return false;
-    if (el.closest('a,audio,input,textarea,.msg-hover-actions,.msg-attach-video--inline')) return true;
+    // the inline video player: its control bar / menus keep their own touches, but a long press on the picture itself
+    // (playing or paused) opens the message action bar, so the video no longer has to be closed first
+    if (el.closest('.msg-attach-video--inline')) {
+      if (el.closest('.vp__big')) return false;
+      return !!el.closest('.vp__ui, .vp__menu, input, textarea, a');
+    }
+    if (el.closest('a,audio,input,textarea,.msg-hover-actions')) return true;
     const btn = el.closest('button');
     // the video tile and the small "full screen" corner button sit on top of the photo: a long press there
     // must open the action bar too (a plain tap on them still plays / enlarges as before)

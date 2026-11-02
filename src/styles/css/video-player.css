@@ -235,11 +235,18 @@
   .vp__btn { height: 34px; min-width: 34px; padding: 0 4px; }
   .vp__time { margin-inline: 4px; font-size: 12px; }
 }
+/* mouse / trackpad: same as before (floating-window button hidden only in very small players) */
 @container (max-width: 300px) {
-  .vp__btn--pip { display: none; }
+  @media (pointer: fine) { .vp__btn--pip { display: none; } }
 }
 @container (max-width: 250px) {
   .vp__vol { display: none; }
+}
+/* touch screens: the floating-window button always stays. To make room the mute control goes first (the phone's volume keys
+   do that job), then the +/-10s skips on very narrow players */
+@media (pointer: coarse) {
+  @container (max-width: 400px) { .vp__vol { display: none; } }
+  @container (max-width: 290px) { .vp__btn--skip { display: none; } }
 }
 
 /* volume boost menu — compact popover anchored to its button, never wider than the player */
